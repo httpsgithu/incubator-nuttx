@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/include/samv7/samv71_irq.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -104,8 +106,13 @@
 #define SAM_PID_EMACQ1        (66)  /* EMAC Queue 1 Interrupt */
 #define SAM_PID_EMACQ2        (67)  /* EMAC Queue 2 Interrupt */
 #define SAM_PID_FPIXC         (68)  /* ARM Cache ECC Warning */
+#define SAM_PID_I2SC0         (69)  /* Inter-IC Sound Controller 0 */
+#define SAM_PID_I2SC1         (70)  /* Inter-IC Sound Controller 1 */
+#define SAM_PID_EMACQ3        (71)  /* EMAC Queue 3 Interrupt */
+#define SAM_PID_EMACQ4        (72)  /* EMAC Queue 4 Interrupt */
+#define SAM_PID_EMACQ5        (73)  /* EMAC Queue 5 Interrupt */
 
-#define NR_PIDS               (69)  /* Number of peripheral identifiers */
+#define NR_PIDS               (74)  /* Number of peripheral identifiers */
 
 /* External interrupts (priority levels >= 256 */
 
@@ -148,11 +155,11 @@
 #define SAM_IRQ_MCAN01        (SAM_IRQ_EXTINT+SAM_PID_MCAN01) /* CAN0 IRQ line 1 */
 #define SAM_IRQ_MCAN10        (SAM_IRQ_EXTINT+SAM_PID_MCAN10) /* CAN1 IRQ line 0 */
 #define SAM_IRQ_MCAN11        (SAM_IRQ_EXTINT+SAM_PID_MCAN11) /* CAN1 IRQ line 1 */
-#define SAM_IRQ_EMAC0         (SAM_IRQ_EXTINT+SAM_PID_EMAC0)  /*  Ethernet MAC */
+#define SAM_IRQ_EMAC0         (SAM_IRQ_EXTINT+SAM_PID_EMAC0)  /* Ethernet MAC */
 #define SAM_IRQ_AFEC1         (SAM_IRQ_EXTINT+SAM_PID_AFEC1)  /* Analog Front End 1 */
 #define SAM_IRQ_TWIHS2        (SAM_IRQ_EXTINT+SAM_PID_TWIHS2) /* Two-Wire Interface 2 */
 #define SAM_IRQ_SPI1          (SAM_IRQ_EXTINT+SAM_PID_SPI1)   /* Serial Peripheral Interface 1 */
-#define SAM_IRQ_QSPI          (SAM_IRQ_EXTINT+SAM_PID_QSPI)   /*  Quad I/O Serial Peripheral Interface */
+#define SAM_IRQ_QSPI          (SAM_IRQ_EXTINT+SAM_PID_QSPI)   /* Quad I/O Serial Peripheral Interface */
 #define SAM_IRQ_UART2         (SAM_IRQ_EXTINT+SAM_PID_UART2)  /* Universal Asynchronous Receiver Transmitter 2 */
 #define SAM_IRQ_UART3         (SAM_IRQ_EXTINT+SAM_PID_UART3)  /* Universal Asynchronous Receiver Transmitter 3 */
 #define SAM_IRQ_UART4         (SAM_IRQ_EXTINT+SAM_PID_UART4)  /* Universal Asynchronous Receiver Transmitter 4 */
@@ -179,7 +186,12 @@
 #define SAM_IRQ_CCF           (SAM_IRQ_EXTINT+SAM_PID_CCF)    /* ARM Cache ECC Fault */
 #define SAM_IRQ_EMACQ1        (SAM_IRQ_EXTINT+SAM_PID_EMACQ1) /* EMAC Queue 1 Interrupt */
 #define SAM_IRQ_EMACQ2        (SAM_IRQ_EXTINT+SAM_PID_EMACQ2) /* EMAC Queue 2 Interrupt */
-#define SAM_IRQ_FPIXC         (SAM_IRQ_EXTINTSAM_PID_FPIXC+)  /* ARM Cache ECC Warning */
+#define SAM_IRQ_FPIXC         (SAM_IRQ_EXTINT+SAM_PID_FPIXC)  /* ARM Cache ECC Warning */
+#define SAM_IRQ_I2SC0         (SAM_IRQ_EXTINT+SAM_PID_I2SC0)  /* Inter-IC Sound Controller 0 */
+#define SAM_IRQ_I2SC1         (SAM_IRQ_EXTINT+SAM_PID_I2SC1)  /* Inter-IC Sound Controller 1 */
+#define SAM_IRQ_EMACQ3        (SAM_IRQ_EXTINT+SAM_PID_EMACQ3) /* EMAC Queue 3 Interrupt */
+#define SAM_IRQ_EMACQ4        (SAM_IRQ_EXTINT+SAM_PID_EMACQ4) /* EMAC Queue 4 Interrupt */
+#define SAM_IRQ_EMACQ5        (SAM_IRQ_EXTINT+SAM_PID_EMACQ5) /* EMAC Queue 5 Interrupt */
 
 #define SAM_IRQ_NEXTINT       NR_PIDS                         /* Total number of external interrupt numbers */
 #define SAM_IRQ_NIRQS         (SAM_IRQ_EXTINT+NR_PIDS)        /* The number of real IRQs */

@@ -1,6 +1,7 @@
 .. include:: /substitutions.rst
 .. _making-changes:
 
+========================
 Making Changes Using Git
 ========================
 
@@ -28,34 +29,32 @@ Here's how to do it:
    If you don't have a `GitHub <https://www.github.com>`_ account, it's free to
    sign up.
 
-
 #. Fork the Projects
 
    Visit both these links and hit the Fork button in the upper right of the page:
 
-   * `NuttX <https://github.com/apache/incubator-nuttx/>`_
-   * `NuttX Apps <https://github.com/apache/incubator-nuttx-apps/>`_
-
+   * `NuttX <https://github.com/apache/nuttx/>`_
+   * `NuttX Apps <https://github.com/apache/nuttx-apps/>`_
 
 #. Clone the Repositories
 
-   On the GitHub web page for your forked ``incubator-nuttx`` project, copy the clone url – get it by hitting the
+   On the GitHub web page for your forked ``nuttx`` project, copy the clone url – get it by hitting the
    green ``Clone or Download`` button in the upper right. Then do this:
 
     .. code-block:: bash
 
-       $ git clone <your forked incubator-nuttx project clone url> nuttx
+       $ git clone <your forked nuttx project clone url> nuttx
        $ cd nuttx
-       $ git remote add upstream https://github.com/apache/incubator-nuttx.git
+       $ git remote add upstream https://github.com/apache/nuttx.git
 
-   Do the same for your forked ``incubator-nuttx-apps`` project:
+   Do the same for your forked ``nuttx-apps`` project:
 
     .. code-block:: bash
 
        $ cd ..
-       $ git clone <your forked incubator-nuttx-apps project clone url> apps
+       $ git clone <your forked nuttx-apps project clone url> apps
        $ cd apps
-       $ git remote add upstream https://github.com/apache/incubator-nuttx-apps.git
+       $ git remote add upstream https://github.com/apache/nuttx-apps.git
 
 #. Create a Local Git Branch
 
@@ -66,9 +65,8 @@ Here's how to do it:
        $ git checkout -b test/my-new-branch
        $ git push
 
-
 Git Workflow With an Upstream Repository
-----------------------------------------
+========================================
 
 The main NuttX git repository is called an "upstream" repository - this is because it's the main source of truth, and
 its changes flow downstream to people who've forked that repository, like us.
@@ -150,7 +148,7 @@ maybe doing that several times. Then when everything works, I get my branch read
    Note that there are some bugs in the ``nxstyle`` program that ``checkpatch.sh`` uses, so
    it may report a few errors that are not actually errors. The committers will help you
    find these. (Or view the
-   `nxstyle Issues <https://github.com/apache/incubator-nuttx/issues?q=is%3Aissue+is%3Aopen+nxstyle>`_.)
+   `nxstyle Issues <https://github.com/apache/nuttx/issues?q=is%3Aissue+is%3Aopen+nxstyle>`_.)
    |br|
    |br|
 
@@ -162,9 +160,8 @@ maybe doing that several times. Then when everything works, I get my branch read
        $ git commit my-file.c
        $ git push
 
-
 Submitting Your Changes to NuttX
---------------------------------
+================================
 
   Pull requests let you tell others about changes you've pushed to a branch in a repository on GitHub. Once a pull
   request is opened, you can discuss and review the potential changes with collaborators and add follow-up commits
@@ -209,14 +206,187 @@ squash before submitting the Pull Request:
 
    Here's `GitHub's instructions for creating a Pull Request <https://help.github.com/en/github/collaborating-with-issues-and-pull-requests/creating-a-pull-request>`_.
 
+   It is important to include an informative commit title and a commit message.
+
+   In the commit title please include the subsystem/area related to your contribution,
+   followed by a descriptive message. Some examples:
+
+    Adding or fixing a platform
+
+    .. code-block:: bash
+
+       arch/arm/stm32/: Add arch support for stm32 platform
+
+       This patch adds initial support for stm32 platform. Please read
+       the documentation included for more details how to wire the display.
+
+       Signed-off-by: Your Name <you@whoareyou.com>
+
+    Adding or fixing a board
+
+    .. code-block:: bash
+
+       arm/stm32f4discover: Add board initialization for SSD1306 OLED Display
+
+       This patch adds support to use the display SSD1306 on I2C1, please read
+       the documentation included for more details how to wire the display.
+
+       Signed-off-by: Your Name <you@whoareyou.com>
+
+   Another example, submitting a commit to fix an issue in the fictional sensor xyz123:
+
+    .. code-block:: bash
+
+       sensors/xyz123: Fix a pressure conversion resolution issue
+
+       I found an issue in the XYZ123 sensor when converting the
+       pressure. The raw value should be divided by 4.25 instead
+       of 4.52.
+
+       Signed-off-by: Your Name <you@whoareyou.com>
+
+   You can search in the github commit history for more examples.
+
 #. Get Pull Request feedback and implement changes
 
    Get suggestions for improvements from reviewers, make changes, and push them to the branch. Once the reviewers are
    happy, they may suggest squashing and merging again to make a single commit. In this case you would repeat steps
    1 through 6.
 
+How to Include the Suggestions on Your Pull Request?
+====================================================
+
+If you submitted your first PR (Pull Request) and received some feedbacks
+to modify your commit, then probably you already modified it and created a
+new commit with these modifications and submitted it.
+
+Also probably you saw that this new commit appeared on your Pull Request at
+NuttX's github page (at Commits tab).
+
+So, someone will ask you some enigmatic thing: "Please rebase and squash these commits!"
+
+Basically what they are saying is that you need to update your repository
+and fuse your commits in a single commit.
+
+Let walk through the steps to do it!
+
+Move to upstream branch and pull the new commits from there:
+
+    .. code-block:: bash
+
+       $ git checkout upstream
+       $ git pull
+
+Return to your working branch and rebase it with upstream:
+
+    .. code-block:: bash
+
+       $ git checkout my-branch
+       $ git rebase upstream
+
+If you run git log will see that your commits still there:
+
+
+    .. code-block:: bash
+
+       $ git log
+       commit xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx (HEAD -> firstpr, upstream/master, upstream)
+
+       Author: Me Myself
+       Date: Today few seconds ago
+
+       Fix suggestions from mainline
+
+       commit xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+       Author: Me Myself
+       Date: Today few minutes ago
+
+       Initial support for something fantastic
+
+       commit 6aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+       Author: Xiang Xiao <xiaoxiang@xiaomi.com>
+       Date:   Sun Dec 18 00:00:00 2022 +0800
+
+       Some existing commit from mainline
+
+See, you have two commits (Fix suggestions... and Initial support...), we can squash both in a single commit!
+
+You can use the git rebase interactive command to squash both commits:
+
+
+    .. code-block:: bash
+
+       $ git rebase -i HEAD~2
+
+Note: case you had 3 commits, then you should replace HEAD~2 with HEAD~3 and so on.
+
+This command will open the nano editor with this screen:
+
+
+    .. code-block:: bash
+
+       pick 10ef3900b2 Initial support for something fantastic
+       pick 9431582586 Fix suggestions from mainline
+
+       # Rebase 9b0e1659ea..9431582586 onto 9b0e1659ea (2 commands)
+       #
+       # Commands:
+       # p, pick <commit> = use commit
+       ...
+
+Here you can control the actions that git will execute over your commits.
+
+Because we want to squash the second commit with the first you need to
+replace the 'pick' of the second line with a 'squash' (or just a 's') this way:
+
+
+    .. code-block:: bash
+
+       pick 10ef3900b2 Initial support for something fantastic
+       squash 9431582586 Fix suggestions from mainline
+
+       # Rebase 9b0e1659ea..9431582586 onto 9b0e1659ea (2 commands)
+       #
+       # Commands:
+       # p, pick <commit> = use commit
+       ...
+
+Now just press `Ctrl + X` to save this modification. In the next screen you can edit your git
+commit messages. After that press Ctrl + X again to save.
+
+If you run git log again will see that now there is one a single commit:
+
+
+    .. code-block:: bash
+
+       $ git log
+       commit xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx (HEAD -> firstpr, upstream/master, upstream)
+       Author: Me Myself
+       Date: Right now baby, right now
+
+       Initial support for something fantastic
+
+       This commit includes the suggestions from mainline
+
+       commit 6aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+       Author: Xiang Xiao <xiaoxiang@xiaomi.com>
+       Date:   Sun Dec 18 00:00:00 2022 +0800
+
+       Some existing commit from mainline
+
+Just push forced this new commit to your repository:
+
+
+    .. code-block:: bash
+
+       $ git push -f
+
+Now you can look at your PR at NuttX's github to confirm that
+this squashed commit is there.
+
 Git Resources
--------------
+=============
 
 * `Git Cheat Sheet (by GitHub) <https://github.github.com/training-kit/downloads/github-git-cheat-sheet.pdf>`_
 * `Git Book (online) <https://git-scm.com/book/en/v2>`_

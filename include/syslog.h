@@ -1,6 +1,8 @@
 /****************************************************************************
  * include/syslog.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -28,6 +30,10 @@
 #include <nuttx/config.h>
 #include <nuttx/compiler.h>
 
+#ifdef CONFIG_SYSLOG_TO_SCHED_NOTE
+#include <nuttx/sched_note.h>
+#endif
+
 #include <stdint.h>
 #include <stdarg.h>
 #include <stdbool.h>
@@ -51,6 +57,13 @@
  *                  as well (Linux).
  *   LOG_PID      - Include PID with each message.
  */
+
+#define LOG_PID         0x01    /* log the pid with each message */
+#define LOG_CONS        0x02    /* log on the console if errors in sending */
+#define LOG_ODELAY      0x04    /* delay open until first syslog() (default) */
+#define LOG_NDELAY      0x08    /* don't delay open */
+#define LOG_NOWAIT      0x10    /* don't wait for console forks: DEPRECATED */
+#define LOG_PERROR      0x20    /* log to stderr as well */
 
 /* Note: openlog() is not currently supported */
 
@@ -162,9 +175,8 @@ extern "C"
  *
  ****************************************************************************/
 
-#if 0 /* Not supported */
-void openlog(FAR const char *ident, int option, int facility);
-#endif
+/* Not supported */
+#define openlog(i, o, f) {(void)(i); (void)(o); (void)(f);}
 
 /****************************************************************************
  * Name: closelog
@@ -176,9 +188,8 @@ void openlog(FAR const char *ident, int option, int facility);
  *
  ****************************************************************************/
 
-#if 0 /* Not supported */
-void closelog(void);
-#endif
+/* Not supported */
+#define closelog()
 
 /****************************************************************************
  * Name: syslog and vsyslog
@@ -198,9 +209,16 @@ void closelog(void);
  *
  ****************************************************************************/
 
-void syslog(int priority, FAR const IPTR char *fmt, ...) sysloglike(2, 3);
+#ifndef CONFIG_SYSLOG_TO_SCHED_NOTE
+void syslog(int priority, FAR const IPTR char *fmt, ...) syslog_like(2, 3);
 void vsyslog(int priority, FAR const IPTR char *fmt, va_list ap)
-     sysloglike(2, 0);
+     syslog_like(2, 0);
+#else
+#  define syslog(priority, fmt, ...) \
+          sched_note_printf(NOTE_TAG_LOG + priority, fmt, ##__VA_ARGS__)
+#  define vsyslog(priority, fmt, ap) \
+          sched_note_vprintf(NOTE_TAG_LOG + priority, fmt, ap)
+#endif
 
 /****************************************************************************
  * Name: setlogmask

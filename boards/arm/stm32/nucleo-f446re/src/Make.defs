@@ -1,6 +1,8 @@
 ############################################################################
 # boards/arm/stm32/nucleo-f446re/src/Make.defs
 #
+# SPDX-License-Identifier: Apache-2.0
+#
 # Licensed to the Apache Software Foundation (ASF) under one or more
 # contributor license agreements.  See the NOTICE file distributed with
 # this work for additional information regarding copyright ownership.  The
@@ -45,8 +47,13 @@ endif
 endif
 endif
 
-ifeq ($(CONFIG_CAN),y)
+ifeq ($(CONFIG_STM32_CAN),y)
+ifeq ($(CONFIG_STM32_CAN_CHARDRIVER),y)
 CSRCS += stm32_can.c
+endif
+ifeq ($(CONFIG_STM32_CAN_SOCKET),y)
+CSRCS += stm32_cansock.c
+endif
 endif
 
 ifeq ($(CONFIG_STM32_PWM),y)
@@ -69,6 +76,10 @@ ifeq ($(CONFIG_BOARD_STM32_IHM08M1),y)
 CSRCS += stm32_foc_ihm08m1.c
 endif
 
+ifeq ($(CONFIG_STM32_ROMFS),y)
+CSRCS += stm32_romfs_initialize.c
+endif
+
 DEPPATH += --dep-path board
 VPATH += :board
-CFLAGS += $(shell $(INCDIR) "$(CC)" $(TOPDIR)$(DELIM)arch$(DELIM)$(CONFIG_ARCH)$(DELIM)src$(DELIM)board$(DELIM)board)
+CFLAGS += ${INCDIR_PREFIX}$(TOPDIR)$(DELIM)arch$(DELIM)$(CONFIG_ARCH)$(DELIM)src$(DELIM)board$(DELIM)board

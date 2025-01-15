@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/imxrt/imxrt_flexcan.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -70,31 +72,8 @@ extern "C"
  *
  ****************************************************************************/
 
-#if !defined(CONFIG_NETDEV_LATEINIT)
-
-void arm_netinitialize(void);
-
-/****************************************************************************
- * Function: imxrt_caninitialize
- *
- * Description:
- *   Initialize the CAN controller and driver
- *
- * Input Parameters:
- *   intf - In the case where there are multiple CAN devices, this value
- *          identifies which CAN device is to be initialized.
- *
- * Returned Value:
- *   OK on success; Negated errno on failure.
- *
- * Assumptions:
- *
- ****************************************************************************/
-
-#else
-
+#ifdef CONFIG_NETDEV_LATEINIT
 int imxrt_caninitialize(int intf);
-
 #endif
 
 #undef EXTERN

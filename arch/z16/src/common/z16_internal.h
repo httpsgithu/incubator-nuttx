@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/z16/src/common/z16_internal.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -70,14 +72,35 @@
 #  define USE_SERIALDRIVER 1
 #endif
 
+/* Align the stack to word (4 byte) boundaries.  This is probablya greater
+ * alignment than is required.
+ */
+
+#define STACK_ALIGNMENT     4
+
+/* Stack alignment macros */
+
+#define STACK_ALIGN_MASK    (STACK_ALIGNMENT - 1)
+#define STACK_ALIGN_DOWN(a) ((a) & ~STACK_ALIGN_MASK)
+#define STACK_ALIGN_UP(a)   (((a) + STACK_ALIGN_MASK) & ~STACK_ALIGN_MASK)
+
 /* Macros for portability */
 
-#define IN_INTERRUPT             (g_current_regs != NULL)
-#define SAVE_IRQCONTEXT(tcb)     z16_copystate((tcb)->xcp.regs, (FAR chipreg_t*)g_current_regs)
-#define SET_IRQCONTEXT(tcb)      do { g_current_regs = (tcb)->xcp.regs; } while (0)
-#define SAVE_USERCONTEXT(tcb)    z16_saveusercontext((tcb)->xcp.regs)
+#define IN_INTERRUPT             (up_current_regs() != NULL)
+#define SAVE_IRQCONTEXT(tcb)     z16_copystate((tcb)->xcp.regs, up_current_regs())
+#define SET_IRQCONTEXT(tcb)      up_set_current_regs((tcb)->xcp.regs)
+#define SAVE_USERCONTEXT(tcb)    up_saveusercontext((tcb)->xcp.regs)
 #define RESTORE_USERCONTEXT(tcb) z16_restoreusercontext((tcb)->xcp.regs)
 #define SIGNAL_RETURN(regs)      z16_restoreusercontext(regs)
+
+/* Register access macros ***************************************************/
+
+#define getreg8(a)              (*(uint8_t volatile _Near*)(a))
+#define putreg8(v,a)            (*(uint8_t volatile _Near*)(a) = (v))
+#define getreg16(a)             (*(uint16_t volatile _Near*)(a))
+#define putreg16(v,a)           (*(uint16_t volatile _Near*)(a) = (v))
+#define getreg32(a)             (*(uint32_t volatile _Near*)(a))
+#define putreg32(v,a)           (*(uint32_t volatile _Near*)(a) = (v))
 
 /****************************************************************************
  * Public Types
@@ -85,19 +108,6 @@
 
 #ifndef __ASSEMBLY__
 typedef void (*up_vector_t)(void);
-#endif
-
-/****************************************************************************
- * Public Data
- ****************************************************************************/
-
-#ifndef __ASSEMBLY__
-/* This holds a references to the current interrupt level
- * register storage structure.  If is non-NULL only during
- * interrupt processing.
- */
-
-extern volatile FAR chipreg_t *g_current_regs;
 #endif
 
 /****************************************************************************
@@ -111,13 +121,12 @@ extern volatile FAR chipreg_t *g_current_regs;
 void z16_copystate(FAR chipreg_t *dest, FAR chipreg_t *src);
 FAR chipreg_t *z16_doirq(int irq, FAR chipreg_t *regs);
 void z16_restoreusercontext(FAR chipreg_t *regs);
-int  z16_saveusercontext(FAR chipreg_t *regs);
 void z16_sigdeliver(void);
 
 #if defined(CONFIG_Z16_LOWPUTC) || defined(CONFIG_Z16_LOWGETC)
 void z16_lowputc(char ch);
 #else
-# define z16_lowputc(ch)
+#  define z16_lowputc(ch)
 #endif
 
 /* Defined in xyz_allocateheap.c */
@@ -136,10 +145,6 @@ void z16_serialinit(void);
 void z16_earlyserialinit(void);
 #endif
 
-#ifdef CONFIG_RPMSG_UART
-void rpmsg_serialinit(void);
-#endif
-
 /* Defined in xyz_irq.c */
 
 void z16_ack_irq(int irq);
@@ -149,21 +154,7 @@ void z16_ack_irq(int irq);
 #if defined(CONFIG_NET) && !defined(CONFIG_NETDEV_LATEINIT)
 void z16_netinitialize(void);
 #else
-# define z16_netinitialize()
-#endif
-
-/* Return the current value of the stack pointer (used in stack dump logic) */
-
-chipreg_t up_getsp(void);
-
-/* Dump stack and registers */
-
-#ifdef CONFIG_ARCH_STACKDUMP
-void z16_stackdump(void);
-void z16_registerdump(void);
-#else
-# define z16_stackdump()
-# define z16_registerdump()
+#  define z16_netinitialize()
 #endif
 
 #endif /* __ASSEMBLY__ */

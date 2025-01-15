@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/cxd56xx/common/src/cxd56_ak09912_scu.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -31,6 +33,7 @@
 #include <nuttx/board.h>
 
 #include <nuttx/sensors/ak09912.h>
+#include <arch/board/cxd56_ak09912.h>
 #include "cxd56_i2c.h"
 
 #include <arch/chip/scu.h>
@@ -51,11 +54,11 @@
 
 #ifdef CONFIG_SENSORS_AK09912_SCU
 
-int board_ak09912_initialize(FAR const char *devpath, int bus)
+int board_ak09912_initialize(const char *devpath, int bus)
 {
   int i;
   int ret;
-  FAR struct i2c_master_s *i2c;
+  struct i2c_master_s *i2c;
 
   sninfo("Initializing AK09912...\n");
 
@@ -79,7 +82,7 @@ int board_ak09912_initialize(FAR const char *devpath, int bus)
     {
       /* register device at I2C bus */
 
-      ret = ak09912_register(devpath, i, i2c, bus);
+      ret = ak09912_scu_register(devpath, i, i2c, bus);
       if (ret < 0)
         {
           snerr("Error registering AK09912.\n");

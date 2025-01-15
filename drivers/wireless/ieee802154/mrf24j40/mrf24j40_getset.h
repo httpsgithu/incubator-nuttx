@@ -1,6 +1,8 @@
 /****************************************************************************
  * drivers/wireless/ieee802154/mrf24j40/mrf24j40_getset.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -18,8 +20,8 @@
  *
  ****************************************************************************/
 
-#ifndef __DRIVERS_WIRELESS_IEEE802154_MRF24J40_GETSET_H
-#define __DRIVERS_WIRELESS_IEEE802154_MRF24J40_GETSET_H
+#ifndef __DRIVERS_WIRELESS_IEEE802154_MRF24J40_MRF24J40_GETSET_H
+#define __DRIVERS_WIRELESS_IEEE802154_MRF24J40_MRF24J40_GETSET_H
 
 int mrf24j40_setrxmode(FAR struct mrf24j40_radio_s *dev, int mode);
 
@@ -49,4 +51,4 @@ int mrf24j40_setcca(FAR struct mrf24j40_radio_s *dev,
 
 int mrf24j40_setpamode(FAR struct mrf24j40_radio_s *dev, int mode);
 
-#endif /* __DRIVERS_WIRELESS_IEEE802154_MRF24J40_GETSET_H */
+#endif /* __DRIVERS_WIRELESS_IEEE802154_MRF24J40_MRF24J40_GETSET_H */

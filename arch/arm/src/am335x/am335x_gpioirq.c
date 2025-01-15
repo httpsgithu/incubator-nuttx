@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/am335x/am335x_gpioirq.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -31,8 +33,7 @@
 #include <nuttx/irq.h>
 
 #include "chip.h"
-#include "arm_arch.h"
-
+#include "arm_internal.h"
 #include "am335x_gpio.h"
 
 #ifdef CONFIG_AM335X_GPIO_IRQ
@@ -181,7 +182,7 @@ static int am335x_gpio_interrupt(uint32_t base, int irq0, void *context)
 }
 
 #ifdef CONFIG_AM335X_GPIO0_IRQ
-static int am335x_gpio0_interrupt(int irq, FAR void *context, FAR void *arg)
+static int am335x_gpio0_interrupt(int irq, void *context, void *arg)
 {
   return am335x_gpio_interrupt(AM335X_GPIO0_VADDR,
                                AM335X_IRQ_GPIO0P0, context);
@@ -189,7 +190,7 @@ static int am335x_gpio0_interrupt(int irq, FAR void *context, FAR void *arg)
 #endif
 
 #ifdef CONFIG_AM335X_GPIO1_IRQ
-static int am335x_gpio1_interrupt(int irq, FAR void *context, FAR void *arg)
+static int am335x_gpio1_interrupt(int irq, void *context, void *arg)
 {
   return am335x_gpio_interrupt(AM335X_GPIO1_VADDR,
                                AM335X_IRQ_GPIO1P0, context);
@@ -197,7 +198,7 @@ static int am335x_gpio1_interrupt(int irq, FAR void *context, FAR void *arg)
 #endif
 
 #ifdef CONFIG_AM335X_GPIO2_IRQ
-static int am335x_gpio2_interrupt(int irq, FAR void *context, FAR void *arg)
+static int am335x_gpio2_interrupt(int irq, void *context, void *arg)
 {
   return am335x_gpio_interrupt(AM335X_GPIO2_VADDR,
                                AM335X_IRQ_GPIO2P0, context);
@@ -205,7 +206,7 @@ static int am335x_gpio2_interrupt(int irq, FAR void *context, FAR void *arg)
 #endif
 
 #ifdef CONFIG_AM335X_GPIO3_IRQ
-static int am335x_gpio3_interrupt(int irq, FAR void *context, FAR void *arg)
+static int am335x_gpio3_interrupt(int irq, void *context, void *arg)
 {
   return am335x_gpio_interrupt(AM335X_GPIO3_VADDR,
                                AM335X_IRQ_GPIO3P0, context);

@@ -1,6 +1,8 @@
 /****************************************************************************
  * net/pkt/pkt_conn.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -31,7 +33,8 @@
 
 #include <arch/irq.h>
 
-#include <nuttx/semaphore.h>
+#include <nuttx/kmalloc.h>
+#include <nuttx/mutex.h>
 #include <nuttx/net/netconfig.h>
 #include <nuttx/net/net.h>
 #include <nuttx/net/netdev.h>
@@ -39,6 +42,7 @@
 
 #include "devif/devif.h"
 #include "pkt/pkt.h"
+#include "utils/utils.h"
 
 /****************************************************************************
  * Pre-processor Definitions
@@ -49,41 +53,24 @@
    (addr1[2] == addr2[2]) && (addr1[3] == addr2[3]) && \
    (addr1[4] == addr2[4]) && (addr1[5] == addr2[5]))
 
+#ifndef CONFIG_NET_PKT_MAX_CONNS
+#  define CONFIG_NET_PKT_MAX_CONNS 0
+#endif
+
 /****************************************************************************
  * Private Data
  ****************************************************************************/
 
 /* The array containing all packet socket connections */
 
-static struct pkt_conn_s g_pkt_connections[CONFIG_NET_PKT_CONNS];
-
-/* A list of all free packet socket connections */
-
-static dq_queue_t g_free_pkt_connections;
-static sem_t g_free_sem;
+NET_BUFPOOL_DECLARE(g_pkt_connections, sizeof(struct pkt_conn_s),
+                    CONFIG_NET_PKT_PREALLOC_CONNS,
+                    CONFIG_NET_PKT_ALLOC_CONNS, CONFIG_NET_PKT_MAX_CONNS);
+static mutex_t g_free_lock = NXMUTEX_INITIALIZER;
 
 /* A list of all allocated packet socket connections */
 
 static dq_queue_t g_active_pkt_connections;
-
-/****************************************************************************
- * Private Functions
- ****************************************************************************/
-
-/****************************************************************************
- * Name: _pkt_semtake() and _pkt_semgive()
- *
- * Description:
- *   Take/give semaphore
- *
- ****************************************************************************/
-
-static inline void _pkt_semtake(FAR sem_t *sem)
-{
-  net_lockedwait_uninterruptible(sem);
-}
-
-#define _pkt_semgive(sem) nxsem_post(sem)
 
 /****************************************************************************
  * Public Functions
@@ -100,21 +87,6 @@ static inline void _pkt_semtake(FAR sem_t *sem)
 
 void pkt_initialize(void)
 {
-  int i;
-
-  /* Initialize the queues */
-
-  dq_init(&g_free_pkt_connections);
-  dq_init(&g_active_pkt_connections);
-  nxsem_init(&g_free_sem, 0, 1);
-
-  for (i = 0; i < CONFIG_NET_PKT_CONNS; i++)
-    {
-      /* Mark the connection closed and move it to the free list */
-
-      g_pkt_connections[i].ifindex = 0;
-      dq_addlast(&g_pkt_connections[i].node, &g_free_pkt_connections);
-    }
 }
 
 /****************************************************************************
@@ -130,22 +102,19 @@ FAR struct pkt_conn_s *pkt_alloc(void)
 {
   FAR struct pkt_conn_s *conn;
 
-  /* The free list is protected by a semaphore (that behaves like a mutex). */
+  /* The free list is protected by a mutex. */
 
-  _pkt_semtake(&g_free_sem);
-  conn = (FAR struct pkt_conn_s *)dq_remfirst(&g_free_pkt_connections);
+  nxmutex_lock(&g_free_lock);
+
+  conn = NET_BUFPOOL_TRYALLOC(g_pkt_connections);
   if (conn)
     {
-      /* Make sure that the connection is marked as uninitialized */
-
-      conn->ifindex = 0;
-
       /* Enqueue the connection into the active list */
 
-      dq_addlast(&conn->node, &g_active_pkt_connections);
+      dq_addlast(&conn->sconn.node, &g_active_pkt_connections);
     }
 
-  _pkt_semgive(&g_free_sem);
+  nxmutex_unlock(&g_free_lock);
   return conn;
 }
 
@@ -160,20 +129,21 @@ FAR struct pkt_conn_s *pkt_alloc(void)
 
 void pkt_free(FAR struct pkt_conn_s *conn)
 {
-  /* The free list is protected by a semaphore (that behaves like a mutex). */
+  /* The free list is protected by a mutex. */
 
   DEBUGASSERT(conn->crefs == 0);
 
-  _pkt_semtake(&g_free_sem);
+  nxmutex_lock(&g_free_lock);
 
   /* Remove the connection from the active list */
 
-  dq_rem(&conn->node, &g_active_pkt_connections);
+  dq_rem(&conn->sconn.node, &g_active_pkt_connections);
 
-  /* Free the connection */
+  /* Free the connection. */
 
-  dq_addlast(&conn->node, &g_free_pkt_connections);
-  _pkt_semgive(&g_free_sem);
+  NET_BUFPOOL_FREE(g_pkt_connections, conn);
+
+  nxmutex_unlock(&g_free_lock);
 }
 
 /****************************************************************************
@@ -181,23 +151,21 @@ void pkt_free(FAR struct pkt_conn_s *conn)
  *
  * Description:
  *   Find a connection structure that is the appropriate connection to be
- *   used with the provided Ethernet header
+ *   used with the provided network device
  *
  * Assumptions:
  *   This function is called from network logic at with the network locked.
  *
  ****************************************************************************/
 
-FAR struct pkt_conn_s *pkt_active(FAR struct eth_hdr_s *buf)
+FAR struct pkt_conn_s *pkt_active(FAR struct net_driver_s *dev)
 {
   FAR struct pkt_conn_s *conn =
     (FAR struct pkt_conn_s *)g_active_pkt_connections.head;
 
   while (conn)
     {
-      /* FIXME lmac in conn should have been set by pkt_bind() */
-
-      if (eth_addr_cmp(buf->dest, conn->lmac))
+      if (dev->d_ifindex == conn->ifindex)
         {
           /* Matching connection found.. return a reference to it */
 
@@ -206,7 +174,7 @@ FAR struct pkt_conn_s *pkt_active(FAR struct eth_hdr_s *buf)
 
       /* Look at the next active connection */
 
-      conn = (FAR struct pkt_conn_s *)conn->node.flink;
+      conn = (FAR struct pkt_conn_s *)conn->sconn.node.flink;
     }
 
   return conn;
@@ -231,7 +199,7 @@ FAR struct pkt_conn_s *pkt_nextconn(FAR struct pkt_conn_s *conn)
     }
   else
     {
-      return (FAR struct pkt_conn_s *)conn->node.flink;
+      return (FAR struct pkt_conn_s *)conn->sconn.node.flink;
     }
 }
 

@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/mips/pic32mx/pic32mx-starterkit/src/pic32mx_boot.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -28,9 +30,7 @@
 
 #include <arch/board/board.h>
 
-#include "mips_arch.h"
 #include "mips_internal.h"
-
 #include "pic32mx.h"
 #include "pic32mx-starterkit.h"
 

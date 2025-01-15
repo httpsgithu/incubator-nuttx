@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/stm32l4/stm32l4_timerisr.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -33,8 +35,6 @@
 #include "nvic.h"
 #include "clock/clock.h"
 #include "arm_internal.h"
-#include "arm_arch.h"
-
 #include "chip.h"
 #include "stm32l4.h"
 

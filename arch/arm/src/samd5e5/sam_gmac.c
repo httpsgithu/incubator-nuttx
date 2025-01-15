@@ -1,13 +1,10 @@
 /****************************************************************************
  * arch/arm/src/samd5e5/sam_gmac.c
  *
- *   Copyright (C) 2013-2019 Gregory Nutt. All rights reserved.
- *   Author: Gregory Nutt <gnutt@nuttx.org>
- *
- * The Atmel sample code has a BSD compatible license that requires this
- * copyright notice:
- *
- *   Copyright (c) 2012, Atmel Corporation
+ * SPDX-License-Identifier: BSD-3-Clause
+ * SPDX-FileCopyrightText: 2013-2019 Gregory Nutt. All rights reserved.
+ * SPDX-FileCopyrightText: 2012 Atmel Corporation
+ * SPDX-FileContributor: Gregory Nutt <gnutt@nuttx.org>
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -55,7 +52,6 @@
 #include <string.h>
 #include <assert.h>
 #include <debug.h>
-#include <queue.h>
 #include <errno.h>
 
 #include <arpa/inet.h>
@@ -66,7 +62,7 @@
 #include <nuttx/kmalloc.h>
 #include <nuttx/wqueue.h>
 #include <nuttx/net/gmii.h>
-#include <nuttx/net/arp.h>
+#include <nuttx/net/ip.h>
 #include <nuttx/net/netdev.h>
 #include <nuttx/net/phy.h>
 
@@ -74,9 +70,7 @@
 #  include <nuttx/net/pkt.h>
 #endif
 
-#include "arm_arch.h"
 #include "arm_internal.h"
-
 #include "chip.h"
 #include "hardware/sam_pinmap.h"
 #include "sam_periphclks.h"
@@ -170,12 +164,6 @@
 
 /* Timing *******************************************************************/
 
-/* TX poll delay = 1 seconds.
- * CLK_TCK is the number of clock ticks per second
- */
-
-#define SAM_WDDELAY     (1*CLK_TCK)
-
 /* TX timeout = 1 minute */
 
 #define SAM_TXTIMEOUT   (60*CLK_TCK)
@@ -201,7 +189,6 @@
 struct sam_gmac_s
 {
   uint8_t               ifup    : 1; /* true:ifup false:ifdown */
-  struct wdog_s         txpoll;      /* TX poll timer */
   struct wdog_s         txtimeout;   /* TX timeout timer */
   struct work_s         irqwork;     /* For deferring interrupt work to the work queue */
   struct work_s         pollwork;    /* For deferring poll work to the work queue */
@@ -293,8 +280,8 @@ static uint32_t sam_getreg(struct sam_gmac_s *priv, uintptr_t addr);
 static void sam_putreg(struct sam_gmac_s *priv,
                        uintptr_t addr, uint32_t val);
 #else
-# define sam_getreg(priv,addr)      getreg32(addr)
-# define sam_putreg(priv,addr,val)  putreg32(val,addr)
+#  define sam_getreg(priv,addr)     getreg32(addr)
+#  define sam_putreg(priv,addr,val) putreg32(val,addr)
 #endif
 
 /* Buffer management */
@@ -316,23 +303,20 @@ static int  sam_recvframe(struct sam_gmac_s *priv);
 static void sam_receive(struct sam_gmac_s *priv);
 static void sam_txdone(struct sam_gmac_s *priv);
 
-static void sam_interrupt_work(FAR void *arg);
-static int  sam_gmac_interrupt(int irq, void *context, FAR void *arg);
+static void sam_interrupt_work(void *arg);
+static int  sam_gmac_interrupt(int irq, void *context, void *arg);
 
 /* Watchdog timer expirations */
 
-static void sam_txtimeout_work(FAR void *arg);
+static void sam_txtimeout_work(void *arg);
 static void sam_txtimeout_expiry(wdparm_t arg);
-
-static void sam_poll_work(FAR void *arg);
-static void sam_poll_expiry(wdparm_t arg);
 
 /* NuttX callback functions */
 
 static int  sam_ifup(struct net_driver_s *dev);
 static int  sam_ifdown(struct net_driver_s *dev);
 
-static void sam_txavail_work(FAR void *arg);
+static void sam_txavail_work(void *arg);
 static int  sam_txavail(struct net_driver_s *dev);
 
 #if defined(CONFIG_NET_MCASTGROUP) || defined(CONFIG_NET_ICMPv6)
@@ -381,9 +365,6 @@ static void sam_txreset(struct sam_gmac_s *priv);
 static void sam_rxreset(struct sam_gmac_s *priv);
 static void sam_gmac_reset(struct sam_gmac_s *priv);
 static void sam_macaddress(struct sam_gmac_s *priv);
-#ifdef CONFIG_NET_ICMPv6
-static void sam_ipv6multicast(struct sam_gmac_s *priv);
-#endif
 static int  sam_gmac_configure(struct sam_gmac_s *priv);
 
 /****************************************************************************
@@ -570,7 +551,7 @@ static int sam_buffer_initialize(struct sam_gmac_s *priv)
   /* Allocate buffers */
 
   allocsize = CONFIG_SAMD5E5_GMAC_NTXBUFFERS * sizeof(struct gmac_txdesc_s);
-  priv->txdesc = (struct gmac_txdesc_s *)kmm_memalign(8, allocsize);
+  priv->txdesc = kmm_memalign(8, allocsize);
   if (!priv->txdesc)
     {
       nerr("ERROR: Failed to allocate TX descriptors\n");
@@ -580,7 +561,7 @@ static int sam_buffer_initialize(struct sam_gmac_s *priv)
   memset(priv->txdesc, 0, allocsize);
 
   allocsize = CONFIG_SAMD5E5_GMAC_NRXBUFFERS * sizeof(struct gmac_rxdesc_s);
-  priv->rxdesc = (struct gmac_rxdesc_s *)kmm_memalign(8, allocsize);
+  priv->rxdesc = kmm_memalign(8, allocsize);
   if (!priv->rxdesc)
     {
       nerr("ERROR: Failed to allocate RX descriptors\n");
@@ -591,7 +572,7 @@ static int sam_buffer_initialize(struct sam_gmac_s *priv)
   memset(priv->rxdesc, 0, allocsize);
 
   allocsize = CONFIG_SAMD5E5_GMAC_NTXBUFFERS * GMAC_TX_UNITSIZE;
-  priv->txbuffer = (uint8_t *)kmm_memalign(8, allocsize);
+  priv->txbuffer = kmm_memalign(8, allocsize);
   if (!priv->txbuffer)
     {
       nerr("ERROR: Failed to allocate TX buffer\n");
@@ -600,7 +581,7 @@ static int sam_buffer_initialize(struct sam_gmac_s *priv)
     }
 
   allocsize = CONFIG_SAMD5E5_GMAC_NRXBUFFERS * GMAC_RX_UNITSIZE;
-  priv->rxbuffer = (uint8_t *)kmm_memalign(8, allocsize);
+  priv->rxbuffer = kmm_memalign(8, allocsize);
   if (!priv->rxbuffer)
     {
       nerr("ERROR: Failed to allocate RX buffer\n");
@@ -809,53 +790,21 @@ static int sam_txpoll(struct net_driver_s *dev)
 {
   struct sam_gmac_s *priv = (struct sam_gmac_s *)dev->d_private;
 
-  /* If the polling resulted in data that should be sent out on the network,
-   * the field d_len is set to a value > 0.
+  /* Send the packet */
+
+  sam_transmit(priv);
+
+  /* Check if there are any free TX descriptors.  We cannot perform
+   * the TX poll if we do not have buffering for another packet.
    */
 
-  if (priv->dev.d_len > 0)
+  if (sam_txfree(priv) == 0)
     {
-      /* Look up the destination MAC address and add it to the Ethernet
-       * header.
+      /* We have to terminate the poll if we have no more descriptors
+       * available for another transfer.
        */
 
-#ifdef CONFIG_NET_IPv4
-#ifdef CONFIG_NET_IPv6
-      if (IFF_IS_IPv4(priv->dev.d_flags))
-#endif
-        {
-          arp_out(&priv->dev);
-        }
-#endif /* CONFIG_NET_IPv4 */
-
-#ifdef CONFIG_NET_IPv6
-#ifdef CONFIG_NET_IPv4
-      else
-#endif
-        {
-          neighbor_out(&priv->dev);
-        }
-#endif /* CONFIG_NET_IPv6 */
-
-      if (!devif_loopback(&priv->dev))
-        {
-          /* Send the packet */
-
-          sam_transmit(priv);
-
-          /* Check if there are any free TX descriptors.  We cannot perform
-           * the TX poll if we do not have buffering for another packet.
-           */
-
-          if (sam_txfree(priv) == 0)
-            {
-              /* We have to terminate the poll if we have no more descriptors
-               * available for another transfer.
-               */
-
-              return -EBUSY;
-            }
-        }
+      return -EBUSY;
     }
 
   /* If zero is returned, the polling will continue until all connections
@@ -902,7 +851,7 @@ static void sam_dopoll(struct sam_gmac_s *priv)
        * then poll the network for new XMIT data.
        */
 
-      devif_timer(dev, 0, sam_txpoll);
+      devif_poll(dev, sam_txpoll);
     }
 }
 
@@ -1218,11 +1167,8 @@ static void sam_receive(struct sam_gmac_s *priv)
         {
           ninfo("IPv4 frame\n");
 
-          /* Handle ARP on input then give the IPv4 packet to the network
-           * layer
-           */
+          /* Receive an IPv4 packet from the network device */
 
-          arp_ipin(&priv->dev);
           ipv4_input(&priv->dev);
 
           /* If the above function invocation resulted in data that should be
@@ -1231,21 +1177,6 @@ static void sam_receive(struct sam_gmac_s *priv)
 
           if (priv->dev.d_len > 0)
             {
-              /* Update the Ethernet header with the correct MAC address */
-
-#ifdef CONFIG_NET_IPv6
-              if (IFF_IS_IPv4(priv->dev.d_flags))
-#endif
-                {
-                  arp_out(&priv->dev);
-                }
-#ifdef CONFIG_NET_IPv6
-              else
-                {
-                  neighbor_out(&priv->dev);
-                }
-#endif
-
               /* And send the packet */
 
               sam_transmit(priv);
@@ -1268,21 +1199,6 @@ static void sam_receive(struct sam_gmac_s *priv)
 
           if (priv->dev.d_len > 0)
             {
-              /* Update the Ethernet header with the correct MAC address */
-
-#ifdef CONFIG_NET_IPv4
-              if (IFF_IS_IPv4(priv->dev.d_flags))
-                {
-                  arp_out(&priv->dev);
-                }
-              else
-#endif
-#ifdef CONFIG_NET_IPv6
-                {
-                  neighbor_out(&priv->dev);
-                }
-#endif
-
               /* And send the packet */
 
               sam_transmit(priv);
@@ -1291,13 +1207,13 @@ static void sam_receive(struct sam_gmac_s *priv)
       else
 #endif
 #ifdef CONFIG_NET_ARP
-      if (BUF->type == htons(ETHTYPE_ARP))
+      if (BUF->type == HTONS(ETHTYPE_ARP))
         {
           ninfo("ARP frame\n");
 
           /* Handle ARP packet */
 
-          arp_arpin(&priv->dev);
+          arp_input(&priv->dev);
 
           /* If the above function invocation resulted in data that should be
            * sent out on the network, d_len field will set to a value > 0.
@@ -1419,9 +1335,9 @@ static void sam_txdone(struct sam_gmac_s *priv)
  *
  ****************************************************************************/
 
-static void sam_interrupt_work(FAR void *arg)
+static void sam_interrupt_work(void *arg)
 {
-  FAR struct sam_gmac_s *priv = (FAR struct sam_gmac_s *)arg;
+  struct sam_gmac_s *priv = (struct sam_gmac_s *)arg;
   uint32_t isr;
   uint32_t rsr;
   uint32_t tsr;
@@ -1637,7 +1553,7 @@ static void sam_interrupt_work(FAR void *arg)
  *
  ****************************************************************************/
 
-static int sam_gmac_interrupt(int irq, void *context, FAR void *arg)
+static int sam_gmac_interrupt(int irq, void *context, void *arg)
 {
   struct sam_gmac_s *priv = &g_gmac;
   uint32_t tsr;
@@ -1691,9 +1607,9 @@ static int sam_gmac_interrupt(int irq, void *context, FAR void *arg)
  *
  ****************************************************************************/
 
-static void sam_txtimeout_work(FAR void *arg)
+static void sam_txtimeout_work(void *arg)
 {
-  FAR struct sam_gmac_s *priv = (FAR struct sam_gmac_s *)arg;
+  struct sam_gmac_s *priv = (struct sam_gmac_s *)arg;
 
   nerr("ERROR: Timeout!\n");
 
@@ -1729,7 +1645,7 @@ static void sam_txtimeout_work(FAR void *arg)
 
 static void sam_txtimeout_expiry(wdparm_t arg)
 {
-  FAR struct sam_gmac_s *priv = (FAR struct sam_gmac_s *)arg;
+  struct sam_gmac_s *priv = (struct sam_gmac_s *)arg;
 
   /* Disable further Ethernet interrupts.  This will prevent some race
    * conditions with interrupt work.  There is still a potential race
@@ -1741,72 +1657,6 @@ static void sam_txtimeout_expiry(wdparm_t arg)
   /* Schedule to perform the TX timeout processing on the worker thread. */
 
   work_queue(ETHWORK, &priv->irqwork, sam_txtimeout_work, priv, 0);
-}
-
-/****************************************************************************
- * Function: sam_poll_work
- *
- * Description:
- *   Perform periodic polling from the worker thread
- *
- * Input Parameters:
- *   arg - The argument passed when work_queue() as called.
- *
- * Returned Value:
- *   OK on success
- *
- * Assumptions:
- *   Ethernet interrupts are disabled
- *
- ****************************************************************************/
-
-static void sam_poll_work(FAR void *arg)
-{
-  FAR struct sam_gmac_s *priv = (FAR struct sam_gmac_s *)arg;
-  struct net_driver_s *dev  = &priv->dev;
-
-  /* Check if there are any free TX descriptors.  We cannot perform the
-   * TX poll if we do not have buffering for another packet.
-   */
-
-  net_lock();
-  if (sam_txfree(priv) > 0)
-    {
-      /* Update TCP timing states and poll the network for new XMIT data. */
-
-      devif_timer(dev, sam_txpoll);
-    }
-
-  /* Setup the watchdog poll timer again */
-
-  wd_start(&priv->txpoll, SAM_WDDELAY, sam_poll_expiry, (wdparm_t)priv);
-  net_unlock();
-}
-
-/****************************************************************************
- * Function: sam_poll_expiry
- *
- * Description:
- *   Periodic timer handler.  Called from the timer interrupt handler.
- *
- * Input Parameters:
- *   arg  - The argument
- *
- * Returned Value:
- *   None
- *
- * Assumptions:
- *   Global interrupts are disabled by the watchdog logic.
- *
- ****************************************************************************/
-
-static void sam_poll_expiry(wdparm_t arg)
-{
-  FAR struct sam_gmac_s *priv = (FAR struct sam_gmac_s *)arg;
-
-  /* Schedule to perform the interrupt processing on the worker thread. */
-
-  work_queue(ETHWORK, &priv->pollwork, sam_poll_work, priv, 0);
 }
 
 /****************************************************************************
@@ -1831,9 +1681,9 @@ static int sam_ifup(struct net_driver_s *dev)
   struct sam_gmac_s *priv = (struct sam_gmac_s *)dev->d_private;
   int ret;
 
-  ninfo("Bringing up: %d.%d.%d.%d\n",
-        dev->d_ipaddr & 0xff, (dev->d_ipaddr >> 8) & 0xff,
-        (dev->d_ipaddr >> 16) & 0xff, dev->d_ipaddr >> 24);
+  ninfo("Bringing up: %u.%u.%u.%u\n",
+        ip4_addr1(dev->d_ipaddr), ip4_addr2(dev->d_ipaddr),
+        ip4_addr3(dev->d_ipaddr), ip4_addr4(dev->d_ipaddr));
 
   /* Configure the GMAC interface for normal operation. */
 
@@ -1843,12 +1693,6 @@ static int sam_ifup(struct net_driver_s *dev)
   /* Set the MAC address (should have been configured while we were down) */
 
   sam_macaddress(priv);
-
-#ifdef CONFIG_NET_ICMPv6
-  /* Set up IPv6 multicast address filtering */
-
-  sam_ipv6multicast(priv);
-#endif
 
   /* Initialize for PHY access */
 
@@ -1877,10 +1721,6 @@ static int sam_ifup(struct net_driver_s *dev)
   /* Enable normal MAC operation */
 
   ninfo("Enable normal operation\n");
-
-  /* Set and activate a timer process */
-
-  wd_start(&priv->txpoll, SAM_WDDELAY, sam_poll_expiry, (wdparm_t)priv);
 
   /* Enable the GMAC interrupt */
 
@@ -1917,9 +1757,8 @@ static int sam_ifdown(struct net_driver_s *dev)
   flags = enter_critical_section();
   up_disable_irq(SAM_IRQ_GMAL);
 
-  /* Cancel the TX poll timer and TX timeout timers */
+  /* Cancel the TX timeout timers */
 
-  wd_cancel(&priv->txpoll);
   wd_cancel(&priv->txtimeout);
 
   /* Put the GMAC in its reset, non-operational state.  This should be
@@ -1953,9 +1792,9 @@ static int sam_ifdown(struct net_driver_s *dev)
  *
  ****************************************************************************/
 
-static void sam_txavail_work(FAR void *arg)
+static void sam_txavail_work(void *arg)
 {
-  FAR struct sam_gmac_s *priv = (FAR struct sam_gmac_s *)arg;
+  struct sam_gmac_s *priv = (struct sam_gmac_s *)arg;
 
   ninfo("ifup: %d\n", priv->ifup);
 
@@ -1993,7 +1832,7 @@ static void sam_txavail_work(FAR void *arg)
 
 static int sam_txavail(struct net_driver_s *dev)
 {
-  FAR struct sam_gmac_s *priv = (FAR struct sam_gmac_s *)dev->d_private;
+  struct sam_gmac_s *priv = (struct sam_gmac_s *)dev->d_private;
 
   /* Is our single work structure available?  It may not be if there are
    * pending interrupt actions and we will have to ignore the Tx
@@ -3539,79 +3378,6 @@ static void sam_macaddress(struct sam_gmac_s *priv)
            (uint32_t)dev->d_mac.ether.ether_addr_octet[5] << 8;
   sam_putreg(priv, SAM_GMAC_SAT1, regval);
 }
-
-/****************************************************************************
- * Function: sam_ipv6multicast
- *
- * Description:
- *   Configure the IPv6 multicast MAC address.
- *
- * Input Parameters:
- *   priv - A reference to the private driver state structure
- *
- * Returned Value:
- *   OK on success; Negated errno on failure.
- *
- * Assumptions:
- *
- ****************************************************************************/
-
-#ifdef CONFIG_NET_ICMPv6
-static void sam_ipv6multicast(struct sam_gmac_s *priv)
-{
-  struct net_driver_s *dev;
-  uint16_t tmp16;
-  uint8_t mac[6];
-
-  /* For ICMPv6, we need to add the IPv6 multicast address
-   *
-   * For IPv6 multicast addresses, the Ethernet MAC is derived by
-   * the four low-order octets OR'ed with the MAC 33:33:00:00:00:00,
-   * so for example the IPv6 address FF02:DEAD:BEEF::1:3 would map
-   * to the Ethernet MAC address 33:33:00:01:00:03.
-   *
-   * NOTES:  This appears correct for the ICMPv6 Router Solicitation
-   * Message, but the ICMPv6 Neighbor Solicitation message seems to
-   * use 33:33:ff:01:00:03.
-   */
-
-  mac[0] = 0x33;
-  mac[1] = 0x33;
-
-  dev    = &priv->dev;
-  tmp16  = dev->d_ipv6addr[6];
-  mac[2] = 0xff;
-  mac[3] = tmp16 >> 8;
-
-  tmp16  = dev->d_ipv6addr[7];
-  mac[4] = tmp16 & 0xff;
-  mac[5] = tmp16 >> 8;
-
-  ninfo("IPv6 Multicast: %02x:%02x:%02x:%02x:%02x:%02x\n",
-        mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
-
-  sam_addmac(dev, mac);
-
-#ifdef CONFIG_NET_ICMPv6_AUTOCONF
-  /* Add the IPv6 all link-local nodes Ethernet address.  This is the
-   * address that we expect to receive ICMPv6 Router Advertisement
-   * packets.
-   */
-
-  sam_addmac(dev, g_ipv6_ethallnodes.ether_addr_octet);
-
-#endif /* CONFIG_NET_ICMPv6_AUTOCONF */
-#ifdef CONFIG_NET_ICMPv6_ROUTER
-  /* Add the IPv6 all link-local routers Ethernet address.  This is the
-   * address that we expect to receive ICMPv6 Router Solicitation
-   * packets.
-   */
-
-  sam_addmac(dev, g_ipv6_ethallrouters.ether_addr_octet);
-
-#endif /* CONFIG_NET_ICMPv6_ROUTER */
-}
-#endif /* CONFIG_NET_ICMPv6 */
 
 /****************************************************************************
  * Function: sam_gmac_configure

@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/common/arm_exit.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -24,94 +26,18 @@
 
 #include <nuttx/config.h>
 
-#include <sched.h>
+#include <assert.h>
 #include <debug.h>
+#include <sched.h>
 
 #include <nuttx/arch.h>
 #include <nuttx/irq.h>
-#ifdef CONFIG_DUMP_ON_EXIT
-#  include <nuttx/fs/fs.h>
-#endif
 
 #include "task/task.h"
 #include "sched/sched.h"
 #include "group/group.h"
 #include "irq/irq.h"
 #include "arm_internal.h"
-
-/****************************************************************************
- * Pre-processor Definitions
- ****************************************************************************/
-
-#ifndef CONFIG_DEBUG_SCHED_INFO
-#  undef CONFIG_DUMP_ON_EXIT
-#endif
-
-/****************************************************************************
- * Private Functions
- ****************************************************************************/
-
-/****************************************************************************
- * Name: _up_dumponexit
- *
- * Description:
- *   Dump the state of all tasks whenever on task exits.  This is debug
- *   instrumentation that was added to check file-related reference counting
- *   but could be useful again sometime in the future.
- *
- ****************************************************************************/
-
-#ifdef CONFIG_DUMP_ON_EXIT
-static void _up_dumponexit(FAR struct tcb_s *tcb, FAR void *arg)
-{
-  FAR struct filelist *filelist;
-#ifdef CONFIG_FILE_STREAM
-  FAR struct file_struct *filep;
-#endif
-  int i;
-  int j;
-
-  sinfo("  TCB=%p name=%s pid=%d\n", tcb, tcb->argv[0], tcb->pid);
-  sinfo("    priority=%d state=%d\n", tcb->sched_priority, tcb->task_state);
-
-  filelist = tcb->group->tg_filelist;
-  for (i = 0; i < filelist->fl_rows; i++)
-    {
-      for (j = 0; j < CONFIG_NFILE_DESCRIPTORS_PER_BLOCK; j++)
-        {
-          struct inode *inode = filelist->fl_files[i][j].f_inode;
-          if (inode)
-            {
-              sinfo("      fd=%d refcount=%d\n",
-                    i * CONFIG_NFILE_DESCRIPTORS_PER_BLOCK + j,
-                    inode->i_crefs);
-            }
-        }
-    }
-
-#ifdef CONFIG_FILE_STREAM
-  filep = tcb->group->tg_streamlist->sl_head;
-  for (; filep != NULL; filep = filep->fs_next)
-    {
-      if (filep->fs_fd >= 0)
-        {
-#ifndef CONFIG_STDIO_DISABLE_BUFFERING
-          if (filep->fs_bufstart != NULL)
-            {
-              sinfo("      fd=%d nbytes=%d\n",
-                    filep->fs_fd,
-                    filep->fs_bufpos - filep->fs_bufstart);
-            }
-          else
-#endif
-            {
-              sinfo("      fd=%d\n", filep->fs_fd);
-            }
-        }
-    }
-#endif
-}
-#endif
 
 /****************************************************************************
  * Public Functions
@@ -130,48 +56,30 @@ static void _up_dumponexit(FAR struct tcb_s *tcb, FAR void *arg)
 
 void up_exit(int status)
 {
-  struct tcb_s *tcb = this_task();
-
-  /* Make sure that we are in a critical section with local interrupts.
-   * The IRQ state will be restored when the next task is started.
-   */
-
-  enter_critical_section();
-
-  sinfo("TCB=%p exiting\n", tcb);
-
-#ifdef CONFIG_DUMP_ON_EXIT
-  sinfo("Other tasks:\n");
-  nxsched_foreach(_up_dumponexit, NULL);
-#endif
-
   /* Destroy the task at the head of the ready to run list. */
 
   nxtask_exit();
 
-  /* Now, perform the context switch to the new ready-to-run task at the
-   * head of the list.
+  /* Update g_running_tasks */
+
+#ifdef CONFIG_ARCH_ARMV6M
+  /* ARMV6M syscal may trigger hard fault， We use
+   * running_task != NULL to determine whether it is
+   * a context for restoration.
    */
 
-  tcb = this_task();
-
-  /* Adjusts time slice for SCHED_RR & SCHED_SPORADIC cases
-   * NOTE: the API also adjusts the global IRQ control for SMP
-   */
-
-  nxsched_resume_scheduler(tcb);
-
-#ifdef CONFIG_ARCH_ADDRENV
-  /* Make sure that the address environment for the previously running
-   * task is closed down gracefully (data caches dump, MMU flushed) and
-   * set up the address environment for the new thread at the head of
-   * the ready-to-run list.
-   */
-
-  group_addrenv(tcb);
+  g_running_tasks[this_cpu()] = NULL;
+#else
+  g_running_tasks[this_cpu()] = this_task();
 #endif
 
   /* Then switch contexts */
 
-  arm_fullcontextrestore(tcb->xcp.regs);
+  arm_fullcontextrestore();
+
+  /* arm_fullcontextrestore() should not return but could if the software
+   * interrupts are disabled.
+   */
+
+  PANIC();
 }

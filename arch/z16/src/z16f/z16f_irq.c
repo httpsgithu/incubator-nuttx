@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/z16/src/z16f/z16f_irq.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -52,10 +54,6 @@ void up_irqinitialize(void)
   putreg16(0x0000, Z16F_IRQ0_EN);
   putreg16(0x0000, Z16F_IRQ1_EN);
   putreg16(0x0000, Z16F_IRQ2_EN);
-
-  /* currents_regs is non-NULL only while processing an interrupt */
-
-  g_current_regs = NULL;
 
   /* And finally, enable interrupts */
 

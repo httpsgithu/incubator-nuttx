@@ -49,8 +49,7 @@
 
 #include <arch/board/board.h>
 
-#include "arm_arch.h"
-
+#include "arm_internal.h"
 #include "chip.h"
 
 #include "rp2040_xosc.h"
@@ -76,7 +75,7 @@ void rp2040_xosc_init(void)
 {
   /* Assumes 1-15 MHz input */
 
-  assert(BOARD_XOSC_FREQ <= (15 * MHZ));
+  ASSERT(BOARD_XOSC_FREQ <= (15 * MHZ));
   putreg32(RP2040_XOSC_CTRL_FREQ_RANGE_1_15MHZ, RP2040_XOSC_CTRL);
 
   /* Set xosc startup delay */

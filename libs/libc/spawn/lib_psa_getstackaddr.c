@@ -1,6 +1,8 @@
 /****************************************************************************
  * libs/libc/spawn/lib_psa_getstackaddr.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -35,10 +37,10 @@
  ****************************************************************************/
 
 /****************************************************************************
- * Name: task_spawnattr_getstackaddr
+ * Name: posix_spawnattr_getstackaddr
  *
  * Description:
- *   The task_spawnattr_getstackaddr() function will obtain the value of
+ *   The posix_spawnattr_getstackaddr() function will obtain the value of
  *   the spawn-stackaddr attribute from the attributes object referenced
  *   by attr.
  *
@@ -52,8 +54,8 @@
  *
  ****************************************************************************/
 
-int task_spawnattr_getstackaddr(FAR const posix_spawnattr_t *attr,
-                                FAR void **stackaddr)
+int posix_spawnattr_getstackaddr(FAR const posix_spawnattr_t *attr,
+                                 FAR void **stackaddr)
 {
   DEBUGASSERT(attr && stackaddr);
   *stackaddr = attr->stackaddr;

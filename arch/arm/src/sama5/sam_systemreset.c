@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/sama5/sam_systemreset.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -31,7 +33,7 @@
 #include <nuttx/board.h>
 #include <arch/sama5/chip.h>
 
-#include "arm_arch.h"
+#include "arm_internal.h"
 #include "hardware/sam_rstc.h"
 
 #ifdef CONFIG_SAMA5_SYSTEMRESET
@@ -56,6 +58,10 @@ void up_systemreset(void)
 #endif
 
   rstcr  = (RSTC_CR_PROCRST | RSTC_CR_KEY);
+
+#if defined(CONFIG_ARCH_CHIP_SAMA5D3)
+  rstcr  |= RSTC_CR_PERRST;
+#endif
 
 #if defined(CONFIG_SAMA5_EXTRESET_ERST) && CONFIG_SAMA5_EXTRESET_ERST != 0
   rstcr |= RSTC_CR_EXTRST;

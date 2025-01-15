@@ -43,7 +43,7 @@ config FAT_LFN
 config FAT_MAXFNAME
 	int "FAT maximum file name size"
 	depends on FAT_LFN
-	default 32
+	default NAME_MAX
 	range 12 255
 	---help---
 		If FAT_LFN is defined, then the default, maximum long file
@@ -183,8 +183,7 @@ config FAT_DMAMEMORY
 
 config FAT_DIRECT_RETRY
 	bool "Direct transfer retry"
-	default y if FAT_DMAMEMORY
-	default n if !FAT_DMAMEMORY
+	default FAT_DMAMEMORY
 	depends on !FAT_FORCE_INDIRECT
 	---help---
 		The FAT file system contains internal, well aligned sector buffers

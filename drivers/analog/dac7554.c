@@ -1,6 +1,8 @@
 /****************************************************************************
  * drivers/analog/dac7554.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -76,9 +78,9 @@ static int  dac7554_setup(FAR struct dac_dev_s *dev);
 static void dac7554_shutdown(FAR struct dac_dev_s *dev);
 static void dac7554_txint(FAR struct dac_dev_s *dev, bool enable);
 static int  dac7554_send(FAR struct dac_dev_s *dev,
-              FAR struct dac_msg_s *msg);
+                         FAR struct dac_msg_s *msg);
 static int  dac7554_ioctl(FAR struct dac_dev_s *dev, int cmd,
-              unsigned long arg);
+                          unsigned long arg);
 
 /****************************************************************************
  * Private Data
@@ -86,12 +88,12 @@ static int  dac7554_ioctl(FAR struct dac_dev_s *dev, int cmd,
 
 static const struct dac_ops_s g_dacops =
 {
-  .ao_reset    = dac7554_reset,
-  .ao_setup    = dac7554_setup,
-  .ao_shutdown = dac7554_shutdown,
-  .ao_txint    = dac7554_txint,
-  .ao_send     = dac7554_send,
-  .ao_ioctl    = dac7554_ioctl,
+  dac7554_reset,        /* ao_reset */
+  dac7554_setup,        /* ao_setup */
+  dac7554_shutdown,     /* ao_shutdown */
+  dac7554_txint,        /* ao_txint */
+  dac7554_send,         /* ao_send */
+  dac7554_ioctl         /* ao_ioctl */
 };
 
 /****************************************************************************
@@ -138,7 +140,7 @@ static void dac7554_reset(FAR struct dac_dev_s *dev)
  *
  ****************************************************************************/
 
-static int  dac7554_setup(FAR struct dac_dev_s *dev)
+static int dac7554_setup(FAR struct dac_dev_s *dev)
 {
   return OK;
 }
@@ -245,12 +247,11 @@ FAR struct dac_dev_s *dac7554_initialize(FAR struct spi_dev_s *spi,
 
   /* Initialize the DAC7554 device structure */
 
-  priv =
-    (FAR struct dac7554_dev_s *)kmm_malloc(sizeof(struct dac7554_dev_s));
+  priv = kmm_malloc(sizeof(struct dac7554_dev_s));
   priv->spi = spi;
   priv->spidev = spidev;
 
-  g_dacdev = (FAR struct dac_dev_s *)kmm_malloc(sizeof(struct dac_dev_s));
+  g_dacdev = kmm_malloc(sizeof(struct dac_dev_s));
   g_dacdev->ad_ops = &g_dacops;
   g_dacdev->ad_priv = priv;
 

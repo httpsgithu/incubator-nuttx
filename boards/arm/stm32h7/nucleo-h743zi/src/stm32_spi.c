@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/stm32h7/nucleo-h743zi/src/stm32_spi.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -31,7 +33,7 @@
 
 #include <nuttx/spi/spi.h>
 
-#include "arm_arch.h"
+#include "arm_internal.h"
 #include "chip.h"
 #include "stm32_gpio.h"
 #include "stm32_spi.h"
@@ -62,14 +64,21 @@ void stm32_spidev_initialize(void)
    */
 
 #ifdef CONFIG_STM32H7_SPI3
+  spiinfo("Configure GPIO for SPI3/CS\n");
+
 #  ifdef CONFIG_WL_NRF24L01
   /* Configure the SPI-based NRF24L01 chip select GPIO */
-
-  spiinfo("Configure GPIO for SPI3/CS\n");
 
   stm32_configgpio(GPIO_NRF24L01_CS);
   stm32_gpiowrite(GPIO_NRF24L01_CS, true);
 #  endif
+#  ifdef CONFIG_MMCSD_SPI
+  /* Configure the SPI-based MMC/SD chip select and card detect GPIO */
+
+  stm32_configgpio(GPIO_MMCSD_CS);
+  stm32_gpiowrite(GPIO_MMCSD_CS, true);
+  stm32_configgpio(GPIO_MMCSD_NCD);
+#endif
 #endif
 }
 
@@ -100,35 +109,35 @@ void stm32_spidev_initialize(void)
  ****************************************************************************/
 
 #ifdef CONFIG_STM32H7_SPI1
-void stm32_spi1select(FAR struct spi_dev_s *dev,
+void stm32_spi1select(struct spi_dev_s *dev,
                       uint32_t devid, bool selected)
 {
   spiinfo("devid: %08lx CS: %s\n",
           (unsigned long)devid, selected ? "assert" : "de-assert");
 }
 
-uint8_t stm32_spi1status(FAR struct spi_dev_s *dev, uint32_t devid)
+uint8_t stm32_spi1status(struct spi_dev_s *dev, uint32_t devid)
 {
   return 0;
 }
 #endif
 
 #ifdef CONFIG_STM32H7_SPI2
-void stm32_spi2select(FAR struct spi_dev_s *dev,
+void stm32_spi2select(struct spi_dev_s *dev,
                       uint32_t devid, bool selected)
 {
   spiinfo("devid: %08lx CS: %s\n",
           (unsigned long)devid, selected ? "assert" : "de-assert");
 }
 
-uint8_t stm32_spi2status(FAR struct spi_dev_s *dev, uint32_t devid)
+uint8_t stm32_spi2status(struct spi_dev_s *dev, uint32_t devid)
 {
   return 0;
 }
 #endif
 
 #ifdef CONFIG_STM32H7_SPI3
-void stm32_spi3select(FAR struct spi_dev_s *dev,
+void stm32_spi3select(struct spi_dev_s *dev,
                       uint32_t devid, bool selected)
 {
   switch (devid)
@@ -143,12 +152,19 @@ void stm32_spi3select(FAR struct spi_dev_s *dev,
         stm32_gpiowrite(GPIO_NRF24L01_CS, !selected);
         break;
 #endif
+
+#ifdef CONFIG_MMCSD_SPI
+      case SPIDEV_MMCSD(0):
+        stm32_gpiowrite(GPIO_MMCSD_CS, !selected);
+        break;
+#endif
+
       default:
         break;
     }
 }
 
-uint8_t stm32_spi3status(FAR struct spi_dev_s *dev, uint32_t devid)
+uint8_t stm32_spi3status(struct spi_dev_s *dev, uint32_t devid)
 {
   uint8_t status = 0;
   switch (devid)
@@ -158,6 +174,16 @@ uint8_t stm32_spi3status(FAR struct spi_dev_s *dev, uint32_t devid)
         status |= SPI_STATUS_PRESENT;
         break;
 #endif
+
+#ifdef CONFIG_MMCSD_SPI
+      case SPIDEV_MMCSD(0):
+
+        /* Note: SD_DET is pulled high when there's no SD card present. */
+
+        status |= stm32_gpioread(GPIO_MMCSD_NCD);
+        break;
+#endif
+
       default:
         break;
     }
@@ -167,42 +193,42 @@ uint8_t stm32_spi3status(FAR struct spi_dev_s *dev, uint32_t devid)
 #endif
 
 #ifdef CONFIG_STM32H7_SPI4
-void stm32_spi4select(FAR struct spi_dev_s *dev,
+void stm32_spi4select(struct spi_dev_s *dev,
                       uint32_t devid, bool selected)
 {
   spiinfo("devid: %08lx CS: %s\n",
           (unsigned long)devid, selected ? "assert" : "de-assert");
 }
 
-uint8_t stm32_spi4status(FAR struct spi_dev_s *dev, uint32_t devid)
+uint8_t stm32_spi4status(struct spi_dev_s *dev, uint32_t devid)
 {
   return 0;
 }
 #endif
 
 #ifdef CONFIG_STM32H7_SPI5
-void stm32_spi5select(FAR struct spi_dev_s *dev,
+void stm32_spi5select(struct spi_dev_s *dev,
                       uint32_t devid, bool selected)
 {
   spiinfo("devid: %08lx CS: %s\n",
           (unsigned long)devid, selected ? "assert" : "de-assert");
 }
 
-uint8_t stm32_spi5status(FAR struct spi_dev_s *dev, uint32_t devid)
+uint8_t stm32_spi5status(struct spi_dev_s *dev, uint32_t devid)
 {
   return 0;
 }
 #endif
 
 #ifdef CONFIG_STM32H7_SPI6
-void stm32_spi6select(FAR struct spi_dev_s *dev,
+void stm32_spi6select(struct spi_dev_s *dev,
                       uint32_t devid, bool selected)
 {
   spiinfo("devid: %08lx CS: %s\n",
           (unsigned long)devid, selected ? "assert" : "de-assert");
 }
 
-uint8_t stm32_spi6status(FAR struct spi_dev_s *dev, uint32_t devid)
+uint8_t stm32_spi6status(struct spi_dev_s *dev, uint32_t devid)
 {
   return 0;
 }
@@ -233,42 +259,42 @@ uint8_t stm32_spi6status(FAR struct spi_dev_s *dev, uint32_t devid)
 
 #ifdef CONFIG_SPI_CMDDATA
 #ifdef CONFIG_STM32H7_SPI1
-int stm32_spi1cmddata(FAR struct spi_dev_s *dev, uint32_t devid, bool cmd)
+int stm32_spi1cmddata(struct spi_dev_s *dev, uint32_t devid, bool cmd)
 {
   return -ENODEV;
 }
 #endif
 
 #ifdef CONFIG_STM32H7_SPI2
-int stm32_spi2cmddata(FAR struct spi_dev_s *dev, uint32_t devid, bool cmd)
+int stm32_spi2cmddata(struct spi_dev_s *dev, uint32_t devid, bool cmd)
 {
   return -ENODEV;
 }
 #endif
 
 #ifdef CONFIG_STM32H7_SPI3
-int stm32_spi3cmddata(FAR struct spi_dev_s *dev, uint32_t devid, bool cmd)
+int stm32_spi3cmddata(struct spi_dev_s *dev, uint32_t devid, bool cmd)
 {
   return -ENODEV;
 }
 #endif
 
 #ifdef CONFIG_STM32H7_SPI4
-int stm32_spi4cmddata(FAR struct spi_dev_s *dev, uint32_t devid, bool cmd)
+int stm32_spi4cmddata(struct spi_dev_s *dev, uint32_t devid, bool cmd)
 {
   return -ENODEV;
 }
 #endif
 
 #ifdef CONFIG_STM32H7_SPI5
-int stm32_spi5cmddata(FAR struct spi_dev_s *dev, uint32_t devid, bool cmd)
+int stm32_spi5cmddata(struct spi_dev_s *dev, uint32_t devid, bool cmd)
 {
   return -ENODEV;
 }
 #endif
 
 #ifdef CONFIG_STM32H7_SPI6
-int stm32_spi5cmddata(FAR struct spi_dev_s *dev, uint32_t devid, bool cmd)
+int stm32_spi5cmddata(struct spi_dev_s *dev, uint32_t devid, bool cmd)
 {
   return -ENODEV;
 }

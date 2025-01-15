@@ -1,6 +1,8 @@
 /****************************************************************************
  * libs/libc/netdb/lib_getnameinfo.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -33,8 +35,6 @@
 
 #include "netdb/lib_netdb.h"
 
-#ifdef CONFIG_LIBC_NETDB
-
 /****************************************************************************
  * Public Functions
  ****************************************************************************/
@@ -53,12 +53,12 @@ int getnameinfo(FAR const struct sockaddr *addr, socklen_t addrlen,
   int ret;
 
   if (addr && addr->sa_family == AF_INET &&
-      addrlen == sizeof(struct sockaddr_in))
+      addrlen >= sizeof(struct sockaddr_in))
     {
       FAR const struct sockaddr_in *sa_in;
 
       sa_in = (FAR const struct sockaddr_in *)addr;
-      port = ntohs(sa_in->sin_port);
+      port = NTOHS(sa_in->sin_port);
       saddr = &sa_in->sin_addr;
       saddr_len = sizeof(sa_in->sin_addr);
     }
@@ -69,7 +69,7 @@ int getnameinfo(FAR const struct sockaddr *addr, socklen_t addrlen,
       FAR const struct sockaddr_in6 *sa_in6;
 
       sa_in6 = (FAR const struct sockaddr_in6 *)addr;
-      port = ntohs(sa_in6->sin6_port);
+      port = NTOHS(sa_in6->sin6_port);
       saddr = &sa_in6->sin6_addr;
       saddr_len = sizeof(sa_in6->sin6_addr);
     }
@@ -135,7 +135,7 @@ int getnameinfo(FAR const struct sockaddr *addr, socklen_t addrlen,
                 break;
 
               default:
-                DEBUGASSERT(0);
+                DEBUGPANIC();
             }
 
           /* Fall-back to numeric for the host name. */
@@ -154,7 +154,7 @@ int getnameinfo(FAR const struct sockaddr *addr, socklen_t addrlen,
                 return EAI_OVERFLOW;
 
               default:
-                DEBUGASSERT(0);
+                DEBUGPANIC();
             }
         }
     }
@@ -197,4 +197,3 @@ int getnameinfo(FAR const struct sockaddr *addr, socklen_t addrlen,
   return OK;
 }
 
-#endif /* CONFIG_LIBC_NETDB */

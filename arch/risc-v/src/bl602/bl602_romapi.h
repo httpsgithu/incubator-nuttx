@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/risc-v/src/bl602/bl602_romapi.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -31,6 +33,7 @@
 #define BL602_ROMAPI_FUNC(idx) (*(uintptr_t *)(BL602_ROMAPI_BASE + (idx)*4))
 
 #define BL602_ROMAPI_ASM_DELAY_US              BL602_ROMAPI_FUNC(20)
+#define BL602_ROMAPI_MEMCPY4                   BL602_ROMAPI_FUNC(24)
 #define BL602_ROMAPI_EFUSE_CTRL_LOAD_R0        BL602_ROMAPI_FUNC(31)
 #define BL602_ROMAPI_RST_SYSTEM                BL602_ROMAPI_FUNC(47)
 #define BL602_ROMAPI_RST_CPU_SW                BL602_ROMAPI_FUNC(48)
@@ -43,4 +46,6 @@
 #define BL602_ROMAPI_SFLASH_WRITE_WITHLOCK     BL602_ROMAPI_FUNC(171)
 #define BL602_ROMAPI_SFLASH_EREASE_WITHLOCK    BL602_ROMAPI_FUNC(172)
 
-#endif
+#define bl602_romapi_memcpy_4 ((uint32_t*  (*) (uint32_t*, const uint32_t*, uint32_t))BL602_ROMAPI_MEMCPY4)
+
+#endif /* __ARCH_RISCV_SRC_BL602_BL602_ROMAPI_H */

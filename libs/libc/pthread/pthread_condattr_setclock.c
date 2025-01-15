@@ -1,6 +1,8 @@
 /****************************************************************************
  * libs/libc/pthread/pthread_condattr_setclock.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -51,11 +53,8 @@ int pthread_condattr_setclock(FAR pthread_condattr_t *attr,
                               clockid_t clock_id)
 {
   if (!attr ||
-      (
-#ifdef CONFIG_CLOCK_MONOTONIC
-      clock_id != CLOCK_MONOTONIC &&
-#endif
-      clock_id != CLOCK_REALTIME))
+      (clock_id != CLOCK_MONOTONIC &&
+       clock_id != CLOCK_REALTIME))
     {
       return EINVAL;
     }

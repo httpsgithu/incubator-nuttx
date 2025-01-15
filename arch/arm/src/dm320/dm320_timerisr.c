@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/dm320/dm320_timerisr.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -29,7 +31,6 @@
 #include <nuttx/arch.h>
 
 #include "chip.h"
-#include "arm_arch.h"
 #include "clock/clock.h"
 #include "arm_internal.h"
 
@@ -93,7 +94,7 @@
  *
  ****************************************************************************/
 
-static int dm320_timerisr(int irq, uint32_t *regs, FAR void *arg)
+static int dm320_timerisr(int irq, uint32_t *regs, void *arg)
 {
   /* Process timer interrupt */
 

@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/samd5e5/sam_wdt.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -38,7 +40,6 @@
 #include <arch/board/board.h>
 
 #include "arm_internal.h"
-#include "arm_arch.h"
 #include "sam_periphclks.h"
 #include "sam_wdt.h"
 
@@ -55,7 +56,7 @@
  * Pre-processor Definitions
  ****************************************************************************/
 
-/** N clock cycles */
+/* N clock cycles */
 
 #define WDT_CLK_8CYCLE      8
 #define WDT_CLK_16CYCLE     16
@@ -70,9 +71,7 @@
 #define WDT_CLK_8192CYCLE   8192
 #define WDT_CLK_16384CYCLE  16384
 
-/**
- * \brief Macro is used to indicate the rate of second/millisecond
- */
+/* Macro is used to indicate the rate of second/millisecond */
 
 #define WDT_PERIOD_RATE 1000
 
@@ -80,20 +79,19 @@
  * Private Types
  ****************************************************************************/
 
-/**
- * This structure provides the private representation of the "lower-half"
+/* This structure provides the private representation of the "lower-half"
  * driver state structure.  This structure must be cast-compatible with the
  * well-known watchdog_lowerhalf_s structure.
  */
 
 struct sam_lowerhalf_s
 {
-  FAR const struct watchdog_ops_s  *ops;  /* Lower half operations */
-  uint32_t timeout;                       /* The (actual) selected timeout */
-  uint32_t lastreset;                     /* The last reset time */
-  bool     started;                       /* true: The watchdog timer has been started */
-  uint8_t  prescaler;                     /* Clock prescaler value */
-  uint16_t reload;                        /* Timer reload value */
+  const struct watchdog_ops_s  *ops; /* Lower half operations */
+  uint32_t timeout;                  /* The (actual) selected timeout */
+  uint32_t lastreset;                /* The last reset time */
+  bool     started;                  /* true: The watchdog timer has been started */
+  uint8_t  prescaler;                /* Clock prescaler value */
+  uint16_t reload;                   /* Timer reload value */
 };
 
 /****************************************************************************
@@ -104,12 +102,12 @@ void sam_sync_wdt(int value);
 
 /* "Lower half" driver methods **********************************************/
 
-static int      sam_start(FAR struct watchdog_lowerhalf_s *lower);
-static int      sam_stop(FAR struct watchdog_lowerhalf_s *lower);
-static int      sam_keepalive(FAR struct watchdog_lowerhalf_s *lower);
-static int      sam_getstatus(FAR struct watchdog_lowerhalf_s *lower,
-                  FAR struct watchdog_status_s *status);
-static int      sam_settimeout(FAR struct watchdog_lowerhalf_s *lower,
+static int      sam_start(struct watchdog_lowerhalf_s *lower);
+static int      sam_stop(struct watchdog_lowerhalf_s *lower);
+static int      sam_keepalive(struct watchdog_lowerhalf_s *lower);
+static int      sam_getstatus(struct watchdog_lowerhalf_s *lower,
+                  struct watchdog_status_s *status);
+static int      sam_settimeout(struct watchdog_lowerhalf_s *lower,
                   uint32_t timeout);
 
 /****************************************************************************
@@ -169,9 +167,9 @@ void sam_wdt_dumpregs(void)
  *
  ****************************************************************************/
 
-static int sam_start(FAR struct watchdog_lowerhalf_s *lower)
+static int sam_start(struct watchdog_lowerhalf_s *lower)
 {
-  FAR struct sam_lowerhalf_s *priv = (FAR struct sam_lowerhalf_s *)lower;
+  struct sam_lowerhalf_s *priv = (struct sam_lowerhalf_s *)lower;
   irqstate_t flags;
 
   wdinfo("Entry: started=%d\n");
@@ -219,7 +217,7 @@ static int sam_start(FAR struct watchdog_lowerhalf_s *lower)
  *
  ****************************************************************************/
 
-static int sam_stop(FAR struct watchdog_lowerhalf_s *lower)
+static int sam_stop(struct watchdog_lowerhalf_s *lower)
 {
   /* The watchdog is always disabled after a reset. It is enabled by clearing
    * the WDDIS bit in the WDT_CR register, then it cannot be disabled again
@@ -250,9 +248,9 @@ static int sam_stop(FAR struct watchdog_lowerhalf_s *lower)
  *
  ****************************************************************************/
 
-static int sam_keepalive(FAR struct watchdog_lowerhalf_s *lower)
+static int sam_keepalive(struct watchdog_lowerhalf_s *lower)
 {
-  FAR struct sam_lowerhalf_s *priv = (FAR struct sam_lowerhalf_s *)lower;
+  struct sam_lowerhalf_s *priv = (struct sam_lowerhalf_s *)lower;
   irqstate_t flags;
 
   /* Reload the WDT timer */
@@ -282,10 +280,10 @@ static int sam_keepalive(FAR struct watchdog_lowerhalf_s *lower)
  *
  ****************************************************************************/
 
-static int sam_getstatus(FAR struct watchdog_lowerhalf_s *lower,
-                           FAR struct watchdog_status_s *status)
+static int sam_getstatus(struct watchdog_lowerhalf_s *lower,
+                         struct watchdog_status_s *status)
 {
-  FAR struct sam_lowerhalf_s *priv = (FAR struct sam_lowerhalf_s *)lower;
+  struct sam_lowerhalf_s *priv = (struct sam_lowerhalf_s *)lower;
   uint32_t ticks;
   uint32_t elapsed;
 
@@ -341,10 +339,10 @@ static int sam_getstatus(FAR struct watchdog_lowerhalf_s *lower,
  *
  ****************************************************************************/
 
-static int sam_settimeout(FAR struct watchdog_lowerhalf_s *lower,
-                            uint32_t timeout)
+static int sam_settimeout(struct watchdog_lowerhalf_s *lower,
+                          uint32_t timeout)
 {
-  FAR struct sam_lowerhalf_s *priv = (FAR struct sam_lowerhalf_s *)lower;
+  struct sam_lowerhalf_s *priv = (struct sam_lowerhalf_s *)lower;
   uint64_t            tmp;
   uint32_t            period_cycles;
   uint8_t             timeout_period = WDT_CONFIG_PER_16K;
@@ -364,7 +362,10 @@ static int sam_settimeout(FAR struct watchdog_lowerhalf_s *lower,
   /* check whether overflow */
 
   if (tmp >> 32)
-  return -ERANGE;
+    {
+      leave_critical_section(flags);
+      return -ERANGE;
+    }
 
   period_cycles = (uint32_t)tmp;
 
@@ -443,9 +444,9 @@ static int sam_settimeout(FAR struct watchdog_lowerhalf_s *lower,
  *
  ****************************************************************************/
 
-void sam_wdt_initialize(FAR const char *devpath)
+void sam_wdt_initialize(const char *devpath)
 {
-  FAR struct sam_lowerhalf_s *priv = &g_wdgdev;
+  struct sam_lowerhalf_s *priv = &g_wdgdev;
   DEBUGASSERT((getreg8(SAM_WDT_CTRLA) & WDT_CTRLA_ENABLE) == 0);
   sam_apb_wdt_enableperiph();
 
@@ -453,9 +454,9 @@ void sam_wdt_initialize(FAR const char *devpath)
 
   priv->ops = &g_wdgops;
   priv->started = false;
-  sam_settimeout((FAR struct watchdog_lowerhalf_s *)priv,
+  sam_settimeout((struct watchdog_lowerhalf_s *)priv,
                   BOARD_SCLK_FREQUENCY / 2);
-  (void)watchdog_register(devpath, (FAR struct watchdog_lowerhalf_s *)priv);
+  watchdog_register(devpath, (struct watchdog_lowerhalf_s *)priv);
 }
 
 #endif /* CONFIG_WATCHDOG && CONFIG__WDT */

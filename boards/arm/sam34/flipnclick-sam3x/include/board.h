@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/sam34/flipnclick-sam3x/include/board.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -256,7 +258,7 @@
  *
  * SPI0 is available on the Arduino compatible SPI connector (but no SPI is
  * available on pins D10-D13 of the main Arduino Shield connectors where
- * you might expect then).  The SPI connector is configured as follows:
+ * you might expect them).  The SPI connector is configured as follows:
  *
  *   Pin Board Signal SAM3X  Pin Board Signal SAM3X
  *   --- ------------ -----  --- ------------ -----
@@ -295,7 +297,7 @@
 /* I2C (aka TWI):
  *
  * I2C0 is available on pins D16-D17 of the Arduino Shield connectors where
- * you would expect then.  The SPI connector is configured as follows:
+ * you would expect them.  The SPI connector is configured as follows:
  *
  *   Pin Label J1 Board Signal SAM3X
  *   --- ----- -- ------------ -----

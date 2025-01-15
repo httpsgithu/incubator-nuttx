@@ -1,6 +1,8 @@
 /****************************************************************************
  * net/igmp/igmp_poll.c
  *
+ * SPDX-License-Identifier: BSD-3-Clause
+ *
  *   Copyright (C) 2010, 2018-2019 Gregory Nutt. All rights reserved.
  *   Author: Gregory Nutt <gnutt@nuttx.org>
  *
@@ -66,8 +68,6 @@
 /* Buffer layout */
 
 #define RASIZE      (4)
-#define IPv4BUF     ((FAR struct igmp_iphdr_s *)&dev->d_buf[NET_LL_HDRLEN(dev)])
-#define IGMPBUF(hl) ((FAR struct igmp_hdr_s *)&dev->d_buf[NET_LL_HDRLEN(dev) + (hl)])
 
 /****************************************************************************
  * Private Functions
@@ -90,7 +90,7 @@
 static inline void igmp_sched_send(FAR struct net_driver_s *dev,
                                    FAR struct igmp_group_s *group)
 {
-  in_addr_t *dest;
+  FAR const in_addr_t *dest;
 
   /* REVISIT:  This should be deferred to a work queue */
 
@@ -153,15 +153,11 @@ static inline void igmp_sched_send(FAR struct net_driver_s *dev,
 void igmp_poll(FAR struct net_driver_s *dev)
 {
   FAR struct igmp_group_s *group;
-  uint16_t iphdrlen;
 
   /* Setup the poll operation */
 
-  iphdrlen          = IPv4_HDRLEN + RASIZE;
-
-  dev->d_appdata = &dev->d_buf[NET_LL_HDRLEN(dev) + iphdrlen + IGMP_HDRLEN];
-  dev->d_len     = 0;
-  dev->d_sndlen  = 0;
+  dev->d_len    = 0;
+  dev->d_sndlen = 0;
 
   /* Check each member of the group */
 

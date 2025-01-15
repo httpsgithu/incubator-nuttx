@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/x86/include/io.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -30,7 +32,7 @@
  */
 
 #ifdef CONFIG_ARCH_I486
-# include <arch/i486/io.h>
+#  include <arch/i486/io.h>
 #endif
 
 /****************************************************************************

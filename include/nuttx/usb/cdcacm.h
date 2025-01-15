@@ -1,6 +1,8 @@
 /****************************************************************************
  * include/nuttx/usb/cdcacm.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -57,6 +59,9 @@
  * CONFIG_CDCACM_EPBULKOUT_HSSIZE
  *   Max package size for the bulk OUT endpoint if high speed mode.
  *   Default 512.
+  * CONFIG_CDCACM_EPBULKOUT_SSSIZE
+ *   Max package size for the bulk OUT endpoint if super speed mode.
+ *   Default 1024.
  * CONFIG_CDCACM_EPBULKIN
  *   The logical 7-bit address of a hardware endpoint that supports
  *   bulk IN operation.  Default: 2
@@ -66,6 +71,9 @@
  * CONFIG_CDCACM_EPBULKIN_HSSIZE
  *   Max package size for the bulk IN endpoint if high speed mode.
  *   Default 512.
+ * CONFIG_CDCACM_EPBULKIN_SSSIZE
+ *   Max package size for the bulk IN endpoint if super speed mode.
+ *   Default 1024.
  * CONFIG_CDCACM_NWRREQS and CONFIG_CDCACM_NRDREQS
  *   The number of write/read requests that can be in flight.
  *   CONFIG_CDCACM_NWRREQS includes write requests used for both the
@@ -146,6 +154,10 @@
 #  define CONFIG_CDCACM_EPBULKIN_HSSIZE 512
 #endif
 
+#ifndef CONFIG_CDCACM_EPBULKIN_SSSIZE
+#  define CONFIG_CDCACM_EPBULKIN_SSSIZE 1024
+#endif
+
 #ifndef CONFIG_CDCACM_BULKIN_REQLEN
 #  ifdef CONFIG_USBDEV_DUALSPEED
 #    define CONFIG_CDCACM_BULKIN_REQLEN (3 * CONFIG_CDCACM_EPBULKIN_FSSIZE / 2)
@@ -174,6 +186,10 @@
 
 #ifndef CONFIG_CDCACM_EPBULKOUT_HSSIZE
 #  define CONFIG_CDCACM_EPBULKOUT_HSSIZE 512
+#endif
+
+#ifndef CONFIG_CDCACM_EPBULKOUT_SSSIZE
+#  define CONFIG_CDCACM_EPBULKOUT_SSSIZE 1024
 #endif
 
 /* Number of requests in the write queue.  This includes write requests used
@@ -284,11 +300,11 @@
 
 #undef EXTERN
 #if defined(__cplusplus)
-# define EXTERN extern "C"
+#  define EXTERN extern "C"
 extern "C"
 {
 #else
-# define EXTERN extern
+#  define EXTERN extern
 #endif
 
 /* Reported serial events.  Data is associated with CDCACM_EVENT_LINECODING
@@ -311,6 +327,8 @@ enum cdcacm_event_e
 };
 
 typedef CODE void (*cdcacm_callback_t)(enum cdcacm_event_e event);
+
+struct usbdevclass_driver_s;
 
 /****************************************************************************
  * Public Function Prototypes
@@ -336,7 +354,6 @@ typedef CODE void (*cdcacm_callback_t)(enum cdcacm_event_e event);
 
 #if defined(CONFIG_USBDEV_COMPOSITE) && defined(CONFIG_CDCACM_COMPOSITE)
 struct usbdev_devinfo_s;
-struct usbdevclass_driver_s;
 int cdcacm_classobject(int minor, FAR struct usbdev_devinfo_s *devinfo,
                        FAR struct usbdevclass_driver_s **classdev);
 #endif
@@ -378,19 +395,13 @@ int cdcacm_initialize(int minor, FAR void **handle);
  *   standalone USB driver:
  *
  *     classdev - The class object returned by cdcacm_classobject()
- *     handle - The opaque handle representing the class object returned by
- *       a previous call to cdcacm_initialize().
  *
  * Returned Value:
  *   None
  *
  ****************************************************************************/
 
-#if defined(CONFIG_USBDEV_COMPOSITE) && defined(CONFIG_CDCACM_COMPOSITE)
 void cdcacm_uninitialize(FAR struct usbdevclass_driver_s *classdev);
-#else
-void cdcacm_uninitialize(FAR void *handle);
-#endif
 
 /****************************************************************************
  * Name: cdcacm_get_composite_devdesc

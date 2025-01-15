@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/stm32l4/b-l475e-iot01a/src/stm32_bringup.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -92,8 +94,8 @@ int stm32l4_bringup(void)
     {
       /* Create an instance of the STM32L4 QSPI device driver */
 
-      FAR struct qspi_dev_s *g_qspi;
-      FAR struct mtd_dev_s *g_mtd_fs;
+      struct qspi_dev_s *g_qspi;
+      struct mtd_dev_s *g_mtd_fs;
 
       g_qspi = stm32l4_qspi_initialize(0);
       if (g_qspi == NULL)
@@ -122,10 +124,10 @@ int stm32l4_bringup(void)
           int partoffset;
           int partszbytes;
           int erasesize;
-          FAR struct mtd_geometry_s geo;
+          struct mtd_geometry_s geo;
           const char *ptr = CONFIG_B_L475E_IOT01A_MTD_PART_LIST;
-          FAR struct mtd_dev_s *mtd_part;
-          char  partref[4];
+          struct mtd_dev_s *mtd_part;
+          char  partref[16];
 
           /* Now create a partition on the FLASH device */
 
@@ -182,12 +184,12 @@ int stm32l4_bringup(void)
                * the MTD device
                */
 
-              sprintf(partref, "p%d", partno);
+              snprintf(partref, sizeof(partref), "p%d", partno);
               smart_initialize(CONFIG_B_L475E_IOT01A_MTD_FLASH_MINOR,
                               mtd_part, partref);
 #endif
 
-  process_next_part:
+process_next_part:
 
               /* Update the pointer to point to the next size in the list */
 

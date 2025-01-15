@@ -1,8 +1,11 @@
 /****************************************************************************
  * arch/arm/src/s32k1xx/s32k1xx_clockconfig.c
  *
- *   Copyright (C) 2019 Gregory Nutt. All rights reserved.
- *   Author: Gregory Nutt <gnutt@nuttx.org>
+ * SPDX-License-Identifier: BSD-3-Clause
+ * SPDX-FileCopyrightText: 2019 Gregory Nutt. All rights reserved.
+ * SPDX-FileCopyrightText: 2016-2018 NXP
+ * SPDX-FileCopyrightText: 2013 - 2015, Freescale Semiconductor, Inc.
+ * SPDX-FileContributor: Gregory Nutt <gnutt@nuttx.org>
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -65,9 +68,7 @@
 #include <nuttx/arch.h>
 #include <nuttx/power/pm.h>
 
-#include "arm_arch.h"
 #include "arm_internal.h"
-
 #include "hardware/s32k1xx_scg.h"
 #include "hardware/s32k1xx_smc.h"
 #include "hardware/s32k1xx_sim.h"
@@ -121,18 +122,6 @@
 
 #define SCG_SPLL_REF_MIN 8000000
 #define SCG_SPLL_REF_MAX 32000000
-
-/* Power management definitions */
-
-#if defined(CONFIG_PM)
-#ifndef PM_IDLE_DOMAIN
-#  define PM_IDLE_DOMAIN      0 /* Revisit */
-#endif
-#endif
-
-#ifndef OK
-#define OK 0
-#endif
 
 /****************************************************************************
  * Private Function Declarations
@@ -1883,7 +1872,7 @@ static void up_pm_notify(struct pm_callback_s *cb, int domain,
             {
               /* error */
 
-              DEBUGASSERT(false);
+              DEBUGPANIC();
             }
           }
 
@@ -1893,7 +1882,7 @@ static void up_pm_notify(struct pm_callback_s *cb, int domain,
           {
             /* error */
 
-            DEBUGASSERT(false);
+            DEBUGPANIC();
           }
 
           /* calculate the new clock ticks */
@@ -2022,7 +2011,7 @@ static void up_pm_notify(struct pm_callback_s *cb, int domain,
             {
               /* error */
 
-              DEBUGASSERT(false);
+              DEBUGPANIC();
             }
           }
 
@@ -2032,7 +2021,7 @@ static void up_pm_notify(struct pm_callback_s *cb, int domain,
           {
             /* error */
 
-            DEBUGASSERT(false);
+            DEBUGPANIC();
           }
 
 #endif /* CONFIG_RUN_STANDBY */
@@ -2220,7 +2209,7 @@ static void up_pm_notify(struct pm_callback_s *cb, int domain,
             {
               /* error */
 
-              DEBUGASSERT(false);
+              DEBUGPANIC();
             }
           }
 
@@ -2230,7 +2219,7 @@ static void up_pm_notify(struct pm_callback_s *cb, int domain,
           {
             /* error */
 
-            DEBUGASSERT(false);
+            DEBUGPANIC();
           }
 
 #endif /* CONFIG_RUN_SLEEP */
@@ -2554,13 +2543,6 @@ int s32k1xx_clockconfig(const struct clock_configuration_s *clkcfg)
 
   DEBUGASSERT(clkcfg != NULL);
 
-#ifdef CONFIG_PM
-  /* Register to receive power management callbacks */
-
-  ret = pm_register(&g_clock_pmcb);
-  DEBUGASSERT(ret == OK);
-#endif
-
   /* Set SCG configuration */
 
   ret = s32k1xx_scg_config(&clkcfg->scg);
@@ -2572,7 +2554,7 @@ int s32k1xx_clockconfig(const struct clock_configuration_s *clkcfg)
 
       /* Set PCC configuration */
 
-      s32k1xx_periphclocks(clkcfg->pcc.count, clkcfg->pcc.pclks);
+      s32k1xx_periphclocks(num_of_peripheral_clocks_0, clkcfg->pcc.pclks);
 
       /* Set SIM configuration */
 
@@ -2585,6 +2567,29 @@ int s32k1xx_clockconfig(const struct clock_configuration_s *clkcfg)
 
   return ret;
 }
+
+/****************************************************************************
+ * Name: s32k1xx_clock_pm_register
+ *
+ * Description:
+ *   This function is called after OS and PM init in order to register to
+ *   receive power management event callbacks.
+ *
+ * Input Parameters:
+ *   None
+ *
+ * Returned Values:
+ *   None
+ *
+ ****************************************************************************/
+#ifdef CONFIG_PM
+void s32k1xx_clock_pm_register(void)
+{
+  /* Register to receive power management callbacks */
+
+  pm_register(&g_clock_pmcb);
+}
+#endif
 
 /****************************************************************************
  * Name: s32k1xx_get_coreclk

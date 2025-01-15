@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/imxrt/imxrt_lpspi.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -65,7 +67,7 @@ struct spi_dev_s; /* Forward reference */
  *
  ****************************************************************************/
 
-FAR struct spi_dev_s *imxrt_lpspibus_initialize(int bus);
+struct spi_dev_s *imxrt_lpspibus_initialize(int bus);
 
 /****************************************************************************
  * Name:  imxrt_lpspi1/2/...select and imxrt_lpspi1/2/...status
@@ -99,34 +101,50 @@ FAR struct spi_dev_s *imxrt_lpspibus_initialize(int bus);
  ****************************************************************************/
 
 #ifdef CONFIG_IMXRT_LPSPI1
-void imxrt_lpspi1select(FAR struct spi_dev_s *dev,
+void imxrt_lpspi1select(struct spi_dev_s *dev,
                         uint32_t devid, bool selected);
-uint8_t imxrt_lpspi1status(FAR struct spi_dev_s *dev, uint32_t devid);
-int imxrt_lpspi1cmddata(FAR struct spi_dev_s *dev,
+uint8_t imxrt_lpspi1status(struct spi_dev_s *dev, uint32_t devid);
+int imxrt_lpspi1cmddata(struct spi_dev_s *dev,
                         uint32_t devid, bool cmd);
 #endif
 
 #ifdef CONFIG_IMXRT_LPSPI2
-void imxrt_lpspi2select(FAR struct spi_dev_s *dev,
+void imxrt_lpspi2select(struct spi_dev_s *dev,
                         uint32_t devid, bool selected);
-uint8_t imxrt_lpspi2status(FAR struct spi_dev_s *dev, uint32_t devid);
-int imxrt_lpspi2cmddata(FAR struct spi_dev_s *dev,
+uint8_t imxrt_lpspi2status(struct spi_dev_s *dev, uint32_t devid);
+int imxrt_lpspi2cmddata(struct spi_dev_s *dev,
                         uint32_t devid, bool cmd);
 #endif
 
 #ifdef CONFIG_IMXRT_LPSPI3
-void imxrt_lpspi3select(FAR struct spi_dev_s *dev,
+void imxrt_lpspi3select(struct spi_dev_s *dev,
                         uint32_t devid, bool selected);
-uint8_t imxrt_lpspi3status(FAR struct spi_dev_s *dev, uint32_t devid);
-int imxrt_lpspi3cmddata(FAR struct spi_dev_s *dev,
+uint8_t imxrt_lpspi3status(struct spi_dev_s *dev, uint32_t devid);
+int imxrt_lpspi3cmddata(struct spi_dev_s *dev,
                         uint32_t devid, bool cmd);
 #endif
 
 #ifdef CONFIG_IMXRT_LPSPI4
-void imxrt_lpspi4select(FAR struct spi_dev_s *dev,
+void imxrt_lpspi4select(struct spi_dev_s *dev,
                         uint32_t devid, bool selected);
-uint8_t imxrt_lpspi4status(FAR struct spi_dev_s *dev, uint32_t devid);
-int imxrt_lpspi4cmddata(FAR struct spi_dev_s *dev,
+uint8_t imxrt_lpspi4status(struct spi_dev_s *dev, uint32_t devid);
+int imxrt_lpspi4cmddata(struct spi_dev_s *dev,
+                        uint32_t devid, bool cmd);
+#endif
+
+#ifdef CONFIG_IMXRT_LPSPI5
+void imxrt_lpspi5select(struct spi_dev_s *dev,
+                        uint32_t devid, bool selected);
+uint8_t imxrt_lpspi5status(struct spi_dev_s *dev, uint32_t devid);
+int imxrt_lpspi5cmddata(struct spi_dev_s *dev,
+                        uint32_t devid, bool cmd);
+#endif
+
+#ifdef CONFIG_IMXRT_LPSPI6
+void imxrt_lpspi6select(struct spi_dev_s *dev,
+                        uint32_t devid, bool selected);
+uint8_t imxrt_lpspi6status(struct spi_dev_s *dev, uint32_t devid);
+int imxrt_lpspi6cmddata(struct spi_dev_s *dev,
                         uint32_t devid, bool cmd);
 #endif
 
@@ -152,27 +170,39 @@ int imxrt_lpspi4cmddata(FAR struct spi_dev_s *dev,
 
 #ifdef CONFIG_SPI_CALLBACK
 #ifdef CONFIG_IMXRT_LPSPI1
-int imxrt_lpspi1register(FAR struct spi_dev_s *dev,
+int imxrt_lpspi1register(struct spi_dev_s *dev,
                          spi_mediachange_t callback,
-                         FAR void *arg);
+                         void *arg);
 #endif
 
 #ifdef CONFIG_IMXRT_LPSPI2
-int imxrt_lpspi2register(FAR struct spi_dev_s *dev,
+int imxrt_lpspi2register(struct spi_dev_s *dev,
                          spi_mediachange_t callback,
-                         FAR void *arg);
+                         void *arg);
 #endif
 
 #ifdef CONFIG_IMXRT_LPSPI3
-int imxrt_lpspi3register(FAR struct spi_dev_s *dev,
+int imxrt_lpspi3register(struct spi_dev_s *dev,
                          spi_mediachange_t callback,
-                         FAR void *arg);
+                         void *arg);
 #endif
 
 #ifdef CONFIG_IMXRT_LPSPI4
-int imxrt_lpspi4register(FAR struct spi_dev_s *dev,
+int imxrt_lpspi4register(struct spi_dev_s *dev,
                          spi_mediachange_t callback,
-                         FAR void *arg);
+                         void *arg);
+#endif
+
+#ifdef CONFIG_IMXRT_LPSPI5
+int imxrt_lpspi5register(struct spi_dev_s *dev,
+                         spi_mediachange_t callback,
+                         void *arg);
+#endif
+
+#ifdef CONFIG_IMXRT_LPSPI6
+int imxrt_lpspi6register(struct spi_dev_s *dev,
+                         spi_mediachange_t callback,
+                         void *arg);
 #endif
 #endif
 

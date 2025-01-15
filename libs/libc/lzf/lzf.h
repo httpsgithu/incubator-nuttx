@@ -1,8 +1,8 @@
 /****************************************************************************
  * libs/libc/lzf/lzf.h
  *
- * Copyright (c) 2000-2007
- * Author: Marc Alexander Lehmann <schmorp@schmorp.de>
+ * SPDX-License-Identifier: BSD-2-Clause
+ * SPDX-FileCopyrightText: 2000-2007 Marc Alexander Lehmann <schmorp@schmorp.de>
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -28,8 +28,8 @@
  *
  ****************************************************************************/
 
-#ifndef __LIBC_LZF_LZF_H
-#define __LIBC_LZF_LZF_H
+#ifndef __LIBS_LIBC_LZF_LZF_H
+#define __LIBS_LIBC_LZF_LZF_H
 
 /****************************************************************************
  * Included Files
@@ -92,4 +92,4 @@ using namespace std;
  * Public Types
  ****************************************************************************/
 
-#endif /* __LIBC_LZF_LZF_H */
+#endif /* __LIBS_LIBC_LZF_LZF_H */

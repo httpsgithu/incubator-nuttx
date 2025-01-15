@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/dm320/ntosd-dm320/src/dm320_network.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -28,9 +30,7 @@
 #include <debug.h>
 #include <arch/board/board.h>
 
-#include "arm_arch.h"
 #include "arm_internal.h"
-
 #include "dm320_memorymap.h"
 #include "dm320_emif.h"
 #include "dm320_gio.h"

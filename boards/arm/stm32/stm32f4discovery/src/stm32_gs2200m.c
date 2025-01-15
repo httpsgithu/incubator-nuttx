@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/stm32/stm32f4discovery/src/stm32_gs2200m.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -33,7 +35,7 @@
 #include <nuttx/spinlock.h>
 #include <nuttx/wireless/gs2200m.h>
 
-#include "arm_arch.h"
+#include "arm_internal.h"
 #include "chip.h"
 #include "stm32.h"
 
@@ -55,7 +57,7 @@
  * Private Function Prototypes
  ****************************************************************************/
 
-static int  gs2200m_irq_attach(xcpt_t, FAR void *);
+static int  gs2200m_irq_attach(xcpt_t, void *);
 static void gs2200m_irq_enable(void);
 static void gs2200m_irq_disable(void);
 static uint32_t gs2200m_dready(int *);
@@ -64,6 +66,8 @@ static void gs2200m_reset(bool);
 /****************************************************************************
  * Private Data
  ****************************************************************************/
+
+static spinlock_t g_gs2200m_lock = SP_UNLOCKED;
 
 static const struct gs2200m_lower_s g_wifi_lower =
 {
@@ -74,12 +78,12 @@ static const struct gs2200m_lower_s g_wifi_lower =
   .reset   = gs2200m_reset
 };
 
-static FAR void *g_devhandle = NULL;
+static void *g_devhandle = NULL;
 static volatile int32_t  _enable_count = 0;
 static volatile uint32_t _n_called;
 
-static xcpt_t    g_irq_handler = NULL;
-static FAR void *g_irq_arg = NULL;
+static xcpt_t g_irq_handler = NULL;
+static void *g_irq_arg = NULL;
 
 /****************************************************************************
  * Private Functions
@@ -89,7 +93,7 @@ static FAR void *g_irq_arg = NULL;
  * Name: gs2200m_irq_attach
  ****************************************************************************/
 
-static int gs2200m_irq_attach(xcpt_t handler, FAR void *arg)
+static int gs2200m_irq_attach(xcpt_t handler, void *arg)
 {
   /* NOTE: Just save the handler and arg here */
 
@@ -104,12 +108,13 @@ static int gs2200m_irq_attach(xcpt_t handler, FAR void *arg)
 
 static void gs2200m_irq_enable(void)
 {
-  irqstate_t flags = spin_lock_irqsave(NULL);
+  irqstate_t flags;
   uint32_t dready = 0;
 
-  wlinfo("== ec:%" PRId32 " called=%" PRId32 " \n",
+  wlinfo("== ec:%" PRId32 " called=%" PRId32 "\n",
          _enable_count, _n_called++);
 
+  flags = spin_lock_irqsave(&g_gs2200m_lock);
   if (0 == _enable_count)
     {
       /* Check if irq has been asserted */
@@ -124,13 +129,13 @@ static void gs2200m_irq_enable(void)
 
   _enable_count++;
 
-  spin_unlock_irqrestore(NULL, flags);
+  spin_unlock_irqrestore(&g_gs2200m_lock, flags);
 
   if (dready)
     {
       /* Call g_irq_handler directly */
 
-      wlinfo("== ** call irq handler ** \n");
+      wlinfo("== ** call irq handler **\n");
       g_irq_handler(0, NULL, g_irq_arg);
     }
 }
@@ -141,11 +146,12 @@ static void gs2200m_irq_enable(void)
 
 static void gs2200m_irq_disable(void)
 {
-  irqstate_t flags = spin_lock_irqsave(NULL);
+  irqstate_t flags;
 
-  wlinfo("== ec:%" PRId32 " called=%" PRId32 " \n",
+  wlinfo("== ec:%" PRId32 " called=%" PRId32 "\n",
          _enable_count, _n_called++);
 
+  flags = spin_lock_irqsave(&g_gs2200m_lock);
   _enable_count--;
 
   if (0 == _enable_count)
@@ -154,7 +160,7 @@ static void gs2200m_irq_disable(void)
                          false, NULL, NULL);
     }
 
-  spin_unlock_irqrestore(NULL, flags);
+  spin_unlock_irqrestore(&g_gs2200m_lock, flags);
 }
 
 /****************************************************************************
@@ -163,7 +169,7 @@ static void gs2200m_irq_disable(void)
 
 static uint32_t gs2200m_dready(int *ec)
 {
-  irqstate_t flags = spin_lock_irqsave(NULL);
+  irqstate_t flags = spin_lock_irqsave(&g_gs2200m_lock);
 
   uint32_t r = stm32_gpioread(GPIO_GS2200M_INT);
 
@@ -174,7 +180,7 @@ static uint32_t gs2200m_dready(int *ec)
       *ec = _enable_count;
     }
 
-  spin_unlock_irqrestore(NULL, flags);
+  spin_unlock_irqrestore(&g_gs2200m_lock, flags);
   return r;
 }
 
@@ -213,9 +219,9 @@ static void _config_pin(void)
  * Name: stm32_gs2200m_initialize
  ****************************************************************************/
 
-int stm32_gs2200m_initialize(FAR const char *devpath, int bus)
+int stm32_gs2200m_initialize(const char *devpath, int bus)
 {
-  FAR struct spi_dev_s *spi;
+  struct spi_dev_s *spi;
 
   wlinfo("Initializing GS2200M..\n");
 

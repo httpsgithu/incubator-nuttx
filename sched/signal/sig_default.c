@@ -1,6 +1,8 @@
 /****************************************************************************
  * sched/signal/sig_default.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -28,10 +30,10 @@
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
-#include <pthread.h>
 #include <signal.h>
 #include <assert.h>
 
+#include <nuttx/pthread.h>
 #include <nuttx/sched.h>
 #include <nuttx/spinlock.h>
 #include <nuttx/signal.h>
@@ -105,31 +107,47 @@ static void nxsig_setup_default_action(FAR struct task_group_s *group,
 
 static const struct nxsig_defaction_s g_defactions[] =
 {
+#ifdef CONFIG_SIG_SIGKILL_ACTION
+  { SIGHUP,    0,                nxsig_abnormal_termination },
+  { SIGINT,    0,                nxsig_abnormal_termination },
+  { SIGQUIT,   0,                nxsig_abnormal_termination },
+  { SIGILL,    0,                nxsig_abnormal_termination },
+  { SIGTRAP,   0,                nxsig_abnormal_termination },
+  { SIGABRT,   0,                nxsig_abnormal_termination },
+  { SIGBUS,    0,                nxsig_abnormal_termination },
+  { SIGFPE,    0,                nxsig_abnormal_termination },
+  { SIGKILL,   SIG_FLAG_NOCATCH, nxsig_abnormal_termination },
+  { SIGSEGV,   0,                nxsig_abnormal_termination },
+  { SIGTERM,   0,                nxsig_abnormal_termination },
+  { SIGXCPU,   0,                nxsig_abnormal_termination },
+  { SIGXFSZ,   0,                nxsig_abnormal_termination },
+  { SIGSYS,    0,                nxsig_abnormal_termination },
+#endif
 #ifdef CONFIG_SIG_SIGUSR1_ACTION
-  { SIGUSR1, 0,                nxsig_abnormal_termination },
+  { SIGUSR1,   0,                nxsig_abnormal_termination },
 #endif
 #ifdef CONFIG_SIG_SIGUSR2_ACTION
-  { SIGUSR2, 0,                nxsig_abnormal_termination },
-#endif
-#ifdef CONFIG_SIG_SIGALRM_ACTION
-  { SIGALRM, 0,                nxsig_abnormal_termination },
-#endif
-#ifdef CONFIG_SIG_SIGPOLL_ACTION
-  { SIGPOLL, 0,                nxsig_abnormal_termination },
-#endif
-#ifdef CONFIG_SIG_SIGSTOP_ACTION
-  { SIGSTOP, SIG_FLAG_NOCATCH, nxsig_stop_task },
-  { SIGTSTP, 0,                nxsig_stop_task },
-  { SIGCONT, SIG_FLAG_NOCATCH, nxsig_null_action },
-#endif
-#ifdef CONFIG_SIG_SIGKILL_ACTION
-  { SIGINT,  0,                nxsig_abnormal_termination },
-  { SIGKILL, SIG_FLAG_NOCATCH, nxsig_abnormal_termination },
-  { SIGQUIT, 0,                nxsig_abnormal_termination },
-  { SIGTERM, 0,                nxsig_abnormal_termination },
+  { SIGUSR2,   0,                nxsig_abnormal_termination },
 #endif
 #ifdef CONFIG_SIG_SIGPIPE_ACTION
-  { SIGPIPE, 0,                nxsig_abnormal_termination }
+  { SIGPIPE,   0,                nxsig_abnormal_termination },
+#endif
+#ifdef CONFIG_SIG_SIGALRM_ACTION
+  { SIGALRM,   0,                nxsig_abnormal_termination },
+  { SIGVTALRM, 0,                nxsig_abnormal_termination },
+#endif
+#ifdef CONFIG_SIG_SIGSTOP_ACTION
+  { SIGCONT,   0,                nxsig_null_action },
+  { SIGSTOP,   SIG_FLAG_NOCATCH, nxsig_stop_task },
+  { SIGTSTP,   0,                nxsig_stop_task },
+  { SIGTTIN,   0,                nxsig_stop_task },
+  { SIGTTOU,   0,                nxsig_stop_task },
+#endif
+#ifdef CONFIG_SIG_SIGPROF_ACTION
+  { SIGPROF,   0,                nxsig_abnormal_termination },
+#endif
+#ifdef CONFIG_SIG_SIGPOLL_ACTION
+  { SIGPOLL,   0,                nxsig_abnormal_termination },
 #endif
 };
 
@@ -192,7 +210,7 @@ static void nxsig_null_action(int signo)
 #ifdef HAVE_NXSIG_ABNORMAL_TERMINANTION
 static void nxsig_abnormal_termination(int signo)
 {
-  FAR struct tcb_s *rtcb = (FAR struct tcb_s *)this_task();
+  FAR struct tcb_s *rtcb = this_task();
 
   /* Careful:  In the multi-threaded task, the signal may be handled on a
    * child pthread.
@@ -207,6 +225,8 @@ static void nxsig_abnormal_termination(int signo)
   group_kill_children(rtcb);
 #endif
 
+  tls_cleanup_popall(tls_get_info());
+
 #ifndef CONFIG_DISABLE_PTHREAD
   /* Check if the currently running task is actually a pthread */
 
@@ -217,21 +237,16 @@ static void nxsig_abnormal_termination(int signo)
        * REVISIT:  This will not work if HAVE_GROUP_MEMBERS is not set.
        */
 
-      rtcb->flags &= ~TCB_FLAG_CANCEL_PENDING;
-      rtcb->flags |= TCB_FLAG_CANCEL_DOING;
-#if !defined(CONFIG_BUILD_FLAT) && defined(__KERNEL__)
-      up_pthread_exit(((FAR struct pthread_tcb_s *)rtcb)->exit,
-                                  PTHREAD_CANCELED);
-#else
-      pthread_exit(PTHREAD_CANCELED);
-#endif
+      nx_pthread_exit(NULL);
     }
   else
 #endif
     {
-      /* Exit to terminate the task (note that exit() vs. _exit() is used. */
+      UNUSED(rtcb);
 
-      exit(EXIT_FAILURE);
+      /* Exit to terminate the task. */
+
+      _exit(EXIT_FAILURE);
     }
 }
 #endif
@@ -253,7 +268,7 @@ static void nxsig_abnormal_termination(int signo)
 #ifdef CONFIG_SIG_SIGSTOP_ACTION
 static void nxsig_stop_task(int signo)
 {
-  FAR struct tcb_s *rtcb = (FAR struct tcb_s *)this_task();
+  FAR struct tcb_s *rtcb = this_task();
 #if defined(CONFIG_SCHED_WAITPID) && !defined(CONFIG_SCHED_HAVE_PARENT)
   FAR struct task_group_s *group;
 
@@ -519,9 +534,9 @@ _sa_handler_t nxsig_default(FAR struct tcb_s *tcb, int signo, bool defaction)
         {
           /* nxsig_addset() is not atomic (but neither is sigaction()) */
 
-          flags = spin_lock_irqsave(NULL);
+          flags = spin_lock_irqsave(&group->tg_lock);
           nxsig_addset(&group->tg_sigdefault, signo);
-          spin_unlock_irqrestore(NULL, flags);
+          spin_unlock_irqrestore(&group->tg_lock, flags);
         }
     }
 
@@ -531,9 +546,9 @@ _sa_handler_t nxsig_default(FAR struct tcb_s *tcb, int signo, bool defaction)
        * atomic (but neither is sigaction()).
        */
 
-      flags = spin_lock_irqsave(NULL);
+      flags = spin_lock_irqsave(&group->tg_lock);
       nxsig_delset(&group->tg_sigdefault, signo);
-      spin_unlock_irqrestore(NULL, flags);
+      spin_unlock_irqrestore(&group->tg_lock, flags);
     }
 
   return handler;

@@ -1,8 +1,9 @@
 /****************************************************************************
  * include/sys/epoll.h
  *
- *   Copyright (C) 2015 Anton D. Kachalov. All rights reserved.
- *   Author: Anton D. Kachalov <mouse@mayc.ru>
+ * SPDX-License-Identifier: BSD-3-Clause
+ * SPDX-FileCopyrightText: 2015 Anton D. Kachalov. All rights reserved.
+ * SPDX-FileContributor: Anton D. Kachalov <mouse@mayc.ru>
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -40,6 +41,9 @@
  * Included Files
  ****************************************************************************/
 
+#include <nuttx/config.h>
+#include <nuttx/compiler.h>
+
 #include <poll.h>
 #include <fcntl.h>
 
@@ -75,12 +79,14 @@ enum EPOLL_EVENTS
 #define EPOLLERR EPOLLERR
     EPOLLHUP = POLLHUP,
 #define EPOLLHUP EPOLLHUP
-    EPOLLRDHUP = 0x2000,
+    EPOLLRDHUP = POLLRDHUP,
 #define EPOLLRDHUP EPOLLRDHUP
     EPOLLWAKEUP = 1u << 29,
 #define EPOLLWAKEUP EPOLLWAKEUP
     EPOLLONESHOT = 1u << 30,
 #define EPOLLONESHOT EPOLLONESHOT
+    EPOLLET = 1u << 31,
+#define EPOLLET EPOLLET
   };
 
 /* Flags to be passed to epoll_create1.  */
@@ -91,12 +97,17 @@ enum
 #define EPOLL_CLOEXEC EPOLL_CLOEXEC
 };
 
-typedef union poll_data
+union epoll_data
 {
   FAR void    *ptr;
   int          fd;
   uint32_t     u32;
-} epoll_data_t;
+#ifdef CONFIG_HAVE_LONG_LONG
+  uint64_t     u64;
+#endif
+};
+
+typedef union epoll_data epoll_data_t;
 
 struct epoll_event
 {

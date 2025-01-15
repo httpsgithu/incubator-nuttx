@@ -1,6 +1,8 @@
 /****************************************************************************
  * sched/sched/sched_wait.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -39,15 +41,6 @@
  ****************************************************************************/
 
 /****************************************************************************
- * Name: nx_wait
- ****************************************************************************/
-
-pid_t nx_wait(FAR int *stat_loc)
-{
-  return nx_waitpid((pid_t)-1, stat_loc, 0);
-}
-
-/****************************************************************************
  * Name: wait
  *
  * Description:
@@ -61,8 +54,8 @@ pid_t nx_wait(FAR int *stat_loc)
  *   available prior to the call to wait(), return will be immediate.
  *
  *   The waitpid() function will behave identically to wait(), if the pid
- *   argument is (pid_t)-1 and the options argument is 0. Otherwise, its
- *   behaviour will be modified by the values of the pid and options
+ *   argument is INVALID_PROCESS_ID and the options argument is 0. Otherwise,
+ *   its behaviour will be modified by the values of the pid and options
  *   arguments.
  *
  * Input Parameters:
@@ -79,7 +72,7 @@ pid_t wait(FAR int *stat_loc)
    * trivial case.
    */
 
-  return waitpid((pid_t)-1, stat_loc, 0);
+  return waitpid(INVALID_PROCESS_ID, stat_loc, 0);
 }
 
 #endif /* CONFIG_SCHED_WAITPID && CONFIG_SCHED_HAVE_PARENT */

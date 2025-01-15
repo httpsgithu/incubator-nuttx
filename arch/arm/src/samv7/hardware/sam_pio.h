@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/samv7/hardware/sam_pio.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -18,8 +20,8 @@
  *
  ****************************************************************************/
 
-#ifndef __ARCH_ARM_SRC_SAMV7_HARDWARE_SAM4E_PIO_H
-#define __ARCH_ARM_SRC_SAMV7_HARDWARE_SAM4E_PIO_H
+#ifndef __ARCH_ARM_SRC_SAMV7_HARDWARE_SAM_PIO_H
+#define __ARCH_ARM_SRC_SAMV7_HARDWARE_SAM_PIO_H
 
 /****************************************************************************
  * Included Files
@@ -578,4 +580,4 @@
  ****************************************************************************/
 
 #endif /* SAMV7_NPIO > 0 */
-#endif /* __ARCH_ARM_SRC_SAMV7_HARDWARE_SAM4E_PIO_H */
+#endif /* __ARCH_ARM_SRC_SAMV7_HARDWARE_SAM_PIO_H */

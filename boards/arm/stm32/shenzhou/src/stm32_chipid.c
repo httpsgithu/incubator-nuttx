@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/stm32/shenzhou/src/stm32_chipid.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -28,7 +30,7 @@
 
 #include <arch/board/board.h>
 
-#include "arm_arch.h"
+#include "arm_internal.h"
 
 /****************************************************************************
  * Pre-processor Definitions
@@ -63,7 +65,8 @@ const char *stm32_getchipid_string(void)
 
   for (i = 0, c = 0; i < 12; i++)
     {
-      sprintf(&cpuid[c], "%02X", getreg8(0x1ffff7e8 + 11 - i));
+      snprintf(&cpuid[c], sizeof(cpuid) - c,
+               "%02X", getreg8(0x1ffff7e8 + 11 - i));
       c += 2;
       if (i % 4 == 3)
         {

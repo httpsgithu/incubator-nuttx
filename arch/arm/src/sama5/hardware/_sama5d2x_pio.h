@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/sama5/hardware/_sama5d2x_pio.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -40,7 +42,6 @@
 #define PIOB                       (1)
 #define PIOC                       (2)
 #define PIOD                       (3)
-#define PIOE                       (4)
 
 /* PIO register offsets *****************************************************/
 

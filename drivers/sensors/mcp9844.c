@@ -1,6 +1,8 @@
 /****************************************************************************
  * drivers/sensors/mcp9844.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -61,14 +63,13 @@ struct mcp9844_dev_s
 /* I2C helper functions */
 
 static int     mcp9844_read_u16(FAR struct mcp9844_dev_s *priv,
-                  uint8_t const regaddr, FAR uint16_t *value);
+                                uint8_t const regaddr, FAR uint16_t *value);
 static int     mcp9844_write_u16(FAR struct mcp9844_dev_s *priv,
-                  uint8_t const regaddr, uint16_t const regval);
+                                 uint8_t const regaddr,
+                                 uint16_t const regval);
 
 /* Character driver methods */
 
-static int     mcp9844_open(FAR struct file *filep);
-static int     mcp9844_close(FAR struct file *filep);
 static ssize_t mcp9844_read(FAR struct file *filep, FAR char *buffer,
                   size_t buflen);
 static ssize_t mcp9844_write(FAR struct file *filep, FAR const char *buffer,
@@ -82,13 +83,12 @@ static int     mcp9844_ioctl(FAR struct file *filep, int cmd,
 
 static const struct file_operations g_mcp9844_fops =
 {
-  mcp9844_open,
-  mcp9844_close,
-  mcp9844_read,
-  mcp9844_write,
-  NULL,
-  mcp9844_ioctl,
-  NULL
+  NULL,            /* open */
+  NULL,            /* close */
+  mcp9844_read,    /* read */
+  mcp9844_write,   /* write */
+  NULL,            /* seek */
+  mcp9844_ioctl,   /* ioctl */
 };
 
 /****************************************************************************
@@ -178,32 +178,6 @@ static int mcp9844_write_u16(FAR struct mcp9844_dev_s *priv,
 }
 
 /****************************************************************************
- * Name: mcp9844_open
- *
- * Description:
- *   This function is called whenever the MCP9844 device is opened.
- *
- ****************************************************************************/
-
-static int mcp9844_open(FAR struct file *filep)
-{
-  return OK;
-}
-
-/****************************************************************************
- * Name: mcp9844_close
- *
- * Description:
- *   This routine is called when the MCP9844 device is closed.
- *
- ****************************************************************************/
-
-static int mcp9844_close(FAR struct file *filep)
-{
-  return OK;
-}
-
-/****************************************************************************
  * Name: mcp9844_read
  ****************************************************************************/
 
@@ -230,7 +204,7 @@ static ssize_t mcp9844_write(FAR struct file *filep, FAR const char *buffer,
 static int mcp9844_ioctl(FAR struct file *filep, int cmd, unsigned long arg)
 {
   FAR struct inode *inode = filep->f_inode;
-  FAR struct mcp9844_dev_s *priv  = inode->i_private;
+  FAR struct mcp9844_dev_s *priv = inode->i_private;
   int ret = OK;
 
   switch (cmd)
@@ -383,15 +357,15 @@ static int mcp9844_ioctl(FAR struct file *filep, int cmd, unsigned long arg)
 int mcp9844_register(FAR const char *devpath, FAR struct i2c_master_s *i2c,
                      uint8_t addr)
 {
+  FAR struct mcp9844_dev_s *priv;
+
   /* Sanity check */
 
   DEBUGASSERT(i2c != NULL);
 
   /* Initialize the MCP9844 device structure */
 
-  FAR struct mcp9844_dev_s *priv =
-    (FAR struct mcp9844_dev_s *)kmm_malloc(sizeof(struct mcp9844_dev_s));
-
+  priv = kmm_malloc(sizeof(struct mcp9844_dev_s));
   if (priv == NULL)
     {
       snerr("ERROR: Failed to allocate instance\n");

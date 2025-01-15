@@ -1,6 +1,8 @@
 /****************************************************************************
  * libs/libc/hex2bin/lib_hex2bin.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -247,55 +249,28 @@ static int readstream(FAR struct lib_instream_s *instream,
 
   /* Skip until the beginning of line start code is encountered */
 
-  ch = instream->get(instream);
-  while (ch != RECORD_STARTCODE && ch != EOF)
+  ch = lib_stream_getc(instream);
+  while (ch != RECORD_STARTCODE && !lib_stream_eof(ch))
     {
-      ch = instream->get(instream);
+      ch = lib_stream_getc(instream);
     }
 
   /* Skip over the startcode */
 
-  if (ch != EOF)
+  if (!lib_stream_eof(ch))
     {
-      ch = instream->get(instream);
+      ch = lib_stream_getc(instream);
     }
 
   /* Then read, verify, and buffer until the end of line is encountered */
 
-  while (ch != EOF && nbytes < (MAXRECORD_ASCSIZE - 1))
+  while (!lib_stream_eof(ch) && nbytes < (MAXRECORD_ASCSIZE - 1))
     {
-#if defined(CONFIG_EOL_IS_LF)
-      if (ch == '\n')
-        {
-          *line = '\0';
-          return nbytes;
-        }
-
-#elif defined(CONFIG_EOL_IS_BOTH_CRLF)
-      if (ch == '\r')
-        {
-          continue;
-        }
-      else if (ch == '\n')
-        {
-          *line = '\0';
-          return nbytes;
-        }
-
-#elif defined(CONFIG_EOL_IS_CR)
-      if (ch == '\r')
-        {
-          *line = '\0';
-          return nbytes;
-        }
-
-#elif defined(CONFIG_EOL_IS_EITHER_CRLF)
       if (ch == '\n' || ch == '\r')
         {
           *line = '\0';
           return nbytes;
         }
-#endif
 
       /* Only hex data goes into the line buffer */
 
@@ -313,7 +288,7 @@ static int readstream(FAR struct lib_instream_s *instream,
 
       /* Read the next character from the input stream */
 
-      ch = instream->get(instream);
+      ch = lib_stream_getc(instream);
     }
 
   /* Some error occurred: Unexpected EOF, line too long, or bad character in
@@ -366,7 +341,7 @@ static inline void writedata(FAR struct lib_sostream_s *outstream,
 {
   for (; bytecount > 0; bytecount--)
     {
-      outstream->put(outstream, *data++);
+      lib_stream_putc(outstream, *data++);
     }
 }
 
@@ -405,18 +380,18 @@ static inline void writedata(FAR struct lib_sostream_s *outstream,
  ****************************************************************************/
 
 int hex2bin(FAR struct lib_instream_s *instream,
-            FAR struct lib_sostream_s *outstream, uint32_t baseaddr,
-            uint32_t endpaddr, enum hex2bin_swap_e swap)
+            FAR struct lib_sostream_s *outstream, unsigned long baseaddr,
+            unsigned long endpaddr, enum hex2bin_swap_e swap)
 {
   FAR uint8_t *alloc;
   FAR uint8_t *line;
   FAR uint8_t *bin;
   int nbytes;
   int bytecount;
-  uint32_t address;
-  uint32_t endaddr;
-  uint32_t expected;
-  uint32_t extension;
+  unsigned long address;
+  unsigned long endaddr;
+  unsigned long expected;
+  unsigned long extension;
   uint16_t address16;
   uint8_t checksum;
   unsigned int lineno;
@@ -573,7 +548,7 @@ int hex2bin(FAR struct lib_instream_s *instream,
 
             /* Get and verify the full 32-bit address */
 
-            address = extension + (uint32_t)address16;
+            address = extension + (unsigned long)address16;
             endaddr = address + bytecount;
 
             if (address < baseaddr || (endpaddr != 0 && endaddr >= endpaddr))
@@ -590,7 +565,7 @@ int hex2bin(FAR struct lib_instream_s *instream,
 
             if (address != expected)
               {
-                off_t pos = outstream->seek(outstream,
+                off_t pos = lib_stream_seek(outstream,
                                             address - baseaddr, SEEK_SET);
                 if (pos == (off_t)-1)
                   {
@@ -648,7 +623,7 @@ int hex2bin(FAR struct lib_instream_s *instream,
               goto errout_with_einval;
             }
 
-          extension = (uint32_t)bin[DATA_BINNDX] << 12;
+          extension = (unsigned long)bin[DATA_BINNDX] << 12;
           break;
 
         case RECORD_START_SEGADDR: /* Start segment address record */
@@ -681,8 +656,8 @@ int hex2bin(FAR struct lib_instream_s *instream,
               goto errout_with_einval;
             }
 
-          extension = (uint32_t)bin[DATA_BINNDX] << 24 |
-                      (uint32_t)bin[DATA_BINNDX + 1] << 16;
+          extension = (unsigned long)bin[DATA_BINNDX] << 24 |
+                      (unsigned long)bin[DATA_BINNDX + 1] << 16;
           break;
 
         case RECORD_START_LINADDR: /* Start linear address record */

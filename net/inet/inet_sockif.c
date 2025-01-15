@@ -1,6 +1,8 @@
 /****************************************************************************
  * net/inet/inet_sockif.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -32,6 +34,7 @@
 #include <debug.h>
 
 #include <nuttx/net/net.h>
+#include <nuttx/net/netconfig.h>
 #include <nuttx/net/tcp.h>
 #include <nuttx/kmalloc.h>
 
@@ -62,39 +65,54 @@ union sockaddr_u
 
 #if defined(NET_UDP_HAVE_STACK) || defined(NET_TCP_HAVE_STACK)
 
-static int        inet_setup(FAR struct socket *psock, int protocol);
+static int        inet_setup(FAR struct socket *psock);
 static sockcaps_t inet_sockcaps(FAR struct socket *psock);
 static void       inet_addref(FAR struct socket *psock);
 static int        inet_bind(FAR struct socket *psock,
-                    FAR const struct sockaddr *addr, socklen_t addrlen);
+                            FAR const struct sockaddr *addr,
+                            socklen_t addrlen);
 static int        inet_getsockname(FAR struct socket *psock,
-                    FAR struct sockaddr *addr, FAR socklen_t *addrlen);
+                                   FAR struct sockaddr *addr,
+                                   FAR socklen_t *addrlen);
 static int        inet_getpeername(FAR struct socket *psock,
-                    FAR struct sockaddr *addr, FAR socklen_t *addrlen);
+                                   FAR struct sockaddr *addr,
+                                   FAR socklen_t *addrlen);
 static int        inet_listen(FAR struct socket *psock, int backlog);
 static int        inet_connect(FAR struct socket *psock,
-                    FAR const struct sockaddr *addr, socklen_t addrlen);
+                               FAR const struct sockaddr *addr,
+                               socklen_t addrlen);
 static int        inet_accept(FAR struct socket *psock,
-                    FAR struct sockaddr *addr, FAR socklen_t *addrlen,
-                    FAR struct socket *newsock);
+                              FAR struct sockaddr *addr,
+                              FAR socklen_t *addrlen,
+                              FAR struct socket *newsock, int flags);
 static int        inet_poll(FAR struct socket *psock,
-                    FAR struct pollfd *fds, bool setup);
+                            FAR struct pollfd *fds, bool setup);
 static ssize_t    inet_send(FAR struct socket *psock, FAR const void *buf,
-                    size_t len, int flags);
+                            size_t len, int flags);
 static ssize_t    inet_sendto(FAR struct socket *psock, FAR const void *buf,
-                    size_t len, int flags, FAR const struct sockaddr *to,
-                    socklen_t tolen);
+                              size_t len, int flags,
+                              FAR const struct sockaddr *to,
+                              socklen_t tolen);
 static ssize_t    inet_sendmsg(FAR struct socket *psock,
-                    FAR struct msghdr *msg, int flags);
+                               FAR struct msghdr *msg, int flags);
 static ssize_t    inet_recvmsg(FAR struct socket *psock,
-                    FAR struct msghdr *msg, int flags);
-static int        inet_ioctl(FAR struct socket *psock, int cmd,
-                    FAR void *arg, size_t arglen);
+                               FAR struct msghdr *msg, int flags);
+static int        inet_ioctl(FAR struct socket *psock,
+                             int cmd, unsigned long arg);
 static int        inet_socketpair(FAR struct socket *psocks[2]);
+static int        inet_shutdown(FAR struct socket *psock, int how);
+#ifdef CONFIG_NET_SOCKOPTS
+static int        inet_getsockopt(FAR struct socket *psock, int level,
+                                  int option, FAR void *value,
+                                  FAR socklen_t *value_len);
+static int        inet_setsockopt(FAR struct socket *psock, int level,
+                                  int option, FAR const void *value,
+                                  socklen_t value_len);
+#endif
 #ifdef CONFIG_NET_SENDFILE
 static ssize_t    inet_sendfile(FAR struct socket *psock,
-                    FAR struct file *infile, FAR off_t *offset,
-                    size_t count);
+                                FAR struct file *infile, FAR off_t *offset,
+                                size_t count);
 #endif
 
 /****************************************************************************
@@ -117,10 +135,14 @@ static const struct sock_intf_s g_inet_sockif =
   inet_recvmsg,     /* si_recvmsg */
   inet_close,       /* si_close */
   inet_ioctl,       /* si_ioctl */
-  inet_socketpair   /* si_socketpair */
+  inet_socketpair,  /* si_socketpair */
+  inet_shutdown     /* si_shutdown */
+#ifdef CONFIG_NET_SOCKOPTS
+  , inet_getsockopt /* si_getsockopt */
+  , inet_setsockopt /* si_setsockopt */
+#endif
 #ifdef CONFIG_NET_SENDFILE
-  ,
-  inet_sendfile     /* si_sendfile */
+  , inet_sendfile   /* si_sendfile */
 #endif
 };
 
@@ -156,6 +178,12 @@ static int inet_tcp_alloc(FAR struct socket *psock)
 
   DEBUGASSERT(conn->crefs == 0);
   conn->crefs = 1;
+
+  /* It is expected the socket has not yet been associated with
+   * any other connection.
+   */
+
+  DEBUGASSERT(psock->s_conn == NULL);
 
   /* Save the pre-allocated connection in the socket structure */
 
@@ -222,7 +250,7 @@ static int inet_udp_alloc(FAR struct socket *psock)
  *
  ****************************************************************************/
 
-static int inet_setup(FAR struct socket *psock, int protocol)
+static int inet_setup(FAR struct socket *psock)
 {
   /* Allocate the appropriate connection structure.  This reserves the
    * the connection structure is is unallocated at this point.  It will
@@ -235,9 +263,9 @@ static int inet_setup(FAR struct socket *psock, int protocol)
     {
 #ifdef CONFIG_NET_TCP
       case SOCK_STREAM:
-        if (protocol != 0 && protocol != IPPROTO_TCP)
+        if (psock->s_proto != 0 && psock->s_proto != IPPROTO_TCP)
           {
-            nerr("ERROR: Unsupported stream protocol: %d\n", protocol);
+            nerr("ERROR: Unsupported stream protocol: %d\n", psock->s_proto);
             return -EPROTONOSUPPORT;
           }
 
@@ -253,9 +281,10 @@ static int inet_setup(FAR struct socket *psock, int protocol)
 
 #ifdef CONFIG_NET_UDP
       case SOCK_DGRAM:
-        if (protocol != 0 && protocol != IPPROTO_UDP)
+        if (psock->s_proto != 0 && psock->s_proto != IPPROTO_UDP)
           {
-            nerr("ERROR: Unsupported datagram protocol: %d\n", protocol);
+            nerr("ERROR: Unsupported datagram protocol: %d\n",
+                 psock->s_proto);
             return -EPROTONOSUPPORT;
           }
 
@@ -268,6 +297,30 @@ static int inet_setup(FAR struct socket *psock, int protocol)
         return -ENETDOWN;
 #endif
 #endif /* CONFIG_NET_UDP */
+
+#if defined(CONFIG_NET_TCP) || defined(CONFIG_NET_UDP)
+      case SOCK_CTRL:
+#  ifdef NET_TCP_HAVE_STACK
+        if (psock->s_proto == 0 || psock->s_proto == IPPROTO_TCP)
+          {
+             /* Allocate and attach the TCP connection structure */
+
+             return inet_tcp_alloc(psock);
+          }
+
+#  endif
+#  ifdef NET_UDP_HAVE_STACK
+        if (psock->s_proto == 0 || psock->s_proto == IPPROTO_UDP)
+          {
+             /* Allocate and attach the UDP connection structure */
+
+             return inet_udp_alloc(psock);
+          }
+
+#  endif
+        nerr("ERROR: Unsupported control protocol: %d\n", psock->s_proto);
+        return -EPROTONOSUPPORT;
+#endif /* CONFIG_NET_TCP || CONFIG_NET_UDP */
 
       default:
         nerr("ERROR: Unsupported type: %d\n", psock->s_type);
@@ -304,6 +357,11 @@ static sockcaps_t inet_sockcaps(FAR struct socket *psock)
         return SOCKCAP_NONBLOCKING;
 #endif
 
+#if defined(NET_TCP_HAVE_STACK) || defined(NET_UDP_HAVE_STACK)
+      case SOCK_CTRL:
+        return SOCKCAP_NONBLOCKING;
+#endif
+
       default:
         return 0;
     }
@@ -329,7 +387,9 @@ static void inet_addref(FAR struct socket *psock)
   DEBUGASSERT(psock != NULL && psock->s_conn != NULL);
 
 #ifdef NET_TCP_HAVE_STACK
-  if (psock->s_type == SOCK_STREAM)
+  if (psock->s_type == SOCK_STREAM ||
+      (psock->s_type == SOCK_CTRL &&
+      (psock->s_proto == 0 || psock->s_proto == IPPROTO_TCP)))
     {
       FAR struct tcp_conn_s *conn = psock->s_conn;
       DEBUGASSERT(conn->crefs > 0 && conn->crefs < 255);
@@ -338,7 +398,9 @@ static void inet_addref(FAR struct socket *psock)
   else
 #endif
 #ifdef NET_UDP_HAVE_STACK
-  if (psock->s_type == SOCK_DGRAM)
+  if (psock->s_type == SOCK_DGRAM ||
+      (psock->s_type == SOCK_CTRL &&
+      (psock->s_proto == 0 || psock->s_proto == IPPROTO_UDP)))
     {
       FAR struct udp_conn_s *conn = psock->s_conn;
       DEBUGASSERT(conn->crefs > 0 && conn->crefs < 255);
@@ -401,7 +463,7 @@ static int inet_bind(FAR struct socket *psock,
   if (addrlen < minlen)
     {
       nerr("ERROR: Invalid address length: %d < %d\n", addrlen, minlen);
-      return -EBADF;
+      return -EINVAL;
     }
 
   /* Perform the binding depending on the protocol type */
@@ -419,7 +481,7 @@ static int inet_bind(FAR struct socket *psock,
           nwarn("WARNING: TCP/IP stack is not available in this "
                 "configuration\n");
 
-          return -ENOSYS;
+          ret = -ENOSYS;
 #endif
         }
         break;
@@ -440,6 +502,15 @@ static int inet_bind(FAR struct socket *psock,
         }
         break;
 #endif /* CONFIG_NET_UDP */
+
+#if defined(CONFIG_NET_TCP) || defined(CONFIG_NET_UDP)
+      case SOCK_CTRL:
+        {
+          nerr("ERROR:  Inappropriate socket type: %d\n", psock->s_type);
+          ret = -EOPNOTSUPP;
+        }
+        break;
+#endif
 
       default:
         nerr("ERROR: Unsupported socket type: %d\n", psock->s_type);
@@ -556,6 +627,532 @@ static int inet_getpeername(FAR struct socket *psock,
     }
 }
 
+#ifdef CONFIG_NET_SOCKOPTS
+
+/****************************************************************************
+ * Name: inet_get_socketlevel_option
+ *
+ * Description:
+ *   inet_get_socketlevel_option() retrieve the value for the option
+ *   specified by the 'option' argument for the socket specified by the
+ *   'psock' argument.  If the size of the option value is greater than
+ *   'value_len', the value stored in the object pointed to by the 'value'
+ *   argument will be silently truncated. Otherwise, the length pointed to
+ *   by the 'value_len' argument will be modified to indicate the actual
+ *   length of the 'value'.
+ *
+ *   The 'level' argument specifies the protocol level of the option. To
+ *   retrieve options at the socket level, specify the level argument as
+ *   SOL_SOCKET; to retrieve options at the TCP-protocol level, the level
+ *   argument is SOL_TCP.
+ *
+ *   See <sys/socket.h> a complete list of values for the socket-level
+ *   'option' argument.  Protocol-specific options are are protocol specific
+ *   header files (such as netinet/tcp.h for the case of the TCP protocol).
+ *
+ * Input Parameters:
+ *   psock     Socket structure of the socket to query
+ *   level     Protocol level to set the option
+ *   option    identifies the option to get
+ *   value     Points to the argument value
+ *   value_len The length of the argument value
+ *
+ * Returned Value:
+ *   Returns zero (OK) on success.  On failure, it returns a negated errno
+ *   value to indicate the nature of the error.  See psock_getsockopt() for
+ *   the complete list of appropriate return error codes.
+ *
+ ****************************************************************************/
+
+static int inet_get_socketlevel_option(FAR struct socket *psock, int option,
+                                       FAR void *value,
+                                       FAR socklen_t *value_len)
+{
+  switch (option)
+    {
+#if CONFIG_NET_RECV_BUFSIZE > 0
+      case SO_RCVBUF:     /* Reports receive buffer size */
+        {
+          if (*value_len != sizeof(int))
+            {
+              return -EINVAL;
+            }
+
+#ifdef NET_TCP_HAVE_STACK
+          if (psock->s_type == SOCK_STREAM)
+            {
+              FAR struct tcp_conn_s *tcp = psock->s_conn;
+              *(FAR int *)value = tcp->rcv_bufs;
+            }
+          else
+#endif
+#ifdef NET_UDP_HAVE_STACK
+          if (psock->s_type == SOCK_DGRAM)
+            {
+              FAR struct udp_conn_s *udp = psock->s_conn;
+              *(FAR int *)value = udp->rcvbufs;
+            }
+          else
+#endif
+            {
+              return -ENOPROTOOPT;
+            }
+        }
+        break;
+#endif
+
+#if CONFIG_NET_SEND_BUFSIZE > 0
+      case SO_SNDBUF:     /* Reports send buffer size */
+        {
+          if (*value_len != sizeof(int))
+            {
+              return -EINVAL;
+            }
+
+#ifdef NET_TCP_HAVE_STACK
+          if (psock->s_type == SOCK_STREAM)
+            {
+              FAR struct tcp_conn_s *tcp = psock->s_conn;
+              *(FAR int *)value = tcp->snd_bufs;
+            }
+          else
+#endif
+#ifdef NET_UDP_HAVE_STACK
+          if (psock->s_type == SOCK_DGRAM)
+            {
+              FAR struct udp_conn_s *udp = psock->s_conn;
+
+              /* Save the send buffer size */
+
+              *(FAR int *)value = udp->sndbufs;
+            }
+          else
+#endif
+            {
+              return -ENOPROTOOPT;
+            }
+        }
+        break;
+#endif
+
+#ifdef CONFIG_NET_TCPPROTO_OPTIONS
+      case SO_KEEPALIVE:
+        {
+          /* Any connection-oriented protocol could potentially support
+           * SO_KEEPALIVE.  However, this option is currently only available
+           * for TCP/IP.
+           *
+           * NOTE: SO_KEEPALIVE is not really a socket-level option; it is a
+           * protocol-level option.  A given TCP connection may service
+           * multiple sockets (via dup'ing of the socket). There is, however,
+           * still only one connection to be monitored and that is a global
+           * attribute across all of the clones that may use the underlying
+           * connection.
+           */
+
+          /* Verifies TCP connections active by enabling the periodic
+           * transmission of probes.
+           */
+
+          return tcp_getsockopt(psock, option, value, value_len);
+        }
+#endif
+
+#ifdef CONFIG_NET_TIMESTAMP
+      case SO_TIMESTAMP:
+        {
+          if (*value_len != sizeof(int))
+            {
+              return -EINVAL;
+            }
+
+          if (psock->s_type == SOCK_DGRAM)
+            {
+              FAR struct udp_conn_s *conn = psock->s_conn;
+              *(FAR int *)value = (conn->timestamp != 0);
+            }
+          else
+            {
+              return -ENOPROTOOPT;
+            }
+        }
+        break;
+#endif
+
+      default:
+        return -ENOPROTOOPT;
+    }
+
+  return OK;
+}
+
+/****************************************************************************
+ * Name: inet_getsockopt
+ *
+ * Description:
+ *   inet_getsockopt() retrieve the value for the option specified by the
+ *   'option' argument at the protocol level specified by the 'level'
+ *   argument. If the size of the option value is greater than 'value_len',
+ *   the value stored in the object pointed to by the 'value' argument will
+ *   be silently truncated. Otherwise, the length pointed to by the
+ *   'value_len' argument will be modified to indicate the actual length
+ *   of the 'value'.
+ *
+ *   The 'level' argument specifies the protocol level of the option. To
+ *   retrieve options at the socket level, specify the level argument as
+ *   SOL_SOCKET.
+ *
+ *   See <sys/socket.h> a complete list of values for the 'option' argument.
+ *
+ * Input Parameters:
+ *   psock     Socket structure of the socket to query
+ *   level     Protocol level to set the option
+ *   option    identifies the option to get
+ *   value     Points to the argument value
+ *   value_len The length of the argument value
+ *
+ ****************************************************************************/
+
+static int inet_getsockopt(FAR struct socket *psock, int level, int option,
+                           FAR void *value, FAR socklen_t *value_len)
+{
+  switch (level)
+    {
+      case SOL_SOCKET:
+        return inet_get_socketlevel_option(psock, option, value, value_len);
+
+#ifdef CONFIG_NET_TCPPROTO_OPTIONS
+      case IPPROTO_TCP:
+        return tcp_getsockopt(psock, option, value, value_len);
+#endif
+
+#ifdef CONFIG_NET_IPv4
+      case IPPROTO_IP:/* IPv4 protocol socket options (see include/netinet/in.h) */
+        return ipv4_getsockopt(psock, option, value, value_len);
+#endif
+
+#ifdef CONFIG_NET_IPv6
+      case IPPROTO_IPV6:/* IPv6 protocol socket options (see include/netinet/in.h) */
+          return ipv6_getsockopt(psock, option, value, value_len);
+#endif
+
+      default:
+        return -ENOPROTOOPT;
+    }
+}
+
+/****************************************************************************
+ * Name: inet_set_socketlevel_option
+ *
+ * Description:
+ *   inet_set_socketlevel_option() sets the socket-level option specified by
+ *   the 'option' argument to the value pointed to by the 'value' argument
+ *   for the socket specified by the 'psock' argument.
+ *
+ *   See <sys/socket.h> a complete list of values for the socket level
+ *   'option' argument.
+ *
+ * Input Parameters:
+ *   psock     Socket structure of socket to operate on
+ *   option    identifies the option to set
+ *   value     Points to the argument value
+ *   value_len The length of the argument value
+ *
+ * Returned Value:
+ *   Returns zero (OK) on success.  On failure, it returns a negated errno
+ *   value to indicate the nature of the error.  See psock_setcockopt() for
+ *   the list of possible error values.
+ *
+ ****************************************************************************/
+
+static int inet_set_socketlevel_option(FAR struct socket *psock, int option,
+                                       FAR const void *value,
+                                       socklen_t value_len)
+{
+  switch (option)
+    {
+#ifdef CONFIG_NET_TCPPROTO_OPTIONS
+      case SO_KEEPALIVE:
+        {
+          /* Any connection-oriented protocol could potentially support
+           * SO_KEEPALIVE.  However, this option is currently only available
+           * for TCP/IP.
+           *
+           * NOTE: SO_KEEPALIVE is not really a socket-level option; it is a
+           * protocol-level option.  A given TCP connection may service
+           * multiple sockets (via dup'ing of the socket). There is, however,
+           * still only one connection to be monitored and that is a global
+           * attribute across all of the clones that may use the underlying
+           * connection.
+           */
+
+          /* Verifies TCP connections active by enabling the
+           * periodic transmission of probes
+           */
+
+          return tcp_setsockopt(psock, option, value, value_len);
+        }
+#endif
+
+#ifdef CONFIG_NET_SOLINGER
+      case SO_LINGER:
+        {
+          /* Lingers on a close() if data is present */
+
+          FAR struct socket_conn_s *conn = psock->s_conn;
+          FAR struct linger *setting;
+
+          /* Verify that option is at least the size of an 'struct linger'. */
+
+          if (value_len < sizeof(struct linger))
+            {
+              return -EINVAL;
+            }
+
+          /* Get the value.  Is the option being set or cleared? */
+
+          setting = (FAR struct linger *)value;
+
+          /* Lock the network so that we have exclusive access to the socket
+           * options.
+           */
+
+          net_lock();
+
+          /* Set or clear the linger option bit and linger time
+           * (in deciseconds)
+           */
+
+          if (setting->l_onoff)
+            {
+              _SO_SETOPT(conn->s_options, option);
+              conn->s_linger = 10 * setting->l_linger;
+            }
+          else
+            {
+              _SO_CLROPT(conn->s_options, option);
+              conn->s_linger = 0;
+            }
+
+          net_unlock();
+        }
+        break;
+#endif
+
+#if CONFIG_NET_RECV_BUFSIZE > 0
+      case SO_RCVBUF:     /* Sets receive buffer size */
+        {
+          int buffersize;
+
+          /* Verify that option is the size of an 'int'.  Should also check
+           * that 'value' is properly aligned for an 'int'
+           */
+
+          if (value_len != sizeof(int))
+            {
+              return -EINVAL;
+            }
+
+          /* Get the value.  Is the option being set or cleared? */
+
+          buffersize = *(FAR int *)value;
+          if (buffersize < 0)
+            {
+              return -EINVAL;
+            }
+
+#if CONFIG_NET_MAX_RECV_BUFSIZE > 0
+          buffersize = MIN(buffersize, CONFIG_NET_MAX_RECV_BUFSIZE);
+#endif
+
+          net_lock();
+
+#ifdef NET_TCP_HAVE_STACK
+          if (psock->s_type == SOCK_STREAM)
+            {
+              FAR struct tcp_conn_s *tcp = psock->s_conn;
+
+              /* Save the receive buffer size */
+
+              tcp->rcv_bufs = buffersize;
+            }
+          else
+#endif
+#ifdef NET_UDP_HAVE_STACK
+          if (psock->s_type == SOCK_DGRAM)
+            {
+              FAR struct udp_conn_s *udp = psock->s_conn;
+
+              /* Save the receive buffer size */
+
+              udp->rcvbufs = buffersize;
+            }
+          else
+#endif
+            {
+              net_unlock();
+              return -ENOPROTOOPT;
+            }
+
+          net_unlock();
+        }
+        break;
+#endif
+
+#if CONFIG_NET_SEND_BUFSIZE > 0
+      case SO_SNDBUF:     /* Sets send buffer size */
+        {
+          int buffersize;
+
+          /* Verify that option is the size of an 'int'.  Should also check
+           * that 'value' is properly aligned for an 'int'
+           */
+
+          if (value_len != sizeof(int))
+            {
+              return -EINVAL;
+            }
+
+          /* Get the value.  Is the option being set or cleared? */
+
+          buffersize = *(FAR int *)value;
+
+          if (buffersize < 0)
+            {
+              return -EINVAL;
+            }
+
+#if CONFIG_NET_MAX_SEND_BUFSIZE > 0
+          buffersize = MIN(buffersize, CONFIG_NET_MAX_SEND_BUFSIZE);
+#endif
+
+          net_lock();
+
+#ifdef NET_TCP_HAVE_STACK
+          if (psock->s_type == SOCK_STREAM)
+            {
+              FAR struct tcp_conn_s *tcp = psock->s_conn;
+
+              /* Save the send buffer size */
+
+              tcp->snd_bufs = buffersize;
+            }
+          else
+#endif
+#ifdef NET_UDP_HAVE_STACK
+          if (psock->s_type == SOCK_DGRAM)
+            {
+              FAR struct udp_conn_s *udp = psock->s_conn;
+
+              /* Save the send buffer size */
+
+              udp->sndbufs = buffersize;
+            }
+          else
+#endif
+            {
+              net_unlock();
+              return -ENOPROTOOPT;
+            }
+
+          net_unlock();
+        }
+        break;
+#endif
+
+#ifdef CONFIG_NET_TIMESTAMP
+      case SO_TIMESTAMP: /* Report receive timestamps as cmsg */
+        {
+          if (value_len < sizeof(int))
+            {
+              return -EINVAL;
+            }
+
+          if (psock->s_type == SOCK_DGRAM)
+            {
+              net_lock();
+
+              /* For now the timestamp enable is just boolean.
+               * If SO_TIMESTAMPING support is added in future, it can be
+               * expanded to flags field for rx/tx timestamps.
+               */
+
+              FAR struct udp_conn_s *conn = psock->s_conn;
+              conn->timestamp = (*((FAR int *)value) != 0);
+
+              net_unlock();
+            }
+          else
+            {
+              return -ENOPROTOOPT;
+            }
+        }
+        break;
+  #endif
+
+      default:
+        return -ENOPROTOOPT;
+    }
+
+  return OK;
+}
+
+/****************************************************************************
+ * Name: inet_setsockopt
+ *
+ * Description:
+ *   inet_setsockopt() sets the option specified by the 'option' argument,
+ *   at the protocol level specified by the 'level' argument, to the value
+ *   pointed to by the 'value' argument for the connection.
+ *
+ *   The 'level' argument specifies the protocol level of the option. To set
+ *   options at the socket level, specify the level argument as SOL_SOCKET.
+ *
+ *   See <sys/socket.h> a complete list of values for the 'option' argument.
+ *
+ * Input Parameters:
+ *   psock     Socket structure of the socket to query
+ *   level     Protocol level to set the option
+ *   option    identifies the option to set
+ *   value     Points to the argument value
+ *   value_len The length of the argument value
+ *
+ ****************************************************************************/
+
+static int inet_setsockopt(FAR struct socket *psock, int level, int option,
+                           FAR const void *value, socklen_t value_len)
+{
+  switch (level)
+    {
+      case SOL_SOCKET:
+        return inet_set_socketlevel_option(psock, option, value, value_len);
+
+#ifdef CONFIG_NET_TCPPROTO_OPTIONS
+      case IPPROTO_TCP:/* TCP protocol socket options (see include/netinet/tcp.h) */
+        return tcp_setsockopt(psock, option, value, value_len);
+#endif
+
+#ifdef CONFIG_NET_UDPPROTO_OPTIONS
+      case IPPROTO_UDP:/* UDP protocol socket options (see include/netinet/udp.h) */
+        return udp_setsockopt(psock, option, value, value_len);
+#endif
+
+#ifdef CONFIG_NET_IPv4
+      case IPPROTO_IP:/* IPv4 protocol socket options (see include/netinet/in.h) */
+        return ipv4_setsockopt(psock, option, value, value_len);
+#endif
+
+#ifdef CONFIG_NET_IPv6
+      case IPPROTO_IPV6:/* IPv6 protocol socket options (see include/netinet/in.h) */
+        return ipv6_setsockopt(psock, option, value, value_len);
+#endif
+      default:
+        return -ENOPROTOOPT;
+    }
+}
+
+#endif
+
 /****************************************************************************
  * Name: inet_listen
  *
@@ -582,7 +1179,7 @@ static int inet_getpeername(FAR struct socket *psock,
  *
  ****************************************************************************/
 
-int inet_listen(FAR struct socket *psock, int backlog)
+static int inet_listen(FAR struct socket *psock, int backlog)
 {
 #if defined(CONFIG_NET_TCP) && defined(NET_TCP_HAVE_STACK)
   FAR struct tcp_conn_s *conn;
@@ -600,11 +1197,39 @@ int inet_listen(FAR struct socket *psock, int backlog)
 
 #ifdef CONFIG_NET_TCP
 #ifdef NET_TCP_HAVE_STACK
-  conn = (FAR struct tcp_conn_s *)psock->s_conn;
+  conn = psock->s_conn;
 
-  if (conn->lport <= 0)
+  if (conn->lport == 0)
     {
-      return -EOPNOTSUPP;
+#ifdef CONFIG_NET_IPv4
+#ifdef CONFIG_NET_IPv6
+      if (conn->domain == PF_INET)
+#endif
+        {
+          /* Select a port that is unique for this IPv4 local address
+           * (network order).
+           */
+
+          conn->lport = tcp_selectport(PF_INET,
+                                (FAR const union ip_addr_u *)
+                                &conn->u.ipv4.laddr, 0);
+        }
+#endif /* CONFIG_NET_IPv4 */
+
+#ifdef CONFIG_NET_IPv6
+#ifdef CONFIG_NET_IPv4
+      else
+#endif
+        {
+          /* Select a port that is unique for this IPv6 local address
+           * (network order).
+           */
+
+          conn->lport = tcp_selectport(PF_INET6,
+                                (FAR const union ip_addr_u *)
+                                conn->u.ipv6.laddr, 0);
+        }
+#endif /* CONFIG_NET_IPv6 */
     }
 
 #ifdef CONFIG_NET_TCPBACKLOG
@@ -687,7 +1312,7 @@ static int inet_connect(FAR struct socket *psock,
       {
         if (addrlen < sizeof(struct sockaddr_in))
           {
-            return -EBADF;
+            return -EINVAL;
           }
       }
       break;
@@ -698,11 +1323,14 @@ static int inet_connect(FAR struct socket *psock,
       {
         if (addrlen < sizeof(struct sockaddr_in6))
           {
-            return -EBADF;
+            return -EINVAL;
           }
       }
       break;
 #endif
+
+    case AF_UNSPEC:
+      break;
 
     default:
       DEBUGPANIC();
@@ -716,13 +1344,23 @@ static int inet_connect(FAR struct socket *psock,
 #if defined(CONFIG_NET_TCP) && defined(NET_TCP_HAVE_STACK)
       case SOCK_STREAM:
         {
+          FAR struct tcp_conn_s *conn = psock->s_conn;
+
           /* Verify that the socket is not already connected */
 
-          if (_SS_ISCONNECTED(psock->s_flags))
+          if (_SS_ISCONNECTED(conn->sconn.s_flags))
             {
               return -EISCONN;
             }
 
+#if defined(CONFIG_NET_IPv4) && defined(CONFIG_NET_IPv6)
+          if (conn->domain != addr->sa_family)
+            {
+              nerr("conn's domain must be the same as addr's family!\n");
+              return -EPROTOTYPE;
+            }
+
+#endif
           /* It's not ... Connect the TCP/IP socket */
 
           return psock_tcp_connect(psock, addr);
@@ -747,24 +1385,42 @@ static int inet_connect(FAR struct socket *psock,
 
           /* Perform the connect/disconnect operation */
 
-          conn = (FAR struct udp_conn_s *)psock->s_conn;
+          conn = psock->s_conn;
+#if defined(CONFIG_NET_IPv4) && defined(CONFIG_NET_IPv6)
+          if (addr != NULL && conn->domain != addr->sa_family)
+            {
+              nerr("conn's domain must be the same as addr's family!\n");
+              return -EPROTOTYPE;
+            }
+
+#endif
           ret  = udp_connect(conn, addr);
           if (ret < 0 || addr == NULL)
             {
               /* Failed to connect or explicitly disconnected */
 
+              conn->sconn.s_flags &= ~_SF_CONNECTED;
               conn->flags &= ~_UDP_FLAG_CONNECTMODE;
             }
           else
             {
               /* Successfully connected */
 
+              conn->sconn.s_flags |= _SF_CONNECTED;
               conn->flags |= _UDP_FLAG_CONNECTMODE;
             }
 
           return ret;
         }
 #endif /* CONFIG_NET_UDP */
+
+#if defined(CONFIG_NET_TCP) && defined(CONFIG_NET_UDP)
+      case SOCK_CTRL:
+        {
+          nerr("ERROR:  Inappropriate socket type: %d\n", psock->s_type);
+          return -EOPNOTSUPP;
+        }
+#endif
 
       default:
         return -EBADF;
@@ -816,7 +1472,8 @@ static int inet_connect(FAR struct socket *psock,
  ****************************************************************************/
 
 static int inet_accept(FAR struct socket *psock, FAR struct sockaddr *addr,
-                       FAR socklen_t *addrlen, FAR struct socket *newsock)
+                       FAR socklen_t *addrlen, FAR struct socket *newsock,
+                       int flags)
 {
 #if defined(CONFIG_NET_TCP) && defined(NET_TCP_HAVE_STACK)
   int ret;
@@ -849,7 +1506,7 @@ static int inet_accept(FAR struct socket *psock, FAR struct sockaddr *addr,
           {
             if (*addrlen < sizeof(struct sockaddr_in))
               {
-                return -EBADF;
+                return -EINVAL;
               }
           }
           break;
@@ -860,7 +1517,7 @@ static int inet_accept(FAR struct socket *psock, FAR struct sockaddr *addr,
           {
             if (*addrlen < sizeof(struct sockaddr_in6))
               {
-                return -EBADF;
+                return -EINVAL;
               }
           }
           break;
@@ -906,10 +1563,9 @@ static int inet_accept(FAR struct socket *psock, FAR struct sockaddr *addr,
        */
 
       psock_close(newsock);
-      return ret;
     }
 
-  return OK;
+  return ret;
 
 #else
   nwarn("WARNING: SOCK_STREAM not supported in this configuration\n");
@@ -950,12 +1606,20 @@ static inline int inet_pollsetup(FAR struct socket *psock,
   else
 #endif /* NET_TCP_HAVE_STACK */
 #ifdef NET_UDP_HAVE_STACK
-  if (psock->s_type != SOCK_STREAM)
+  if (psock->s_type == SOCK_DGRAM)
     {
       return udp_pollsetup(psock, fds);
     }
   else
 #endif /* NET_UDP_HAVE_STACK */
+#if defined(NET_TCP_HAVE_STACK) || defined(NET_UDP_HAVE_STACK)
+  if (psock->s_type == SOCK_CTRL)
+    {
+      nerr("ERROR:  Inappropriate socket type: %d\n", psock->s_type);
+      return -EOPNOTSUPP;
+    }
+  else
+#endif
     {
       return -ENOSYS;
     }
@@ -996,6 +1660,14 @@ static inline int inet_pollteardown(FAR struct socket *psock,
     }
   else
 #endif /* NET_UDP_HAVE_STACK */
+#if defined(NET_TCP_HAVE_STACK) || defined(NET_UDP_HAVE_STACK)
+  if (psock->s_type == SOCK_CTRL)
+    {
+      nerr("ERROR:  Inappropriate socket type: %d\n", psock->s_type);
+      return -EOPNOTSUPP;
+    }
+  else
+#endif
     {
       return -ENOSYS;
     }
@@ -1069,6 +1741,9 @@ static int inet_poll(FAR struct socket *psock, FAR struct pollfd *fds,
 static ssize_t inet_send(FAR struct socket *psock, FAR const void *buf,
                          size_t len, int flags)
 {
+#ifdef NET_UDP_HAVE_STACK
+  FAR struct socket_conn_s *conn = psock->s_conn;
+#endif
   ssize_t ret;
 
   switch (psock->s_type)
@@ -1112,7 +1787,7 @@ static ssize_t inet_send(FAR struct socket *psock, FAR const void *buf,
             {
               /* UDP/IP packet send */
 
-              ret = _SS_ISCONNECTED(psock->s_flags) ?
+              ret = _SS_ISCONNECTED(conn->s_flags) ?
                 psock_udp_sendto(psock, buf, len, 0, NULL, 0) : -ENOTCONN;
             }
 #endif /* NET_UDP_HAVE_STACK */
@@ -1120,7 +1795,7 @@ static ssize_t inet_send(FAR struct socket *psock, FAR const void *buf,
 #elif defined(NET_UDP_HAVE_STACK)
           /* Only UDP/IP packet send */
 
-          ret = _SS_ISCONNECTED(psock->s_flags) ?
+          ret = _SS_ISCONNECTED(conn->s_flags) ?
             psock_udp_sendto(psock, buf, len, 0, NULL, 0) : -ENOTCONN;
 #else
           ret = -ENOSYS;
@@ -1128,6 +1803,15 @@ static ssize_t inet_send(FAR struct socket *psock, FAR const void *buf,
         }
         break;
 #endif /* CONFIG_NET_UDP */
+
+#if defined(CONFIG_NET_TCP) || defined(CONFIG_NET_UDP)
+      case SOCK_CTRL:
+        {
+          nerr("ERROR:  Inappropriate socket type: %d\n", psock->s_type);
+          ret = -EOPNOTSUPP;
+        }
+        break;
+#endif
 
       default:
         {
@@ -1201,11 +1885,9 @@ static ssize_t inet_sendto(FAR struct socket *psock, FAR const void *buf,
     }
 
 #ifdef CONFIG_NET_UDP
-  /* If this is a connected socket, then return EISCONN */
-
   if (psock->s_type != SOCK_DGRAM)
     {
-      nerr("ERROR: Connected socket\n");
+      nerr("ERROR: Inappropriate socket type %d\n", psock->s_type);
       return -EBADF;
     }
 
@@ -1289,6 +1971,11 @@ static ssize_t inet_sendmsg(FAR struct socket *psock,
 
   for (len = 0, iov = msg->msg_iov; iov != end; iov++)
     {
+      if (iov->iov_len == 0 || iov->iov_base == NULL)
+        {
+          continue;
+        }
+
       memcpy(((unsigned char *)buf) + len, iov->iov_base, iov->iov_len);
       len += iov->iov_len;
     }
@@ -1311,12 +1998,10 @@ static ssize_t inet_sendmsg(FAR struct socket *psock,
  *   psock    A reference to the socket structure of the socket
  *   cmd      The ioctl command
  *   arg      The argument of the ioctl cmd
- *   arglen   The length of 'arg'
  *
  ****************************************************************************/
 
-static int inet_ioctl(FAR struct socket *psock, int cmd,
-                      FAR void *arg, size_t arglen)
+static int inet_ioctl(FAR struct socket *psock, int cmd, unsigned long arg)
 {
   /* Verify that the sockfd corresponds to valid, allocated socket */
 
@@ -1325,17 +2010,21 @@ static int inet_ioctl(FAR struct socket *psock, int cmd,
       return -EBADF;
     }
 
-#if defined(CONFIG_NET_TCP) && !defined(CONFIG_NET_TCP_NO_STACK)
-  if (psock->s_type == SOCK_STREAM)
+#ifdef NET_TCP_HAVE_STACK
+  if (psock->s_type == SOCK_STREAM ||
+      (psock->s_type == SOCK_CTRL &&
+      (psock->s_proto == 0 || psock->s_proto == IPPROTO_TCP)))
     {
-      return tcp_ioctl(psock->s_conn, cmd, arg, arglen);
+      return tcp_ioctl(psock->s_conn, cmd, arg);
     }
 #endif
 
 #if defined(CONFIG_NET_UDP) && defined(NET_UDP_HAVE_STACK)
-  if (psock->s_type == SOCK_DGRAM)
+  if (psock->s_type == SOCK_DGRAM ||
+      (psock->s_type == SOCK_CTRL &&
+      (psock->s_proto == 0 || psock->s_proto == IPPROTO_UDP)))
     {
-      return udp_ioctl(psock->s_conn, cmd, arg, arglen);
+      return udp_ioctl(psock->s_conn, cmd, arg);
     }
 #endif
 
@@ -1382,7 +2071,7 @@ static int inet_socketpair(FAR struct socket *psocks[2])
       len = sizeof(addr[0].inaddr);
       memset(&addr[0], 0, len);
       addr[0].inaddr.sin_family = psocks[0]->s_domain;
-      addr[0].inaddr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+      addr[0].inaddr.sin_addr.s_addr = HTONL(INADDR_LOOPBACK);
     }
 
   memcpy(&addr[1], &addr[0], len);
@@ -1441,6 +2130,8 @@ static int inet_socketpair(FAR struct socket *psocks[2])
 #if defined(CONFIG_NET_TCP)
   if (psocks[0]->s_type == SOCK_STREAM)
     {
+      FAR struct socket_conn_s *conn = psocks[1]->s_conn;
+
       ret = psock_listen(pserver, 2);
       if (ret < 0)
         {
@@ -1459,7 +2150,8 @@ static int inet_socketpair(FAR struct socket *psocks[2])
 
       psock_close(psocks[1]);
 
-      ret = psock_accept(pserver, &addr[1].addr, &len, psocks[1]);
+      ret = psock_accept(pserver, &addr[1].addr, &len, psocks[1],
+                         conn->s_flags & _SF_NONBLOCK ? SOCK_NONBLOCK : 0);
     }
 #endif /* CONFIG_NET_TCP */
 
@@ -1475,6 +2167,41 @@ errout:
 #else
   return -EOPNOTSUPP;
 #endif /* CONFIG_NET_TCP || CONFIG_NET_UDP */
+}
+
+/****************************************************************************
+ * Name: inet_shutdown
+ *
+ * Description:
+ *   Performs the shutdown operation on an AF_INET or AF_INET6 socket
+ *
+ * Input Parameters:
+ *   psock   Socket instance
+ *   how     Specifies the type of shutdown
+ *
+ * Returned Value:
+ *   0: Success; Negated errno on failure
+ *
+ ****************************************************************************/
+
+static int inet_shutdown(FAR struct socket *psock, int how)
+{
+  switch (psock->s_type)
+    {
+#ifdef CONFIG_NET_TCP
+      case SOCK_STREAM:
+#ifdef NET_TCP_HAVE_STACK
+        return tcp_shutdown(psock, how);
+#else
+        nwarn("WARNING: SOCK_STREAM support is not available in this "
+              "configuration\n");
+        return -EAFNOSUPPORT;
+#endif /* NET_TCP_HAVE_STACK */
+#endif /* CONFIG_NET_TCP */
+
+      default:
+        return -EOPNOTSUPP;
+    }
 }
 
 /****************************************************************************
@@ -1502,7 +2229,7 @@ static ssize_t inet_sendfile(FAR struct socket *psock,
                              FAR struct file *infile, FAR off_t *offset,
                              size_t count)
 {
-#if defined(CONFIG_NET_TCP) && !defined(CONFIG_NET_TCP_NO_STACK)
+#ifdef NET_TCP_HAVE_STACK
   if (psock->s_type == SOCK_STREAM)
     {
       return tcp_sendfile(psock, infile, offset, count);
@@ -1544,17 +2271,13 @@ static ssize_t inet_sendfile(FAR struct socket *psock,
 static ssize_t inet_recvmsg(FAR struct socket *psock,
                             FAR struct msghdr *msg, int flags)
 {
-  FAR void *buf = msg->msg_iov->iov_base;
-  size_t len = msg->msg_iov->iov_len;
-  FAR struct sockaddr *from = msg->msg_name;
-  FAR socklen_t *fromlen = &msg->msg_namelen;
   ssize_t ret;
 
   /* If a 'from' address has been provided, verify that it is large
    * enough to hold this address family.
    */
 
-  if (from)
+  if (msg->msg_name)
     {
       socklen_t minlen;
 
@@ -1583,7 +2306,7 @@ static ssize_t inet_recvmsg(FAR struct socket *psock,
           return -EINVAL;
         }
 
-      if (*fromlen < minlen)
+      if (msg->msg_namelen < minlen)
         {
           return -EINVAL;
         }
@@ -1599,7 +2322,7 @@ static ssize_t inet_recvmsg(FAR struct socket *psock,
     case SOCK_STREAM:
       {
 #ifdef NET_TCP_HAVE_STACK
-        ret = psock_tcp_recvfrom(psock, buf, len, flags, from, fromlen);
+        ret = psock_tcp_recvfrom(psock, msg, flags);
 #else
         ret = -ENOSYS;
 #endif
@@ -1611,13 +2334,22 @@ static ssize_t inet_recvmsg(FAR struct socket *psock,
     case SOCK_DGRAM:
       {
 #ifdef NET_UDP_HAVE_STACK
-        ret = psock_udp_recvfrom(psock, buf, len, flags, from, fromlen);
+        ret = psock_udp_recvfrom(psock, msg, flags);
 #else
         ret = -ENOSYS;
 #endif
       }
       break;
 #endif /* CONFIG_NET_UDP */
+
+#if defined(CONFIG_NET_TCP) || defined(CONFIG_NET_UDP)
+    case SOCK_CTRL:
+      {
+        nerr("ERROR:  Inappropriate socket type: %d\n", psock->s_type);
+        ret = -EOPNOTSUPP;
+      }
+      break;
+#endif
 
     default:
       {
@@ -1658,96 +2390,92 @@ int inet_close(FAR struct socket *psock)
    * types.
    */
 
-  switch (psock->s_type)
-    {
 #ifdef CONFIG_NET_TCP
-      case SOCK_STREAM:
-        {
+  if (psock->s_type == SOCK_STREAM ||
+      (psock->s_type == SOCK_CTRL &&
+      (psock->s_proto == 0 || psock->s_proto == IPPROTO_TCP)))
+    {
 #ifdef NET_TCP_HAVE_STACK
-          FAR struct tcp_conn_s *conn = psock->s_conn;
-          int ret;
+      FAR struct tcp_conn_s *conn = psock->s_conn;
+      int ret;
 
-          /* Is this the last reference to the connection structure (there
-           * could be more if the socket was dup'ed).
-           */
+      /* Is this the last reference to the connection structure (there
+       * could be more if the socket was dup'ed).
+       */
 
-          if (conn->crefs <= 1)
-            {
-              /* Yes... Clost the socket */
-
-              ret = tcp_close(psock);
-              if (ret < 0)
-                {
-                  /* This would normally occur only if there is a timeout
-                   * from a lingering close.
-                   */
-
-                  nerr("ERROR: tcp_close failed: %d\n", ret);
-                  return ret;
-                }
-            }
-          else
-            {
-              /* No.. Just decrement the reference count */
-
-              conn->crefs--;
-
-              /* Stop monitor for this socket only */
-
-              tcp_close_monitor(psock);
-            }
-#else
-        nwarn("WARNING: SOCK_STREAM support is not available in this "
-              "configuration\n");
-        return -EAFNOSUPPORT;
-#endif /* NET_TCP_HAVE_STACK */
-        }
-        break;
-#endif /* CONFIG_NET_TCP */
-
-#ifdef CONFIG_NET_UDP
-      case SOCK_DGRAM:
+      if (conn->crefs <= 1)
         {
-#ifdef NET_UDP_HAVE_STACK
-          FAR struct udp_conn_s *conn = psock->s_conn;
-          int ret;
+          /* Yes... Clost the socket */
 
-          /* Is this the last reference to the connection structure (there
-           * could be more if the socket was dup'ed).
-           */
-
-          if (conn->crefs <= 1)
+          ret = tcp_close(psock);
+          if (ret < 0)
             {
-              /* Yes... Clost the socket */
+              /* This would normally occur only if there is a timeout
+               * from a lingering close.
+               */
 
-              ret = udp_close(psock);
-              if (ret < 0)
-                {
-                  /* This would normally occur only if there is a timeout
-                   * from a lingering close.
-                   */
-
-                  nerr("ERROR: udp_close failed: %d\n", ret);
-                  return ret;
-                }
+              nerr("ERROR: tcp_close failed: %d\n", ret);
+              return ret;
             }
-          else
-            {
-              /* No.. Just decrement the reference count */
-
-              conn->crefs--;
-            }
-#else
-          nwarn("WARNING: SOCK_DGRAM support is not available in this "
-                "configuration\n");
-          return -EAFNOSUPPORT;
-#endif /* NET_UDP_HAVE_STACK */
         }
-        break;
-#endif /* CONFIG_NET_UDP */
+      else
+        {
+          /* No.. Just decrement the reference count */
 
-      default:
-        return -EBADF;
+          conn->crefs--;
+        }
+#else
+      nwarn("WARNING: SOCK_STREAM support is not available in this "
+            "configuration\n");
+      return -EAFNOSUPPORT;
+#endif /* NET_TCP_HAVE_STACK */
+    }
+  else
+#endif /* CONFIG_NET_TCP */
+#ifdef CONFIG_NET_UDP
+  if (psock->s_type == SOCK_DGRAM ||
+      (psock->s_type == SOCK_CTRL &&
+      (psock->s_proto == 0 || psock->s_proto == IPPROTO_UDP)))
+    {
+#ifdef NET_UDP_HAVE_STACK
+      FAR struct udp_conn_s *conn = psock->s_conn;
+      int ret;
+
+      /* Is this the last reference to the connection structure (there
+       * could be more if the socket was dup'ed).
+       */
+
+      if (conn->crefs <= 1)
+        {
+          /* Yes... Clost the socket */
+
+          ret = udp_close(psock);
+          if (ret < 0)
+            {
+              /* This would normally occur only if there is a timeout
+               * from a lingering close.
+               */
+
+              nerr("ERROR: udp_close failed: %d\n", ret);
+              return ret;
+            }
+        }
+      else
+        {
+          /* No.. Just decrement the reference count */
+
+          conn->crefs--;
+        }
+#else
+      nwarn("WARNING: SOCK_DGRAM support is not available in this "
+            "configuration\n");
+      return -EAFNOSUPPORT;
+#endif /* NET_UDP_HAVE_STACK */
+    }
+  else
+#endif /* CONFIG_NET_UDP */
+    {
+      return -EBADF;
     }
 
   return OK;
@@ -1771,14 +2499,15 @@ int inet_close(FAR struct socket *psock)
  ****************************************************************************/
 
 FAR const struct sock_intf_s *
-  inet_sockif(sa_family_t family, int type, int protocol)
+inet_sockif(sa_family_t family, int type, int protocol)
 {
   DEBUGASSERT(family == PF_INET || family == PF_INET6);
 
 #if defined(HAVE_PFINET_SOCKETS) && defined(CONFIG_NET_ICMP_SOCKET)
   /* PF_INET, ICMP data gram sockets are a special case of raw sockets */
 
-  if (family == PF_INET && type == SOCK_DGRAM && protocol == IPPROTO_ICMP)
+  if (family == PF_INET && (type == SOCK_DGRAM || type == SOCK_CTRL ||
+      type == SOCK_RAW) && protocol == IPPROTO_ICMP)
     {
       return &g_icmp_sockif;
     }
@@ -1787,29 +2516,22 @@ FAR const struct sock_intf_s *
 #if defined(HAVE_PFINET6_SOCKETS) && defined(CONFIG_NET_ICMPv6_SOCKET)
   /* PF_INET, ICMP data gram sockets are a special case of raw sockets */
 
-  if (family == PF_INET6 && type == SOCK_DGRAM && protocol == IPPROTO_ICMP6)
+  if (family == PF_INET6 && (type == SOCK_DGRAM || type == SOCK_CTRL ||
+      type == SOCK_RAW) && protocol == IPPROTO_ICMPV6)
     {
       return &g_icmpv6_sockif;
     }
   else
 #endif
-#ifdef NET_UDP_HAVE_STACK
-  if (type == SOCK_DGRAM && (protocol == 0 || protocol == IPPROTO_UDP))
+#if defined(NET_UDP_HAVE_STACK) || defined(NET_TCP_HAVE_STACK)
     {
       return &g_inet_sockif;
     }
-  else
-#endif
-#ifdef NET_TCP_HAVE_STACK
-  if (type == SOCK_STREAM && (protocol == 0 || protocol == IPPROTO_TCP))
-    {
-      return &g_inet_sockif;
-    }
-  else
-#endif
+#else
     {
       return NULL;
     }
+#endif
 }
 
 #endif /* HAVE_INET_SOCKETS */

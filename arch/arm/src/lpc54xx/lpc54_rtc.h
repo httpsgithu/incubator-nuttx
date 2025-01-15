@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/lpc54xx/lpc54_rtc.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -45,7 +47,7 @@
 #ifdef CONFIG_RTC_ALARM
 /* The form of an alarm callback */
 
-typedef CODE void (*alarmcb_t)(void);
+typedef void (*alarmcb_t)(void);
 #endif
 
 /****************************************************************************
@@ -82,7 +84,7 @@ extern "C"
 
 #ifdef CONFIG_RTC_ALARM
 struct timespec;
-int lpc54_rtc_setalarm(FAR const struct timespec *tp, alarmcb_t callback);
+int lpc54_rtc_setalarm(const struct timespec *tp, alarmcb_t callback);
 #endif
 
 /****************************************************************************
@@ -101,7 +103,7 @@ int lpc54_rtc_setalarm(FAR const struct timespec *tp, alarmcb_t callback);
 
 #ifdef CONFIG_RTC_ALARM
 struct tm;
-int lpc54_rtc_rdalarm(FAR struct tm *time);
+int lpc54_rtc_rdalarm(struct tm *time);
 #endif
 
 /****************************************************************************
@@ -146,7 +148,7 @@ int lpc54_rtc_cancelalarm(void);
 
 #ifdef CONFIG_RTC_DRIVER
 struct rtc_lowerhalf_s;
-FAR struct rtc_lowerhalf_s *lpc54_rtc_lowerhalf(void);
+struct rtc_lowerhalf_s *lpc54_rtc_lowerhalf(void);
 #endif
 
 #undef EXTERN

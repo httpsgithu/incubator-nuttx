@@ -1,5 +1,7 @@
-/************************************************************************************
+/****************************************************************************
  * arch/renesas/include/sh1/irq.h
+ *
+ * SPDX-License-Identifier: Apache-2.0
  *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -16,7 +18,7 @@
  * License for the specific language governing permissions and limitations
  * under the License.
  *
- ************************************************************************************/
+ ****************************************************************************/
 
 /* This file should never be included directly but, rather,
  * only indirectly through nuttx/irq.h
@@ -25,16 +27,16 @@
 #ifndef __ARCH_RENESAS_INCLUDE_SH1_IRQ_H
 #define __ARCH_RENESAS_INCLUDE_SH1_IRQ_H
 
-/************************************************************************************
+/****************************************************************************
  * Included Files
- ************************************************************************************/
+ ****************************************************************************/
 
 #include <nuttx/config.h>
 #include <stdint.h>
 
-/************************************************************************************
+/****************************************************************************
  * Pre-processor Definitions
- ************************************************************************************/
+ ****************************************************************************/
 
 /* IRQ channels */
 
@@ -241,16 +243,17 @@
 #define SH1_SYSTIMER_IRQ   SH1_IMIA0_IRQ
 #endif
 
-/* Vector table offsets *************************************************************/
+/* Vector table offsets *****************************************************/
 
-/* The following provides the vector numbers for each IRQ.  The IRQ numbers (above)
- * form the densely packet number space used by the system to identify IRQs.  The
- * following are the (relatively) loosely spaced offsets that identify the location
- * of the corresponding vector in the vector table.
+/* The following provides the vector numbers for each IRQ.
+ * The IRQ numbers (above) form the densely packet number space used by the
+ * system to identify IRQs.  The following are the (relatively) loosely
+ * spaced offsets that identify the location of the corresponding vector
+ * in the vector table.
  *
- * These offsets are specified as a vector number (suitably for indexing an array
- * of uint32_t) but would have to by multiplied by 4 to get an addressable, byte
- * offset.
+ * These offsets are specified as a vector number (suitably for indexing
+ * an array of uint32_t) but would have to by multiplied by 4 to get
+ * an addressable, byte offset.
  */
 
 /* Resets */
@@ -439,21 +442,15 @@
 #define XCPTCONTEXT_REGS    (22)
 #define XCPTCONTEXT_SIZE    (4 * XCPTCONTEXT_REGS)
 
-/************************************************************************************
+/****************************************************************************
  * Public Types
- ************************************************************************************/
+ ****************************************************************************/
 
 /* This struct defines the way the registers are stored.  We need to save: */
 
 #ifndef __ASSEMBLY__
 struct xcptcontext
 {
-  /* The following function pointer is non-zero if there are pending signals
-   * to be processed.
-   */
-
-  void *sigdeliver; /* Actual type is sig_deliver_t */
-
   /* These are saved copies of LR and SR used during signal processing.
    *
    * REVISIT:  Because there is only one copy of these save areas,
@@ -471,9 +468,9 @@ struct xcptcontext
 };
 #endif
 
-/************************************************************************************
+/****************************************************************************
  * Public Data
- ************************************************************************************/
+ ****************************************************************************/
 
 #ifndef __ASSEMBLY__
 #ifdef __cplusplus
@@ -484,15 +481,15 @@ extern "C"
 #define EXTERN extern
 #endif
 
-/************************************************************************************
+/****************************************************************************
  * Inline Functions
- ************************************************************************************/
+ ****************************************************************************/
 
 #ifndef __ASSEMBLY__
 
 /* Get the current value of the SR */
 
-static inline irqstate_t __getsr(void)
+static inline_function irqstate_t __getsr(void)
 {
   irqstate_t flags;
 
@@ -502,14 +499,30 @@ static inline irqstate_t __getsr(void)
 
 /* Set the new value of the SR */
 
-static inline void __setsr(irqstate_t sr)
+static inline_function void __setsr(irqstate_t sr)
 {
   __asm__ __volatile__ ("ldc %0, sr" : : "r" (sr));
 }
 
+/* Return the current value of the stack pointer */
+
+static inline_function uint32_t up_getsp(void)
+{
+  uint32_t sp;
+
+  __asm__ __volatile__
+    (
+      "mov   r15, %0\n\t"
+      : "=&z" (sp)
+      :
+      : "memory"
+    );
+  return sp;
+}
+
 /* Return the current interrupt enable state and disable interrupts */
 
-static inline irqstate_t up_irq_save(void)
+static inline_function irqstate_t up_irq_save(void)
 {
   irqstate_t flags = __getsr();
   __setsr(flags | 0x000000f0);
@@ -518,7 +531,7 @@ static inline irqstate_t up_irq_save(void)
 
 /* Disable interrupts */
 
-static inline void up_irq_disable(void)
+static inline_function void up_irq_disable(void)
 {
   uint32_t flags = __getsr();
   __setsr(flags | 0x000000f0);
@@ -526,7 +539,7 @@ static inline void up_irq_disable(void)
 
 /* Enable interrupts */
 
-static inline void up_irq_enable(void)
+static inline_function void up_irq_enable(void)
 {
   uint32_t flags = __getsr();
   __setsr(flags & ~0x000000f0);
@@ -534,7 +547,7 @@ static inline void up_irq_enable(void)
 
 /* Restore saved interrupt state */
 
-static inline void up_irq_restore(irqstate_t flags)
+static inline_function void up_irq_restore(irqstate_t flags)
 {
   if ((flags & 0x000000f0) != 0x000000f0)
     {
@@ -547,9 +560,23 @@ static inline void up_irq_restore(irqstate_t flags)
 }
 #endif
 
-/************************************************************************************
+/****************************************************************************
  * Public Functions Prototypes
- ************************************************************************************/
+ ****************************************************************************/
+
+/****************************************************************************
+ * Name: up_getusrpc
+ ****************************************************************************/
+
+#define up_getusrpc(regs) \
+    (((uint32_t *)((regs) ? (regs) : up_current_regs()))[REG_PC])
+
+/****************************************************************************
+ * Name: up_getusrsp
+ ****************************************************************************/
+
+#define up_getusrsp(regs) \
+    ((uintptr_t)((uint32_t *)(regs))[REG_SP])
 
 #undef EXTERN
 #ifdef __cplusplus

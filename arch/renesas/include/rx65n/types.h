@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/renesas/include/rx65n/types.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -18,7 +20,7 @@
  *
  ****************************************************************************/
 
-/* This file should never be included directly but, rather, only indirectly\
+/* This file should never be included directly but, rather, only indirectly
  * through sys/types.h
  */
 
@@ -63,6 +65,15 @@ typedef unsigned long long _uint64_t;
 
 typedef _int64_t           _intmax_t;
 typedef _uint64_t          _uintmax_t;
+
+#if defined(__WCHAR_TYPE__)
+typedef __WCHAR_TYPE__     _wchar_t;
+#else
+typedef int                _wchar_t;
+#endif
+
+typedef int                _wint_t;
+typedef int                _wctype_t;
 
 /* A size is 4 bytes */
 

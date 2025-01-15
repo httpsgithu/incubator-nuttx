@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/xmc4/xmc4_i2c.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -27,7 +29,6 @@
 
 #include <nuttx/config.h>
 #include <nuttx/i2c/i2c_master.h>
-#include "hardware/xmc4_i2c.h"
 
 /****************************************************************************
  * Public Function Prototypes
@@ -50,7 +51,7 @@
  *
  ****************************************************************************/
 
-FAR struct i2c_master_s *xmc4_i2cbus_initialize(int port);
+struct i2c_master_s *xmc4_i2cbus_initialize(int port);
 
 /****************************************************************************
  * Name: xmc4_i2cbus_uninitialize
@@ -67,6 +68,6 @@ FAR struct i2c_master_s *xmc4_i2cbus_initialize(int port);
  *
  ****************************************************************************/
 
-int xmc4_i2cbus_uninitialize(FAR struct i2c_master_s *dev);
+int xmc4_i2cbus_uninitialize(struct i2c_master_s *dev);
 
 #endif /* __ARCH_ARM_SRC_XMC4_XMC4_I2C_H */

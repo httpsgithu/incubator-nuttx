@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/rtl8720c/ameba_flash.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -150,10 +152,10 @@ static void flash_resource_unlock(irqstate_t state)
   leave_critical_section(state);
 }
 
-static int ameba_flash_erase(FAR struct mtd_dev_s *dev,
+static int ameba_flash_erase(struct mtd_dev_s *dev,
                              off_t startblock, size_t nblocks)
 {
-  FAR struct ameba_flash_dev_s *priv = (FAR struct ameba_flash_dev_s *)dev;
+  struct ameba_flash_dev_s *priv = (struct ameba_flash_dev_s *)dev;
   uint32_t address = priv->baseaddr + (startblock << AMEBA_SECTOR_SHIFT);
   irqstate_t state;
   state = flash_resource_lock();
@@ -162,12 +164,12 @@ static int ameba_flash_erase(FAR struct mtd_dev_s *dev,
   return nblocks;
 }
 
-static ssize_t ameba_flash_bread(FAR struct mtd_dev_s *dev,
-                                      off_t startblock,
-                                      size_t nblocks,
-                                      FAR uint8_t *buf)
+static ssize_t ameba_flash_bread(struct mtd_dev_s *dev,
+                                 off_t startblock,
+                                 size_t nblocks,
+                                 uint8_t *buf)
 {
-  FAR struct ameba_flash_dev_s *priv = (FAR struct ameba_flash_dev_s *)dev;
+  struct ameba_flash_dev_s *priv = (struct ameba_flash_dev_s *)dev;
   uint32_t address = priv->baseaddr + (startblock << AMEBA_PAGE_SHIFT);
   uint32_t length = nblocks << AMEBA_PAGE_SHIFT;
   irqstate_t state;
@@ -178,11 +180,11 @@ static ssize_t ameba_flash_bread(FAR struct mtd_dev_s *dev,
   return nblocks;
 }
 
-static ssize_t ameba_flash_bwrite(FAR struct mtd_dev_s *dev,
+static ssize_t ameba_flash_bwrite(struct mtd_dev_s *dev,
                                   off_t startblock,
-                                  size_t nblocks, FAR const uint8_t *buf)
+                                  size_t nblocks, const uint8_t *buf)
 {
-  FAR struct ameba_flash_dev_s *priv = (FAR struct ameba_flash_dev_s *)dev;
+  struct ameba_flash_dev_s *priv = (struct ameba_flash_dev_s *)dev;
   uint32_t address = priv->baseaddr + (startblock << AMEBA_PAGE_SHIFT);
   uint32_t length = nblocks << AMEBA_PAGE_SHIFT;
   irqstate_t state;
@@ -222,20 +224,22 @@ static int ameba_flash_spic_init(struct ameba_flash_dev_s *priv)
   return 0;
 }
 
-static int ameba_flash_ioctl(FAR struct mtd_dev_s *dev,
+static int ameba_flash_ioctl(struct mtd_dev_s *dev,
                              int cmd, unsigned long arg)
 {
-  FAR struct ameba_flash_dev_s *priv = (FAR struct ameba_flash_dev_s *)dev;
+  struct ameba_flash_dev_s *priv = (struct ameba_flash_dev_s *)dev;
   irqstate_t state;
   int ret = OK;
   switch (cmd)
     {
     case MTDIOC_GEOMETRY:
     {
-      FAR struct mtd_geometry_s *geo =
-        (FAR struct mtd_geometry_s *)((uintptr_t)arg);
+      struct mtd_geometry_s *geo =
+        (struct mtd_geometry_s *)((uintptr_t)arg);
       if (geo)
         {
+          memset(geo, 0, sizeof(*geo));
+
           geo->blocksize    = AMEBA_PAGE_SIZE;
           geo->erasesize    = AMEBA_SECTOR_SIZE;
           geo->neraseblocks = priv->nsectors;
@@ -247,8 +251,8 @@ static int ameba_flash_ioctl(FAR struct mtd_dev_s *dev,
     break;
     case BIOC_PARTINFO:
     {
-      FAR struct partition_info_s *info =
-        (FAR struct partition_info_s *)arg;
+      struct partition_info_s *info =
+        (struct partition_info_s *)arg;
       if (info != NULL)
         {
           info->numsectors  = priv->nsectors *
@@ -293,7 +297,7 @@ static int ameba_flash_ioctl(FAR struct mtd_dev_s *dev,
  *
  ****************************************************************************/
 
-static FAR struct mtd_dev_s *ameba_flash_initialize(void)
+static struct mtd_dev_s *ameba_flash_initialize(void)
 {
   struct ameba_flash_dev_s *priv;
   priv = kmm_zalloc(sizeof(struct ameba_flash_dev_s));
@@ -317,11 +321,11 @@ static FAR struct mtd_dev_s *ameba_flash_initialize(void)
       priv = NULL;
     }
 
-  return (FAR struct mtd_dev_s *)priv;
+  return (struct mtd_dev_s *)priv;
 }
 
-static void ameba_partition_init(FAR const struct partition_s *part,
-                                       FAR const void *path)
+static void ameba_partition_init(const struct partition_s *part,
+                                 const void *path)
 {
   char dev[32];
   snprintf(dev, sizeof(dev), "/dev/%s", part->name);
@@ -334,7 +338,7 @@ void ameba_flash_init(void)
 {
   const struct partition_s *table;
   char *path = "/dev/ameba_flash";
-  FAR struct mtd_dev_s *mtd;
+  struct mtd_dev_s *mtd;
   mtd = ameba_flash_initialize();
   if (mtd == NULL)
     {

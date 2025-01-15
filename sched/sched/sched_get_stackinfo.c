@@ -1,6 +1,8 @@
 /****************************************************************************
  * sched/sched/sched_get_stackinfo.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -61,7 +63,7 @@ int nxsched_get_stackinfo(pid_t pid, FAR struct stackinfo_s *stackinfo)
 
   DEBUGASSERT(rtcb != NULL && stackinfo != NULL);
 
-  /*  Pid of 0 means that we are querying ourself */
+  /* Pid of 0 means that we are querying ourself */
 
   if (pid == 0)
     {
@@ -100,7 +102,7 @@ int nxsched_get_stackinfo(pid_t pid, FAR struct stackinfo_s *stackinfo)
 
   stackinfo->adj_stack_size  = qtcb->adj_stack_size;
   stackinfo->stack_alloc_ptr = qtcb->stack_alloc_ptr;
-  stackinfo->stack_base_ptr   = qtcb->stack_base_ptr;
+  stackinfo->stack_base_ptr  = qtcb->stack_base_ptr;
 
   return OK;
 }

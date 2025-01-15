@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/rp2040/rp2040_irq.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -34,10 +36,7 @@
 
 #include "nvic.h"
 #include "ram_vectors.h"
-#include "arm_arch.h"
 #include "arm_internal.h"
-
-#include "rp2040_irq.h"
 
 /****************************************************************************
  * Pre-processor Definitions
@@ -56,22 +55,6 @@
 /****************************************************************************
  * Public Data
  ****************************************************************************/
-
-/* g_current_regs[] holds a references to the current interrupt level
- * register storage structure.  If is non-NULL only during interrupt
- * processing.  Access to g_current_regs[] must be through the macro
- * CURRENT_REGS for portability.
- */
-
-#ifdef CONFIG_SMP
-/* For the case of configurations with multiple CPUs, then there must be one
- * such value for each processor that can receive an interrupt.
- */
-
-volatile uint32_t *g_current_regs[CONFIG_SMP_NCPUS];
-#else
-volatile uint32_t *g_current_regs[1];
-#endif
 
 #ifdef CONFIG_SMP
 extern void rp2040_send_irqreq(int irqreq);
@@ -94,16 +77,6 @@ const uint32_t g_cpu_intstack_top[CONFIG_SMP_NCPUS] =
 #endif /* CONFIG_SMP_NCPUS > 1 */
 };
 #endif /* defined(CONFIG_SMP) && CONFIG_ARCH_INTERRUPTSTACK > 7 */
-
-/* This is the address of the  exception vector table (determined by the
- * linker script).
- */
-
-extern uint32_t _vectors[];
-
-/****************************************************************************
- * Private Data
- ****************************************************************************/
 
 /****************************************************************************
  * Private Functions
@@ -165,7 +138,7 @@ static void rp2040_dumpnvic(const char *msg, int irq)
  ****************************************************************************/
 
 #ifdef CONFIG_DEBUG_FEATURES
-static int rp2040_nmi(int irq, FAR void *context, FAR void *arg)
+static int rp2040_nmi(int irq, void *context, void *arg)
 {
   up_irq_save();
   _err("PANIC!!! NMI received\n");
@@ -173,7 +146,7 @@ static int rp2040_nmi(int irq, FAR void *context, FAR void *arg)
   return 0;
 }
 
-static int rp2040_pendsv(int irq, FAR void *context, FAR void *arg)
+static int rp2040_pendsv(int irq, void *context, void *arg)
 {
   up_irq_save();
   _err("PANIC!!! PendSV received\n");
@@ -181,7 +154,7 @@ static int rp2040_pendsv(int irq, FAR void *context, FAR void *arg)
   return 0;
 }
 
-static int rp2040_reserved(int irq, FAR void *context, FAR void *arg)
+static int rp2040_reserved(int irq, void *context, void *arg)
 {
   up_irq_save();
   _err("PANIC!!! Reserved interrupt\n");
@@ -266,10 +239,6 @@ void up_irqinitialize(void)
       putreg32(DEFPRIORITY32, regaddr);
     }
 
-  /* currents_regs is non-NULL only while processing an interrupt */
-
-  CURRENT_REGS = NULL;
-
   /* Attach the SVCall and Hard Fault exception handlers.  The SVCall
    * exception is used for performing context switches; The Hard Fault
    * must also be caught because a SVCall may show up as a Hard Fault
@@ -309,8 +278,8 @@ void up_disable_irq(int irq)
   DEBUGASSERT((unsigned)irq < NR_IRQS);
 
 #ifdef CONFIG_SMP
-  if (irq >= RP2040_IRQ_EXTINT && irq != RP2040_SIO_IRQ_PROC1 &&
-      up_cpu_index() != 0)
+  if (irq >= RP2040_IRQ_EXTINT && irq != RP2040_SMP_CALL_PROC1 &&
+      this_cpu() != 0)
     {
       /* Must be handled by Core 0 */
 
@@ -357,8 +326,8 @@ void up_enable_irq(int irq)
   DEBUGASSERT((unsigned)irq < NR_IRQS);
 
 #ifdef CONFIG_SMP
-  if (irq >= RP2040_IRQ_EXTINT && irq != RP2040_SIO_IRQ_PROC1 &&
-      up_cpu_index() != 0)
+  if (irq >= RP2040_IRQ_EXTINT && irq != RP2040_SMP_CALL_PROC1 &&
+      this_cpu() != 0)
     {
       /* Must be handled by Core 0 */
 
@@ -471,23 +440,7 @@ int up_prioritize_irq(int irq, int priority)
 #endif
 
 /****************************************************************************
- * Name: arm_intstack_top
- *
- * Description:
- *   Return a pointer to the top the correct interrupt stack allocation
- *   for the current CPU.
- *
- ****************************************************************************/
-
-#if defined(CONFIG_SMP) && CONFIG_ARCH_INTERRUPTSTACK > 7
-uintptr_t arm_intstack_top(void)
-{
-  return g_cpu_intstack_top[up_cpu_index()];
-}
-#endif
-
-/****************************************************************************
- * Name: arm_intstack_alloc
+ * Name: up_get_intstackbase
  *
  * Description:
  *   Return a pointer to the "alloc" the correct interrupt stack allocation
@@ -496,8 +449,8 @@ uintptr_t arm_intstack_top(void)
  ****************************************************************************/
 
 #if defined(CONFIG_SMP) && CONFIG_ARCH_INTERRUPTSTACK > 7
-uintptr_t arm_intstack_alloc(void)
+uintptr_t up_get_intstackbase(int cpu)
 {
-  return g_cpu_intstack_top[up_cpu_index()] - INTSTACK_SIZE;
+  return g_cpu_intstack_top[cpu] - INTSTACK_SIZE;
 }
 #endif

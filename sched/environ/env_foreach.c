@@ -1,6 +1,8 @@
 /****************************************************************************
  * sched/environ/env_foreach.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -65,22 +67,23 @@ int env_foreach(FAR struct task_group_s *group,
                 env_foreach_t cb,
                 FAR void *arg)
 {
-  FAR char *ptr;
-  FAR char *end;
   int ret = OK;
+  size_t i;
 
   /* Verify input parameters */
 
   DEBUGASSERT(group != NULL && cb != NULL);
 
-  /* Search for a name=value string with matching name */
+  if (group->tg_envp == NULL)
+    {
+      return ret;
+    }
 
-  end = &group->tg_envp[group->tg_envsize];
-  for (ptr = group->tg_envp; ptr < end; ptr += (strlen(ptr) + 1))
+  for (i = 0; group->tg_envp[i] != NULL; i++)
     {
       /* Perform the callback */
 
-      ret = cb(arg, ptr);
+      ret = cb(arg, group->tg_envp[i]);
 
       /* Terminate the traversal early if the callback so requests by
        * returning a non-zero value.
@@ -91,6 +94,8 @@ int env_foreach(FAR struct task_group_s *group,
           break;
         }
     }
+
+  DEBUGASSERT(ret != OK || group->tg_envc == i);
 
   return ret;
 }

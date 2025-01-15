@@ -1,6 +1,8 @@
 /****************************************************************************
  * net/devif/devif_loopback.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -32,19 +34,23 @@
 #include <nuttx/net/netdev.h>
 
 /****************************************************************************
- * Pre-processor Definitions
+ * Public Functions
  ****************************************************************************/
-
-/* This is a helper pointer for accessing the contents of the ip header */
-
-#define IPv4BUF ((FAR struct ipv4_hdr_s *)(dev->d_buf + dev->d_llhdrlen))
-#define IPv6BUF ((FAR struct ipv6_hdr_s *)(dev->d_buf + dev->d_llhdrlen))
 
 /****************************************************************************
- * Private Functions
+ * Name: devif_is_loopback
+ *
+ * Description:
+ *   The function checks the destination address of the packet to see
+ *   whether the target of packet is ourself.
+ *
+ * Returned Value:
+ *   true is returned if the packet need loop back to ourself, otherwise
+ *   false is returned.
+ *
  ****************************************************************************/
 
-static bool is_loopback(FAR struct net_driver_s *dev)
+bool devif_is_loopback(FAR struct net_driver_s *dev)
 {
   if (dev->d_len > 0)
     {
@@ -58,7 +64,7 @@ static bool is_loopback(FAR struct net_driver_s *dev)
 
 #ifdef CONFIG_NET_IPv6
       if ((IPv6BUF->vtc & IP_VERSION_MASK) == IPv6_VERSION &&
-          net_ipv6addr_hdrcmp(IPv6BUF->destipaddr, dev->d_ipv6addr))
+          NETDEV_IS_MY_V6ADDR(dev, IPv6BUF->destipaddr))
         {
           return true;
         }
@@ -85,7 +91,7 @@ static bool is_loopback(FAR struct net_driver_s *dev)
 
 int devif_loopback(FAR struct net_driver_s *dev)
 {
-  if (!is_loopback(dev))
+  if (!devif_is_loopback(dev))
     {
       return 0;
     }
@@ -128,17 +134,12 @@ int devif_loopback(FAR struct net_driver_s *dev)
       else
 #endif
         {
+          nwarn("WARNING: Unrecognized IP version\n");
           NETDEV_RXDROPPED(dev);
+          dev->d_len = 0;
         }
 
       NETDEV_TXDONE(dev);
-
-      /* Add the link layer header length for the next loop */
-
-      if (dev->d_len != 0)
-        {
-          dev->d_len += dev->d_llhdrlen;
-        }
     }
   while (dev->d_len > 0);
 

@@ -1,6 +1,8 @@
 ############################################################################
 # sched/signal/Make.defs
 #
+# SPDX-License-Identifier: Apache-2.0
+#
 # Licensed to the Apache Software Foundation (ASF) under one or more
 # contributor license agreements.  See the NOTICE file distributed with
 # this work for additional information regarding copyright ownership.  The
@@ -20,7 +22,7 @@
 
 CSRCS += sig_initialize.c
 CSRCS += sig_action.c sig_procmask.c sig_pending.c sig_suspend.c
-CSRCS += sig_kill.c sig_queue.c sig_waitinfo.c sig_timedwait.c
+CSRCS += sig_kill.c sig_tgkill.c sig_queue.c sig_waitinfo.c sig_timedwait.c
 CSRCS += sig_findaction.c sig_allocpendingsigaction.c
 CSRCS += sig_releasependingsigaction.c sig_unmaskpendingsignal.c
 CSRCS += sig_removependingsignal.c sig_releasependingsignal.c sig_lowest.c

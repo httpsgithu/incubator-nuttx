@@ -1,6 +1,8 @@
 /****************************************************************************
  * include/nuttx/video/isx012.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -24,6 +26,8 @@
 /****************************************************************************
  * Included Files
  ****************************************************************************/
+
+#include <nuttx/config.h>
 
 /****************************************************************************
  * Pre-processor Definitions
@@ -49,9 +53,11 @@ extern "C"
  * Public Function Prototypes
  ****************************************************************************/
 
-int isx012_initialize(FAR struct i2c_master_s *i2c);
+int isx012_initialize(void);
 int isx012_uninitialize(void);
-
+#ifdef CONFIG_VIDEO_ISX012_REGDEBUG
+int isx012_read_register(uint16_t addr, FAR uint8_t *buf, uint8_t size);
+#endif
 #undef EXTERN
 #ifdef __cplusplus
 }

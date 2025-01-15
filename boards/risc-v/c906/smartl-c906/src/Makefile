@@ -1,6 +1,8 @@
 ############################################################################
 # boards/risc-v/c906/smartl-c906/src/Makefile
 #
+# SPDX-License-Identifier: Apache-2.0
+#
 # Licensed to the Apache Software Foundation (ASF) under one or more
 # contributor license agreements.  See the NOTICE file distributed with
 # this work for additional information regarding copyright ownership.  The
@@ -28,10 +30,6 @@ endif
 
 ifeq ($(CONFIG_ARCH_LEDS),y)
 CSRCS += c906_leds.c
-endif
-
-ifeq ($(CONFIG_ARCH_FPU),y)
-CSRCS += c906_ostest.c
 endif
 
 include $(TOPDIR)/boards/Board.mk

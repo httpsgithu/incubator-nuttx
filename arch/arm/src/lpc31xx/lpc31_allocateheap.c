@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/lpc31xx/lpc31_allocateheap.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -34,11 +36,10 @@
 
 #include "arm.h"
 #include "chip.h"
-#include "arm_arch.h"
 #include "arm_internal.h"
 #include "lpc31_memorymap.h"
 
-#ifdef CONFIG_PAGING
+#ifdef CONFIG_LEGACY_PAGING
 #  include <nuttx/page.h>
 #  include "pg_macros.h"
 #endif
@@ -135,7 +136,7 @@
  * will let the heap run all the way to the end of SRAM.
  */
 
-#ifdef CONFIG_PAGING
+#ifdef CONFIG_LEGACY_PAGING
 #  ifdef PGTABLE_IN_HIGHSRAM
 #    define LPC31_HEAP_VEND (PG_LOCKED_VBASE + PG_TOTAL_VSIZE - PGTABLE_SIZE)
 #  else
@@ -177,10 +178,10 @@
  *
  ****************************************************************************/
 
-void up_allocate_heap(FAR void **heap_start, size_t *heap_size)
+void up_allocate_heap(void **heap_start, size_t *heap_size)
 {
   board_autoled_on(LED_HEAPALLOCATE);
-  *heap_start = (FAR void *)g_idle_topstack;
+  *heap_start = (void *)g_idle_topstack;
   *heap_size  = LPC31_HEAP_VEND - g_idle_topstack;
 }
 
@@ -197,17 +198,17 @@ void up_allocate_heap(FAR void **heap_start, size_t *heap_size)
 void arm_addregion(void)
 {
 #if defined(CONFIG_LPC31_EXTSRAM0) && defined(CONFIG_LPC31_EXTSRAM0HEAP)
-  MM_ADDREGION((FAR void *)LPC31_EXTSRAM0_VSECTION,
+  MM_ADDREGION((void *)LPC31_EXTSRAM0_VSECTION,
                 CONFIG_LPC31_EXTSRAM0SIZE);
 #endif
 
 #if defined(CONFIG_LPC31_EXTSRAM1) && defined(CONFIG_LPC31_EXTSRAM1HEAP)
-  MM_ADDREGION((FAR void *)LPC31_EXTSRAM1_VSECTION,
+  MM_ADDREGION((void *)LPC31_EXTSRAM1_VSECTION,
                 CONFIG_LPC31_EXTSRAM1SIZE);
 #endif
 
 #if defined(CONFIG_LPC31_EXTDRAM) && defined(CONFIG_LPC31_EXTDRAMHEAP)
-  MM_ADDREGION((FAR void *)LPC31_EXTSDRAM_VSECTION,
+  MM_ADDREGION((void *)LPC31_EXTSDRAM_VSECTION,
                 CONFIG_LPC31_EXTDRAMSIZE);
 #endif
 }

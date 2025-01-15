@@ -1,6 +1,8 @@
 /****************************************************************************
  * include/nuttx/wireless/nrf24l01.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -18,8 +20,8 @@
  *
  ****************************************************************************/
 
-#ifndef __INCLUDE_NUTTX_NRF24L01_H
-#define __INCLUDE_NUTTX_NRF24L01_H
+#ifndef __INCLUDE_NUTTX_WIRELESS_NRF24L01_H
+#define __INCLUDE_NUTTX_WIRELESS_NRF24L01_H
 
 /****************************************************************************
  * Included Files
@@ -532,4 +534,4 @@ void nrf24l01_dumprxfifo(FAR struct nrf24l01_dev_s *dev);
 }
 #endif
 
-#endif /* __INCLUDE_NUTTX_NRF24L01_H */
+#endif /* __INCLUDE_NUTTX_WIRELESS_NRF24L01_H */

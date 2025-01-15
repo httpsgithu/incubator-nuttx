@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/samd2l2/sam_gclk.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -97,7 +99,7 @@ extern "C"
  *
  ****************************************************************************/
 
-void sam_gclk_config(FAR const struct sam_gclkconfig_s *config);
+void sam_gclk_config(const struct sam_gclkconfig_s *config);
 
 /****************************************************************************
  * Name: sam_gclk_chan_enable

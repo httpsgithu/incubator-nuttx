@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/stm32l4/nucleo-l476rg/src/stm32_appinit.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -51,6 +53,14 @@
 
 #include "stm32l4_i2c.h"
 
+#ifdef CONFIG_SENSORS_BMP280
+#include "stm32_bmp280.h"
+#endif
+
+#ifdef CONFIG_SENSORS_MPU9250
+#include "stm32_mpu9250.h"
+#endif
+
 /****************************************************************************
  * Private Data
  ****************************************************************************/
@@ -78,7 +88,7 @@
 #if defined(CONFIG_I2C) && defined(CONFIG_SYSTEM_I2CTOOL)
 static void stm32_i2c_register(int bus)
 {
-  FAR struct i2c_master_s *i2c;
+  struct i2c_master_s *i2c;
   int ret;
 
   i2c = stm32l4_i2cbus_initialize(bus);
@@ -148,7 +158,7 @@ static void stm32_i2ctool(void)
 int board_app_initialize(uintptr_t arg)
 {
 #ifdef HAVE_RTC_DRIVER
-  FAR struct rtc_lowerhalf_s *rtclower;
+  struct rtc_lowerhalf_s *rtclower;
 #endif
 
 #if defined(CONFIG_I2C) && defined(CONFIG_SYSTEM_I2CTOOL)
@@ -294,8 +304,7 @@ int board_app_initialize(uintptr_t arg)
   ret = board_ajoy_initialize();
   if (ret < 0)
     {
-      syslog(LOG_ERR,
-             "ERROR: Failed to register the joystick driver: %d\n",
+      syslog(LOG_ERR, "ERROR: Failed to register the joystick driver: %d\n",
              ret);
       return ret;
     }
@@ -307,8 +316,7 @@ int board_app_initialize(uintptr_t arg)
   ret = board_timer_driver_initialize("/dev/timer0", 2);
   if (ret < 0)
     {
-      syslog(LOG_ERR,
-             "ERROR: Failed to register the timer driver: %d\n",
+      syslog(LOG_ERR, "ERROR: Failed to register the timer driver: %d\n",
              ret);
       return ret;
     }
@@ -320,72 +328,66 @@ int board_app_initialize(uintptr_t arg)
   index = 0;
 
 #ifdef CONFIG_STM32L4_TIM1_QE
-  sprintf(buf, "/dev/qe%d", index++);
+  snprintf(buf, sizeof(buf), "/dev/qe%d", index++);
   ret = stm32l4_qencoder_initialize(buf, 1);
   if (ret < 0)
     {
-      syslog(LOG_ERR,
-             "ERROR: Failed to register the qencoder: %d\n",
+      syslog(LOG_ERR, "ERROR: Failed to register the qencoder: %d\n",
              ret);
       return ret;
     }
 #endif
 
 #ifdef CONFIG_STM32L4_TIM2_QE
-  sprintf(buf, "/dev/qe%d", index++);
+  snprintf(buf, sizeof(buf), "/dev/qe%d", index++);
   ret = stm32l4_qencoder_initialize(buf, 2);
   if (ret < 0)
     {
-      syslog(LOG_ERR,
-             "ERROR: Failed to register the qencoder: %d\n",
+      syslog(LOG_ERR, "ERROR: Failed to register the qencoder: %d\n",
              ret);
       return ret;
     }
 #endif
 
 #ifdef CONFIG_STM32L4_TIM3_QE
-  sprintf(buf, "/dev/qe%d", index++);
+  snprintf(buf, sizeof(buf), "/dev/qe%d", index++);
   ret = stm32l4_qencoder_initialize(buf, 3);
   if (ret < 0)
     {
-      syslog(LOG_ERR,
-             "ERROR: Failed to register the qencoder: %d\n",
+      syslog(LOG_ERR, "ERROR: Failed to register the qencoder: %d\n",
              ret);
       return ret;
     }
 #endif
 
 #ifdef CONFIG_STM32L4_TIM4_QE
-  sprintf(buf, "/dev/qe%d", index++);
+  snprintf(buf, sizeof(buf), "/dev/qe%d", index++);
   ret = stm32l4_qencoder_initialize(buf, 4);
   if (ret < 0)
     {
-      syslog(LOG_ERR,
-             "ERROR: Failed to register the qencoder: %d\n",
+      syslog(LOG_ERR, "ERROR: Failed to register the qencoder: %d\n",
              ret);
       return ret;
     }
 #endif
 
 #ifdef CONFIG_STM32L4_TIM5_QE
-  sprintf(buf, "/dev/qe%d", index++);
+  snprintf(buf, sizeof(buf), "/dev/qe%d", index++);
   ret = stm32l4_qencoder_initialize(buf, 5);
   if (ret < 0)
     {
-      syslog(LOG_ERR,
-             "ERROR: Failed to register the qencoder: %d\n",
+      syslog(LOG_ERR, "ERROR: Failed to register the qencoder: %d\n",
              ret);
       return ret;
     }
 #endif
 
 #ifdef CONFIG_STM32L4_TIM8_QE
-  sprintf(buf, "/dev/qe%d", index++);
+  snprintf(buf, sizeof(buf), "/dev/qe%d", index++);
   ret = stm32l4_qencoder_initialize(buf, 8);
   if (ret < 0)
     {
-      syslog(LOG_ERR,
-             "ERROR: Failed to register the qencoder: %d\n",
+      syslog(LOG_ERR, "ERROR: Failed to register the qencoder: %d\n",
              ret);
       return ret;
     }
@@ -431,10 +433,37 @@ int board_app_initialize(uintptr_t arg)
   ret = stm32l4_cc1101_initialize();
   if (ret < 0)
     {
-      syslog(LOG_ERR,
-             "ERROR: stm32l4_cc1101_initialize failed: %d\n",
+      syslog(LOG_ERR, "ERROR: stm32l4_cc1101_initialize failed: %d\n",
              ret);
       return ret;
+    }
+#endif
+
+#ifdef CONFIG_SENSORS_BMP280
+  /* Try to register BMP280 device in I2C1 */
+
+  ret = board_bmp280_initialize(0, 1);
+  if (ret < 0)
+    {
+      syslog(LOG_ERR, "Failed to initialize BMP280 driver: %d\n", ret);
+    }
+  else
+    {
+      syslog(LOG_ERR, "Initialized BMP280 driver: %d\n", ret);
+    }
+#endif
+
+#ifdef CONFIG_SENSORS_MPU9250
+  /* Try to register MPU9250 device in I2C1 */
+
+  ret = board_mpu9250_initialize(0, 1);
+  if (ret < 0)
+    {
+      syslog(LOG_ERR, "Failed to initialize MPU9250 driver: %d\n", ret);
+    }
+  else
+    {
+      syslog(LOG_INFO, "Initialized MPU9250 driver: %d\n", ret);
     }
 #endif
 
@@ -451,7 +480,7 @@ int board_ioctl(unsigned int cmd, uintptr_t arg)
 #if defined(CONFIG_BOARDCTL_UNIQUEID)
 int board_uniqueid(uint8_t *uniqueid)
 {
-  if (uniqueid == 0)
+  if (uniqueid == NULL)
     {
       return -EINVAL;
     }

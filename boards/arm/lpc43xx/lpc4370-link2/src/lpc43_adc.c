@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/lpc43xx/lpc4370-link2/src/lpc43_adc.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -32,8 +34,7 @@
 #include <arch/board/board.h>
 
 #include "chip.h"
-#include "arm_arch.h"
-
+#include "arm_internal.h"
 #include "lpc43_adc.h"
 
 #if defined(CONFIG_LPC43_ADC0) || defined(CONFIG_LPC43_ADC1)

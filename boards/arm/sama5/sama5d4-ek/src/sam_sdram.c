@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/sama5/sama5d4-ek/src/sam_sdram.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -122,7 +124,7 @@
 
 #include <nuttx/arch.h>
 
-#include "arm_arch.h"
+#include "arm_internal.h"
 
 #include "sam_periphclks.h"
 #include "hardware/sam_memorymap.h"
@@ -274,7 +276,7 @@ static void sam_config_slaveddr(void)
  *   "Two DDR2/SDRAM (MT47H64M16HR) used as main system memory (256 MByte).
  *   The board includes 2 Gbits of on-board solderedDDR2 (double data rate)
  *   SDRAM. The footprints can also host two DDR2 (MT47H128M16RT) from
- *   Micron® for a total of 512 MBytes of DDR2 memory. The memory bus is 32
+ *   MicronÂ® for a total of 512 MBytes of DDR2 memory. The memory bus is 32
  *   bits wide and operates with a frequency of up to 166 MHz."
  *
  *   From the Atmel Code Example:

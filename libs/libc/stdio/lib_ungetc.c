@@ -1,6 +1,8 @@
 /****************************************************************************
  * libs/libc/stdio/lib_ungetc.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -43,19 +45,17 @@ int ungetc(int c, FAR FILE *stream)
   int nungotten;
 #endif
 
-  /* Verify that a non-NULL stream was provided */
+  /* Verify that a non-NULL stream was provided and c is not EOF */
 
-  if (!stream)
+  if (!stream || c == EOF)
     {
-      set_errno(EBADF);
       return EOF;
     }
 
   /* Stream must be open for read access */
 
-  if ((stream->fs_fd < 0) || ((stream->fs_oflags & O_RDOK) == 0))
+  if ((stream->fs_oflags & O_RDOK) == 0)
     {
-      set_errno(EBADF);
       return EOF;
     }
 
@@ -70,7 +70,6 @@ int ungetc(int c, FAR FILE *stream)
   else
 #endif
     {
-      set_errno(ENOMEM);
       return EOF;
     }
 }

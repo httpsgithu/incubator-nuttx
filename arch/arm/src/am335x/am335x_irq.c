@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/am335x/am335x_irq.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -27,8 +29,8 @@
 #include <assert.h>
 
 #include <nuttx/arch.h>
+#include <nuttx/spinlock.h>
 
-#include "arm_arch.h"
 #include "arm_internal.h"
 #include "sctlr.h"
 
@@ -36,21 +38,20 @@
 #include "am335x_irq.h"
 
 /****************************************************************************
+ * Private Data
+ ****************************************************************************/
+#ifdef CONFIG_ARCH_IRQPRIO
+static spinlock_t g_irq_lock = SP_UNLOCKED;
+#endif
+
+/****************************************************************************
  * Public Data
  ****************************************************************************/
 
-/* g_current_regs[] holds a references to the current interrupt level
- * register storage structure.  If is non-NULL only during interrupt
- * processing.  Access to g_current_regs[] must be through the macro
- * CURRENT_REGS for portability.
- */
-
-volatile uint32_t *g_current_regs[1];
-
 /* Symbols defined via the linker script */
 
-extern uint32_t _vector_start; /* Beginning of vector block */
-extern uint32_t _vector_end;   /* End+1 of vector block */
+extern uint8_t _vector_start[]; /* Beginning of vector block */
+extern uint8_t _vector_end[];   /* End+1 of vector block */
 
 /****************************************************************************
  * Public Functions
@@ -87,8 +88,8 @@ void up_irqinitialize(void)
 
   /* Set the VBAR register to the address of the vector table */
 
-  DEBUGASSERT((((uintptr_t)&_vector_start) & ~VBAR_MASK) == 0);
-  cp15_wrvbar((uint32_t)&_vector_start);
+  DEBUGASSERT((((uintptr_t)_vector_start) & ~VBAR_MASK) == 0);
+  cp15_wrvbar((uint32_t)_vector_start);
 #endif /* CONFIG_ARCH_LOWVECTORS */
 
   /* The following operations need to be atomic, but since this function is
@@ -120,10 +121,6 @@ void up_irqinitialize(void)
       getreg32(AM335X_INTC_PEND_IRQ(i));   /* Reading status clears pending interrupts */
       getreg32(AM335X_INTC_PEND_FIQ(i));   /* Reading status clears pending interrupts */
     }
-
-  /* currents_regs is non-NULL only while processing an interrupt */
-
-  CURRENT_REGS = NULL;
 
 #ifndef CONFIG_SUPPRESS_INTERRUPTS
   /* Initialize logic to support a second level of interrupt decoding for
@@ -339,7 +336,7 @@ int up_prioritize_irq(int irq, int priority)
     {
       /* These operations must be atomic */
 
-      flags = enter_critical_section();
+      flags = spin_lock_irqsave(&g_irq_lock);
 
 #if 0 // TODO
       /* Set the new priority */
@@ -351,7 +348,7 @@ int up_prioritize_irq(int irq, int priority)
       putreg32(regval, regaddr);
 #endif
 
-      leave_critical_section(flags);
+      spin_unlock_irqrestore(&g_irq_lock, flags);
       return OK;
     }
 

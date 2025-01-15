@@ -1,6 +1,8 @@
 /****************************************************************************
  * drivers/audio/wm8904.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -31,12 +33,16 @@
  ****************************************************************************/
 
 #include <nuttx/config.h>
+
+#include <sys/param.h>
+
 #include <nuttx/compiler.h>
 
 #include <pthread.h>
 #include <mqueue.h>
 
 #include <nuttx/wqueue.h>
+#include <nuttx/mutex.h>
 #include <nuttx/fs/ioctl.h>
 
 #ifdef CONFIG_AUDIO
@@ -1052,16 +1058,6 @@
 #define WM8904_FRAMELEN8              14        /* Bits per frame for 8-bit data */
 #define WM8904_FRAMELEN16             32        /* Bits per frame for 16-bit data */
 
-/* Commonly defined and redefined macros */
-
-#ifndef MIN
-#  define MIN(a,b)                   (((a) < (b)) ? (a) : (b))
-#endif
-
-#ifndef MAX
-#  define MAX(a,b)                   (((a) > (b)) ? (a) : (b))
-#endif
-
 /****************************************************************************
  * Public Types
  ****************************************************************************/
@@ -1082,7 +1078,7 @@ struct wm8904_dev_s
 
   /* Our specific driver data goes here */
 
-  const FAR struct wm8904_lower_s *lower;   /* Pointer to the board lower functions */
+  FAR const struct wm8904_lower_s *lower;   /* Pointer to the board lower functions */
   FAR struct i2c_master_s *i2c;             /* I2C driver to use */
   FAR struct i2s_dev_s   *i2s;              /* I2S driver to use */
   struct dq_queue_s       pendq;            /* Queue of pending buffers to be sent */
@@ -1091,7 +1087,7 @@ struct wm8904_dev_s
   char                    mqname[16];       /* Our message queue name */
   pthread_t               threadid;         /* ID of our thread */
   uint32_t                bitrate;          /* Actual programmed bit rate */
-  sem_t                   pendsem;          /* Protect pendq */
+  mutex_t                 pendlock;         /* Protect pendq */
 #ifdef WM8904_USE_FFLOCK_INT
   struct work_s           work;             /* Interrupt work */
 #endif

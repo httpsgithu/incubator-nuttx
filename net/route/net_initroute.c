@@ -1,6 +1,8 @@
 /****************************************************************************
  * net/route/net_initroute.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -25,7 +27,6 @@
 #include <nuttx/config.h>
 
 #include "route/ramroute.h"
-#include "route/fileroute.h"
 #include "route/cacheroute.h"
 #include "route/route.h"
 
@@ -53,10 +54,6 @@ void net_init_route(void)
 {
 #if defined(CONFIG_ROUTE_IPv4_RAMROUTE) || defined(CONFIG_ROUTE_IPv6_RAMROUTE)
   net_init_ramroute();
-#endif
-
-#if defined(CONFIG_ROUTE_IPv4_FILEROUTE) || defined(CONFIG_ROUTE_IPv6_FILEROUTE)
-  net_init_fileroute();
 #endif
 
 #if defined(CONFIG_ROUTE_IPv4_CACHEROUTE) || defined(CONFIG_ROUTE_IPv6_CACHEROUTE)

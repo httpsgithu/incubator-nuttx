@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/xtensa/esp32/common/src/esp32_ili9341.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -54,6 +56,9 @@
 #ifndef DISPLAY_DC
 #  error "DISPLAY_DC must be defined in board.h!"
 #endif
+#ifndef DISPLAY_BCKL
+#  error "DISPLAY_BCKL must be defined in board.h!"
+#endif
 #ifndef DISPLAY_SPI
 #  error "DISPLAY_SPI must be defined in board.h!"
 #endif
@@ -82,19 +87,19 @@ struct ili93414ws_lcd_s
  * Private Function Protototypes
  ****************************************************************************/
 
-static void esp32_ili93414ws_select(FAR struct ili9341_lcd_s *lcd);
-static void esp32_ili93414ws_deselect(FAR struct ili9341_lcd_s *lcd);
-static int esp32_ili93414ws_backlight(FAR struct ili9341_lcd_s *lcd,
+static void esp32_ili93414ws_select(struct ili9341_lcd_s *lcd);
+static void esp32_ili93414ws_deselect(struct ili9341_lcd_s *lcd);
+static int esp32_ili93414ws_backlight(struct ili9341_lcd_s *lcd,
                                       int level);
-static int esp32_ili93414ws_sendcmd(FAR struct ili9341_lcd_s *lcd,
+static int esp32_ili93414ws_sendcmd(struct ili9341_lcd_s *lcd,
                                     const uint8_t cmd);
-static int esp32_ili93414ws_sendparam(FAR struct ili9341_lcd_s *lcd,
+static int esp32_ili93414ws_sendparam(struct ili9341_lcd_s *lcd,
                                       const uint8_t param);
-static int esp32_ili93414ws_sendgram(FAR struct ili9341_lcd_s *lcd,
+static int esp32_ili93414ws_sendgram(struct ili9341_lcd_s *lcd,
                                      const uint16_t *wd, uint32_t nwords);
-static int esp32_ili93414ws_recvparam(FAR struct ili9341_lcd_s *lcd,
+static int esp32_ili93414ws_recvparam(struct ili9341_lcd_s *lcd,
                                       uint8_t *param);
-static int esp32_ili93414ws_recvgram(FAR struct ili9341_lcd_s *lcd,
+static int esp32_ili93414ws_recvgram(struct ili9341_lcd_s *lcd,
                                      uint16_t *wd, uint32_t nwords);
 
 /****************************************************************************
@@ -119,9 +124,9 @@ static struct lcd_dev_s *g_lcd = NULL;
  *
  ****************************************************************************/
 
-static void esp32_ili93414ws_select(FAR struct ili9341_lcd_s *lcd)
+static void esp32_ili93414ws_select(struct ili9341_lcd_s *lcd)
 {
-  FAR struct ili93414ws_lcd_s *priv = (FAR struct ili93414ws_lcd_s *)lcd;
+  struct ili93414ws_lcd_s *priv = (struct ili93414ws_lcd_s *)lcd;
 
   SPI_LOCK(priv->spi, true);
   SPI_SELECT(priv->spi, SPIDEV_DISPLAY(0), true);
@@ -138,9 +143,9 @@ static void esp32_ili93414ws_select(FAR struct ili9341_lcd_s *lcd)
  *
  ****************************************************************************/
 
-static void esp32_ili93414ws_deselect(FAR struct ili9341_lcd_s *lcd)
+static void esp32_ili93414ws_deselect(struct ili9341_lcd_s *lcd)
 {
-  FAR struct ili93414ws_lcd_s *priv = (FAR struct ili93414ws_lcd_s *)lcd;
+  struct ili93414ws_lcd_s *priv = (struct ili93414ws_lcd_s *)lcd;
 
   SPI_SELECT(priv->spi, SPIDEV_DISPLAY(0), false);
   SPI_LOCK(priv->spi, false);
@@ -168,7 +173,7 @@ static void esp32_ili93414ws_deselect(FAR struct ili9341_lcd_s *lcd)
  *
  ****************************************************************************/
 
-static int esp32_ili93414ws_backlight(FAR struct ili9341_lcd_s *lcd,
+static int esp32_ili93414ws_backlight(struct ili9341_lcd_s *lcd,
                                       int level)
 {
   if (level > 0)
@@ -200,10 +205,10 @@ static int esp32_ili93414ws_backlight(FAR struct ili9341_lcd_s *lcd,
  *
  ****************************************************************************/
 
-static int esp32_ili93414ws_sendcmd(FAR struct ili9341_lcd_s *lcd,
+static int esp32_ili93414ws_sendcmd(struct ili9341_lcd_s *lcd,
                                     const uint8_t cmd)
 {
-  FAR struct ili93414ws_lcd_s *priv = (FAR struct ili93414ws_lcd_s *)lcd;
+  struct ili93414ws_lcd_s *priv = (struct ili93414ws_lcd_s *)lcd;
 
   lcdinfo("%02x\n", cmd);
 
@@ -231,10 +236,10 @@ static int esp32_ili93414ws_sendcmd(FAR struct ili9341_lcd_s *lcd,
  *
  ****************************************************************************/
 
-static int esp32_ili93414ws_sendparam(FAR struct ili9341_lcd_s *lcd,
+static int esp32_ili93414ws_sendparam(struct ili9341_lcd_s *lcd,
                                       const uint8_t param)
 {
-  FAR struct ili93414ws_lcd_s *priv = (FAR struct ili93414ws_lcd_s *)lcd;
+  struct ili93414ws_lcd_s *priv = (struct ili93414ws_lcd_s *)lcd;
 
   lcdinfo("param=%04x\n", param);
 
@@ -262,10 +267,10 @@ static int esp32_ili93414ws_sendparam(FAR struct ili9341_lcd_s *lcd,
  *
  ****************************************************************************/
 
-static int esp32_ili93414ws_sendgram(FAR struct ili9341_lcd_s *lcd,
+static int esp32_ili93414ws_sendgram(struct ili9341_lcd_s *lcd,
                                      const uint16_t *wd, uint32_t nwords)
 {
-  FAR struct ili93414ws_lcd_s *priv = (FAR struct ili93414ws_lcd_s *)lcd;
+  struct ili93414ws_lcd_s *priv = (struct ili93414ws_lcd_s *)lcd;
 
   lcdinfo("lcd:%p, wd=%p, nwords=%" PRIu32 "\n", lcd, wd, nwords);
 
@@ -290,10 +295,10 @@ static int esp32_ili93414ws_sendgram(FAR struct ili9341_lcd_s *lcd,
  *
  ****************************************************************************/
 
-static int esp32_ili93414ws_recvparam(FAR struct ili9341_lcd_s *lcd,
+static int esp32_ili93414ws_recvparam(struct ili9341_lcd_s *lcd,
                                       uint8_t *param)
 {
-  FAR struct ili93414ws_lcd_s *priv = (FAR struct ili93414ws_lcd_s *)lcd;
+  struct ili93414ws_lcd_s *priv = (struct ili93414ws_lcd_s *)lcd;
 
   SPI_SETBITS(priv->spi, 8);
 
@@ -320,10 +325,10 @@ static int esp32_ili93414ws_recvparam(FAR struct ili9341_lcd_s *lcd,
  *
  ****************************************************************************/
 
-static int esp32_ili93414ws_recvgram(FAR struct ili9341_lcd_s *lcd,
+static int esp32_ili93414ws_recvgram(struct ili9341_lcd_s *lcd,
                                      uint16_t *wd, uint32_t nwords)
 {
-  FAR struct ili93414ws_lcd_s *priv = (FAR struct ili93414ws_lcd_s *)lcd;
+  struct ili93414ws_lcd_s *priv = (struct ili93414ws_lcd_s *)lcd;
 
   lcdinfo("wd=%p, nwords=%" PRIu32 "\n", wd, nwords);
 
@@ -349,8 +354,8 @@ static int esp32_ili93414ws_recvgram(FAR struct ili9341_lcd_s *lcd,
 
 int board_lcd_initialize(void)
 {
-  FAR struct ili93414ws_lcd_s *priv = &g_lcddev;
-  FAR struct spi_dev_s *spi;
+  struct ili93414ws_lcd_s *priv = &g_lcddev;
+  struct spi_dev_s *spi;
   lcdinfo("Initializing LCD\n");
 
   if (g_lcd == NULL)
@@ -423,7 +428,7 @@ int board_lcd_initialize(void)
  *
  ****************************************************************************/
 
-FAR struct lcd_dev_s *board_lcd_getdev(int lcddev)
+struct lcd_dev_s *board_lcd_getdev(int lcddev)
 {
   if (lcddev == 0)
     {

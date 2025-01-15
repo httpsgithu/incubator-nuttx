@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/rtl8720c/ameba_uart.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -18,8 +20,8 @@
  *
  ****************************************************************************/
 
-#ifndef __INCLUDE_NUTTX_SERIAL_UART_AMEBA_H
-#define __INCLUDE_NUTTX_SERIAL_UART_AMEBA_H
+#ifndef __ARCH_ARM_SRC_RTL8720C_AMEBA_UART_H
+#define __ARCH_ARM_SRC_RTL8720C_AMEBA_UART_H
 
 /****************************************************************************
  * Included Files
@@ -175,4 +177,4 @@ typedef uint32_t uart_addrwidth_t;
 struct file;  /* Forward reference */
 int uart_ioctl(struct file *filep, int cmd, unsigned long arg);
 #endif /* CONFIG_AMEBA_UART */
-#endif /* __INCLUDE_NUTTX_SERIAL_UART_AMEBA_H */
+#endif /* __ARCH_ARM_SRC_RTL8720C_AMEBA_UART_H */

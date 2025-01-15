@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/cxd56xx/cxd56_sdhci.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -424,7 +426,7 @@ struct sdio_dev_s;
  *
  ****************************************************************************/
 
-FAR struct sdio_dev_s *cxd56_sdhci_initialize(int slotno);
+struct sdio_dev_s *cxd56_sdhci_initialize(int slotno);
 
 /****************************************************************************
  * Name: cxd56_sdhci_finalize
@@ -441,7 +443,7 @@ FAR struct sdio_dev_s *cxd56_sdhci_initialize(int slotno);
  *
  ****************************************************************************/
 
-FAR struct sdio_dev_s *cxd56_sdhci_finalize(int slotno);
+struct sdio_dev_s *cxd56_sdhci_finalize(int slotno);
 
 /****************************************************************************
  * Name: cxd56_sdhci_mediachange
@@ -459,7 +461,7 @@ FAR struct sdio_dev_s *cxd56_sdhci_finalize(int slotno);
  *
  ****************************************************************************/
 
-void cxd56_sdhci_mediachange(FAR struct sdio_dev_s *dev);
+void cxd56_sdhci_mediachange(struct sdio_dev_s *dev);
 
 /****************************************************************************
  * Name: sdio_wrprotect
@@ -477,7 +479,7 @@ void cxd56_sdhci_mediachange(FAR struct sdio_dev_s *dev);
  *
  ****************************************************************************/
 
-void cxd56_sdhci_wrprotect(FAR struct sdio_dev_s *dev, bool wrprotect);
+void cxd56_sdhci_wrprotect(struct sdio_dev_s *dev, bool wrprotect);
 
 /****************************************************************************
  * Name: cxd56_sdio_resetstatus
@@ -490,7 +492,7 @@ void cxd56_sdhci_wrprotect(FAR struct sdio_dev_s *dev, bool wrprotect);
  *
  ****************************************************************************/
 
-void cxd56_sdio_resetstatus(FAR struct sdio_dev_s *dev);
+void cxd56_sdio_resetstatus(struct sdio_dev_s *dev);
 
 #undef EXTERN
 #ifdef __cplusplus

@@ -1,6 +1,8 @@
 /****************************************************************************
  * include/nuttx/leds/apa102.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -31,8 +33,6 @@
  * CONFIG_SPI         - Enables support for SPI drivers
  * CONFIG_LEDS_APA102 - Enables support for the APA102 driver
  */
-
-#if defined(CONFIG_SPI) && defined(CONFIG_LEDS_APA102)
 
 /****************************************************************************
  * Pre-processor Definitions
@@ -95,5 +95,4 @@ int apa102_register(FAR const char *devpath, FAR struct spi_dev_s *spi);
 }
 #endif
 
-#endif /* CONFIG_SPI && CONFIG_LEDS_APA102 */
 #endif /* __INCLUDE_NUTTX_LEDS_APA102_H */

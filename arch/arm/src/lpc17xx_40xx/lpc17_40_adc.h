@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/lpc17xx_40xx/lpc17_40_adc.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -99,7 +101,7 @@ EXTERN uint8_t g_adc_chanlist[CONFIG_LPC17_40_ADC_NCHANNELS];
  ****************************************************************************/
 
 #ifdef CONFIG_LPC17_40_ADC
-FAR struct adc_dev_s *lpc17_40_adcinitialize(void);
+struct adc_dev_s *lpc17_40_adcinitialize(void);
 #endif
 
 #undef EXTERN

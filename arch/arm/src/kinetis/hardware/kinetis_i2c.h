@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/kinetis/hardware/kinetis_i2c.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -18,8 +20,8 @@
  *
  ****************************************************************************/
 
-#ifndef __ARCH_ARM_SRC_KINETIS_HARDWARE_KINETIS_I2CE_H
-#define __ARCH_ARM_SRC_KINETIS_HARDWARE_KINETIS_I2CE_H
+#ifndef __ARCH_ARM_SRC_KINETIS_HARDWARE_KINETIS_I2C_H
+#define __ARCH_ARM_SRC_KINETIS_HARDWARE_KINETIS_I2C_H
 
 /****************************************************************************
  * Included Files
@@ -283,4 +285,4 @@
  * Public Functions Prototypes
  ****************************************************************************/
 
-#endif /* __ARCH_ARM_SRC_KINETIS_HARDWARE_KINETIS_I2CE_H */
+#endif /* __ARCH_ARM_SRC_KINETIS_HARDWARE_KINETIS_I2C_H */

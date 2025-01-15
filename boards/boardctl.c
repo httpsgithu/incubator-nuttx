@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/boardctl.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -24,16 +26,20 @@
 
 #include <nuttx/config.h>
 
-#include <sys/types.h>
 #include <sys/boardctl.h>
+#include <sys/types.h>
+#include <assert.h>
 #include <stdint.h>
 #include <errno.h>
-#include <assert.h>
+#include <gcov.h>
 
+#include <nuttx/arch.h>
 #include <nuttx/board.h>
+#include <nuttx/cache.h>
 #include <nuttx/lib/modlib.h>
 #include <nuttx/binfmt/symtab.h>
 #include <nuttx/drivers/ramdisk.h>
+#include <nuttx/reboot_notifier.h>
 
 #ifdef CONFIG_NX
 #  include <nuttx/nx/nxmu.h>
@@ -44,17 +50,14 @@
 #endif
 
 #ifdef CONFIG_BOARDCTL_USBDEVCTRL
+#  include <nuttx/usb/adb.h>
 #  include <nuttx/usb/cdcacm.h>
 #  include <nuttx/usb/pl2303.h>
 #  include <nuttx/usb/usbmsc.h>
 #  include <nuttx/usb/composite.h>
 #endif
 
-#ifdef CONFIG_BOARDCTL_TESTSET
-#  include <nuttx/spinlock.h>
-#endif
-
-#if defined(CONFIG_BUILD_PROTECTED) && defined(CONFIG_FS_BINFS)
+#if defined(CONFIG_BUILD_PROTECTED) && defined(CONFIG_BUILTIN)
 #  include <nuttx/lib/builtin.h>
 #endif
 
@@ -87,6 +90,39 @@ static inline int
 
   switch (ctrl->usbdev)
     {
+#if defined(CONFIG_USBADB) && !defined(CONFIG_USBADB_COMPOSITE)
+      case BOARDIOC_USBDEV_ADB:              /* ADB class */
+        switch (ctrl->action)
+          {
+            case BOARDIOC_USBDEV_INITIALIZE: /* Initialize ADB device */
+              break;
+
+            case BOARDIOC_USBDEV_CONNECT:    /* Connect the ADB device */
+              {
+                DEBUGASSERT(ctrl->handle != NULL);
+
+                *ctrl->handle = usbdev_adb_initialize();
+                if (*ctrl->handle == NULL)
+                  {
+                    ret = -EIO;
+                  }
+              }
+              break;
+
+            case BOARDIOC_USBDEV_DISCONNECT: /* Disconnect the ADB device */
+              {
+                DEBUGASSERT(ctrl->handle != NULL && *ctrl->handle != NULL);
+                usbdev_adb_uninitialize(*ctrl->handle);
+              }
+              break;
+
+            default:
+              ret = -EINVAL;
+              break;
+          }
+        break;
+#endif
+
 #ifdef CONFIG_CDCACM
       case BOARDIOC_USBDEV_CDCACM:           /* CDC/ACM, not in a composite */
         switch (ctrl->action)
@@ -308,7 +344,7 @@ static inline int boardctl_pmctrl(FAR struct boardioc_pm_ctrl_s *ctrl)
 
 int boardctl(unsigned int cmd, uintptr_t arg)
 {
-  int ret;
+  int ret = OK;
 
   switch (cmd)
     {
@@ -361,6 +397,8 @@ int boardctl(unsigned int cmd, uintptr_t arg)
 
       case BOARDIOC_POWEROFF:
         {
+          reboot_notifier_call_chain(SYS_POWER_OFF, (FAR void *)arg);
+          up_flush_dcache_all();
           ret = board_power_off((int)arg);
         }
         break;
@@ -376,6 +414,8 @@ int boardctl(unsigned int cmd, uintptr_t arg)
 
       case BOARDIOC_RESET:
         {
+          reboot_notifier_call_chain(SYS_RESTART, (FAR void *)arg);
+          up_flush_dcache_all();
           ret = board_reset((int)arg);
         }
         break;
@@ -383,7 +423,7 @@ int boardctl(unsigned int cmd, uintptr_t arg)
 
 #ifdef CONFIG_PM
       /* CMD:           BOARDIOC_PM_CONTROL
-       * DESCRIPTION:   anage power state transition and query
+       * DESCRIPTION:   manage power state transition and query
        * ARG:           A pointer to an instance of struct boardioc_pm_ctrl_s
        * CONFIGURATION: CONFIG_PM
        * DEPENDENCIES:  None
@@ -548,7 +588,6 @@ int boardctl(unsigned int cmd, uintptr_t arg)
 
          DEBUGASSERT(symdesc != NULL);
          exec_setsymtab(symdesc->symtab, symdesc->nsymbols);
-         ret = OK;
         }
         break;
 #endif
@@ -557,7 +596,7 @@ int boardctl(unsigned int cmd, uintptr_t arg)
       /* CMD:           BOARDIOC_OS_SYMTAB
        * DESCRIPTION:   Select the OS symbol table.  This symbol table
        *                provides the symbol definitions exported by the OS to
-       *                kernal modules.
+       *                kernel modules.
        * ARG:           A pointer to an instance of struct boardioc_symtab_s
        * CONFIGURATION: CONFIG_BOARDCTL_OS_SYMTAB
        * DEPENDENCIES:  None
@@ -570,7 +609,6 @@ int boardctl(unsigned int cmd, uintptr_t arg)
 
          DEBUGASSERT(symdesc != NULL);
          modlib_setsymtab(symdesc->symtab, symdesc->nsymbols);
-         ret = OK;
         }
         break;
 #endif
@@ -592,20 +630,19 @@ int boardctl(unsigned int cmd, uintptr_t arg)
        * ARG:           A pointer to an instance of struct boardioc_builtin_s
        * CONFIGURATION: This BOARDIOC command is always available when
        *                CONFIG_BUILTIN is enabled, but does nothing unless
-       *                CONFIG_BUILD_KERNEL and CONFIG_FS_BINFS are selected.
+       *                CONFIG_BUILD_KERNEL is selected.
        * DEPENDENCIES:  None
        */
 
       case BOARDIOC_BUILTINS:
         {
-#if defined(CONFIG_BUILD_PROTECTED) && defined(CONFIG_FS_BINFS)
+#if defined(CONFIG_BUILD_PROTECTED)
           FAR const struct boardioc_builtin_s *builtin =
             (FAR const struct boardioc_builtin_s *)arg;
 
          DEBUGASSERT(builtin != NULL);
          builtin_setlist(builtin->builtins, builtin->count);
 #endif
-         ret = OK;
         }
         break;
 #endif
@@ -657,7 +694,7 @@ int boardctl(unsigned int cmd, uintptr_t arg)
        * ARG:           A reference readable instance of struct
        *                boardioc_vncstart_s
        * CONFIGURATION: CONFIG_VNCSERVER
-       * DEPENDENCIES:  VNC server provides vnc_default_fbinitialize()
+       * DEPENDENCIES:  VNC server provides nx_vnc_fbinitialize()
        */
 
       case BOARDIOC_VNC_START:
@@ -673,7 +710,7 @@ int boardctl(unsigned int cmd, uintptr_t arg)
             {
               /* Setup the VNC server to support keyboard/mouse inputs */
 
-              ret = vnc_default_fbinitialize(vnc->display, vnc->handle);
+              ret = nx_vnc_fbinitialize(vnc->display, vnc->handle);
             }
         }
         break;
@@ -751,28 +788,122 @@ int boardctl(unsigned int cmd, uintptr_t arg)
 
 #endif /* CONFIG_NXTERM */
 
-#ifdef CONFIG_BOARDCTL_TESTSET
-      /* CMD:           BOARDIOC_TESTSET
-       * DESCRIPTION:   Access architecture-specific up_testset() operation
-       * ARG:           A pointer to a write-able spinlock object.  On
-       *                success the  preceding spinlock state is returned:
-       *                0=unlocked, 1=locked.
-       * CONFIGURATION: CONFIG_BOARDCTL_TESTSET
-       * DEPENDENCIES:  Architecture-specific logic provides up_testset()
+#ifdef CONFIG_BOARDCTL_SPINLOCK
+      /* CMD:           BOARDIOC_SPINLOCK
+       * DESCRIPTION:   Access spinlock specific operation
+       * ARG:           A pointer to a write-able boardioc_spinlock_s
+       *                object.
+       * CONFIGURATION: CONFIG_BOARDCTL_SPINLOCK
+       * DEPENDENCIES:  spinlock specific logic
        */
 
-      case BOARDIOC_TESTSET:
+      case BOARDIOC_SPINLOCK:
         {
-          volatile FAR spinlock_t *lock = (volatile FAR spinlock_t *)arg;
+          FAR struct boardioc_spinlock_s *spinlock =
+            (FAR struct boardioc_spinlock_s *)arg;
+          FAR volatile spinlock_t *lock = spinlock->lock;
+          FAR irqstate_t *flags = spinlock->flags;
 
-          if (lock == NULL)
+          if (spinlock->action == BOARDIOC_SPINLOCK_LOCK)
             {
-              ret = -EINVAL;
+              if (flags != NULL)
+                {
+                  *flags = up_irq_save();
+                }
+
+              if (lock != NULL)
+                {
+                  spin_lock(lock);
+                }
+            }
+          else if (spinlock->action == BOARDIOC_SPINLOCK_TRYLOCK)
+            {
+              if (flags != NULL)
+                {
+                  *flags = up_irq_save();
+                }
+
+              if (!spin_trylock(lock))
+                {
+                  ret = -EBUSY;
+                  if (flags != NULL)
+                    {
+                      up_irq_restore(*flags);
+                    }
+                }
+            }
+          else if (spinlock->action == BOARDIOC_SPINLOCK_UNLOCK)
+            {
+              if (flags != NULL)
+                {
+                  up_irq_restore(*flags);
+                }
+
+              if (lock != NULL)
+                {
+                  spin_unlock(lock);
+                }
             }
           else
             {
-              ret = up_testset(lock) == SP_LOCKED ? 1 : 0;
+              ret = -EINVAL;
             }
+        }
+        break;
+#endif
+
+#ifdef CONFIG_BOARDCTL_RESET_CAUSE
+      /* CMD:           BOARDIOC_RESET_CAUSE
+       * DESCRIPTION:   Get the cause of last-time board reset
+       * ARG:           A pointer to an instance of struct
+       *                boardioc_reset_cause_s
+       * CONFIGURATION: CONFIG_BOARDCTL_RESET_CAUSE
+       * DEPENDENCIES:  Board logic must provide the
+       *                board_reset_cause() interface.
+       */
+
+      case BOARDIOC_RESET_CAUSE:
+        {
+          FAR struct boardioc_reset_cause_s *cause =
+            (FAR struct boardioc_reset_cause_s *)arg;
+
+          DEBUGASSERT(cause != NULL);
+          ret = board_reset_cause(cause);
+        }
+        break;
+#endif
+
+#ifdef CONFIG_BOARDCTL_IRQ_AFFINITY
+      /* CMD:           BOARDIOC_IRQ_AFFINITY
+       * DESCRIPTION:   Set an IRQ affinity by software.
+       * ARG:           Integer array:
+                        member 0 is the interrupt number
+                        member 1 is the CPU index
+       * CONFIGURATION: CONFIG_BOARDCTL_IRQ_AFFINITY
+       * DEPENDENCIES:  Bound Multi-Processing (CONFIG_BMP)
+       */
+
+      case BOARDIOC_IRQ_AFFINITY:
+        {
+          FAR unsigned int *affinity = (FAR unsigned int *)arg;
+          up_affinity_irq(affinity[0], affinity[1]);
+          ret = OK;
+        }
+        break;
+#endif
+
+#ifdef CONFIG_BOARDCTL_START_CPU
+      /* CMD:           BOARDIOC_START_CPU
+       * DESCRIPTION:   Start specified slave core by master core
+       * ARG:           Integer value for cpu core id.
+       * CONFIGURATION: CONFIG_BOARDCTL_START_CPU
+       * DEPENDENCIES:  Board logic must provide the
+       *                board_start_cpu() interface.
+       */
+
+      case BOARDIOC_START_CPU:
+        {
+          ret = board_start_cpu((int)arg);
         }
         break;
 #endif
@@ -802,7 +933,7 @@ int boardctl(unsigned int cmd, uintptr_t arg)
       return ERROR;
     }
 
-  return OK;
+  return ret;
 }
 
 #endif /* CONFIG_BOARDCTL */

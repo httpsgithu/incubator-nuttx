@@ -1,6 +1,8 @@
 /****************************************************************************
  * sched/paging/pg_miss.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -33,7 +35,7 @@
 #include <nuttx/page.h>
 #include <nuttx/signal.h>
 
-#ifdef CONFIG_PAGING
+#ifdef CONFIG_LEGACY_PAGING
 
 #include "sched/sched.h"
 #include "paging/paging.h"
@@ -57,9 +59,9 @@
  *        must be "locked" and always present in memory.
  *      - ASSERT if an interrupt was executing at the time of the exception.
  *   2) Block the currently executing task.
- *      - Call up_block_task() to block the task at the head of the ready-
- *        to-run list.  This should cause an interrupt level context switch
- *        to the next highest priority task.
+ *      - Call up_switch_context() to block the task at the head of the
+ *        ready-to-run list.  This should cause an interrupt level context
+ *        switch to the next highest priority task.
  *      - The blocked task will be marked with state TSTATE_WAIT_PAGEFILL
  *        and will be retained in the g_waitingforfill prioritized task
  *        list.
@@ -123,9 +125,9 @@ void pg_miss(void)
   DEBUGASSERT(g_pgworker != ftcb->pid);
 
   /* Block the currently executing task
-   * - Call up_block_task() to block the task at the head of the ready-
-   *   to-run list.  This should cause an interrupt level context switch
-   *   to the next highest priority task.
+   * - Call up_switch_context() to block the task at the head of the
+   *   ready-to-run list.  This should cause an interrupt level context
+   *   switch to the next highest priority task.
    * - The blocked task will be marked with state TSTATE_WAIT_PAGEFILL
    *   and will be retained in the g_waitingforfill prioritized task list.
    *
@@ -133,8 +135,20 @@ void pg_miss(void)
    * that isn't going to end well.
    */
 
-  DEBUGASSERT(NULL != ftcb->flink);
-  up_block_task(ftcb, TSTATE_WAIT_PAGEFILL);
+  DEBUGASSERT(!is_idle_task(ftcb));
+
+  /* Remove the tcb task from the running list. */
+
+  nxsched_remove_self(ftcb);
+
+  /* Add the task to the specified blocked task list */
+
+  ftcb->task_state = TSTATE_WAIT_PAGEFILL;
+  nxsched_add_prioritized(ftcb, list_waitingforfill());
+
+  /* Now, perform the context switch */
+
+  up_switch_context(this_task(), ftcb);
 
   /* Boost the page fill worker thread priority.
    * - Check the priority of the task at the head of the g_waitingforfill
@@ -163,8 +177,8 @@ void pg_miss(void)
   if (!g_pftcb)
     {
       pginfo("Signaling worker. PID: %d\n", g_pgworker);
-      nxsig_kill(g_pgworker, SIGWORK);
+      nxsig_kill(g_pgworker, SIGPAGING);
     }
 }
 
-#endif /* CONFIG_PAGING */
+#endif /* CONFIG_LEGACY_PAGING */

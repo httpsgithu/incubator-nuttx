@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/sam34/sam4s-xplained-pro/src/sam4s-xplained-pro.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -18,8 +20,8 @@
  *
  ****************************************************************************/
 
-#ifndef __BOARDS_ARM_SAM34_SAM4S_XPLAINED_SRC_SAM4S_XPLAINED_H
-#define __BOARDS_ARM_SAM34_SAM4S_XPLAINED_SRC_SAM4S_XPLAINED_H
+#ifndef __BOARDS_ARM_SAM34_SAM4S_XPLAINED_PRO_SRC_SAM4S_XPLAINED_PRO_H
+#define __BOARDS_ARM_SAM34_SAM4S_XPLAINED_PRO_SRC_SAM4S_XPLAINED_PRO_H
 
 /****************************************************************************
  * Included Files
@@ -51,7 +53,7 @@
 #undef  HAVE_USBMONITOR
 
 #if defined(CONFIG_MMCSD_SPI)
-# define HAVE_MMCSD_SPI 1
+#  define HAVE_MMCSD_SPI 1
 #endif
 
 /* HSMCI */
@@ -189,8 +191,8 @@
 /* NAND */
 
 #ifdef HAVE_NAND
-# define NAND_MINOR 0
-# define SAM_SMC_CS0 0 /* GPIO_SMC_NCS0  connect SAM_SMC_CS0_BASE */
+#  define NAND_MINOR 0
+#  define SAM_SMC_CS0 0 /* GPIO_SMC_NCS0  connect SAM_SMC_CS0_BASE */
 int sam_nand_automount(int minor);
 #endif /* HAVE_NAND */
 
@@ -205,7 +207,7 @@ int sam_nand_automount(int minor);
 #ifdef HAVE_HSMCI
 int sam_hsmci_initialize(void);
 #else
-# define sam_hsmci_initialize()
+#  define sam_hsmci_initialize()
 #endif
 
 int sam_sdinitialize(int port, int minor);
@@ -252,4 +254,4 @@ bool sam_writeprotected(int slotno);
 
 int sam_watchdog_initialize(void);
 
-#endif /* __BOARDS_ARM_SAM34_SAM4S_XPLAINED_SRC_SAM4S_XPLAINED_H */
+#endif /* __BOARDS_ARM_SAM34_SAM4S_XPLAINED_PRO_SRC_SAM4S_XPLAINED_PRO_H */

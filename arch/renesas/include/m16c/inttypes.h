@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/renesas/include/m16c/inttypes.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -18,8 +20,8 @@
  *
  ****************************************************************************/
 
-#ifndef __ARCH_AVR_INCLUDE_M16C_INTTYPES_H
-#define __ARCH_AVR_INCLUDE_M16C_INTTYPES_H
+#ifndef __ARCH_RENESAS_INCLUDE_M16C_INTTYPES_H
+#define __ARCH_RENESAS_INCLUDE_M16C_INTTYPES_H
 
 /****************************************************************************
  * Included Files
@@ -116,4 +118,4 @@
 #define UINT32_C(x) x ## ul
 #define UINT64_C(x) x ## ull
 
-#endif /* __ARCH_AVR_INCLUDE_M16C_INTTYPES_H */
+#endif /* __ARCH_RENESAS_INCLUDE_M16C_INTTYPES_H */

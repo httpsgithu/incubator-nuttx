@@ -1,6 +1,7 @@
 /****************************************************************************
  * arch/arm/src/sama5/hardware/sam_rstc.h
- * Reset Controller (RSTC) definitions for the SAMA5
+ *
+ * SPDX-License-Identifier: Apache-2.0
  *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -51,6 +52,9 @@
 /* Reset Controller Control Register */
 
 #define RSTC_CR_PROCRST         (1 << 0)   /* Bit 0:  Processor Reset */
+#if defined(CONFIG_ARCH_CHIP_SAMA5D3)
+#  define RSTC_CR_PERRST        (1 << 2)   /* Bit 2:  Peripheral Reset */
+#endif
 #define RSTC_CR_EXTRST          (1 << 3)   /* Bit 3:  External Reset */
 #define RSTC_CR_KEY_SHIFT       (24)       /* Bits 24-31:  Password */
 #define RSTC_CR_KEY_MASK        (0xff << RSTC_CR_KEY_SHIFT)

@@ -1,6 +1,8 @@
 /****************************************************************************
  * fs/mmap/fs_rammap.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -18,25 +20,7 @@
  *
  ****************************************************************************/
 
-#ifndef __FS_MMAP_RAMMAP_H
-#define __FS_MMAP_RAMMAP_H
-
-/****************************************************************************
- * Included Files
- ****************************************************************************/
-
-#include <nuttx/config.h>
-
-#include <sys/types.h>
-#include <nuttx/semaphore.h>
-
-#ifdef CONFIG_FS_RAMMAP
-
-/****************************************************************************
- * Public Types
- ****************************************************************************/
-
-/* This structure describes one file that has been copied to memory and
+/* This driver manages files that have been copied to memory and
  * managed as a share-able "memory mapped" file.  This functionality is
  * intended to provide a substitute for memory mapped files for architectures
  * that do not have MMUs and, hence, cannot support on demand paging of
@@ -53,29 +37,36 @@
  * - There are not access privileges.
  */
 
-struct fs_rammap_s
+#ifndef __FS_MMAP_FS_RAMMAP_H
+#define __FS_MMAP_FS_RAMMAP_H
+
+/****************************************************************************
+ * Included Files
+ ****************************************************************************/
+
+#include <nuttx/config.h>
+
+#include <sys/types.h>
+#include <nuttx/mm/map.h>
+
+/* A memory mapping type definition */
+
+enum mm_map_type_e
 {
-  struct fs_rammap_s *flink;       /* Implements a singly linked list */
-  FAR void           *addr;        /* Start of allocated memory */
-  size_t              length;      /* Length of region */
-  off_t               offset;      /* File offset */
+  MAP_USER = 0,
+  MAP_KERNEL,
+  MAP_XIP,
 };
 
-/* This structure defines all "mapped" files */
+#ifdef CONFIG_FS_RAMMAP
 
-struct fs_allmaps_s
-{
-  sem_t               exclsem;     /* Provides exclusive access the list */
-  struct fs_rammap_s *head;        /* List of mapped files */
-};
+/****************************************************************************
+ * Public Types
+ ****************************************************************************/
 
 /****************************************************************************
  * Public Data
  ****************************************************************************/
-
-/* This is the list of all mapped files */
-
-extern struct fs_allmaps_s g_rammaps;
 
 /****************************************************************************
  * Public Function Prototypes
@@ -92,8 +83,7 @@ extern struct fs_allmaps_s g_rammaps;
  *   length  The length of the mapping.  For exception #1 above, this length
  *           ignored:  The entire underlying media is always accessible.
  *   offset  The offset into the file to map
- *   kernel  kmm_zalloc or kumm_zalloc
- *   mapped  The pointer to the mapped area
+ *   type    fs_heap_zalloc or kumm_zalloc or xip_base
  *
  * Returned Value:
  *   On success rammmap returns 0. Otherwise errno is returned appropriately.
@@ -107,8 +97,10 @@ extern struct fs_allmaps_s g_rammaps;
  *
  ****************************************************************************/
 
-int rammap(FAR struct file *filep, size_t length,
-           off_t offset, bool kernel, FAR void **mapped);
-
+int rammap(FAR struct file *filep, FAR struct mm_map_entry_s *entry,
+           enum mm_map_type_e type);
+#else
+#  define rammap(file, entry, type) (-ENOSYS)
 #endif /* CONFIG_FS_RAMMAP */
-#endif /* __FS_MMAP_RAMMAP_H */
+
+#endif /* __FS_MMAP_FS_RAMMAP_H */

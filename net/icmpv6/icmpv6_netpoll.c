@@ -1,6 +1,8 @@
 /****************************************************************************
  * net/icmpv6/icmpv6_netpoll.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -49,7 +51,7 @@
  *
  * Input Parameters:
  *   dev      The structure of the network driver that caused the event
- *   conn     The connection structure associated with the socket
+ *   pvpriv   An instance of struct icmpv6_poll_s cast to void*
  *   flags    Set of events describing why the callback was invoked
  *
  * Returned Value:
@@ -61,10 +63,9 @@
  ****************************************************************************/
 
 static uint16_t icmpv6_poll_eventhandler(FAR struct net_driver_s *dev,
-                                         FAR void *pvconn,
                                          FAR void *pvpriv, uint16_t flags)
 {
-  FAR struct icmpv6_poll_s *info = (FAR struct icmpv6_poll_s *)pvpriv;
+  FAR struct icmpv6_poll_s *info = pvpriv;
   FAR struct icmpv6_conn_s *conn;
   FAR struct socket *psock;
   pollevent_t eventset;
@@ -85,7 +86,6 @@ static uint16_t icmpv6_poll_eventhandler(FAR struct net_driver_s *dev,
        */
 
       psock = info->psock;
-      DEBUGASSERT(psock != NULL && psock->s_conn != NULL);
       conn  = psock->s_conn;
       if (dev != conn->dev)
         {
@@ -98,7 +98,7 @@ static uint16_t icmpv6_poll_eventhandler(FAR struct net_driver_s *dev,
       eventset = 0;
       if ((flags & ICMPv6_NEWDATA) != 0)
         {
-          eventset |= (POLLIN & info->fds->events);
+          eventset |= POLLIN;
         }
 
       /* Check for loss of connection events. */
@@ -110,11 +110,7 @@ static uint16_t icmpv6_poll_eventhandler(FAR struct net_driver_s *dev,
 
       /* Awaken the caller of poll() is requested event occurred. */
 
-      if (eventset)
-        {
-          info->fds->revents |= eventset;
-          nxsem_post(info->fds->sem);
-        }
+      poll_notify(&info->fds, 1, eventset);
     }
 
   return flags;
@@ -142,16 +138,25 @@ static uint16_t icmpv6_poll_eventhandler(FAR struct net_driver_s *dev,
 
 int icmpv6_pollsetup(FAR struct socket *psock, FAR struct pollfd *fds)
 {
-  FAR struct icmpv6_conn_s *conn = psock->s_conn;
+  FAR struct icmpv6_conn_s *conn;
   FAR struct icmpv6_poll_s *info;
   FAR struct devif_callback_s *cb;
+  pollevent_t eventset = 0;
   int ret = OK;
-
-  DEBUGASSERT(conn != NULL && fds != NULL);
 
   /* Some of the following must be atomic */
 
   net_lock();
+
+  conn = psock->s_conn;
+
+  /* Sanity check */
+
+  if (!conn || !fds)
+    {
+      ret = -EINVAL;
+      goto errout_with_lock;
+    }
 
   /* Find a container to hold the poll information */
 
@@ -186,7 +191,7 @@ int icmpv6_pollsetup(FAR struct socket *psock, FAR struct pollfd *fds)
    */
 
   cb->flags = NETDEV_DOWN;
-  cb->priv  = (FAR void *)info;
+  cb->priv  = info;
   cb->event = icmpv6_poll_eventhandler;
 
   if ((fds->events & POLLIN) != 0)
@@ -198,7 +203,7 @@ int icmpv6_pollsetup(FAR struct socket *psock, FAR struct pollfd *fds)
    * for use during poll teardown as well.
    */
 
-  fds->priv = (FAR void *)info;
+  fds->priv = info;
 
   /* Check for read data availability now */
 
@@ -206,23 +211,18 @@ int icmpv6_pollsetup(FAR struct socket *psock, FAR struct pollfd *fds)
     {
       /* Normal data may be read without blocking. */
 
-      fds->revents |= (POLLRDNORM & fds->events);
+      eventset |= POLLRDNORM;
     }
 
   /* Always report POLLWRNORM if caller request it because we don't utilize
    * IOB buffer for sending.
    */
 
-  fds->revents |= (POLLWRNORM & fds->events);
+  eventset |= POLLWRNORM;
 
   /* Check if any requested events are already in effect */
 
-  if (fds->revents != 0)
-    {
-      /* Yes.. then signal the poll logic */
-
-      nxsem_post(fds->sem);
-    }
+  poll_notify(&fds, 1, eventset);
 
 errout_with_lock:
   net_unlock();
@@ -250,15 +250,24 @@ int icmpv6_pollteardown(FAR struct socket *psock, FAR struct pollfd *fds)
   FAR struct icmpv6_conn_s *conn;
   FAR struct icmpv6_poll_s *info;
 
-  DEBUGASSERT(psock != NULL && psock->s_conn != NULL &&
-              fds != NULL && fds->priv != NULL);
+  /* Some of the following must be atomic */
+
+  net_lock();
 
   conn = psock->s_conn;
+
+  /* Sanity check */
+
+  if (!conn || !fds->priv)
+    {
+      net_unlock();
+      return -EINVAL;
+    }
 
   /* Recover the socket descriptor poll state info from the poll structure */
 
   info = (FAR struct icmpv6_poll_s *)fds->priv;
-  DEBUGASSERT(info != NULL && info->fds != NULL && info->cb != NULL);
+  DEBUGASSERT(info->fds != NULL && info->cb != NULL);
 
   if (info != NULL)
     {
@@ -274,6 +283,8 @@ int icmpv6_pollteardown(FAR struct socket *psock, FAR struct pollfd *fds)
 
       info->psock = NULL;
     }
+
+  net_unlock();
 
   return OK;
 }

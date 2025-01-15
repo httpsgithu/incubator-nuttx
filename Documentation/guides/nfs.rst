@@ -115,7 +115,7 @@ command line.
 
 .. code-block::
 
-  fsmount <server-address> <mount-point> <remote-path>
+  nfsmount <server-address> <mount-point> <remote-path> [udp]
 
 **Synopsis**. The ``nfsmount`` command mounts a network file system in
 the NuttX pseudo filesystem. The ``nfsmount`` will use NFSv3 UDP
@@ -179,8 +179,8 @@ commands:
 
 .. code-block:: console
 
-  # sudo apt-get install nfs-common
-  # sudo apt-get install nfs-kernel-server
+  $ sudo apt-get install nfs-common
+  $ sudo apt-get install nfs-kernel-server
 
 After that, we need to make or choose the directory we want to export
 from the NFS server. In our case, we are going to make a new directory
@@ -189,7 +189,6 @@ called ``/export``.
 .. code-block:: console
 
   # sudo mkdir /export
-
 
 It is important that ``/export`` directory allow access to everyone (777
 permissions) as we will be accessing the NFS share from the client with
@@ -279,6 +278,5 @@ And also we can verify if NFS is running in the system with:
        100021   1   tcp   1629  nlockmgr
        100021   3   tcp   1629  nlockmgr
        100021   4   tcp   1629  nlockmgr
-
 
 Now your NFS sever is sharing ``/export`` directory to be accessed.

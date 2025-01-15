@@ -1,6 +1,8 @@
 /****************************************************************************
  * sched/pthread/pthread_getschedparam.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -78,7 +80,7 @@ int pthread_getschedparam(pthread_t thread, FAR int *policy,
 {
   int ret;
 
-  sinfo("Thread ID=%d policy=0x%p param=0x%p\n", thread, policy, param);
+  sinfo("Thread ID=%d policy=%p param=%p\n", thread, policy, param);
 
   if (policy == NULL || param == NULL)
     {

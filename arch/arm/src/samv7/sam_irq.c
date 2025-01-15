@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/samv7/sam_irq.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -24,7 +26,7 @@
 
 #include <nuttx/config.h>
 
-#include <stdint.h>
+#include <inttypes.h>
 #include <assert.h>
 #include <debug.h>
 
@@ -34,8 +36,9 @@
 #include <arch/armv7-m/nvicpri.h>
 
 #include "nvic.h"
-#include "ram_vectors.h"
-#include "arm_arch.h"
+#ifdef CONFIG_ARCH_RAMVECTORS
+#  include "ram_vectors.h"
+#endif
 #include "arm_internal.h"
 
 #ifdef CONFIG_SAMV7_GPIO_IRQ
@@ -62,28 +65,6 @@
 #define NVIC_CLRENA_OFFSET (NVIC_IRQ0_31_CLEAR - NVIC_IRQ0_31_ENABLE)
 
 /****************************************************************************
- * Public Data
- ****************************************************************************/
-
-/* g_current_regs[] holds a references to the current interrupt level
- * register storage structure.  If is non-NULL only during interrupt
- * processing.  Access to g_current_regs[] must be through the macro
- * CURRENT_REGS for portability.
- */
-
-volatile uint32_t *g_current_regs[1];
-
-/* This is the address of the  exception vector table (determined by the
- * linker script).
- */
-
-extern uint32_t _vectors[];
-
-/****************************************************************************
- * Private Data
- ****************************************************************************/
-
-/****************************************************************************
  * Private Functions
  ****************************************************************************/
 
@@ -104,7 +85,7 @@ static void sam_dumpnvic(const char *msg, int irq)
 
   irqinfo("NVIC (%s, irq=%d):\n", msg, irq);
   irqinfo("  INTCTRL:    %08x VECTAB:  %08x\n",
-        getreg32(NVIC_INTCTRL), getreg32(NVIC_VECTAB));
+          getreg32(NVIC_INTCTRL), getreg32(NVIC_VECTAB));
 #if 0
   irqinfo("  SYSH ENABLE MEMFAULT: %08x BUSFAULT: %08x USGFAULT: %08x "
           "SYSTICK: %08x\n",
@@ -165,8 +146,7 @@ static void sam_dumpnvic(const char *msg, int irq)
 #endif
 
 /****************************************************************************
- * Name: sam_nmi, sam_busfault, sam_usagefault, sam_pendsv, sam_dbgmonitor,
- *       sam_pendsv, sam_reserved
+ * Name: sam_nmi, sam_pendsv, sam_pendsv, sam_reserved
  *
  * Description:
  *   Handlers for various exceptions.  None are handled and all are fatal
@@ -176,7 +156,7 @@ static void sam_dumpnvic(const char *msg, int irq)
  ****************************************************************************/
 
 #ifdef CONFIG_DEBUG_FEATURES
-static int sam_nmi(int irq, FAR void *context, FAR void *arg)
+static int sam_nmi(int irq, void *context, void *arg)
 {
   up_irq_save();
   _err("PANIC!!! NMI received\n");
@@ -184,23 +164,7 @@ static int sam_nmi(int irq, FAR void *context, FAR void *arg)
   return 0;
 }
 
-static int sam_busfault(int irq, FAR void *context, FAR void *arg)
-{
-  up_irq_save();
-  _err("PANIC!!! Bus fault received: %08x\n", getreg32(NVIC_CFAULTS));
-  PANIC();
-  return 0;
-}
-
-static int sam_usagefault(int irq, FAR void *context, FAR void *arg)
-{
-  up_irq_save();
-  _err("PANIC!!! Usage fault received: %08x\n", getreg32(NVIC_CFAULTS));
-  PANIC();
-  return 0;
-}
-
-static int sam_pendsv(int irq, FAR void *context, FAR void *arg)
+static int sam_pendsv(int irq, void *context, void *arg)
 {
   up_irq_save();
   _err("PANIC!!! PendSV received\n");
@@ -208,15 +172,7 @@ static int sam_pendsv(int irq, FAR void *context, FAR void *arg)
   return 0;
 }
 
-static int sam_dbgmonitor(int irq, FAR void *context, FAR void *arg)
-{
-  up_irq_save();
-  _err("PANIC!!! Debug Monitor received\n");
-  PANIC();
-  return 0;
-}
-
-static int sam_reserved(int irq, FAR void *context, FAR void *arg)
+static int sam_reserved(int irq, void *context, void *arg)
 {
   up_irq_save();
   _err("PANIC!!! Reserved interrupt\n");
@@ -234,7 +190,6 @@ static int sam_reserved(int irq, FAR void *context, FAR void *arg)
  *
  ****************************************************************************/
 
-#ifdef CONFIG_ARMV7M_USEBASEPRI
 static inline void sam_prioritize_syscall(int priority)
 {
   uint32_t regval;
@@ -246,7 +201,6 @@ static inline void sam_prioritize_syscall(int priority)
   regval |= (priority << NVIC_SYSH_PRIORITY_PR11_SHIFT);
   putreg32(regval, NVIC_SYSH8_11_PRIORITY);
 }
-#endif
 
 /****************************************************************************
  * Name: sam_irqinfo
@@ -354,9 +308,6 @@ static int sam_irqinfo(int irq, uintptr_t *regaddr, uint32_t *bit,
 void up_irqinitialize(void)
 {
   uintptr_t regaddr;
-#if defined(CONFIG_DEBUG_SYMBOLS) && !defined(CONFIG_ARMV7M_USEBASEPRI)
-  uint32_t regval;
-#endif
   int nintlines;
   int i;
 
@@ -398,6 +349,13 @@ void up_irqinitialize(void)
    */
 
   arm_ramvec_initialize();
+
+  /* At this moment both I- and D-Caches have been already enabled in
+   * __start so we need to flush RAM vectors table to memory.
+   */
+
+  up_clean_dcache((uintptr_t)g_ram_vectors,
+                  (uintptr_t)g_ram_vectors + sizeof(g_ram_vectors));
 #endif
 
   /* Set all interrupts (and exceptions) to the default priority */
@@ -417,10 +375,6 @@ void up_irqinitialize(void)
       putreg32(DEFPRIORITY32, regaddr);
     }
 
-  /* currents_regs is non-NULL only while processing an interrupt */
-
-  CURRENT_REGS = NULL;
-
   /* Attach the SVCall and Hard Fault exception handlers.  The SVCall
    * exception is used for performing context switches; The Hard Fault
    * must also be caught because a SVCall may show up as a Hard Fault
@@ -435,9 +389,8 @@ void up_irqinitialize(void)
 #ifdef CONFIG_ARCH_IRQPRIO
   /* up_prioritize_irq(SAM_IRQ_PENDSV, NVIC_SYSH_PRIORITY_MIN); */
 #endif
-#ifdef CONFIG_ARMV7M_USEBASEPRI
+
   sam_prioritize_syscall(NVIC_SYSH_SVCALL_PRIORITY);
-#endif
 
   /* If the MPU is enabled, then attach and enable the Memory Management
    * Fault handler.
@@ -455,25 +408,15 @@ void up_irqinitialize(void)
 #ifndef CONFIG_ARM_MPU
   irq_attach(SAM_IRQ_MEMFAULT, arm_memfault, NULL);
 #endif
-  irq_attach(SAM_IRQ_BUSFAULT, sam_busfault, NULL);
-  irq_attach(SAM_IRQ_USAGEFAULT, sam_usagefault, NULL);
+  irq_attach(SAM_IRQ_BUSFAULT, arm_busfault, NULL);
+  irq_attach(SAM_IRQ_USAGEFAULT, arm_usagefault, NULL);
   irq_attach(SAM_IRQ_PENDSV, sam_pendsv, NULL);
-  irq_attach(SAM_IRQ_DBGMONITOR, sam_dbgmonitor, NULL);
+  arm_enable_dbgmonitor();
+  irq_attach(SAM_IRQ_DBGMONITOR, arm_dbgmonitor, NULL);
   irq_attach(SAM_IRQ_RESERVED, sam_reserved, NULL);
 #endif
 
   sam_dumpnvic("initial", SAM_IRQ_NIRQS);
-
-  /* If a debugger is connected, try to prevent it from catching hardfaults.
-   * If CONFIG_ARMV7M_USEBASEPRI, no hardfaults are expected in normal
-   * operation.
-   */
-
-#if defined(CONFIG_DEBUG_SYMBOLS) && !defined(CONFIG_ARMV7M_USEBASEPRI)
-  regval  = getreg32(NVIC_DEMCR);
-  regval &= ~NVIC_DEMCR_VCHARDERR;
-  putreg32(regval, NVIC_DEMCR);
-#endif
 
 #ifndef CONFIG_SUPPRESS_INTERRUPTS
   /* Initialize logic to support a second level of interrupt decoding for

@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/arm/arm_cache.S
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -37,6 +39,8 @@
  ****************************************************************************/
 
 	.text
+	.syntax	unified
+	.arm
 
 /* Control functions caches and the write buffer c7
  * Register c7 controls the caches and the write buffer. The function of each cache
@@ -69,6 +73,22 @@
  * by r0=start and r1=end.  Cleans the corresponding D-cache lines and invalidates
  * the corresponding I-Cache lines.
  */
+
+	.globl	up_get_dcache_linesize
+	.type   up_get_dcache_linesize, function
+
+up_get_dcache_linesize:
+	mov		r0, #CACHE_DLINESIZE
+	mov		pc, lr
+	.size   up_get_dcache_linesize, .-up_get_dcache_linesize
+
+	.globl	up_get_icache_linesize
+	.type   up_get_icache_linesize, function
+
+up_get_icache_linesize:
+	mov		r0, #CACHE_DLINESIZE
+	mov		pc, lr
+	.size   up_get_icache_linesize, .-up_get_icache_linesize
 
 	.globl	up_coherent_dcache
 	.type	up_coherent_dcache, function
@@ -123,7 +143,16 @@ up_invalidate_icache_all:
 	.type	up_invalidate_dcache, function
 
 up_invalidate_dcache:
-	bic		r0, r0, #CACHE_DLINESIZE - 1
+	mov		r2, #CACHE_DLINESIZE - 1
+
+	tst		r0, r2
+	bic		r0, r0, r2			/* R0=aligned start address */
+	mcrne		p15, 0, r0, c7, c14, 1		/* Clean & invalidate D entry */
+
+	tst		r1, r2
+	bic		r1, r1, r2			/* R1=aligned end address */
+	mcrne		p15, 0, r1, c7, c14, 1		/* Clean & invalidate D entry */
+
 1:	mcr		p15, 0, r0, c7, c6, 1		/* Invalidate D entry */
 	add		r0, r0, #CACHE_DLINESIZE
 	cmp		r0, r1

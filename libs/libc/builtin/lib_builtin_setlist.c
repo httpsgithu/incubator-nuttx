@@ -1,6 +1,8 @@
 /****************************************************************************
  * libs/libc/builtin/lib_builtin_setlist.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -26,8 +28,7 @@
 
 #include <nuttx/lib/builtin.h>
 
-#if defined(CONFIG_BUILD_PROTECTED) && defined(CONFIG_FS_BINFS) && \
-    defined(__KERNEL__)
+#if defined(CONFIG_BUILD_PROTECTED) && defined(__KERNEL__)
 
 /****************************************************************************
  * Public Functions
@@ -71,4 +72,4 @@ void builtin_setlist(FAR const struct builtin_s *builtins, int count)
   g_builtin_count = count;
 }
 
-#endif /* CONFIG_BUILD_PROTECTED && CONFIG_FS_BINFS && __KERNEL__ */
+#endif /* CONFIG_BUILD_PROTECTED && __KERNEL__ */

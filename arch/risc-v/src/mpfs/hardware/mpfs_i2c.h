@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/risc-v/src/mpfs/hardware/mpfs_i2c.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -43,6 +45,8 @@
 #define MPFS_I2C_CTRL_CR1_MASK        (1 << 1)
 #define MPFS_I2C_CTRL_CR0_MASK        (1 << 0)
 
+#define MPFS_I2C_ST_IDLE              0xF8  /* No activity, I2C bus idle */
+#define MPFS_I2C_ST_STOP_SENT         0xE0  /* Stop condition has been sent */
 #define MPFS_I2C_ST_RESET_ACTIVATED   0xD0  /* Master reset is activated */
 #define MPFS_I2C_ST_RX_DATA_NACK      0x58  /* Data received, NACK sent */
 #define MPFS_I2C_ST_RX_DATA_ACK       0x50  /* Data received, ACK sent */

@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/mips/src/pic32mz/pic32mz_i2c.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -53,7 +55,7 @@
  *
  ****************************************************************************/
 
-FAR struct i2c_master_s *pic32mz_i2cbus_initialize(int port);
+struct i2c_master_s *pic32mz_i2cbus_initialize(int port);
 
 /****************************************************************************
  * Name: pic32mz_i2cbus_uninitialize
@@ -70,6 +72,6 @@ FAR struct i2c_master_s *pic32mz_i2cbus_initialize(int port);
  *
  ****************************************************************************/
 
-int pic32mz_i2cbus_uninitialize(FAR struct i2c_master_s *dev);
+int pic32mz_i2cbus_uninitialize(struct i2c_master_s *dev);
 
 #endif /* __ARCH_MIPS_SRC_PIC32MZ_PIC32MZ_I2C_H */

@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/misoc/src/lm32/lm32_decodeirq.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -69,7 +71,7 @@ uint32_t *lm32_decodeirq(uint32_t intstat, uint32_t *regs)
         {
           /* Yes.. Dispatch the interrupt */
 
-          /* REVIST: Do I need to acknowledge the interrupt first? */
+          /* REVISIT: Do I need to acknowledge the interrupt first? */
 
           irqinfo("irq=%d\n", irq);
           regs = lm32_doirq(irq, regs);

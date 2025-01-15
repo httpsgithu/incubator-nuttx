@@ -1,6 +1,8 @@
 /****************************************************************************
  * drivers/sensors/mpl115a.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -72,8 +74,6 @@ static int mpl115a_getpressure(FAR struct mpl115a_dev_s *priv);
 
 /* Character driver methods */
 
-static int     mpl115a_open(FAR struct file *filep);
-static int     mpl115a_close(FAR struct file *filep);
 static ssize_t mpl115a_read(FAR struct file *filep, FAR char *buffer,
                             size_t buflen);
 static ssize_t mpl115a_write(FAR struct file *filep, FAR const char *buffer,
@@ -85,16 +85,10 @@ static ssize_t mpl115a_write(FAR struct file *filep, FAR const char *buffer,
 
 static const struct file_operations g_mpl115afops =
 {
-  mpl115a_open,   /* open */
-  mpl115a_close,  /* close */
+  NULL,           /* open */
+  NULL,           /* close */
   mpl115a_read,   /* read */
   mpl115a_write,  /* write */
-  NULL,           /* seek */
-  NULL,           /* ioctl */
-  NULL,           /* poll */
-#ifndef CONFIG_DISABLE_PSEUDOFS_OPERATIONS
-  NULL            /* unlink */
-#endif
 };
 
 /****************************************************************************
@@ -294,32 +288,6 @@ static int mpl115a_getpressure(FAR struct mpl115a_dev_s *priv)
 
   sninfo("Final Pressure = %d\n", pressure >> 4);
   return pressure;
-}
-
-/****************************************************************************
- * Name: mpl115a_open
- *
- * Description:
- *   This function is called whenever the MPL115A1 device is opened.
- *
- ****************************************************************************/
-
-static int mpl115a_open(FAR struct file *filep)
-{
-  return OK;
-}
-
-/****************************************************************************
- * Name: mpl115a_close
- *
- * Description:
- *   This routine is called when the LM-75 device is closed.
- *
- ****************************************************************************/
-
-static int mpl115a_close(FAR struct file *filep)
-{
-  return OK;
 }
 
 /****************************************************************************

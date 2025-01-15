@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/stm32f7/hardware/stm32f74xx77xx_adc.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -372,8 +374,10 @@
 #define ADC_JSQR_JSQ3_MASK           (0x1f << ADC_JSQR_JSQ3_SHIFT)
 #define ADC_JSQR_JSQ4_SHIFT          (15)      /* Bits 19-15: 4th conversion in injected sequence */
 #define ADC_JSQR_JSQ4_MASK           (0x1f << ADC_JSQR_JSQ4_SHIFT)
+#define ADC_JSQR_JSQ_SHIFT           (5)       /* Shift between JSQx bits */
 #define ADC_JSQR_JL_SHIFT            (20)      /* Bits 21-20: Injected Sequence length */
 #define ADC_JSQR_JL_MASK             (3 << ADC_JSQR_JL_SHIFT)
+#  define ADC_JSQR_JL(n)             (((n) - 1) << ADC_JSQR_JL_SHIFT) /* n=1..4 */
 
 /* ADC injected data register 1-4 */
 

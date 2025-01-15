@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/lpc43xx/lpc43_cgu.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -18,8 +20,8 @@
  *
  ****************************************************************************/
 
-#ifndef __ARCH_ARM_SRC_LPC43XX_CGU_H
-#define __ARCH_ARM_SRC_LPC43XX_CGU_H
+#ifndef __ARCH_ARM_SRC_LPC43XX_LPC43_CGU_H
+#define __ARCH_ARM_SRC_LPC43XX_LPC43_CGU_H
 
 /****************************************************************************
  * Included Files
@@ -105,4 +107,4 @@ void lpc43_clockconfig(void);
 #endif
 
 #endif /* __ASSEMBLY__ */
-#endif /* __ARCH_ARM_SRC_LPC43XX_CGU_H */
+#endif /* __ARCH_ARM_SRC_LPC43XX_LPC43_CGU_H */

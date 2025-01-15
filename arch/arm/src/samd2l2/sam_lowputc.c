@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/samd2l2/sam_lowputc.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -20,7 +22,7 @@
 
 /* References:
  *   1. "Atmel SAM D20J / SAM D20G / SAM D20E ARM-Based Microcontroller
- *      Datasheet", 42129J–SAM–12/2013
+ *      Datasheet", 42129J-SAM-12/2013
  *   2. Atmel sample code.  This code has an ASF license with is compatible
  *      with the NuttX BSD license, but includes the provision that this
  *      code not be used in non-Atmel products.  That sample code was used
@@ -40,7 +42,7 @@
 
 #include <nuttx/irq.h>
 
-#include "arm_arch.h"
+#include "arm_internal.h"
 #include "sam_config.h"
 #include "sam_gclk.h"
 #include "sam_pm.h"
@@ -53,10 +55,6 @@
 /****************************************************************************
  * Pre-processor Definitions
  ****************************************************************************/
-
-#ifndef OK
-#  define OK 0
-#endif
 
 /****************************************************************************
  * Private Data

@@ -1,14 +1,10 @@
 /****************************************************************************
  * arch/arm/src/tiva/hardware/cc13x2_cc26x2/cc13x2_cc26x2_i2c.h
  *
- *   Copyright (C) 2018 Gregory Nutt. All rights reserved.
- *   Author: Gregory Nutt <gnutt@nuttx.org>
- *
- * Technical content derives from a TI header file that has a compatible
- * BSD license:
- *
- *   Copyright (c) 2015-2017, Texas Instruments Incorporated
- *   All rights reserved.
+ * SPDX-License-Identifier: BSD-3-Clause
+ * SPDX-FileCopyrightText: 2018 Gregory Nutt. All rights reserved.
+ * SPDX-FileCopyrightText: 2015-2017, Texas Instruments Incorporated
+ * SPDX-FileContributor: Gregory Nutt <gnutt@nuttx.org>
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -39,8 +35,8 @@
  *
  ****************************************************************************/
 
-#ifndef __ARCH_ARM_SRC_TIVA_HARDWARE_CC13X20_CC26X2_CC13X20_CC26X2_I2C_H
-#define __ARCH_ARM_SRC_TIVA_HARDWARE_CC13X20_CC26X2_CC13X20_CC26X2_I2C_H
+#ifndef __ARCH_ARM_SRC_TIVA_HARDWARE_CC13X2_CC26X2_CC13X2_CC26X2_I2C_H
+#define __ARCH_ARM_SRC_TIVA_HARDWARE_CC13X2_CC26X2_CC13X2_CC26X2_I2C_H
 
 /****************************************************************************
  * Pre-processor Definitions
@@ -209,4 +205,4 @@
 #define I2C_MCR_MFE                             (1 << 4)  /* Bit 4:  I2C master function enable */
 #define I2C_MCR_SFE                             (1 << 5)  /* Bit 5:  I2C slave function enable */
 
-#endif /* __ARCH_ARM_SRC_TIVA_HARDWARE_CC13X20_CC26X2_CC13X20_CC26X2_I2C_H */
+#endif /* __ARCH_ARM_SRC_TIVA_HARDWARE_CC13X2_CC26X2_CC13X2_CC26X2_I2C_H */

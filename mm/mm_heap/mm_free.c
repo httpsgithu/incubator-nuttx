@@ -1,6 +1,8 @@
 /****************************************************************************
  * mm/mm_heap/mm_free.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -28,16 +30,18 @@
 #include <debug.h>
 
 #include <nuttx/arch.h>
+#include <nuttx/sched.h>
 #include <nuttx/mm/mm.h>
+#include <nuttx/mm/kasan.h>
+#include <nuttx/sched_note.h>
 
 #include "mm_heap/mm.h"
-#include "kasan/kasan.h"
 
 /****************************************************************************
  * Private Functions
  ****************************************************************************/
 
-static void mm_add_delaylist(FAR struct mm_heap_s *heap, FAR void *mem)
+static void add_delaylist(FAR struct mm_heap_s *heap, FAR void *mem)
 {
 #if defined(CONFIG_BUILD_FLAT) || defined(__KERNEL__)
   FAR struct mm_delaynode_s *tmp = mem;
@@ -45,12 +49,23 @@ static void mm_add_delaylist(FAR struct mm_heap_s *heap, FAR void *mem)
 
   /* Delay the deallocation until a more appropriate time. */
 
-  flags = enter_critical_section();
+  flags = mm_lock_irq(heap);
 
-  tmp->flink = heap->mm_delaylist[up_cpu_index()];
-  heap->mm_delaylist[up_cpu_index()] = tmp;
+#  ifdef CONFIG_DEBUG_ASSERTIONS
+  FAR struct mm_freenode_s *node;
 
-  leave_critical_section(flags);
+  node = (FAR struct mm_freenode_s *)((FAR char *)mem - MM_SIZEOF_ALLOCNODE);
+  DEBUGASSERT(MM_NODE_IS_ALLOC(node));
+#  endif
+
+  tmp->flink = heap->mm_delaylist[this_cpu()];
+  heap->mm_delaylist[this_cpu()] = tmp;
+
+#if CONFIG_MM_FREE_DELAYCOUNT_MAX > 0
+  heap->mm_delaycount[this_cpu()]++;
+#endif
+
+  mm_unlock_irq(heap, flags);
 #endif
 }
 
@@ -59,73 +74,91 @@ static void mm_add_delaylist(FAR struct mm_heap_s *heap, FAR void *mem)
  ****************************************************************************/
 
 /****************************************************************************
- * Name: mm_free
+ * Name: mm_delayfree
  *
  * Description:
- *   Returns a chunk of memory to the list of free nodes,  merging with
- *   adjacent free chunks if possible.
+ *   Delay free memory if `delay` is true, otherwise free it immediately.
  *
  ****************************************************************************/
 
-void mm_free(FAR struct mm_heap_s *heap, FAR void *mem)
+void mm_delayfree(FAR struct mm_heap_s *heap, FAR void *mem, bool delay)
 {
   FAR struct mm_freenode_s *node;
   FAR struct mm_freenode_s *prev;
   FAR struct mm_freenode_s *next;
-  int ret;
+  size_t nodesize;
+  size_t prevsize;
 
-  UNUSED(ret);
-  minfo("Freeing %p\n", mem);
-
-  /* Protect against attempts to free a NULL reference */
-
-  if (!mem)
+  if (mm_lock(heap) < 0)
     {
-      return;
-    }
-
-  kasan_poison(mem, mm_malloc_size(mem));
-
-  if (mm_takesemaphore(heap) == false)
-    {
-      kasan_unpoison(mem, mm_malloc_size(mem));
-
-      /* We are in IDLE task & can't get sem, or meet -ESRCH return,
-       * which means we are in situations during context switching(See
-       * mm_takesemaphore() & getpid()). Then add to the delay list.
+      /* Meet -ESRCH return, which means we are in situations
+       * during context switching(See mm_lock() & gettid()).
+       * Then add to the delay list.
        */
 
-      mm_add_delaylist(heap, mem);
+      add_delaylist(heap, mem);
       return;
     }
 
-  DEBUGASSERT(mm_heapmember(heap, mem));
+  nodesize = mm_malloc_size(heap, mem);
+#ifdef CONFIG_MM_FILL_ALLOCATIONS
+#if CONFIG_MM_FREE_DELAYCOUNT_MAX > 0
+  /* If delay free is enabled, a memory node will be freed twice.
+   * The first time is to add the node to the delay list, and the second
+   * time is to actually free the node. Therefore, we only colorize the
+   * memory node the first time, when `delay` is set to true.
+   */
+
+  if (delay)
+#endif
+    {
+      memset(mem, MM_FREE_MAGIC, nodesize);
+    }
+#endif
+
+  kasan_poison(mem, nodesize);
+
+  if (delay)
+    {
+      mm_unlock(heap);
+      add_delaylist(heap, mem);
+      return;
+    }
 
   /* Map the memory chunk into a free node */
 
-  node = (FAR struct mm_freenode_s *)((FAR char *)mem - SIZEOF_MM_ALLOCNODE);
+  node = (FAR struct mm_freenode_s *)
+         ((FAR char *)kasan_reset_tag(mem) - MM_SIZEOF_ALLOCNODE);
+  nodesize = MM_SIZEOF_NODE(node);
 
   /* Sanity check against double-frees */
 
-  DEBUGASSERT(node->preceding & MM_ALLOC_BIT);
+  DEBUGASSERT(MM_NODE_IS_ALLOC(node));
 
-  node->preceding &= ~MM_ALLOC_BIT;
+  node->size &= ~MM_ALLOC_BIT;
+
+  /* Update heap statistics */
+
+  heap->mm_curused -= nodesize;
+  sched_note_heap(NOTE_HEAP_FREE, heap, mem, nodesize, heap->mm_curused);
 
   /* Check if the following node is free and, if so, merge it */
 
-  next = (FAR struct mm_freenode_s *)((FAR char *)node + node->size);
-  DEBUGASSERT((next->preceding & ~MM_ALLOC_BIT) == node->size);
-  if ((next->preceding & MM_ALLOC_BIT) == 0)
+  next = (FAR struct mm_freenode_s *)((FAR char *)node + nodesize);
+  DEBUGASSERT(MM_PREVNODE_IS_ALLOC(next));
+  if (MM_NODE_IS_FREE(next))
     {
       FAR struct mm_allocnode_s *andbeyond;
+      size_t nextsize = MM_SIZEOF_NODE(next);
 
       /* Get the node following the next node (which will
        * become the new next node). We know that we can never
        * index past the tail chunk because it is always allocated.
        */
 
-      andbeyond = (FAR struct mm_allocnode_s *)
-                    ((FAR char *)next + next->size);
+      andbeyond = (FAR struct mm_allocnode_s *)((FAR char *)next + nextsize);
+      DEBUGASSERT(MM_PREVNODE_IS_FREE(andbeyond) &&
+                  andbeyond->preceding == nextsize);
 
       /* Remove the next node.  There must be a predecessor,
        * but there may not be a successor node.
@@ -140,20 +173,28 @@ void mm_free(FAR struct mm_heap_s *heap, FAR void *mem)
 
       /* Then merge the two chunks */
 
-      node->size          += next->size;
-      andbeyond->preceding =  node->size |
-                              (andbeyond->preceding & MM_ALLOC_BIT);
+      nodesize            += nextsize;
+      node->size           = nodesize | (node->size & MM_MASK_BIT);
+      andbeyond->preceding = nodesize;
       next                 = (FAR struct mm_freenode_s *)andbeyond;
+    }
+  else
+    {
+      next->size     |= MM_PREVFREE_BIT;
+      next->preceding = nodesize;
     }
 
   /* Check if the preceding node is also free and, if so, merge
    * it with this node
    */
 
-  prev = (FAR struct mm_freenode_s *)((FAR char *)node - node->preceding);
-  DEBUGASSERT((node->preceding & ~MM_ALLOC_BIT) == prev->size);
-  if ((prev->preceding & MM_ALLOC_BIT) == 0)
+  if (MM_PREVNODE_IS_FREE(node))
     {
+      prev = (FAR struct mm_freenode_s *)
+        ((FAR char *)node - node->preceding);
+      prevsize = MM_SIZEOF_NODE(prev);
+      DEBUGASSERT(MM_NODE_IS_FREE(prev) && node->preceding == prevsize);
+
       /* Remove the node.  There must be a predecessor, but there may
        * not be a successor node.
        */
@@ -167,13 +208,49 @@ void mm_free(FAR struct mm_heap_s *heap, FAR void *mem)
 
       /* Then merge the two chunks */
 
-      prev->size     += node->size;
-      next->preceding = prev->size | (next->preceding & MM_ALLOC_BIT);
+      prevsize       += nodesize;
+      prev->size      = prevsize | (prev->size & MM_MASK_BIT);
+      next->preceding = prevsize;
       node            = prev;
     }
 
   /* Add the merged node to the nodelist */
 
   mm_addfreechunk(heap, node);
-  mm_givesemaphore(heap);
+  mm_unlock(heap);
+}
+
+/****************************************************************************
+ * Name: mm_free
+ *
+ * Description:
+ *   Returns a chunk of memory to the list of free nodes,  merging with
+ *   adjacent free chunks if possible.
+ *
+ ****************************************************************************/
+
+void mm_free(FAR struct mm_heap_s *heap, FAR void *mem)
+{
+  minfo("Freeing %p\n", mem);
+
+  /* Protect against attempts to free a NULL reference */
+
+  if (mem == NULL)
+    {
+      return;
+    }
+
+  DEBUGASSERT(mm_heapmember(heap, mem));
+
+#ifdef CONFIG_MM_HEAP_MEMPOOL
+  if (heap->mm_mpool)
+    {
+      if (mempool_multiple_free(heap->mm_mpool, mem) >= 0)
+        {
+          return;
+        }
+    }
+#endif
+
+  mm_delayfree(heap, mem, CONFIG_MM_FREE_DELAYCOUNT_MAX > 0);
 }

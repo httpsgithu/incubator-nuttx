@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/nrf52/nrf52_tim_lowerhalf.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -37,6 +39,6 @@
  * Name: nrf52_timer_initialize
  ****************************************************************************/
 
-int nrf52_timer_initialize(FAR const char *devpath, uint8_t timer);
+int nrf52_timer_initialize(const char *devpath, uint8_t timer);
 
 #endif /* __ARCH_ARM_SRC_NRF52_NRF52_TIM_LOWERHALF_H */

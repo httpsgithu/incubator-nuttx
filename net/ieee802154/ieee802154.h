@@ -1,6 +1,8 @@
 /****************************************************************************
  * net/ieee802154/ieee802154.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -18,8 +20,8 @@
  *
  ****************************************************************************/
 
-#ifndef _NET_IEEE802154_IEEE802154_H
-#define _NET_IEEE802154_IEEE802154_H
+#ifndef __NET_IEEE802154_IEEE802154_H
+#define __NET_IEEE802154_IEEE802154_H
 
 /****************************************************************************
  * Included Files
@@ -28,8 +30,9 @@
 #include <nuttx/config.h>
 
 #include <sys/types.h>
-#include <queue.h>
 #include <netpacket/ieee802154.h>
+
+#include <nuttx/net/net.h>
 
 #ifdef CONFIG_NET_IEEE802154
 
@@ -40,9 +43,9 @@
 /* Allocate a new IEEE 802.15.4 socket data callback */
 
 #define ieee802154_callback_alloc(dev,conn) \
-  devif_callback_alloc(dev, &conn->list, &conn->list_tail)
+  devif_callback_alloc(dev, &conn->sconn.list, &conn->sconn.list_tail)
 #define ieee802154_callback_free(dev,conn,cb) \
-  devif_conn_callback_free(dev, cb, &conn->list, &conn->list_tail)
+  devif_conn_callback_free(dev, cb, &conn->sconn.list, &conn->sconn.list_tail)
 
 /* Memory Pools */
 
@@ -97,14 +100,7 @@ struct ieee802154_conn_s
 {
   /* Common prologue of all connection structures. */
 
-  dq_entry_t node;                             /* Supports a double linked list */
-
-  /* This is a list of IEEE 802.15.4 callbacks.  Each callback represents
-   * a thread that is stalled, waiting for a device-specific event.
-   */
-
-  FAR struct devif_callback_s *list;
-  FAR struct devif_callback_s *list_tail;
+  struct socket_conn_s sconn;
 
   /* IEEE 802.15.4-specific content follows */
 
@@ -160,20 +156,6 @@ struct sockaddr;              /* Forward reference */
  ****************************************************************************/
 
 void ieee802154_initialize(void);
-
-/****************************************************************************
- * Name: ieee802154_conn_initialize
- *
- * Description:
- *   Initialize the IEEE 802.15.4 connection structure allocator.  Called
- *   once and only from ieee802154_initialize().
- *
- * Assumptions:
- *   Called early in the initialization sequence
- *
- ****************************************************************************/
-
-void ieee802154_conn_initialize(void);
 
 /****************************************************************************
  * Name: ieee802154_conn_alloc()
@@ -462,4 +444,4 @@ void ieee802154_container_free(FAR struct ieee802154_container_s *container);
 #endif
 
 #endif /* CONFIG_NET_IEEE802154 */
-#endif /* _NET_IEEE802154_IEEE802154_H */
+#endif /* __NET_IEEE802154_IEEE802154_H */

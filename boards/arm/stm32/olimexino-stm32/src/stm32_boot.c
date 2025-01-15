@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/stm32/olimexino-stm32/src/stm32_boot.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -42,7 +44,7 @@
  ****************************************************************************/
 
 #if defined(CONFIG_USBDEV)
-static int vbus_handler(int irq, FAR void *context, FAR void *arg)
+static int vbus_handler(int irq, void *context, void *arg)
 {
   return OK;
 }

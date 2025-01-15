@@ -1,6 +1,8 @@
 /****************************************************************************
  * libs/libc/string/lib_strncat.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -26,17 +28,19 @@
 #include <sys/types.h>
 #include <string.h>
 
+#include "libc.h"
+
 /****************************************************************************
  * Public Functions
  ****************************************************************************/
 
-#ifndef CONFIG_ARCH_STRNCAT
+#if !defined(CONFIG_LIBC_ARCH_STRNCAT) && defined(LIBC_BUILD_STRNCAT)
 #undef strncat /* See mm/README.txt */
-char *strncat(char *dest, const char *src, size_t n)
+FAR char *strncat(FAR char *dest, FAR const char *src, size_t n)
 {
-  char *ret   = dest;
+  FAR char *ret = dest;
 
-  dest  += strlen(dest);
+  dest += strlen(dest);
   for (; n > 0 && *src != '\0' ; n--)
     {
       *dest++ = *src++;

@@ -1,6 +1,8 @@
 /****************************************************************************
  * drivers/input/stmpe811_base.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -266,8 +268,7 @@ STMPE811_HANDLE stmpe811_instantiate(FAR struct i2c_master_s *dev,
   /* Allocate the device state structure */
 
 #ifdef CONFIG_STMPE811_MULTIPLE
-  priv = (FAR struct stmpe811_dev_s *)kmm_zalloc(
-    sizeof(struct stmpe811_dev_s));
+  priv = kmm_zalloc(sizeof(struct stmpe811_dev_s));
   if (!priv)
     {
       return NULL;
@@ -288,7 +289,7 @@ STMPE811_HANDLE stmpe811_instantiate(FAR struct i2c_master_s *dev,
 
   /* Initialize the device state structure */
 
-  nxsem_init(&priv->exclsem, 0, 1);
+  nxmutex_init(&priv->lock);
   priv->config = config;
 
 #ifdef CONFIG_STMPE811_SPI
@@ -302,6 +303,7 @@ STMPE811_HANDLE stmpe811_instantiate(FAR struct i2c_master_s *dev,
   ret = stmpe811_checkid(priv);
   if (ret < 0)
     {
+      nxmutex_destroy(&priv->lock);
 #ifdef CONFIG_STMPE811_MULTIPLE
       g_stmpe811list = priv->flink;
       kmm_free(priv);

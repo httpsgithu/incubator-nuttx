@@ -1,6 +1,8 @@
 /****************************************************************************
  * fs/procfs/fs_procfscritmon.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -42,6 +44,9 @@
 #include <nuttx/kmalloc.h>
 #include <nuttx/fs/fs.h>
 #include <nuttx/fs/procfs.h>
+#include <nuttx/sched.h>
+
+#include "fs_heap.h"
 
 #if !defined(CONFIG_DISABLE_MOUNTPOINT) && defined(CONFIG_FS_PROCFS) && \
      defined(CONFIG_SCHED_CRITMONITOR)
@@ -93,12 +98,13 @@ static int     critmon_stat(FAR const char *relpath, FAR struct stat *buf);
  * with any compiler.
  */
 
-const struct procfs_operations critmon_operations =
+const struct procfs_operations g_critmon_operations =
 {
   critmon_open,       /* open */
   critmon_close,      /* close */
   critmon_read,       /* read */
   NULL,               /* write */
+  NULL,               /* poll */
 
   critmon_dup,        /* dup */
 
@@ -137,17 +143,9 @@ static int critmon_open(FAR struct file *filep, FAR const char *relpath,
       return -EACCES;
     }
 
-  /* "critmon" is the only acceptable value for the relpath */
-
-  if (strcmp(relpath, "critmon") != 0)
-    {
-      ferr("ERROR: relpath is '%s'\n", relpath);
-      return -ENOENT;
-    }
-
   /* Allocate a container to hold the file attributes */
 
-  attr = kmm_zalloc(sizeof(struct critmon_file_s));
+  attr = fs_heap_zalloc(sizeof(struct critmon_file_s));
   if (!attr)
     {
       ferr("ERROR: Failed to allocate file attributes\n");
@@ -175,7 +173,7 @@ static int critmon_close(FAR struct file *filep)
 
   /* Release the file attributes structure */
 
-  kmm_free(attr);
+  fs_heap_free(attr);
   filep->f_priv = NULL;
   return OK;
 }
@@ -189,19 +187,36 @@ static ssize_t critmon_read_cpu(FAR struct critmon_file_s *attr,
                                 FAR off_t *offset, int cpu)
 {
   struct timespec maxtime;
-  size_t remaining;
   size_t linesize;
   size_t copysize;
   size_t totalsize;
 
-  remaining = buflen;
+  UNUSED(maxtime);
+  UNUSED(linesize);
+  UNUSED(copysize);
+
   totalsize = 0;
 
+  /* Generate output for CPU Serial Number */
+
+  linesize = procfs_snprintf(attr->line, CRITMON_LINELEN, "%d", cpu);
+  copysize = procfs_memcpy(attr->line, linesize, buffer, buflen, offset);
+
+  totalsize += copysize;
+  buffer    += copysize;
+  buflen    -= copysize;
+
+  if (buflen <= 0)
+    {
+      return totalsize;
+    }
+
+#if CONFIG_SCHED_CRITMONITOR_MAXTIME_PREEMPTION >= 0
   /* Convert the for maximum time pre-emption disabled */
 
-  if (g_premp_max[cpu] > 0)
+  if (g_preemp_max[cpu] > 0)
     {
-      up_critmon_convert(g_premp_max[cpu], &maxtime);
+      perf_convert(g_preemp_max[cpu], &maxtime);
     }
   else
     {
@@ -211,29 +226,31 @@ static ssize_t critmon_read_cpu(FAR struct critmon_file_s *attr,
 
   /* Reset the maximum */
 
-  g_premp_max[cpu] = 0;
+  g_preemp_max[cpu] = 0;
 
   /* Generate output for maximum time pre-emption disabled */
 
-  linesize = procfs_snprintf(attr->line, CRITMON_LINELEN, "%d,%lu.%09lu,",
-                             cpu, (unsigned long)maxtime.tv_sec,
+  linesize = procfs_snprintf(attr->line, CRITMON_LINELEN, ",%lu.%09lu",
+                             (unsigned long)maxtime.tv_sec,
                              (unsigned long)maxtime.tv_nsec);
   copysize = procfs_memcpy(attr->line, linesize, buffer, buflen, offset);
 
   totalsize += copysize;
   buffer    += copysize;
-  remaining -= copysize;
+  buflen    -= copysize;
 
-  if (totalsize >= buflen)
+  if (buflen <= 0)
     {
       return totalsize;
     }
+#endif
 
+#if CONFIG_SCHED_CRITMONITOR_MAXTIME_CSECTION >= 0
   /* Convert and generate output for maximum time in a critical section */
 
   if (g_crit_max[cpu] > 0)
     {
-      up_critmon_convert(g_crit_max[cpu], &maxtime);
+      perf_convert(g_crit_max[cpu], &maxtime);
     }
   else
     {
@@ -247,12 +264,26 @@ static ssize_t critmon_read_cpu(FAR struct critmon_file_s *attr,
 
   /* Generate output for maximum time in a critical section */
 
-  linesize = procfs_snprintf(attr->line, CRITMON_LINELEN, "%lu.%09lu\n",
+  linesize = procfs_snprintf(attr->line, CRITMON_LINELEN, ",%lu.%09lu",
                              (unsigned long)maxtime.tv_sec,
                              (unsigned long)maxtime.tv_nsec);
   copysize = procfs_memcpy(attr->line, linesize, buffer, buflen, offset);
 
   totalsize += copysize;
+  buffer    += copysize;
+  buflen    -= copysize;
+
+  if (buflen <= 0)
+    {
+      return totalsize;
+    }
+#endif
+
+  linesize = procfs_snprintf(attr->line, CRITMON_LINELEN, "\n");
+  copysize = procfs_memcpy(attr->line, linesize, buffer, buflen, offset);
+
+  totalsize += copysize;
+
   return totalsize;
 }
 
@@ -266,9 +297,7 @@ static ssize_t critmon_read(FAR struct file *filep, FAR char *buffer,
   FAR struct critmon_file_s *attr;
   off_t offset;
   ssize_t ret;
-#ifdef CONFIG_SMP
   int cpu;
-#endif
 
   finfo("buffer=%p buflen=%d\n", buffer, (int)buflen);
 
@@ -280,7 +309,6 @@ static ssize_t critmon_read(FAR struct file *filep, FAR char *buffer,
   ret    = 0;
   offset = filep->f_pos;
 
-#ifdef CONFIG_SMP
   /* Get the status for each CPU  */
 
   for (cpu = 0; cpu < CONFIG_SMP_NCPUS; cpu++)
@@ -293,15 +321,7 @@ static ssize_t critmon_read(FAR struct file *filep, FAR char *buffer,
         {
           break;
         }
-
-      offset += nbytes;
     }
-
-#else
-  /* Get status for the single CPU */
-
-  ret = critmon_read_cpu(attr, buffer + ret, buflen -ret, &offset, 0);
-#endif
 
   if (ret > 0)
     {
@@ -333,7 +353,7 @@ static int critmon_dup(FAR const struct file *oldp, FAR struct file *newp)
 
   /* Allocate a new container to hold the task and attribute selection */
 
-  newattr = kmm_malloc(sizeof(struct critmon_file_s));
+  newattr = fs_heap_malloc(sizeof(struct critmon_file_s));
   if (!newattr)
     {
       ferr("ERROR: Failed to allocate file attributes\n");
@@ -359,14 +379,6 @@ static int critmon_dup(FAR const struct file *oldp, FAR struct file *newp)
 
 static int critmon_stat(const char *relpath, struct stat *buf)
 {
-  /* "critmon" is the only acceptable value for the relpath */
-
-  if (strcmp(relpath, "critmon") != 0)
-    {
-      ferr("ERROR: relpath is '%s'\n", relpath);
-      return -ENOENT;
-    }
-
   /* "critmon" is the name for a read-only file */
 
   memset(buf, 0, sizeof(struct stat));

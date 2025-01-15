@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/x86/src/qemu/qemu.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -32,7 +34,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 
-#include "up_internal.h"
+#include "x86_internal.h"
 #include "chip.h"
 
 /****************************************************************************
@@ -197,7 +199,7 @@ int i486_dumpgpio(uint16_t pinset, const char *msg);
  *
  ****************************************************************************/
 
-FAR struct spi_dev_s *i486_spibus_initialize(int port);
+struct spi_dev_s *i486_spibus_initialize(int port);
 
 /****************************************************************************
  * Name:  i486_spi/ssp0/ssp1select, i486_spi/ssp0/ssp1status, and
@@ -230,11 +232,11 @@ FAR struct spi_dev_s *i486_spibus_initialize(int port);
  ****************************************************************************/
 
 #ifdef CONFIG_I486_SPI
-void  i486_spiselect(FAR struct spi_dev_s *dev,
+void  i486_spiselect(struct spi_dev_s *dev,
                      uint32_t devid, bool selected);
-uint8_t i486_spistatus(FAR struct spi_dev_s *dev, uint32_t devid);
+uint8_t i486_spistatus(struct spi_dev_s *dev, uint32_t devid);
 #ifdef CONFIG_SPI_CMDDATA
-int i486_spicmddata(FAR struct spi_dev_s *dev, uint32_t devid, bool cmd);
+int i486_spicmddata(struct spi_dev_s *dev, uint32_t devid, bool cmd);
 #endif
 #endif
 
@@ -255,10 +257,10 @@ int i486_spicmddata(FAR struct spi_dev_s *dev, uint32_t devid, bool cmd);
  ****************************************************************************/
 
 #ifdef CONFIG_I486_SPI
-void spi_flush(FAR struct spi_dev_s *dev);
+void spi_flush(struct spi_dev_s *dev);
 #endif
 #if defined(CONFIG_I486_SSP0) || defined(CONFIG_I486_SSP1)
-void ssp_flush(FAR struct spi_dev_s *dev);
+void ssp_flush(struct spi_dev_s *dev);
 #endif
 
 /****************************************************************************

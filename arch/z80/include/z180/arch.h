@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/z80/include/z180/arch.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -33,8 +35,6 @@
 
 #include <stdint.h>
 
-#include <arch/irq.h>
-
 /****************************************************************************
  * Pre-processor Definitions
  ****************************************************************************/
@@ -52,14 +52,13 @@
  */
 
 #ifdef CONFIG_ARCH_ADDRENV
-typedef uint8_t save_addrenv_t;
 
 /* At the task-level, the z180 address environment is represented as struct
  * z180_cbr_s which is defined in irq.h.
  */
 
 struct z180_cbr_s;
-typedef FAR struct z180_cbr_s *group_addrenv_t;
+typedef FAR struct z180_cbr_s *arch_addrenv_t;
 #endif
 
 /****************************************************************************

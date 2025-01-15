@@ -1,6 +1,8 @@
 /**************************************************************************
  * arch/z80/src/z8/z8_saveusercontext.S
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -30,7 +32,7 @@
  * Pre-processor Definitions
  **************************************************************************/
 
-	xdef	_z8_saveusercontext
+	xdef	_up_saveusercontext
 
 /**************************************************************************
  * Code
@@ -39,7 +41,7 @@
 	segment	CODE
 
 /****************************************************************************
- * Name: _z8_saveusercontext
+ * Name: _up_saveusercontext
  *
  * Description:
  *   Save the current state of the user thread.  Since this function is
@@ -63,7 +65,7 @@
  *
  **************************************************************************/
 
-_z8_saveusercontext:
+_up_saveusercontext:
 	/* Get the rr6 = the current value of the stack pointer */
 
 	ldx	r6, sph			/* rr6 = stack pointer */

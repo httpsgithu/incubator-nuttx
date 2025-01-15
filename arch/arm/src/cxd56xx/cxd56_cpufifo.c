@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/cxd56xx/cxd56_cpufifo.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -25,13 +27,13 @@
 #include <nuttx/config.h>
 #include <nuttx/irq.h>
 #include <nuttx/arch.h>
-#include <queue.h>
+#include <nuttx/queue.h>
+
 #include <assert.h>
 #include <debug.h>
 #include <errno.h>
 
-#include "arm_arch.h"
-
+#include "arm_internal.h"
 #include "chip.h"
 #include "hardware/cxd56_cpufifo.h"
 #include "cxd56_cpufifo.h"
@@ -54,7 +56,7 @@
 
 struct cfpushdata_s
 {
-  FAR sq_entry_t entry;
+  sq_entry_t entry;
   uint32_t data[2];
 };
 
@@ -62,8 +64,8 @@ struct cfpushdata_s
  * Private Function Prototypes
  ****************************************************************************/
 
-static int  cpufifo_txhandler(int irq, FAR void *context, FAR void *arg);
-static int  cpufifo_rxhandler(int irq, FAR void *context, FAR void *arg);
+static int  cpufifo_txhandler(int irq, void *context, void *arg);
+static int  cpufifo_rxhandler(int irq, void *context, void *arg);
 static int  cpufifo_trypush(uint32_t data[2]);
 static int  cpufifo_reserve(uint32_t data[2]);
 
@@ -82,11 +84,11 @@ static cpufifo_handler_t   g_cfrxhandler;
  * Private Functions
  ****************************************************************************/
 
-static int cpufifo_txhandler(int irq, FAR void *context, FAR void *arg)
+static int cpufifo_txhandler(int irq, void *context, void *arg)
 {
-  FAR struct cfpushdata_s *pd;
+  struct cfpushdata_s *pd;
 
-  pd = (FAR struct cfpushdata_s *)sq_remfirst(&g_pushqueue);
+  pd = (struct cfpushdata_s *)sq_remfirst(&g_pushqueue);
   if (pd)
     {
       /* Ignore error because always FIFO is not full at here */
@@ -103,7 +105,7 @@ static int cpufifo_txhandler(int irq, FAR void *context, FAR void *arg)
   return OK;
 }
 
-static int cpufifo_rxhandler(int irq, FAR void *context, FAR void *arg)
+static int cpufifo_rxhandler(int irq, void *context, void *arg)
 {
   uint32_t word[2] =
                      {
@@ -145,9 +147,9 @@ static int cpufifo_trypush(uint32_t data[2])
 
 static int cpufifo_reserve(uint32_t data[2])
 {
-  FAR struct cfpushdata_s *pd;
+  struct cfpushdata_s *pd;
 
-  pd = (FAR struct cfpushdata_s *)sq_remfirst(&g_emptyqueue);
+  pd = (struct cfpushdata_s *)sq_remfirst(&g_emptyqueue);
 
   /* This error indicates that need more sending buffer, it can be
    * configured by CONFIG_CXD56_CPUFIFO_ENTRIES.
@@ -253,7 +255,7 @@ int cxd56_cfinitialize(void)
 
   for (i = 0; i < NR_PUSHBUFENTRIES; i++)
     {
-      sq_addlast((FAR sq_entry_t *)&g_pushbuffer[i], &g_emptyqueue);
+      sq_addlast((sq_entry_t *)&g_pushbuffer[i], &g_emptyqueue);
     }
 
   /* Clear user defined receive handler. */

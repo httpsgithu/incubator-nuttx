@@ -1,10 +1,8 @@
 /****************************************************************************
  * arch/arm/src/rp2040/hardware/rp2040_memorymap.h
  *
- * Generated from rp2040.svd originally provided by
- *   Raspberry Pi (Trading) Ltd.
- *
- * Copyright 2020 (c) 2020 Raspberry Pi (Trading) Ltd.
+ * SPDX-License-Identifier: BSD-3-Clause
+ * SPDX-FileCopyrightText: 2020 Raspberry Pi (Trading) Ltd.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -44,8 +42,7 @@
 
 #include <nuttx/config.h>
 
-#include "arm_arch.h"
-
+#include "arm_internal.h"
 #include "chip.h"
 
 /****************************************************************************
@@ -114,10 +111,10 @@
 
 #ifndef __ASSEMBLY__
 
-# define xorbits_reg32(v,a)   putreg32(v, (a) | RP2040_ATOMIC_XOR_REG_OFFSET)
-# define setbits_reg32(v,a)   putreg32(v, (a) | RP2040_ATOMIC_SET_REG_OFFSET)
-# define clrbits_reg32(v,a)   putreg32(v, (a) | RP2040_ATOMIC_CLR_REG_OFFSET)
-# define modbits_reg32(v,m,a) xorbits_reg32((getreg32(a) ^ (v)) & (m), a)
+#  define xorbits_reg32(v,a)   putreg32(v, (a) | RP2040_ATOMIC_XOR_REG_OFFSET)
+#  define setbits_reg32(v,a)   putreg32(v, (a) | RP2040_ATOMIC_SET_REG_OFFSET)
+#  define clrbits_reg32(v,a)   putreg32(v, (a) | RP2040_ATOMIC_CLR_REG_OFFSET)
+#  define modbits_reg32(v,m,a) xorbits_reg32((getreg32(a) ^ (v)) & (m), a)
 
 /****************************************************************************
  * Public Function Prototypes

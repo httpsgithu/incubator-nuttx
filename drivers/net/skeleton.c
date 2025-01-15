@@ -1,6 +1,8 @@
 /****************************************************************************
  * drivers/net/skeleton.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -38,14 +40,14 @@
 #include <nuttx/irq.h>
 #include <nuttx/wdog.h>
 #include <nuttx/wqueue.h>
-#include <nuttx/net/arp.h>
+#include <nuttx/net/ip.h>
 #include <nuttx/net/netdev.h>
 
 #ifdef CONFIG_NET_PKT
 #  include <nuttx/net/pkt.h>
 #endif
 
-#ifdef CONFIG_NET_skeleton
+#ifdef CONFIG_NET_SKELETON
 
 /****************************************************************************
  * Pre-processor Definitions
@@ -68,27 +70,25 @@
 
 #define ETHWORK LPWORK
 
-/* CONFIG_SKELETON_NINTERFACES determines the number of physical interfaces
- * that will be supported.
+/* CONFIG_NET_SKELETON_NINTERFACES determines the number of
+ * physical interfaces that will be supported.
  */
 
-#ifndef CONFIG_SKELETON_NINTERFACES
-# define CONFIG_SKELETON_NINTERFACES 1
+#ifndef CONFIG_NET_SKELETON_NINTERFACES
+#  define CONFIG_NET_SKELETON_NINTERFACES 1
 #endif
-
-/* TX poll delay = 1 seconds.
- * CLK_TCK is the number of clock ticks per second
- */
-
-#define SKELETON_WDDELAY   (1*CLK_TCK)
 
 /* TX timeout = 1 minute */
 
 #define SKELETON_TXTIMEOUT (60*CLK_TCK)
 
+/* Packet buffer size */
+
+#define PKTBUF_SIZE (MAX_NETDEV_PKTSIZE + CONFIG_NET_GUARDSIZE)
+
 /* This is a helper pointer for accessing the contents of Ethernet header */
 
-#define BUF ((struct eth_hdr_s *)priv->sk_dev.d_buf)
+#define BUF ((FAR struct eth_hdr_s *)priv->sk_dev.d_buf)
 
 /****************************************************************************
  * Private Types
@@ -101,7 +101,6 @@
 struct skel_driver_s
 {
   bool sk_bifup;               /* true:ifup false:ifdown */
-  struct wdog_s sk_txpoll;     /* TX poll timer */
   struct wdog_s sk_txtimeout;  /* TX timeout timer */
   struct work_s sk_irqwork;    /* For deferring interrupt work to the work queue */
   struct work_s sk_pollwork;   /* For deferring poll work to the work queue */
@@ -126,16 +125,18 @@ struct skel_driver_s
  * descriptors in rings to implement such a pipeline.  This example assumes
  * much simpler hardware that simply handles one packet at a time.
  *
- * NOTE that if CONFIG_SKELETON_NINTERFACES were greater than 1, you would
- * need a minimum on one packet buffer per instance.  Much better to be
- * allocated dynamically in cases where more than one are needed.
+ * NOTE that if CONFIG_NET_SKELETON_NINTERFACES were greater than 1,
+ * you would need a minimum on one packet buffer per instance.
+ * Much better to be allocated dynamically in cases where more than
+ * one are needed.
  */
 
-static uint8_t g_pktbuf[MAX_NETDEV_PKTSIZE + CONFIG_NET_GUARDSIZE];
+static uint16_t
+  g_pktbuf[CONFIG_NET_SKELETON_NINTERFACES][(PKTBUF_SIZE + 1) / 2];
 
 /* Driver state structure */
 
-static struct skel_driver_s g_skel[CONFIG_SKELETON_NINTERFACES];
+static struct skel_driver_s g_skel[CONFIG_NET_SKELETON_NINTERFACES];
 
 /****************************************************************************
  * Private Function Prototypes
@@ -148,7 +149,7 @@ static int  skel_txpoll(FAR struct net_driver_s *dev);
 
 /* Interrupt handling */
 
-static void skel_reply(struct skel_driver_s *priv)
+static void skel_reply(struct skel_driver_s *priv);
 static void skel_receive(FAR struct skel_driver_s *priv);
 static void skel_txdone(FAR struct skel_driver_s *priv);
 
@@ -159,9 +160,6 @@ static int  skel_interrupt(int irq, FAR void *context, FAR void *arg);
 
 static void skel_txtimeout_work(FAR void *arg);
 static void skel_txtimeout_expiry(wdparm_t arg);
-
-static void skel_poll_work(FAR void *arg);
-static void skel_poll_expiry(wdparm_t arg);
 
 /* NuttX callback functions */
 
@@ -177,9 +175,6 @@ static int  skel_addmac(FAR struct net_driver_s *dev,
 #ifdef CONFIG_NET_MCASTGROUP
 static int  skel_rmmac(FAR struct net_driver_s *dev,
               FAR const uint8_t *mac);
-#endif
-#ifdef CONFIG_NET_ICMPv6
-static void skel_ipv6multicast(FAR struct skel_driver_s *priv);
 #endif
 #endif
 #ifdef CONFIG_NETDEV_IOCTL
@@ -259,50 +254,9 @@ static int skel_txpoll(FAR struct net_driver_s *dev)
   FAR struct skel_driver_s *priv =
     (FAR struct skel_driver_s *)dev->d_private;
 
-  /* If the polling resulted in data that should be sent out on the network,
-   * the field d_len is set to a value > 0.
-   */
+  /* Send the packet */
 
-  if (priv->sk_dev.d_len > 0)
-    {
-      /* Look up the destination MAC address and add it to the Ethernet
-       * header.
-       */
-
-#ifdef CONFIG_NET_IPv4
-#ifdef CONFIG_NET_IPv6
-      if (IFF_IS_IPv4(priv->sk_dev.d_flags))
-#endif
-        {
-          arp_out(&priv->sk_dev);
-        }
-#endif /* CONFIG_NET_IPv4 */
-
-#ifdef CONFIG_NET_IPv6
-#ifdef CONFIG_NET_IPv4
-      else
-#endif
-        {
-          neighbor_out(&priv->sk_dev);
-        }
-#endif /* CONFIG_NET_IPv6 */
-
-      /* Check if the network is sending this packet to the IP address of
-       * this device.  If so, just loop the packet back into the network but
-       * don't attempt to put it on the wire.
-       */
-
-      if (!devif_loopback(&priv->sk_dev))
-        {
-          /* Send the packet */
-
-          skel_transmit(priv);
-
-          /* Check if there is room in the device to hold another packet.
-           * If not, return a non-zero value to terminate the poll.
-           */
-        }
-    }
+  skel_transmit(priv);
 
   /* If zero is returned, the polling will continue until all connections
    * have been examined.
@@ -338,30 +292,6 @@ static void skel_reply(struct skel_driver_s *priv)
 
   if (priv->sk_dev.d_len > 0)
     {
-      /* Update the Ethernet header with the correct MAC address */
-
-#ifdef CONFIG_NET_IPv4
-#ifdef CONFIG_NET_IPv6
-      /* Check for an outgoing IPv4 packet */
-
-      if (IFF_IS_IPv4(priv->sk_dev.d_flags))
-#endif
-        {
-          arp_out(&priv->sk_dev);
-        }
-#endif
-
-#ifdef CONFIG_NET_IPv6
-#ifdef CONFIG_NET_IPv4
-      /* Otherwise, it must be an outgoing IPv6 packet */
-
-      else
-#endif
-        {
-          neighbor_out(&skel->sk_dev);
-        }
-#endif
-
       /* And send the packet */
 
       skel_transmit(priv);
@@ -413,11 +343,8 @@ static void skel_receive(FAR struct skel_driver_s *priv)
           ninfo("IPv4 frame\n");
           NETDEV_RXIPV4(&priv->sk_dev);
 
-          /* Handle ARP on input, then dispatch IPv4 packet to the network
-           * layer.
-           */
+          /* Receive an IPv4 packet from the network device */
 
-          arp_ipin(&priv->sk_dev);
           ipv4_input(&priv->sk_dev);
 
           /* Check for a reply to the IPv4 packet */
@@ -447,11 +374,11 @@ static void skel_receive(FAR struct skel_driver_s *priv)
 #ifdef CONFIG_NET_ARP
       /* Check for an ARP packet */
 
-      if (BUF->type == htons(ETHTYPE_ARP))
+      if (BUF->type == HTONS(ETHTYPE_ARP))
         {
           /* Dispatch ARP packet to the network layer */
 
-          arp_arpin(&priv->sk_dev);
+          arp_input(&priv->sk_dev);
           NETDEV_RXARP(&priv->sk_dev);
 
           /* If the above function invocation resulted in data that should be
@@ -470,7 +397,7 @@ static void skel_receive(FAR struct skel_driver_s *priv)
           NETDEV_RXDROPPED(&priv->sk_dev);
         }
     }
-  while (); /* While there are more packets to be processed */
+  while (true); /* While there are more packets to be processed */
 }
 
 /****************************************************************************
@@ -492,8 +419,6 @@ static void skel_receive(FAR struct skel_driver_s *priv)
 
 static void skel_txdone(FAR struct skel_driver_s *priv)
 {
-  int delay;
-
   /* Check for errors and update statistics */
 
   NETDEV_TXDONE(priv->sk_dev);
@@ -562,7 +487,7 @@ static void skel_interrupt_work(FAR void *arg)
 
   /* Re-enable Ethernet interrupts */
 
-  up_enable_irq(CONFIG_SKELETON_IRQ);
+  up_enable_irq(CONFIG_NET_SKELETON_IRQ);
 }
 
 /****************************************************************************
@@ -595,7 +520,7 @@ static int skel_interrupt(int irq, FAR void *context, FAR void *arg)
    * condition here.
    */
 
-  up_disable_irq(CONFIG_SKELETON_IRQ);
+  up_disable_irq(CONFIG_NET_SKELETON_IRQ);
 
   /* TODO: Determine if a TX transfer just completed */
 
@@ -680,87 +605,11 @@ static void skel_txtimeout_expiry(wdparm_t arg)
    * condition with interrupt work that is already queued and in progress.
    */
 
-  up_disable_irq(CONFIG_SKELETON_IRQ);
+  up_disable_irq(CONFIG_NET_SKELETON_IRQ);
 
   /* Schedule to perform the TX timeout processing on the worker thread. */
 
   work_queue(ETHWORK, &priv->sk_irqwork, skel_txtimeout_work, priv, 0);
-}
-
-/****************************************************************************
- * Name: skel_poll_work
- *
- * Description:
- *   Perform periodic polling from the worker thread
- *
- * Input Parameters:
- *   arg - The argument passed when work_queue() as called.
- *
- * Returned Value:
- *   OK on success
- *
- * Assumptions:
- *   Run on a work queue thread.
- *
- ****************************************************************************/
-
-static void skel_poll_work(FAR void *arg)
-{
-  FAR struct skel_driver_s *priv = (FAR struct skel_driver_s *)arg;
-
-  /* Lock the network and serialize driver operations if necessary.
-   * NOTE: Serialization is only required in the case where the driver work
-   * is performed on an LP worker thread and where more than one LP worker
-   * thread has been configured.
-   */
-
-  net_lock();
-
-  /* Perform the poll */
-
-  /* Check if there is room in the send another TX packet.  We cannot perform
-   * the TX poll if he are unable to accept another packet for transmission.
-   */
-
-  /* If so, update TCP timing states and poll the network for new XMIT data.
-   * Hmmm.. might be bug here.  Does this mean if there is a transmit in
-   * progress, we will missing TCP time state updates?
-   */
-
-  devif_timer(&priv->sk_dev, SKELETON_WDDELAY, skel_txpoll);
-
-  /* Setup the watchdog poll timer again */
-
-  wd_start(&priv->sk_txpoll, SKELETON_WDDELAY,
-           skel_poll_expiry, (wdparm_t)priv);
-  net_unlock();
-}
-
-/****************************************************************************
- * Name: skel_poll_expiry
- *
- * Description:
- *   Periodic timer handler.  Called from the timer interrupt handler.
- *
- * Input Parameters:
- *   arg  - The argument
- *
- * Returned Value:
- *   None
- *
- * Assumptions:
- *   Runs in the context of a the timer interrupt handler.  Local
- *   interrupts are disabled by the interrupt logic.
- *
- ****************************************************************************/
-
-static void skel_poll_expiry(wdparm_t arg)
-{
-  FAR struct skel_driver_s *priv = (FAR struct skel_driver_s *)arg;
-
-  /* Schedule to perform the interrupt processing on the worker thread. */
-
-  work_queue(ETHWORK, &priv->sk_pollwork, skel_poll_work, priv, 0);
 }
 
 /****************************************************************************
@@ -787,9 +636,9 @@ static int skel_ifup(FAR struct net_driver_s *dev)
     (FAR struct skel_driver_s *)dev->d_private;
 
 #ifdef CONFIG_NET_IPv4
-  ninfo("Bringing up: %d.%d.%d.%d\n",
-        dev->d_ipaddr & 0xff, (dev->d_ipaddr >> 8) & 0xff,
-        (dev->d_ipaddr >> 16) & 0xff, dev->d_ipaddr >> 24);
+  ninfo("Bringing up: %u.%u.%u.%u\n",
+        ip4_addr1(dev->d_ipaddr), ip4_addr2(dev->d_ipaddr),
+        ip4_addr3(dev->d_ipaddr), ip4_addr4(dev->d_ipaddr));
 #endif
 #ifdef CONFIG_NET_IPv6
   ninfo("Bringing up: %04x:%04x:%04x:%04x:%04x:%04x:%04x:%04x\n",
@@ -800,23 +649,10 @@ static int skel_ifup(FAR struct net_driver_s *dev)
 
   /* Initialize PHYs, Ethernet interface, and setup up Ethernet interrupts */
 
-  /* Instantiate MAC address from priv->sk_dev.d_mac.ether.ether_addr_octet */
-
-#ifdef CONFIG_NET_ICMPv6
-  /* Set up IPv6 multicast address filtering */
-
-  skel_ipv6multicast(priv);
-#endif
-
-  /* Set and activate a timer process */
-
-  wd_start(&priv->sk_txpoll, SKELETON_WDDELAY,
-           skel_poll_expiry, (wdparm_t)priv);
-
   /* Enable the Ethernet interrupt */
 
   priv->sk_bifup = true;
-  up_enable_irq(CONFIG_SKELETON_IRQ);
+  up_enable_irq(CONFIG_NET_SKELETON_IRQ);
   return OK;
 }
 
@@ -846,11 +682,10 @@ static int skel_ifdown(FAR struct net_driver_s *dev)
   /* Disable the Ethernet interrupt */
 
   flags = enter_critical_section();
-  up_disable_irq(CONFIG_SKELETON_IRQ);
+  up_disable_irq(CONFIG_NET_SKELETON_IRQ);
 
-  /* Cancel the TX poll timer and TX timeout timers */
+  /* Cancel the TX timeout timers */
 
-  wd_cancel(&priv->sk_txpoll);
   wd_cancel(&priv->sk_txtimeout);
 
   /* Put the EMAC in its reset, non-operational state.  This should be
@@ -902,7 +737,7 @@ static void skel_txavail_work(FAR void *arg)
 
       /* If so, then poll the network for new XMIT data */
 
-      devif_timer(&priv->sk_dev, 0, skel_txpoll);
+      devif_poll(&priv->sk_dev, skel_txpoll);
     }
 
   net_unlock();
@@ -971,6 +806,7 @@ static int skel_addmac(FAR struct net_driver_s *dev, FAR const uint8_t *mac)
 
   /* Add the MAC address to the hardware multicast routing table */
 
+  UNUSED(priv);
   return OK;
 }
 #endif
@@ -999,81 +835,10 @@ static int skel_rmmac(FAR struct net_driver_s *dev, FAR const uint8_t *mac)
 
   /* Add the MAC address to the hardware multicast routing table */
 
+  UNUSED(priv);
   return OK;
 }
 #endif
-
-/****************************************************************************
- * Name: skel_ipv6multicast
- *
- * Description:
- *   Configure the IPv6 multicast MAC address.
- *
- * Input Parameters:
- *   priv - A reference to the private driver state structure
- *
- * Returned Value:
- *   Zero (OK) on success; a negated errno value on failure.
- *
- ****************************************************************************/
-
-#ifdef CONFIG_NET_ICMPv6
-static void skel_ipv6multicast(FAR struct skel_driver_s *priv)
-{
-  FAR struct net_driver_s *dev;
-  uint16_t tmp16;
-  uint8_t mac[6];
-
-  /* For ICMPv6, we need to add the IPv6 multicast address
-   *
-   * For IPv6 multicast addresses, the Ethernet MAC is derived by
-   * the four low-order octets OR'ed with the MAC 33:33:00:00:00:00,
-   * so for example the IPv6 address FF02:DEAD:BEEF::1:3 would map
-   * to the Ethernet MAC address 33:33:00:01:00:03.
-   *
-   * NOTES:  This appears correct for the ICMPv6 Router Solicitation
-   * Message, but the ICMPv6 Neighbor Solicitation message seems to
-   * use 33:33:ff:01:00:03.
-   */
-
-  mac[0] = 0x33;
-  mac[1] = 0x33;
-
-  dev    = &priv->dev;
-  tmp16  = dev->d_ipv6addr[6];
-  mac[2] = 0xff;
-  mac[3] = tmp16 >> 8;
-
-  tmp16  = dev->d_ipv6addr[7];
-  mac[4] = tmp16 & 0xff;
-  mac[5] = tmp16 >> 8;
-
-  ninfo("IPv6 Multicast: %02x:%02x:%02x:%02x:%02x:%02x\n",
-        mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
-
-  skel_addmac(dev, mac);
-
-#ifdef CONFIG_NET_ICMPv6_AUTOCONF
-  /* Add the IPv6 all link-local nodes Ethernet address.  This is the
-   * address that we expect to receive ICMPv6 Router Advertisement
-   * packets.
-   */
-
-  skel_addmac(dev, g_ipv6_ethallnodes.ether_addr_octet);
-
-#endif /* CONFIG_NET_ICMPv6_AUTOCONF */
-
-#ifdef CONFIG_NET_ICMPv6_ROUTER
-  /* Add the IPv6 all link-local routers Ethernet address.  This is the
-   * address that we expect to receive ICMPv6 Router Solicitation
-   * packets.
-   */
-
-  skel_addmac(dev, g_ipv6_ethallrouters.ether_addr_octet);
-
-#endif /* CONFIG_NET_ICMPv6_ROUTER */
-}
-#endif /* CONFIG_NET_ICMPv6 */
 
 /****************************************************************************
  * Name: skel_ioctl
@@ -1109,7 +874,7 @@ static int skel_ioctl(FAR struct net_driver_s *dev, int cmd,
       /* Add cases here to support the IOCTL commands */
 
       default:
-        nerr("ERROR: Unrecognized IOCTL command: %d\n", command);
+        nerr("ERROR: Unrecognized IOCTL command: %d\n", cmd);
         return -ENOTTY;  /* Special return value for this case */
     }
 
@@ -1145,14 +910,14 @@ int skel_initialize(int intf)
 
   /* Get the interface structure associated with this interface number. */
 
-  DEBUGASSERT(intf < CONFIG_SKELETON_NINTERFACES);
+  DEBUGASSERT(intf < CONFIG_NET_SKELETON_NINTERFACES);
   priv = &g_skel[intf];
 
   /* Check if a Ethernet chip is recognized at its I/O base */
 
   /* Attach the IRQ to the driver */
 
-  if (irq_attach(CONFIG_SKELETON_IRQ, skel_interrupt, priv))
+  if (irq_attach(CONFIG_NET_SKELETON_IRQ, skel_interrupt, priv))
     {
       /* We could not attach the ISR to the interrupt */
 
@@ -1162,18 +927,18 @@ int skel_initialize(int intf)
   /* Initialize the driver structure */
 
   memset(priv, 0, sizeof(struct skel_driver_s));
-  priv->sk_dev.d_buf     = g_pktbuf;      /* Single packet buffer */
-  priv->sk_dev.d_ifup    = skel_ifup;     /* I/F up (new IP address) callback */
-  priv->sk_dev.d_ifdown  = skel_ifdown;   /* I/F down callback */
-  priv->sk_dev.d_txavail = skel_txavail;  /* New TX data callback */
+  priv->sk_dev.d_buf     = (FAR uint8_t *)g_pktbuf[intf]; /* Single packet buffer */
+  priv->sk_dev.d_ifup    = skel_ifup;                     /* I/F up (new IP address) callback */
+  priv->sk_dev.d_ifdown  = skel_ifdown;                   /* I/F down callback */
+  priv->sk_dev.d_txavail = skel_txavail;                  /* New TX data callback */
 #ifdef CONFIG_NET_MCASTGROUP
-  priv->sk_dev.d_addmac  = skel_addmac;   /* Add multicast MAC address */
-  priv->sk_dev.d_rmmac   = skel_rmmac;    /* Remove multicast MAC address */
+  priv->sk_dev.d_addmac  = skel_addmac;                   /* Add multicast MAC address */
+  priv->sk_dev.d_rmmac   = skel_rmmac;                    /* Remove multicast MAC address */
 #endif
 #ifdef CONFIG_NETDEV_IOCTL
-  priv->sk_dev.d_ioctl   = skel_ioctl;    /* Handle network IOCTL commands */
+  priv->sk_dev.d_ioctl   = skel_ioctl;                    /* Handle network IOCTL commands */
 #endif
-  priv->sk_dev.d_private = g_skel;        /* Used to recover private state from dev */
+  priv->sk_dev.d_private = g_skel;                        /* Used to recover private state from dev */
 
   /* Put the interface in the down state.  This usually amounts to resetting
    * the device and/or calling skel_ifdown().
@@ -1190,4 +955,6 @@ int skel_initialize(int intf)
   return OK;
 }
 
-#endif /* CONFIG_NET_skeleton */
+#endif /* !defined(CONFIG_SCHED_WORKQUEUE) */
+
+#endif /* CONFIG_NET_SKELETON */

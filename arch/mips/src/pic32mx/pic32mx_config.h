@@ -1,5 +1,7 @@
-/************************************************************************************
+/****************************************************************************
  * arch/mips/src/pic32mx/pic32mx_config.h
+ *
+ * SPDX-License-Identifier: Apache-2.0
  *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -16,14 +18,14 @@
  * License for the specific language governing permissions and limitations
  * under the License.
  *
- ************************************************************************************/
+ ****************************************************************************/
 
-#ifndef __ARCH_MIPS_SRC_PIC32MX_PIC32MX_PIC32_H
-#define __ARCH_MIPS_SRC_PIC32MX_PIC32MX_PIC32_H
+#ifndef __ARCH_MIPS_SRC_PIC32MX_PIC32MX_CONFIG_H
+#define __ARCH_MIPS_SRC_PIC32MX_PIC32MX_CONFIG_H
 
-/************************************************************************************
+/****************************************************************************
  * Included Files
- ************************************************************************************/
+ ****************************************************************************/
 
 #include <nuttx/config.h>
 #include <arch/board/board.h>
@@ -34,11 +36,11 @@
 #include "pic32mx_int.h"
 #include "pic32mx_devcfg.h"
 
-/************************************************************************************
+/****************************************************************************
  * Pre-processor Definitions
- ************************************************************************************/
+ ****************************************************************************/
 
-/* Interrupt Priorities *************************************************************/
+/* Interrupt Priorities *****************************************************/
 
 #ifndef CONFIG_PIC32MX_CTPRIO         /* Core Timer Interrupt */
 #  define CONFIG_PIC32MX_CTPRIO (INT_IPC_MID_PRIORITY << 2)
@@ -470,23 +472,7 @@
 #  error "CONFIG_PIC32MX_USBPRIO is too large"
 #endif
 
-/* SYS calls ************************************************************************/
-
-/* SYS call 1 and 2 are defined for internal use by the PIC32MX port (see
- * arch/mips/include/mips32/syscall.h).  In addition, SYS call 3 is the return from
- * a SYS call in kernel mode.  The first four syscall values must, therefore, be
- * reserved (0 is not used).
- */
-
-#ifdef CONFIG_BUILD_KERNEL
-#  if !defined(CONFIG_SYS_RESERVED) || CONFIG_SYS_RESERVED < 4
-#    error "CONFIG_SYS_RESERVED must be defined to be 4 for a kernel build"
-#  elif CONFIG_SYS_RESERVED > 4
-#    warning "CONFIG_SYS_RESERVED should be defined to be 4 for a kernel build"
-#  endif
-#endif
-
-/* UARTs ****************************************************************************/
+/* UARTs ********************************************************************/
 
 /* Don't enable UARTs not supported by the chip. */
 
@@ -528,8 +514,8 @@
 #  define HAVE_UART_DEVICE 1
 #endif
 
-/* Is there a serial console?  There should be no more than one defined.  It
- * could be on any UARTn, n=1,.. CHIP_NUARTS
+/* Is there a serial console?  There should be no more than one defined.
+ * It could be on any UARTn, n=1,.. CHIP_NUARTS
  */
 
 #if defined(CONFIG_UART1_SERIAL_CONSOLE) && defined(CONFIG_PIC32MX_UART1)
@@ -584,7 +570,7 @@
 #  undef HAVE_SERIAL_CONSOLE
 #endif
 
-/* Device Configuration *************************************************************/
+/* Device Configuration *****************************************************/
 
 /* DEVCFG3 */
 
@@ -604,7 +590,9 @@
 #  define CONFIG_PIC32MX_SRSSEL   INT_IPC_MIN_PRIORITY
 #endif
 
-/* Unless overridden in the .config file, all pins are in the default setting */
+/* Unless overridden in the .config file,
+ * all pins are in the default setting.
+ */
 
 #ifndef CONFIG_PIC32MX_FMIIEN               /* Ethernet MII enable: 0=RMII 1=MII */
 #  define CONFIG_PIC32MX_FMIIEN   1         /* MII enabled */
@@ -892,20 +880,20 @@
 #  define CONFIG_PIC32MX_CODEWP           1     /* Disabled */
 #endif
 
-/************************************************************************************
+/****************************************************************************
  * Public Types
- ************************************************************************************/
+ ****************************************************************************/
 
-/************************************************************************************
+/****************************************************************************
  * Public Data
- ************************************************************************************/
+ ****************************************************************************/
 
-/************************************************************************************
+/****************************************************************************
  * Inline Functions
- ************************************************************************************/
+ ****************************************************************************/
 
-/************************************************************************************
+/****************************************************************************
  * Public Functions Prototypes
- ************************************************************************************/
+ ****************************************************************************/
 
-#endif /* __ARCH_MIPS_SRC_PIC32MX_PIC32MX_PIC32_H */
+#endif /* __ARCH_MIPS_SRC_PIC32MX_PIC32MX_CONFIG_H */

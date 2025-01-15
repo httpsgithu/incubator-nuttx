@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/sam34/sam4e-ek/src/sam_at25.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -58,8 +60,8 @@
 
 int sam_at25_automount(int minor)
 {
-  FAR struct spi_dev_s *spi;
-  FAR struct mtd_dev_s *mtd;
+  struct spi_dev_s *spi;
+  struct mtd_dev_s *mtd;
   static bool initialized = false;
   int ret;
 

@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/armv7-a/arm_saveusercontext.S
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -23,116 +25,75 @@
  ****************************************************************************/
 
 #include <nuttx/config.h>
-#include <arch/irq.h>
-
-/****************************************************************************
- * Pre-processor Definitions
- ****************************************************************************/
-
-/****************************************************************************
- * Public Symbols
- ****************************************************************************/
+#include <nuttx/irq.h>
 
 	.file	"arm_saveusercontext.S"
 
-/****************************************************************************
- * Macros
- ****************************************************************************/
+	.text
+	.syntax	unified
+	.arm
 
 /****************************************************************************
  * Public Functions
  ****************************************************************************/
 
 /****************************************************************************
- * Name: arm_saveusercontext
+ * Name: up_saveusercontext
  *
  * Description:
- *   Save the current thread context.  Full prototype is:
+ *   Save the current context.  Full prototype is:
  *
- *   int  arm_saveusercontext(uint32_t *saveregs);
+ *   int up_saveusercontext(void *saveregs);
+ *
+ *   R0 = saveregs = pinter saved array
  *
  * Returned Value:
- *   0: Normal return
- *   1: Context switch return
+ *   None
  *
  ****************************************************************************/
 
-	.globl	arm_saveusercontext
-	.type	arm_saveusercontext, function
-arm_saveusercontext:
+	.globl	up_saveusercontext
+	.globl	up_saveusercontext
+	.type	up_saveusercontext, %function
 
-	/* On entry, a1 (r0) holds address of struct xcptcontext */
+up_saveusercontext:
 
-	/* Make sure that the return value will be non-zero (the value of the
-	 * other volatile registers don't matter -- r1-r3, ip).  This function
-	 * is called through the normal C calling conventions and the values of
-	 * these registers cannot be assumed at the point of setjmp return.
-	 */
+	/* Save r0, r1 */
 
-	mov		ip, #1
-	str		ip, [r0, #(4*REG_R0)]
-
-	/* Save the volatile registers (plus r12 which really
-	 * doesn't need to be saved)
-	 */
-
-	add		r1, r0, #(4*REG_R4)
-	stmia		r1, {r4-r14}
-
-	/* Save the current cpsr */
-
-	mrs		r2, cpsr		/* R2 = CPSR value */
-	add		r1, r0, #(4*REG_CPSR)
-	str		r2, [r1]
-
-	/* Save the return address as the PC so that we return to the exit from
-	 * this function.
-	 */
-
-	ldr		r2, =1f
-	add		r1, r0, #(4*REG_PC)
-	str		r2, [r1]
-
-	/* Save the floating point registers.
-	 * REVISIT:  Not all of the floating point registers need to be saved.
-	 * Some are volatile and need not be preserved across functions calls.
-	 * But right now, I can't find the definitive list of the volatile
-	 * floating point registers.
-	 */
+	str		r0, [r0, #(4*REG_R0)]
+	str		r1, [r0, #(4*REG_R1)]
 
 #ifdef CONFIG_ARCH_FPU
-	add		r1, r0, #(4*REG_S0)	/* R1=Address of FP register storage */
+	/* Save fpu */
 
-	/* Store all floating point registers.  Registers are stored in numeric order,
-	 * s0, s1, ... in increasing address order.
-	 */
+#  ifdef CONFIG_ARM_DPFPU32
+	vstmia.64	r0!, {d0-d15}
+	vstmia.64	r0!, {d16-d31}
+#  else
+	vstmia		r0!, {s0-s31}
+#  endif
+	/* Save fpscr, r13 and r14 */
 
-#ifdef CONFIG_ARM_HAVE_FPU_D32
-	vstmia.64	r1!, {d0-d15}		/* Save the full FP context */
-	vstmia.64	r1!, {d16-d31}
+	vmrs		r1, fpscr
+	stmia		r0!, {r1, r13, r14}
 #else
-	vstmia		r1!, {s0-s31}		/* Save the full FP context */
+	/* Save r13, r14 */
+
+	stmia		r0!, {r13, r14}
 #endif
 
-	/* Store the floating point control and status register.  At the end of the
-	 * vstmia, r1 will point to the FPCSR storage location.
-	 */
+	/* Save r2~r12, and store the return address as PC */
 
-	vmrs		r2, fpscr		/* Fetch the FPCSR */
-	str		r2, [r1], #4		/* Save the floating point control and status register */
-#endif
+	add		r0, r0, #8
+	stmia		r0!, {r2-r12, r14}
 
-	/* Return 0 now indicating that this return is not a context switch */
+	/* Save cpsr */
 
-	mov		r0, #0			/* Return value == 0 */
-	bx		lr			/* Return */
+	mrs		r1, CPSR
+	str		r1, [r0]
 
-1:
+	mov		r0, #0
+	bx		lr
 
-	/* Return 1 now indicating that this return is a context switch */
-
-	mov		r0, #1			/* Return value == 1 */
-	bx		lr			/* Return */
-
-	.size	arm_saveusercontext, .-arm_saveusercontext
+	.size	up_saveusercontext, . - up_saveusercontext
 	.end

@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/xtensa/src/common/xtensa_sigdeliver.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -35,6 +37,7 @@
 #include <arch/board/board.h>
 
 #include "sched/sched.h"
+#include "signal/signal.h"
 #include "xtensa.h"
 
 /****************************************************************************
@@ -46,7 +49,7 @@
  *
  * Description:
  *   This is the a signal handling trampoline.  When a signal action was
- *   posted.  The task context was mucked with and forced to branch to this
+ *   posted, the task context was mucked with and forced to branch to this
  *   location with interrupts disabled.
  *
  ****************************************************************************/
@@ -54,14 +57,7 @@
 void xtensa_sig_deliver(void)
 {
   struct tcb_s *rtcb = this_task();
-  uint32_t regs[XCPTCONTEXT_REGS];
-
-  /* Save the errno.  This must be preserved throughout the signal handling
-   * so that the user code final gets the correct errno value (probably
-   * EINTR).
-   */
-
-  int saved_errno = get_errno();
+  uint32_t *regs = rtcb->xcp.saved_regs;
 
 #ifdef CONFIG_SMP
   /* In the SMP case, we must terminate the critical section while the signal
@@ -74,21 +70,18 @@ void xtensa_sig_deliver(void)
 
   board_autoled_on(LED_SIGNAL);
 
-  sinfo("rtcb=%p sigdeliver=%p sigpendactionq.head=%p\n",
-        rtcb, rtcb->xcp.sigdeliver, rtcb->sigpendactionq.head);
-  DEBUGASSERT(rtcb->xcp.sigdeliver != NULL);
+  sinfo("rtcb=%p sigpendactionq.head=%p\n",
+        rtcb, rtcb->sigpendactionq.head);
+  DEBUGASSERT((rtcb->flags & TCB_FLAG_SIGDELIVER) != 0);
 
-  /* Save the return state on the stack. */
-
-  xtensa_copystate(regs, rtcb->xcp.regs);
-
+retry:
 #ifdef CONFIG_SMP
   /* In the SMP case, up_schedule_sigaction(0) will have incremented
    * 'irqcount' in order to force us into a critical section.  Save the
    * pre-incremented irqcount.
    */
 
-  saved_irqcount = rtcb->irqcount - 1;
+  saved_irqcount = rtcb->irqcount;
   DEBUGASSERT(saved_irqcount >= 0);
 
   /* Now we need to call leave_critical_section() repeatedly to get the
@@ -96,11 +89,10 @@ void xtensa_sig_deliver(void)
    * section.
    */
 
-  do
+  while (rtcb->irqcount > 0)
     {
       leave_critical_section((regs[REG_PS]));
     }
-  while (rtcb->irqcount > 0);
 #endif /* CONFIG_SMP */
 
 #ifndef CONFIG_SUPPRESS_INTERRUPTS
@@ -113,7 +105,7 @@ void xtensa_sig_deliver(void)
 
   /* Deliver the signals */
 
-  ((sig_deliver_t)rtcb->xcp.sigdeliver)(rtcb);
+  nxsig_deliver(rtcb);
 
   /* Output any debug messages BEFORE restoring errno (because they may
    * alter errno), then disable interrupts again and restore the original
@@ -128,7 +120,7 @@ void xtensa_sig_deliver(void)
    */
 
   DEBUGASSERT(rtcb->irqcount == 0);
-  while (rtcb->irqcount < saved_irqcount)
+  while (rtcb->irqcount < saved_irqcount + 1)
     {
       enter_critical_section();
     }
@@ -138,9 +130,14 @@ void xtensa_sig_deliver(void)
   up_irq_save();
 #endif
 
-  /* Restore the saved errno value */
-
-  set_errno(saved_errno);
+  if (!sq_empty(&rtcb->sigpendactionq) &&
+      (rtcb->flags & TCB_FLAG_SIGNAL_ACTION) == 0)
+    {
+#ifdef CONFIG_SMP
+      leave_critical_section((regs[REG_PS]));
+#endif
+      goto retry;
+    }
 
   /* Modify the saved return state with the actual saved values in the
    * TCB.  This depends on the fact that nested signal handling is
@@ -152,48 +149,23 @@ void xtensa_sig_deliver(void)
    * could be modified by a hostile program.
    */
 
-  regs[REG_PC]         = rtcb->xcp.saved_pc;
-  regs[REG_PS]         = rtcb->xcp.saved_ps;
-  rtcb->xcp.sigdeliver = NULL;  /* Allows next handler to be scheduled */
+  /* Allows next handler to be scheduled */
 
-  /* Issue:
-   *
-   * Task1 --> process
-   *       --> xtensa_context_save(S1)
-   *       --> s32i a0, a2, (4 * REG_A0)
-   *       --> rtcb->xcp.regs[REG_A0] = A0
-   *
-   * Task preemption
-   *
-   * Task2 --> Post signal to Task1
-   *       --> Wake up Task1
-   *
-   * Task1 --> xtensa_sig_deliver
-   *       --> up_irq_enable()
-   *       --> Task preemption
-   *
-   * Task preemption --> xtensa_context_save
-   *                 --> rtcb->xcp.regs[REG_A0] = A0 of "xtensa_sig_deliver"
-   *                     = _xtensa_sig_trampoline + 6
-   *                     = "j 1b"
-   *
-   * Process ...
-   *
-   * Task1 --> xtensa_sig_deliver
-   *       --> xtensa_context_restore
-   *       --> xtensa_context_save(S1)
-   *       --> l32i a0, a2, (4 * REG_A0)
-   *       --> a0 = "j 1b"
-   *       --> ret
-   *       --> run "j 1b"
-   */
-
-  rtcb->xcp.regs[REG_A0] = regs[REG_A0];
+  rtcb->flags &= ~TCB_FLAG_SIGDELIVER;
 
   /* Then restore the correct state for this thread of execution.
-   * NOTE: The co-processor state should already be correct.
    */
 
   board_autoled_off(LED_SIGNAL);
-  xtensa_context_restore(regs);
+#ifdef CONFIG_SMP
+  /* We need to keep the IRQ lock until task switching */
+
+  rtcb->irqcount++;
+  leave_critical_section((regs[REG_PS]));
+  rtcb->irqcount--;
+#endif
+
+  rtcb->xcp.regs = rtcb->xcp.saved_regs;
+  xtensa_context_restore();
+  UNUSED(regs);
 }

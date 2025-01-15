@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/stm32/olimex-stm32-p407/src/stm32_cs4344.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -85,9 +87,9 @@
 
 int stm32_cs4344_initialize(int minor)
 {
-  FAR struct audio_lowerhalf_s *cs4344;
-  FAR struct audio_lowerhalf_s *pcm;
-  FAR struct i2s_dev_s *i2s;
+  struct audio_lowerhalf_s *cs4344;
+  struct audio_lowerhalf_s *pcm;
+  struct i2s_dev_s *i2s;
   static bool initialized = false;
   char devname[12];
   int ret;
@@ -141,7 +143,7 @@ int stm32_cs4344_initialize(int minor)
 
       /* Create a device name */
 
-      snprintf(devname, 12, "pcm%d",  minor);
+      snprintf(devname, sizeof(devname), "pcm%d",  minor);
 
       /* Finally, we can register the PCM/CS4344/I2S audio device.
        *

@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/sama5/sam_rtc.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -26,19 +28,16 @@
 
 #include <nuttx/arch.h>
 #include <nuttx/irq.h>
+#include <nuttx/wqueue.h>
 
 #include <time.h>
 #include <assert.h>
 #include <errno.h>
 #include <debug.h>
 
-#include <nuttx/arch.h>
-#include <nuttx/irq.h>
-#include <nuttx/wqueue.h>
-
 #include <arch/board/board.h>
 
-#include "arm_arch.h"
+#include "arm_internal.h"
 #include "sam_rtc.h"
 
 #ifdef CONFIG_RTC
@@ -103,7 +102,7 @@ volatile bool g_rtc_enabled = false;
  ****************************************************************************/
 
 #ifdef CONFIG_DEBUG_RTC_INFO
-static void rtc_dumpregs(FAR const char *msg)
+static void rtc_dumpregs(const char *msg)
 {
   rtcinfo("%s:\n", msg);
   rtcinfo("      CR: %08x\n", getreg32(SAM_RTC_CR));
@@ -135,7 +134,7 @@ static void rtc_dumpregs(FAR const char *msg)
  ****************************************************************************/
 
 #ifdef CONFIG_DEBUG_RTC_INFO
-static void rtc_dumptime(FAR struct tm *tp, FAR const char *msg)
+static void rtc_dumptime(struct tm *tp, const char *msg)
 {
   rtcinfo("%s:\n", msg);
   rtcinfo("  tm_sec: %08x\n", tp->tm_sec);
@@ -211,7 +210,7 @@ static int rtc_bcd2bin(uint32_t value)
  ****************************************************************************/
 
 #ifdef CONFIG_RTC_ALARM
-static void rtc_worker(FAR void *arg)
+static void rtc_worker(void *arg)
 {
   /* Sample once (atomically) */
 
@@ -244,7 +243,7 @@ static void rtc_worker(FAR void *arg)
  ****************************************************************************/
 
 #ifdef CONFIG_RTC_ALARM
-static int rtc_interrupt(int irq, void *context, FAR void *arg)
+static int rtc_interrupt(int irq, void *context, void *arg)
 {
   int ret;
 
@@ -364,7 +363,7 @@ int up_rtc_initialize(void)
  *
  ****************************************************************************/
 
-int up_rtc_getdatetime(FAR struct tm *tp)
+int up_rtc_getdatetime(struct tm *tp)
 {
   uint32_t timr;
   uint32_t calr;
@@ -452,9 +451,9 @@ int up_rtc_getdatetime(FAR struct tm *tp)
  *
  ****************************************************************************/
 
-int up_rtc_settime(FAR const struct timespec *tp)
+int up_rtc_settime(const struct timespec *tp)
 {
-  FAR struct tm newtime;
+  struct tm newtime;
   uint32_t regval;
   uint32_t timr;
   uint32_t calr;
@@ -576,9 +575,9 @@ int up_rtc_settime(FAR const struct timespec *tp)
  ****************************************************************************/
 
 #ifdef CONFIG_RTC_ALARM
-int sam_rtc_setalarm(FAR const struct timespec *tp, alarmcb_t callback)
+int sam_rtc_setalarm(const struct timespec *tp, alarmcb_t callback)
 {
-  FAR struct tm newalarm;
+  struct tm newalarm;
   irqstate_t flags;
   uint32_t timalr;
   uint32_t calalr;

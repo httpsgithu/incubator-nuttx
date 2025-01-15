@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/stm32l4/hardware/stm32l4x5xx_rcc.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -152,17 +154,17 @@
 
 #define RCC_CFGR_SW_SHIFT           (0)       /* Bits 0-1: System clock Switch */
 #define RCC_CFGR_SW_MASK            (3 << RCC_CFGR_SW_SHIFT)
-#  define RCC_CFGR_SW_MSI           (0 << RCC_CFGR_SW_SHIFT) /* 00: HSI selected as system clock */
-#  define RCC_CFGR_SW_HSI           (1 << RCC_CFGR_SW_SHIFT) /* 00: HSI selected as system clock */
-#  define RCC_CFGR_SW_HSE           (2 << RCC_CFGR_SW_SHIFT) /* 01: HSE selected as system clock */
-#  define RCC_CFGR_SW_PLL           (3 << RCC_CFGR_SW_SHIFT) /* 10: PLL selected as system clock */
+#  define RCC_CFGR_SW_MSI           (0 << RCC_CFGR_SW_SHIFT) /* 00: MSI selected as system clock */
+#  define RCC_CFGR_SW_HSI           (1 << RCC_CFGR_SW_SHIFT) /* 01: HSI selected as system clock */
+#  define RCC_CFGR_SW_HSE           (2 << RCC_CFGR_SW_SHIFT) /* 10: HSE selected as system clock */
+#  define RCC_CFGR_SW_PLL           (3 << RCC_CFGR_SW_SHIFT) /* 11: PLL selected as system clock */
 
 #define RCC_CFGR_SWS_SHIFT          (2)       /* Bits 2-3: System Clock Switch Status */
 #define RCC_CFGR_SWS_MASK           (3 << RCC_CFGR_SWS_SHIFT)
-#  define RCC_CFGR_SWS_MSI          (0 << RCC_CFGR_SWS_SHIFT) /* 00: HSI oscillator used as system clock */
-#  define RCC_CFGR_SWS_HSI          (1 << RCC_CFGR_SWS_SHIFT) /* 00: HSI oscillator used as system clock */
-#  define RCC_CFGR_SWS_HSE          (2 << RCC_CFGR_SWS_SHIFT) /* 01: HSE oscillator used as system clock */
-#  define RCC_CFGR_SWS_PLL          (3 << RCC_CFGR_SWS_SHIFT) /* 10: PLL used as system clock */
+#  define RCC_CFGR_SWS_MSI          (0 << RCC_CFGR_SWS_SHIFT) /* 00: MSI oscillator used as system clock */
+#  define RCC_CFGR_SWS_HSI          (1 << RCC_CFGR_SWS_SHIFT) /* 01: HSI oscillator used as system clock */
+#  define RCC_CFGR_SWS_HSE          (2 << RCC_CFGR_SWS_SHIFT) /* 10: HSE oscillator used as system clock */
+#  define RCC_CFGR_SWS_PLL          (3 << RCC_CFGR_SWS_SHIFT) /* 11: PLL used as system clock */
 
 #define RCC_CFGR_HPRE_SHIFT         (4)       /* Bits 4-7: AHB prescaler */
 #define RCC_CFGR_HPRE_MASK          (0x0f << RCC_CFGR_HPRE_SHIFT)

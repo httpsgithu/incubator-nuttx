@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/kinetis/kinetis_rtc.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -26,6 +28,7 @@
 #include <nuttx/arch.h>
 #include <nuttx/irq.h>
 #include <nuttx/timers/rtc.h>
+#include <nuttx/spinlock.h>
 #include <arch/board/board.h>
 
 #include <stdlib.h>
@@ -36,8 +39,7 @@
 #include <debug.h>
 #include <errno.h>
 
-#include "arm_arch.h"
-
+#include "arm_internal.h"
 #include "kinetis_config.h"
 #include "chip.h"
 #include "hardware/kinetis_rtc.h"
@@ -60,6 +62,10 @@
 /****************************************************************************
  * Private Data
  ****************************************************************************/
+
+#ifdef CONFIG_RTC_HIRES
+static spinlock_t g_rtc_lock = SP_UNLOCKED;
+#endif
 
 #ifdef CONFIG_RTC_ALARM
 static alarmcb_t g_alarmcb;
@@ -91,7 +97,7 @@ volatile bool g_rtc_enabled = false;
  ****************************************************************************/
 
 #ifdef CONFIG_DEBUG_RTC_INFO
-static void rtc_dumpregs(FAR const char *msg)
+static void rtc_dumpregs(const char *msg)
 {
   rtcinfo("%s:\n", msg);
   rtcinfo("   TSR: %08x\n", getreg32(KINETIS_RTC_TSR));
@@ -129,7 +135,7 @@ static void rtc_dumpregs(FAR const char *msg)
  ****************************************************************************/
 
 #ifdef CONFIG_DEBUG_RTC_INFO
-static void rtc_dumptime(FAR struct tm *tp, FAR const char *msg)
+static void rtc_dumptime(struct tm *tp, const char *msg)
 {
   rtcinfo("%s:\n", msg);
   rtcinfo("  tm_sec: %08x\n", tp->tm_sec);
@@ -159,7 +165,7 @@ static void rtc_dumptime(FAR struct tm *tp, FAR const char *msg)
  ****************************************************************************/
 
 #if defined(CONFIG_RTC_ALARM)
-static int kinetis_rtc_interrupt(int irq, void *context, FAR void *arg)
+static int kinetis_rtc_interrupt(int irq, void *context, void *arg)
 {
   uint16_t rtc_sr;
 
@@ -423,7 +429,7 @@ time_t up_rtc_time(void)
  ****************************************************************************/
 
 #ifdef CONFIG_RTC_HIRES
-int up_rtc_gettime(FAR struct timespec *tp)
+int up_rtc_gettime(struct timespec *tp)
 {
   irqstate_t flags;
   uint32_t seconds;
@@ -435,7 +441,7 @@ int up_rtc_gettime(FAR struct timespec *tp)
    * wrapped-around.
    */
 
-  flags = enter_critical_section();
+  flags = spin_lock_irqsave(&g_rtc_lock);
   do
     {
       prescaler = getreg32(KINETIS_RTC_TPR);
@@ -444,7 +450,7 @@ int up_rtc_gettime(FAR struct timespec *tp)
     }
   while (prescaler > prescaler2);
 
-  leave_critical_section(flags);
+  spin_unlock_irqrestore(&g_rtc_lock, flags);
 
   /* Build seconds + nanoseconds from seconds and prescaler register */
 
@@ -469,7 +475,7 @@ int up_rtc_gettime(FAR struct timespec *tp)
  *
  ****************************************************************************/
 
-int up_rtc_settime(FAR const struct timespec *tp)
+int up_rtc_settime(const struct timespec *tp)
 {
   irqstate_t flags;
   uint32_t seconds;
@@ -478,7 +484,7 @@ int up_rtc_settime(FAR const struct timespec *tp)
   seconds = tp->tv_sec;
   prescaler = tp->tv_nsec / (1000000000 / CONFIG_RTC_FREQUENCY);
 
-  flags = enter_critical_section();
+  flags = spin_lock_irqsave(&g_rtc_lock);
 
   putreg32(0, KINETIS_RTC_SR);  /* Disable counter */
 
@@ -487,7 +493,7 @@ int up_rtc_settime(FAR const struct timespec *tp)
 
   putreg32(RTC_SR_TCE, KINETIS_RTC_SR); /* Re-enable counter */
 
-  leave_critical_section(flags);
+  spin_unlock_irqrestore(&g_rtc_lock, flags);
 
   return OK;
 }
@@ -508,7 +514,7 @@ int up_rtc_settime(FAR const struct timespec *tp)
  ****************************************************************************/
 
 #ifdef CONFIG_RTC_ALARM
-int kinetis_rtc_setalarm(FAR const struct timespec *tp, alarmcb_t callback)
+int kinetis_rtc_setalarm(const struct timespec *tp, alarmcb_t callback)
 {
   /* Is there already something waiting on the ALARM? */
 
@@ -589,7 +595,7 @@ int kinetis_rtc_cancelalarm(void)
  ****************************************************************************/
 
 #ifdef CONFIG_RTC_ALARM
-int kinetis_rtc_rdalarm(FAR struct timespec *tp)
+int kinetis_rtc_rdalarm(struct timespec *tp)
 {
   DEBUGASSERT(tp != NULL);
 

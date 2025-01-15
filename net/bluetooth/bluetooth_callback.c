@@ -1,6 +1,8 @@
 /****************************************************************************
  * net/bluetooth/bluetooth_callback.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -69,7 +71,7 @@ uint16_t bluetooth_callback(FAR struct radio_driver_s *radio,
     {
       /* Perform the callback */
 
-      flags = devif_conn_event(&radio->r_dev, conn, flags, conn->bc_list);
+      flags = devif_conn_event(&radio->r_dev, flags, conn->bc_conn.list);
     }
 
   return flags;

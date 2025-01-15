@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/s32k1xx/hardware/s32k1xx_sim.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -190,8 +192,8 @@
 /* ADC Options Register */
 
 #define SIM_ADCOPT_ADC0TRGSEL                   (1 << 0)  /* Bit 0:  ADC0 trigger source select */
-# define SIM_ADCOPT_ADC0TRGSEL_PDB              (0)       /*         PDB output */
-# define SIM_ADCOPT_ADC0TRGSEL_TRGMUX           (1 << 0)  /*         TRGMUX output */
+#  define SIM_ADCOPT_ADC0TRGSEL_PDB             (0)       /*         PDB output */
+#  define SIM_ADCOPT_ADC0TRGSEL_TRGMUX          (1 << 0)  /*         TRGMUX output */
 #define SIM_ADCOPT_ADC0SWPRETRG_SHIFT           (1)       /* Bits 1-3: ADC0 software pretrigger sources */
 #define SIM_ADCOPT_ADC0SWPRETRG_MASK            (7 << SIM_ADCOPT_ADC0SWPRETRG_SHIFT)
 #  define SIM_ADCOPT_ADC0SWPRETRG_DISABLED      (0 << SIM_ADCOPT_ADC0SWPRETRG_SHIFT) /* Software pretrigger disabled */
@@ -207,8 +209,8 @@
 #  define SIM_ADCOPT_ADC0PRETRGSEL_SW           (2 << SIM_ADCOPT_ADC0PRETRGSEL_SHIFT) /* Software pretrigger */
 
 #define SIM_ADCOPT_ADC1TRGSEL                   (1 << 8)  /* Bit 8:  ADC1 trigger source select */
-# define SIM_ADCOPT_ADC1TRGSEL_PDB              (0)       /*         PDB output */
-# define SIM_ADCOPT_ADC1TRGSEL_TRGMUX           (1 << 8)  /*         TRGMUX output */
+#  define SIM_ADCOPT_ADC1TRGSEL_PDB             (0)       /*         PDB output */
+#  define SIM_ADCOPT_ADC1TRGSEL_TRGMUX          (1 << 8)  /*         TRGMUX output */
 #define SIM_ADCOPT_ADC1SWPRETRG_SHIFT           (9)       /* Bits 9-11: ADC1 software pretrigger sources */
 #define SIM_ADCOPT_ADC1SWPRETRG_MASK            (7 << SIM_ADCOPT_ADC1SWPRETRG_SHIFT)
 #  define SIM_ADCOPT_ADC1SWPRETRG_DISABLED      (0 << SIM_ADCOPT_ADC1SWPRETRG_SHIFT) /* Software pretrigger disabled */

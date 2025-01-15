@@ -46,7 +46,7 @@
  ****************************************************************************/
 
 #define MAX_TIMERS 4
-#define MAX_US_RESOLUTION 819 /* MAX_US = (PREmax * USEC_PER_SEC) / CLKmin */ 
+#define MAX_US_RESOLUTION 819 /* MAX_US = (PREmax * USEC_PER_SEC) / CLKmin */
 #define TIMER_WIDTH 64
 
 /****************************************************************************
@@ -159,7 +159,7 @@ int esp32s2_freerun_initialize(struct esp32s2_freerun_s *freerun,
 
       pre = esp_clk_apb_freq() * resolution / USEC_PER_SEC;
 
-      tmrinfo("pre= %" PRIu16 " clk=%d \n", pre, esp_clk_apb_freq());
+      tmrinfo("pre= %" PRIu16 " clk=%d\n", pre, esp_clk_apb_freq());
 
       /* Configure TIMER prescaler */
 

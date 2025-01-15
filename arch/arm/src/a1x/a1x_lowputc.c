@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/a1x/a1x_lowputc.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -30,8 +32,6 @@
 #include <arch/board/board.h>
 
 #include "arm_internal.h"
-#include "arm_arch.h"
-
 #include "a1x_config.h"
 #include "hardware/a1x_uart.h"
 #include "a1x_pio.h"

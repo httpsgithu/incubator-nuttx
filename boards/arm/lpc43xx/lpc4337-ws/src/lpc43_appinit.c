@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/lpc43xx/lpc4337-ws/src/lpc43_appinit.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -50,7 +52,7 @@
 #ifdef HAVE_I2CTOOL
 static void lpc43_i2c_register(int bus)
 {
-  FAR struct i2c_master_s *i2c;
+  struct i2c_master_s *i2c;
   int ret;
 
   i2c = lpc43_i2cbus_initialize(bus);

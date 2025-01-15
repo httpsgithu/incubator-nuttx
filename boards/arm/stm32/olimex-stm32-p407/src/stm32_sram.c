@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/stm32/olimex-stm32-p407/src/stm32_sram.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -28,8 +30,7 @@
 #include <debug.h>
 
 #include "chip.h"
-#include "arm_arch.h"
-
+#include "arm_internal.h"
 #include "stm32.h"
 #include "stm3240g-eval.h"
 
@@ -48,17 +49,17 @@
 #endif
 
 /* SRAM Timing
- * REVIST:
+ * REVISIT:
  * These were ported from the STM3240G-EVAL and have not been verified on
  * this platform.
  */
 
 #define SRAM_ADDRESS_SETUP_TIME      3
-#define SRAM_ADDRESS_HOLD_TIME       0
+#define SRAM_ADDRESS_HOLD_TIME       1
 #define SRAM_DATA_SETUP_TIME         6
 #define SRAM_BUS_TURNAROUND_DURATION 1
-#define SRAM_CLK_DIVISION            0
-#define SRAM_DATA_LATENCY            0
+#define SRAM_CLK_DIVISION            1
+#define SRAM_DATA_LATENCY            2
 
 /****************************************************************************
  * Public Data

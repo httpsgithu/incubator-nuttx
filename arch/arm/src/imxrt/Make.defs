@@ -1,6 +1,8 @@
 ############################################################################
 # arch/arm/src/imxrt/Make.defs
 #
+# SPDX-License-Identifier: Apache-2.0
+#
 # Licensed to the Apache Software Foundation (ASF) under one or more
 # contributor license agreements.  See the NOTICE file distributed with
 # this work for additional information regarding copyright ownership.  The
@@ -20,66 +22,31 @@
 
 # Common ARM and Cortex-M7 files
 
-CMN_ASRCS  = arm_saveusercontext.S arm_fullcontextrestore.S
-CMN_ASRCS += arm_testset.S arm_fetchadd.S vfork.S
-
-CMN_CSRCS  = arm_assert.c arm_blocktask.c arm_copyfullstate.c
-CMN_CSRCS += arm_createstack.c arm_mdelay.c arm_udelay.c arm_exit.c
-CMN_CSRCS += arm_initialize.c arm_initialstate.c arm_interruptcontext.c
-CMN_CSRCS += arm_memfault.c arm_modifyreg8.c arm_modifyreg16.c arm_modifyreg32.c
-CMN_CSRCS += arm_releasepending.c arm_releasestack.c arm_reprioritizertr.c
-CMN_CSRCS += arm_schedulesigaction.c arm_sigdeliver.c arm_stackframe.c
-CMN_CSRCS += arm_unblocktask.c arm_usestack.c arm_doirq.c arm_hardfault.c
-CMN_CSRCS += arm_svcall.c arm_vfork.c arm_trigger_irq.c arm_systemreset.c
-CMN_CSRCS += arm_switchcontext.c arm_puts.c
-
-ifeq ($(CONFIG_ARMV7M_STACKCHECK),y)
-CMN_CSRCS += arm_stackcheck.c
-endif
-
-# Configuration-dependent common files
-
-ifeq ($(CONFIG_ARMV7M_LAZYFPU),y)
-CMN_ASRCS += arm_lazyexception.S
-else
-CMN_ASRCS += arm_exception.S
-endif
-CMN_CSRCS += arm_vectors.c
-
-ifeq ($(CONFIG_ARCH_RAMVECTORS),y)
-CMN_CSRCS += arm_ramvec_initialize.c arm_ramvec_attach.c
-endif
-
-ifeq ($(CONFIG_ARM_MPU),y)
-CMN_CSRCS += arm_mpu.c
-endif
-
-ifeq ($(CONFIG_BUILD_PROTECTED),y)
-CMN_CSRCS += arm_task_start.c arm_pthread_start.c
-CMN_CSRCS += arm_pthread_exit.c
-CMN_CSRCS += arm_signal_dispatch.c
-CMN_UASRCS += arm_signal_handler.S
-endif
-
-ifeq ($(CONFIG_STACK_COLORATION),y)
-CMN_CSRCS += arm_checkstack.c
-endif
-
-CMN_CSRCS += arm_cache.c
-
-ifeq ($(CONFIG_ARCH_FPU),y)
-CMN_ASRCS += arm_fpu.S
-CMN_CSRCS += arm_copyarmstate.c
-endif
+include armv7-m/Make.defs
 
 # Required i.MX RT files
 
-CHIP_CSRCS  = imxrt_allocateheap.c imxrt_start.c imxrt_clockconfig.c
-CHIP_CSRCS += imxrt_periphclks.c imxrt_irq.c imxrt_clrpend.c imxrt_gpio.c
-CHIP_CSRCS += imxrt_daisy.c imxrt_wdog.c imxrt_iomuxc.c imxrt_serial.c
+CHIP_CSRCS  = imxrt_allocateheap.c imxrt_start.c imxrt_periphclks.c
+ifeq ($(CONFIG_IMXRT_PROGMEM),y)
+CHIP_CSRCS += imxrt_flash.c
+endif
+CHIP_CSRCS += imxrt_irq.c imxrt_clrpend.c imxrt_gpio.c
+CHIP_CSRCS += imxrt_daisy.c imxrt_wdog.c imxrt_serial.c
 CHIP_CSRCS += imxrt_xbar.c imxrt_ocotp.c imxrt_lowputc.c
 
 # Configuration-dependent i.MX RT files
+
+ifeq ($(CONFIG_IMXRT_CLOCKCONFIG_VER2),y)
+CHIP_CSRCS += imxrt_clockconfig_ver2.c imxrt_pmu.c
+else
+CHIP_CSRCS += imxrt_clockconfig_ver1.c
+endif
+
+ifeq ($(CONFIG_IMXRT_IOMUX_VER2),y)
+CHIP_CSRCS += imxrt_iomuxc_ver2.c
+else
+CHIP_CSRCS += imxrt_iomuxc_ver1.c
+endif
 
 ifneq ($(CONFIG_ARCH_IDLE_CUSTOM),y)
 CHIP_CSRCS += imxrt_idle.c
@@ -117,6 +84,10 @@ endif
 
 ifeq ($(CONFIG_IMXRT_FLEXCAN),y)
 CHIP_CSRCS += imxrt_flexcan.c
+endif
+
+ifeq ($(CONFIG_IMXRT_FLEXIO),y)
+CHIP_CSRCS += imxrt_flexio.c
 endif
 
 ifeq ($(CONFIG_IMXRT_FLEXPWM),y)
@@ -163,5 +134,9 @@ CHIP_CSRCS += imxrt_usbdev.c
 endif
 
 ifeq ($(CONFIG_IMXRT_ADC),y)
-CHIP_CSRCS += imxrt_adc.c
+ifeq ($(CONFIG_IMXRT_ADC_VER2),y)
+CHIP_CSRCS += imxrt_adc_ver2.c
+else
+CHIP_CSRCS += imxrt_adc_ver1.c
+endif
 endif

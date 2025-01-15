@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/rp2040/raspberrypi-pico/src/rp2040_bringup.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -33,30 +35,12 @@
 
 #include "rp2040_pico.h"
 
-#ifdef CONFIG_LCD_BACKPACK
-#include "rp2040_lcd_backpack.h"
-#endif
+#ifdef CONFIG_ARCH_BOARD_COMMON
+#include "rp2040_common_bringup.h"
+#endif /* CONFIG_ARCH_BOARD_COMMON */
 
-#ifdef CONFIG_LCD
-#include <nuttx/board.h>
-#endif
-
-#ifdef CONFIG_LCD_DEV
-#include <nuttx/lcd/lcd_dev.h>
-#endif
-
-#ifdef CONFIG_VIDEO_FB
-#include <nuttx/video/fb.h>
-#endif
-
-#ifdef CONFIG_SENSORS_INA219
-#include <nuttx/sensors/ina219.h>
-#include "rp2040_ina219.h"
-#endif
-
-#ifdef CONFIG_SENSORS_BMP180
-#include <nuttx/sensors/bmp180.h>
-#include "rp2040_bmp180.h"
+#ifdef CONFIG_USERLED
+#  include <nuttx/leds/userled.h>
 #endif
 
 /****************************************************************************
@@ -69,134 +53,38 @@
 
 int rp2040_bringup(void)
 {
-  int ret = 0;
+#ifdef CONFIG_ARCH_BOARD_COMMON
 
-#ifdef CONFIG_RP2040_I2C_DRIVER
-  #ifdef CONFIG_RP2040_I2C0
-  ret = board_i2cdev_initialize(0);
+  int ret = rp2040_common_bringup();
   if (ret < 0)
     {
-      _err("ERROR: Failed to initialize I2C0.\n");
-    }
-  #endif
-
-  #ifdef CONFIG_RP2040_I2C1
-  ret = board_i2cdev_initialize(1);
-  if (ret < 0)
-    {
-      _err("ERROR: Failed to initialize I2C1.\n");
-    }
-  #endif
-#endif
-
-#ifdef CONFIG_RP2040_SPI_DRIVER
-  #ifdef CONFIG_RP2040_SPI0
-  ret = board_spidev_initialize(0);
-  if (ret < 0)
-    {
-      _err("ERROR: Failed to initialize SPI0.\n");
-    }
-  #endif
-
-  #ifdef CONFIG_RP2040_SPI1
-  ret = board_spidev_initialize(1);
-  if (ret < 0)
-    {
-      _err("ERROR: Failed to initialize SPI1.\n");
-    }
-  #endif
-#endif
-
-#ifdef CONFIG_RP2040_SPISD
-  /* Mount the SPI-based MMC/SD block driver */
-
-  ret = board_spisd_initialize(0, CONFIG_RP2040_SPISD_SPI_CH);
-  if (ret < 0)
-    {
-      _err("ERROR: Failed to initialize SPI device to MMC/SD: %d\n",
-           ret);
-    }
-#endif
-
-#ifdef CONFIG_FS_PROCFS
-  /* Mount the procfs file system */
-
-  ret = nx_mount(NULL, "/proc", "procfs", 0, NULL);
-  if (ret < 0)
-    {
-      serr("ERROR: Failed to mount procfs at %s: %d\n", "/proc", ret);
-    }
-#endif
-
-#ifdef CONFIG_SENSORS_BMP180
-  /* Try to register BMP180 device in I2C0 */
-
-  ret = board_bmp180_initialize(0);
-  if (ret < 0)
-    {
-      syslog(LOG_ERR, "Failed to initialize BMP180 driver: %d\n", ret);
-    }
-#endif
-
-#ifdef CONFIG_SENSORS_INA219
-  /* Configure and initialize the INA219 sensor in I2C0 */
-
-  ret = board_ina219_initialize(0);
-  if (ret < 0)
-    {
-      syslog(LOG_ERR, "ERROR: rp2040_ina219_initialize() failed: %d\n", ret);
-    }
-#endif
-
-#ifdef CONFIG_VIDEO_FB
-  ret = fb_register(0, 0);
-  if (ret < 0)
-    {
-      _err("ERROR: Failed to initialize Frame Buffer Driver.\n");
-    }
-#elif defined(CONFIG_LCD)
-  ret = board_lcd_initialize();
-  if (ret < 0)
-    {
-      syslog(LOG_ERR, "ERROR: Failed to initialize LCD.\n");
-    }
-#endif
-
-#ifdef CONFIG_LCD_DEV
-  ret = lcddev_register(0);
-  if (ret < 0)
-    {
-      syslog(LOG_ERR, "ERROR: lcddev_register() failed: %d\n", ret);
-    }
-#endif
-
-#ifdef CONFIG_LCD_BACKPACK
-  /* slcd:0, i2c:0, rows=2, cols=16 */
-
-  ret = board_lcd_backpack_init(0, 0, 2, 16);
-  if (ret < 0)
-    {
-      syslog(LOG_ERR, "Failed to initialize PCF8574 LCD, error %d\n", ret);
       return ret;
     }
-#endif
 
-#ifdef CONFIG_RP2040_I2S
-  ret = board_i2sdev_initialize(0);
+#endif /* CONFIG_ARCH_BOARD_COMMON */
+
+  /* --- Place any board specific bringup code here --- */
+
+#ifdef CONFIG_USERLED
+  /* Register the LED driver */
+
+  ret = userled_lower_initialize("/dev/userleds");
   if (ret < 0)
     {
-      _err("ERROR: Failed to initialize I2S.\n");
+      syslog(LOG_ERR, \
+      "ERROR: userled_lower_initialize() failed: %d\n", ret);
     }
 #endif
 
-#ifdef CONFIG_DEV_GPIO
-  ret = rp2040_dev_gpio_init();
+#ifdef CONFIG_INPUT_BUTTONS
+  /* Register the BUTTON driver */
+
+  ret = btn_lower_initialize("/dev/buttons");
   if (ret < 0)
     {
-      syslog(LOG_ERR, "Failed to initialize GPIO Driver: %d\n", ret);
-      return ret;
+      syslog(LOG_ERR, "ERROR: btn_lower_initialize() failed: %d\n", ret);
     }
 #endif
 
-  return ret;
+  return OK;
 }

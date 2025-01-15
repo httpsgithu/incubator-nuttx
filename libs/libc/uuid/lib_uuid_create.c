@@ -1,6 +1,8 @@
 /****************************************************************************
  * libs/libc/uuid/lib_uuid_create.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -22,6 +24,7 @@
  * Included Files
  ****************************************************************************/
 
+#include <errno.h>
 #include <stdlib.h>
 #include <uuid.h>
 
@@ -40,19 +43,9 @@
  *
  ****************************************************************************/
 
-void uuid_create(uuid_t *u, uint32_t *status)
+void uuid_create(FAR uuid_t *u, FAR uint32_t *status)
 {
-#ifdef CONFIG_CRYPTO_RANDOM_POOL
   arc4random_buf(u, sizeof(uuid_t));
-#else
-  unsigned long *beg = (unsigned long *)u;
-  unsigned long *end = (unsigned long *)(u + 1);
-
-  while (beg < end)
-    {
-      *beg++ = rand();
-    }
-#endif
 
   u->clock_seq_hi_and_reserved &= ~(1 << 6);
   u->clock_seq_hi_and_reserved |= (1 << 7);

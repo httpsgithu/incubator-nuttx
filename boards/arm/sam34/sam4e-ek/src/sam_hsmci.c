@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/sam34/sam4e-ek/src/sam_hsmci.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -76,7 +78,7 @@ static struct sam_hsmci_state_s g_hsmci;
  *
  ****************************************************************************/
 
-static int sam_hsmci_cardetect(int irq, void *regs, FAR void *arg)
+static int sam_hsmci_cardetect(int irq, void *regs, void *arg)
 {
   bool inserted;
 

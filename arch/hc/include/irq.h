@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/hc/include/irq.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -29,6 +31,11 @@
  * Included Files
  ****************************************************************************/
 
+#include <sys/types.h>
+#ifndef __ASSEMBLY__
+#  include <stdbool.h>
+#endif
+
 /* Include NuttX-specific IRQ definitions */
 
 #include <nuttx/irq.h>
@@ -42,9 +49,9 @@
  */
 
 #if defined(CONFIG_ARCH_HC12)
-# include <arch/hc12/irq.h>
+#  include <arch/hc12/irq.h>
 #elif defined(CONFIG_ARCH_HCS12)
-# include <arch/hcs12/irq.h>
+#  include <arch/hcs12/irq.h>
 #endif
 
 /****************************************************************************
@@ -55,18 +62,6 @@
  * Public Types
  ****************************************************************************/
 
-/****************************************************************************
- * Inline functions
- ****************************************************************************/
-
-/****************************************************************************
- * Public Data
- ****************************************************************************/
-
-/****************************************************************************
- * Public Function Prototypes
- ****************************************************************************/
-
 #ifndef __ASSEMBLY__
 #ifdef __cplusplus
 #define EXTERN extern "C"
@@ -75,6 +70,76 @@ extern "C"
 #else
 #define EXTERN extern
 #endif
+
+/****************************************************************************
+ * Inline functions
+ ****************************************************************************/
+
+/* Return the current value of the stack pointer */
+
+static inline_function uint16_t up_getsp(void)
+{
+  uint16_t ret;
+  __asm__
+  (
+    "\tsts %0\n"
+  : "=m"(ret) :
+  );
+  return ret;
+}
+
+/****************************************************************************
+ * Public Data
+ ****************************************************************************/
+
+/* This holds a references to the current interrupt level register storage
+ * structure.  It is non-NULL only during interrupt processing.
+ */
+
+EXTERN volatile uint8_t *g_current_regs;
+
+/****************************************************************************
+ * Public Function Prototypes
+ ****************************************************************************/
+
+/****************************************************************************
+ * Inline functions
+ ****************************************************************************/
+
+static inline_function uint8_t *up_current_regs(void)
+{
+  return (FAR uint8_t *)g_current_regs;
+}
+
+static inline_function void up_set_current_regs(FAR uint8_t *regs)
+{
+  g_current_regs = regs;
+}
+
+/****************************************************************************
+ * Name: up_interrupt_context
+ *
+ * Description:
+ *   Return true is we are currently executing in the interrupt
+ *   handler context.
+ *
+ ****************************************************************************/
+
+#define up_interrupt_context() (up_current_regs() != NULL)
+
+/****************************************************************************
+ * Name: up_getusrsp
+ ****************************************************************************/
+
+static inline_function uintptr_t up_getusrsp(void *regs)
+{
+  uint8_t *ptr = regs;
+  return (uintptr_t)(ptr[REG_SPH] << 8 | ptr[REG_SPL]);
+}
+
+/****************************************************************************
+ * Public Function Prototypes
+ ****************************************************************************/
 
 #undef EXTERN
 #ifdef __cplusplus

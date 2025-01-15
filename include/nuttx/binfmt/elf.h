@@ -1,6 +1,8 @@
 /****************************************************************************
  * include/nuttx/binfmt/elf.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -28,12 +30,10 @@
 #include <nuttx/config.h>
 
 #include <sys/types.h>
-
 #include <stdint.h>
 #include <stdbool.h>
 #include <elf.h>
 
-#include <nuttx/arch.h>
 #include <nuttx/binfmt/binfmt.h>
 
 /****************************************************************************
@@ -58,17 +58,6 @@
 #  define CONFIG_ELF_BUFFERINCR 32
 #endif
 
-/* Allocation array size and indices */
-
-#define LIBELF_ELF_ALLOC     0
-#ifdef CONFIG_BINFMT_CONSTRUCTORS
-#  define LIBELF_CTORS_ALLOC 1
-#  define LIBELF_CTPRS_ALLOC 2
-#  define LIBELF_NALLOC      3
-#else
-#  define LIBELF_NALLOC      1
-#endif
-
 /****************************************************************************
  * Public Types
  ****************************************************************************/
@@ -84,7 +73,7 @@ struct elf_loadinfo_s
    *
    * If CONFIG_ARCH_ADDRENV=n, elfalloc will be allocated using kmm_malloc()
    * (or kmm_zalloc()).
-   * If CONFIG_ARCH_ADDRENV-y, then elfalloc will be allocated using
+   * If CONFIG_ARCH_ADDRENV=y, then elfalloc will be allocated using
    * up_addrenv_create().  In either case, there will be a unique instance
    * of elfalloc (and stack) for each instance of a process.
    *
@@ -92,16 +81,23 @@ struct elf_loadinfo_s
    * after the ELF module has been loaded.
    */
 
-  uintptr_t         textalloc;   /* .text memory allocated when ELF file was loaded */
-  uintptr_t         dataalloc;   /* .bss/.data memory allocated when ELF file was loaded */
-  size_t            textsize;    /* Size of the ELF .text memory allocation */
-#ifdef CONFIG_ARCH_USE_TEXT_HEAP
-  size_t            textalign;   /* Necessary alignment of .text */
+#ifdef CONFIG_ARCH_USE_SEPARATED_SECTION
+  FAR uintptr_t     *sectalloc;   /* All sections memory allocated when ELF file was loaded */
 #endif
-  size_t            datasize;    /* Size of the ELF .bss/.data memory allocation */
-  off_t             filelen;     /* Length of the entire ELF file */
 
-  Elf_Ehdr          ehdr;        /* Buffered ELF file header */
+  uintptr_t          textalloc;  /* .text memory allocated when ELF file was loaded */
+  uintptr_t          dataalloc;  /* .bss/.data memory allocated when ELF file was loaded */
+  size_t             textsize;   /* Size of the ELF .text memory allocation */
+  size_t             datasize;   /* Size of the ELF .bss/.data memory allocation */
+  size_t             textalign;  /* Necessary alignment of .text */
+  size_t             dataalign;  /* Necessary alignment of .bss/.data */
+  off_t              filelen;    /* Length of the entire ELF file */
+  uid_t              fileuid;    /* Uid of the file system */
+  gid_t              filegid;    /* Gid of the file system */
+  int                filemode;   /* Mode of the file system */
+
+  Elf_Ehdr           ehdr;       /* Buffered ELF file header */
+  FAR Elf_Phdr      *phdr;       /* Buffered ELF program headers */
   FAR Elf_Shdr      *shdr;       /* Buffered ELF section headers */
   uint8_t           *iobuffer;   /* File I/O buffer */
 
@@ -118,15 +114,13 @@ struct elf_loadinfo_s
 
   /* Address environment.
    *
-   * addrenv - This is the handle created by up_addrenv_create() that can be
+   * addrenv - This is the handle created by addrenv_allocate() that can be
    *   used to manage the tasks address space.
-   * oldenv  - This is a value returned by up_addrenv_select() that must be
-   *   used to restore the current address environment.
    */
 
 #ifdef CONFIG_ARCH_ADDRENV
-  group_addrenv_t    addrenv;    /* Task group address environment */
-  save_addrenv_t     oldenv;     /* Saved address environment */
+  FAR addrenv_t     *addrenv;    /* Address environment */
+  FAR addrenv_t     *oldenv;     /* Saved address environment */
 #endif
 
   uint16_t           symtabidx;  /* Symbol table section index */
@@ -147,35 +141,6 @@ extern "C"
 #else
 #define EXTERN extern
 #endif
-
-/****************************************************************************
- * Name: elf_initialize
- *
- * Description:
- *   In order to use the ELF binary format, this function must be called
- *   during system initialization to register the ELF binary format.
- *
- * Returned Value:
- *   This is a NuttX internal function so it follows the convention that
- *   0 (OK) is returned on success and a negated errno is returned on
- *   failure.
- *
- ****************************************************************************/
-
-int elf_initialize(void);
-
-/****************************************************************************
- * Name: elf_uninitialize
- *
- * Description:
- *   Unregister the ELF binary loader
- *
- * Returned Value:
- *   None
- *
- ****************************************************************************/
-
-void elf_uninitialize(void);
 
 /****************************************************************************
  * Name: elf_init
@@ -253,7 +218,7 @@ int elf_bind(FAR struct elf_loadinfo_s *loadinfo,
  *
  ****************************************************************************/
 
-int elf_unload(struct elf_loadinfo_s *loadinfo);
+int elf_unload(FAR struct elf_loadinfo_s *loadinfo);
 
 #undef EXTERN
 #if defined(__cplusplus)

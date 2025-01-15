@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/armv7-a/l2cc_pl310.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -18,7 +20,7 @@
  *
  ****************************************************************************/
 
-/* Reference: "CoreLink™ Level 2 Cache Controller L2C-310", Revision r3p2,
+/* Reference: "CoreLinkâ„¢ Level 2 Cache Controller L2C-310", Revision r3p2,
  *   Technical Reference Manual, ARM DDI 0246F (ID011711), ARM
  */
 

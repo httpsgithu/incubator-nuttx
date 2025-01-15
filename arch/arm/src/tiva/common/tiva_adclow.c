@@ -1,17 +1,12 @@
 /****************************************************************************
  * arch/arm/src/tiva/common/tiva_adclow.c
  *
- *   Copyright (C) 2016-2018 Gregory Nutt. All rights reserved.
- *   Copyright (C) 2015 TRD2 Inc. All rights reserved.
- *   Author: Calvin Maguranis <calvin.maguranis@trd2inc.com>
- *           Gregory Nutt <gnutt@nuttx.org>
- *
- * The Tivaware sample code has a BSD compatible license that requires this
- * copyright notice:
- *
- * Copyright (c) 2005-2014 Texas Instruments Incorporated.
- * All rights reserved.
- * Software License Agreement
+ * SPDX-License-Identifier: BSD-3-Clause
+ * SPDX-FileCopyrightText: 2016-2018 Gregory Nutt. All rights reserved.
+ * SPDX-FileCopyrightText: 2015 TRD2 Inc. All rights reserved.
+ * SPDX-FileCopyrightText: 2005-2014 Texas Instruments Incorporated.
+ * SPDX-FileContributor: Calvin Maguranis <calvin.maguranis@trd2inc.com>
+ * SPDX-FileContributor: Gregory Nutt <gnutt@nuttx.org>
  *
  *   Redistribution and use in source and binary forms, with or without
  *   modification, are permitted provided that the following conditions
@@ -76,11 +71,10 @@
 #include <nuttx/signal.h>
 #include <nuttx/analog/adc.h>
 #include <nuttx/analog/ioctl.h>
-#include <nuttx/semaphore.h>
+#include <nuttx/mutex.h>
 
 #include <arch/board/board.h>
 
-#include "arm_arch.h"
 #include "arm_internal.h"
 #include "tiva_gpio.h"
 #include "tiva_adc.h"
@@ -129,8 +123,6 @@
 /* ADC support definitions **************************************************/
 
 #define SSE_PROC_TRIG(n)  (1 << (n))
-#define SEM_PROCESS_PRIVATE 0
-#define SEM_PROCESS_SHARED  1
 
 /****************************************************************************
  * Public Functions
@@ -138,8 +130,8 @@
 
 /* Upper level ADC driver ***************************************************/
 
-static int  tiva_adc_bind(FAR struct adc_dev_s *dev,
-                          FAR const struct adc_callback_s *callback);
+static int  tiva_adc_bind(struct adc_dev_s *dev,
+                          const struct adc_callback_s *callback);
 static void tiva_adc_reset(struct adc_dev_s *dev);
 static int  tiva_adc_setup(struct adc_dev_s *dev);
 static void tiva_adc_shutdown(struct adc_dev_s *dev);
@@ -178,7 +170,7 @@ struct tiva_adc_s
 
 struct tiva_adc_sse_s
 {
-  sem_t exclsem;         /* Mutual exclusion semaphore */
+  mutex_t lock;          /* Mutual exclusion mutex */
   struct work_s work;    /* Supports the interrupt handling "bottom half" */
   bool cfg;              /* Configuration state */
   bool ena;              /* Sample sequencer operation state */
@@ -207,20 +199,50 @@ static void tiva_adc_dump_dev(void);
 static struct adc_dev_s      dev0;
 static struct tiva_adc_s     adc0;
 
-static struct tiva_adc_sse_s sse00;
-static struct tiva_adc_sse_s sse01;
-static struct tiva_adc_sse_s sse02;
-static struct tiva_adc_sse_s sse03;
+static struct tiva_adc_sse_s sse00 =
+{
+  .lock = NXMUTEX_INITIALIZER,
+};
+
+static struct tiva_adc_sse_s sse01 =
+{
+  .lock = NXMUTEX_INITIALIZER,
+};
+
+static struct tiva_adc_sse_s sse02 =
+{
+  .lock = NXMUTEX_INITIALIZER,
+};
+
+static struct tiva_adc_sse_s sse03 =
+{
+  .lock = NXMUTEX_INITIALIZER,
+};
 #endif
 
 #ifdef CONFIG_TIVA_ADC1
 static struct adc_dev_s      dev1;
 static struct tiva_adc_s     adc1;
 
-static struct tiva_adc_sse_s sse10;
-static struct tiva_adc_sse_s sse11;
-static struct tiva_adc_sse_s sse12;
-static struct tiva_adc_sse_s sse13;
+static struct tiva_adc_sse_s sse10 =
+{
+  .lock = NXMUTEX_INITIALIZER,
+};
+
+static struct tiva_adc_sse_s sse11 =
+{
+  .lock = NXMUTEX_INITIALIZER,
+};
+
+static struct tiva_adc_sse_s sse12 =
+{
+  .lock = NXMUTEX_INITIALIZER,
+};
+
+static struct tiva_adc_sse_s sse13 =
+{
+  .lock = NXMUTEX_INITIALIZER,
+};
 #endif
 
 /* Offer run-time ADC objects in array form to help reduce the reliance on
@@ -391,8 +413,8 @@ static void tiva_adc_irqinitialize(struct tiva_adc_cfg_s *cfg)
  *
  ****************************************************************************/
 
-static int tiva_adc_bind(FAR struct adc_dev_s *dev,
-                         FAR const struct adc_callback_s *callback)
+static int tiva_adc_bind(struct adc_dev_s *dev,
+                         const struct adc_callback_s *callback)
 {
   struct tiva_adc_s *priv = (struct tiva_adc_s *)dev->ad_priv;
 
@@ -684,7 +706,7 @@ static void tiva_adc_read(void *arg)
   ret = tiva_adc_lock(g_adcs[sse->adc], sse->num);
   if (ret < 0)
     {
-      return ;
+      return;
     }
 
   /* Get sampled data */
@@ -815,7 +837,6 @@ static struct tiva_adc_s *tiva_adc_struct_init(struct tiva_adc_cfg_s *cfg)
                     {
                       sse->adc = cfg->adc;
                       sse->num = s;
-                      nxsem_init(&sse->exclsem, SEM_PROCESS_PRIVATE, 1);
                       sse->ena = false;
                       sse->cfg = true;
                     }
@@ -957,12 +978,12 @@ int tiva_adc_initialize(const char *devpath, struct tiva_adc_cfg_s *cfg,
  *
  ****************************************************************************/
 
-int tiva_adc_lock(FAR struct tiva_adc_s *priv, int sse)
+int tiva_adc_lock(struct tiva_adc_s *priv, int sse)
 {
   struct tiva_adc_sse_s *s = g_sses[SSE_IDX(priv->devno, sse)];
 
   ainfo("Locking...\n");
-  return nxsem_wait_uninterruptible(&s->exclsem);
+  return nxmutex_lock(&s->lock);
 }
 
 /****************************************************************************
@@ -973,11 +994,11 @@ int tiva_adc_lock(FAR struct tiva_adc_s *priv, int sse)
  *
  ****************************************************************************/
 
-void tiva_adc_unlock(FAR struct tiva_adc_s *priv, int sse)
+void tiva_adc_unlock(struct tiva_adc_s *priv, int sse)
 {
   struct tiva_adc_sse_s *s = g_sses[SSE_IDX(priv->devno, sse)];
   ainfo("Unlocking\n");
-  nxsem_post(&s->exclsem);
+  nxmutex_unlock(&s->lock);
 }
 
 #ifdef CONFIG_DEBUG_ANALOG

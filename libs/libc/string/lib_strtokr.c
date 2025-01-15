@@ -1,6 +1,8 @@
 /****************************************************************************
  * libs/libc/string/lib_strtokr.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -75,10 +77,11 @@
  *
  ****************************************************************************/
 
+#undef strtok_r /* See mm/README.txt */
 FAR char *strtok_r(FAR char *str, FAR const char *delim, FAR char **saveptr)
 {
-  char *pbegin;
-  char *pend = NULL;
+  FAR char *pbegin;
+  FAR char *pend = NULL;
 
   /* Decide if we are starting a new string or continuing from
    * the point we left off.

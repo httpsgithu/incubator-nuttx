@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/efm32/efm32_gpioirq.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -31,7 +33,7 @@
 #include <nuttx/arch.h>
 #include <nuttx/irq.h>
 
-#include "arm_arch.h"
+#include "arm_internal.h"
 #include "hardware/efm32_gpio.h"
 #include "efm32_gpio.h"
 #include "efm32_bitband.h"
@@ -118,7 +120,7 @@ static int  efm32_gpio_interrupt(uint32_t mask, void *context)
  *
  ****************************************************************************/
 
-static int efm32_even_interrupt(int irq, void *context, FAR void *arg)
+static int efm32_even_interrupt(int irq, void *context, void *arg)
 {
   return efm32_gpio_interrupt(0x00005555, context);
 }
@@ -131,7 +133,7 @@ static int efm32_even_interrupt(int irq, void *context, FAR void *arg)
  *
  ****************************************************************************/
 
-static int efm32_odd_interrupt(int irq, void *context, FAR void *arg)
+static int efm32_odd_interrupt(int irq, void *context, void *arg)
 {
   return efm32_gpio_interrupt(0x0000aaaa, context);
 }

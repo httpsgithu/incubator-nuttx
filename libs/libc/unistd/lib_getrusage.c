@@ -1,6 +1,8 @@
 /****************************************************************************
  * libs/libc/unistd/lib_getrusage.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -48,10 +50,15 @@
  *   information for the child process is discarded and not included in the
  *   resource information provided by getrusage().
  *
+ *   Note: This is currently a dummy implementation and as such does not
+ *   honor the 'who' parameter.
+ *
  ****************************************************************************/
 
 int getrusage(int who, FAR struct rusage *r_usage)
 {
+  UNUSED(who);
+
   if (r_usage == NULL)
     {
       set_errno(EINVAL);

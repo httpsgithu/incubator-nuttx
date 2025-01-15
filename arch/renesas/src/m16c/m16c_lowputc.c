@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/renesas/src/m16c/m16c_lowputc.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -27,11 +29,8 @@
 #include <stdint.h>
 #include <nuttx/arch.h>
 
-#include "up_internal.h"
-#include "up_arch.h"
-
+#include "renesas_internal.h"
 #include "chip.h"
-#include "up_internal.h"
 #include "m16c_uart.h"
 
 /****************************************************************************
@@ -278,7 +277,7 @@ static inline void up_lowserialsetup(void)
  ****************************************************************************/
 
 /****************************************************************************
- * Name: up_lowputc
+ * Name: renesas_lowputc
  *
  * Description:
  *   Output one byte on the serial console.
@@ -286,7 +285,7 @@ static inline void up_lowserialsetup(void)
  ****************************************************************************/
 
 #if defined(HAVE_SERIAL) && !defined(CONFIG_SLCD_CONSOLE)
-void up_lowputc(char ch)
+void renesas_lowputc(char ch)
 {
 #ifdef HAVE_SERIALCONSOLE
   /* Wait until the transmit buffer is empty */
@@ -323,6 +322,6 @@ void up_lowsetup(void)
   /* The LCD is initialized here if the LCD is used for console output.  */
 
 #ifdef CONFIG_SLCD_CONSOLE
-  up_lcdinit();
+  renesas_lcdinit();
 #endif
 }

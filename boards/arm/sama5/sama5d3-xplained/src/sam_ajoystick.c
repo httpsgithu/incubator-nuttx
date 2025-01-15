@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/sama5/sama5d3-xplained/src/sam_ajoystick.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -86,17 +88,17 @@
  ****************************************************************************/
 
 static ajoy_buttonset_t
-ajoy_supported(FAR const struct ajoy_lowerhalf_s *lower);
-static int ajoy_sample(FAR const struct ajoy_lowerhalf_s *lower,
-                       FAR struct ajoy_sample_s *sample);
+ajoy_supported(const struct ajoy_lowerhalf_s *lower);
+static int ajoy_sample(const struct ajoy_lowerhalf_s *lower,
+                       struct ajoy_sample_s *sample);
 static ajoy_buttonset_t
-ajoy_buttons(FAR const struct ajoy_lowerhalf_s *lower);
-static void ajoy_enable(FAR const struct ajoy_lowerhalf_s *lower,
+ajoy_buttons(const struct ajoy_lowerhalf_s *lower);
+static void ajoy_enable(const struct ajoy_lowerhalf_s *lower,
                         ajoy_buttonset_t press, ajoy_buttonset_t release,
-                        ajoy_handler_t handler, FAR void *arg);
+                        ajoy_handler_t handler, void *arg);
 
 static void ajoy_disable(void);
-static int ajoy_interrupt(int irq, FAR void *context, FAR void *arg);
+static int ajoy_interrupt(int irq, void *context, void *arg);
 
 /****************************************************************************
  * Private Data
@@ -135,7 +137,7 @@ static struct file g_adcfile;
 /* Current interrupt handler and argument */
 
 static ajoy_handler_t g_ajoyhandler;
-static FAR void *g_ajoyarg;
+static void *g_ajoyarg;
 
 /****************************************************************************
  * Private Functions
@@ -150,7 +152,7 @@ static FAR void *g_ajoyarg;
  ****************************************************************************/
 
 static ajoy_buttonset_t
-ajoy_supported(FAR const struct ajoy_lowerhalf_s *lower)
+ajoy_supported(const struct ajoy_lowerhalf_s *lower)
 {
   iinfo("Supported: %02x\n", AJOY_SUPPORTED);
   return (ajoy_buttonset_t)AJOY_SUPPORTED;
@@ -164,11 +166,11 @@ ajoy_supported(FAR const struct ajoy_lowerhalf_s *lower)
  *
  ****************************************************************************/
 
-static int ajoy_sample(FAR const struct ajoy_lowerhalf_s *lower,
-                       FAR struct ajoy_sample_s *sample)
+static int ajoy_sample(const struct ajoy_lowerhalf_s *lower,
+                       struct ajoy_sample_s *sample)
 {
   struct adc_msg_s adcmsg[SAM_ADC_NCHANNELS];
-  FAR struct adc_msg_s *ptr;
+  struct adc_msg_s *ptr;
   ssize_t nread;
   ssize_t offset;
   int have;
@@ -246,7 +248,7 @@ static int ajoy_sample(FAR const struct ajoy_lowerhalf_s *lower,
  ****************************************************************************/
 
 static ajoy_buttonset_t
-ajoy_buttons(FAR const struct ajoy_lowerhalf_s *lower)
+ajoy_buttons(const struct ajoy_lowerhalf_s *lower)
 {
   ajoy_buttonset_t ret = 0;
   int i;
@@ -278,9 +280,9 @@ ajoy_buttons(FAR const struct ajoy_lowerhalf_s *lower)
  *
  ****************************************************************************/
 
-static void ajoy_enable(FAR const struct ajoy_lowerhalf_s *lower,
-                         ajoy_buttonset_t press, ajoy_buttonset_t release,
-                         ajoy_handler_t handler, FAR void *arg)
+static void ajoy_enable(const struct ajoy_lowerhalf_s *lower,
+                        ajoy_buttonset_t press, ajoy_buttonset_t release,
+                        ajoy_handler_t handler, void *arg)
 {
   irqstate_t flags;
   ajoy_buttonset_t either = press | release;
@@ -367,7 +369,7 @@ static void ajoy_disable(void)
  *
  ****************************************************************************/
 
-static int ajoy_interrupt(int irq, FAR void *context, FAR void *arg)
+static int ajoy_interrupt(int irq, void *context, void *arg)
 {
   DEBUGASSERT(g_ajoyhandler);
   if (g_ajoyhandler)

@@ -1,6 +1,8 @@
 /****************************************************************************
  * include/nuttx/sensors/lsm303agr.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -18,8 +20,8 @@
  *
  ****************************************************************************/
 
-#ifndef __INCLUDE_NUTTX_SENSORS_LSM303AGR
-#define __INCLUDE_NUTTX_SENSORS_LSM303AGR
+#ifndef __INCLUDE_NUTTX_SENSORS_LSM303AGR_H
+#define __INCLUDE_NUTTX_SENSORS_LSM303AGR_H
 
 /****************************************************************************
  * Included Files
@@ -210,4 +212,4 @@ int lsm303agr_sensor_register(FAR const char *devpath,
 #endif
 
 #endif /* CONFIG_I2C && CONFIG_SENSORS_LSM303AGR */
-#endif /* __INCLUDE_NUTTX_SENSORS_LSM303AGR */
+#endif /* __INCLUDE_NUTTX_SENSORS_LSM303AGR_H */

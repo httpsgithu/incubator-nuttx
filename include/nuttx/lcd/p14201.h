@@ -1,6 +1,7 @@
 /****************************************************************************
  * include/nuttx/lcd/p14201.h
- * Application interface to the RiT P14201 OLED driver
+ *
+ * SPDX-License-Identifier: Apache-2.0
  *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -19,8 +20,8 @@
  *
  ****************************************************************************/
 
-#ifndef __INCLUDE_NUTTX_P14201_H
-#define __INCLUDE_NUTTX_P14201_H
+#ifndef __INCLUDE_NUTTX_LCD_P14201_H
+#define __INCLUDE_NUTTX_LCD_P14201_H
 
 /****************************************************************************
  * Included Files
@@ -114,4 +115,4 @@ FAR struct lcd_dev_s *rit_initialize(FAR struct spi_dev_s *spi,
 }
 #endif
 
-#endif /* __INCLUDE_NUTTX_P14201_H */
+#endif /* __INCLUDE_NUTTX_LCD_P14201_H */

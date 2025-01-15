@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/xtensa/src/esp32/hardware/esp32_rtc_io.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -18,8 +20,8 @@
  *
  ****************************************************************************/
 
-#ifndef __ARCH_XTENSA_SRC_ESP32_HARDWARE_XTENSA_ESP32_RTC_IO_H
-#define __ARCH_XTENSA_SRC_ESP32_HARDWARE_XTENSA_ESP32_RTC_IO_H
+#ifndef __ARCH_XTENSA_SRC_ESP32_HARDWARE_ESP32_RTC_IO_H
+#define __ARCH_XTENSA_SRC_ESP32_HARDWARE_ESP32_RTC_IO_H
 
 /****************************************************************************
  * Included Files
@@ -3197,4 +3199,4 @@
 #define RTC_IO_IO_DATE_S           0
 #define RTC_IO_RTC_IO_DATE_VERSION 0x1703160
 
-#endif /* __ARCH_XTENSA_SRC_ESP32_HARDWARE_XTENSA_ESP32_RTC_IO_H */
+#endif /* __ARCH_XTENSA_SRC_ESP32_HARDWARE_ESP32_RTC_IO_H */

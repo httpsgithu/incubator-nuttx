@@ -1,6 +1,8 @@
 /****************************************************************************
  * drivers/timers/oneshot.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -34,7 +36,7 @@
 #include <nuttx/kmalloc.h>
 #include <nuttx/signal.h>
 #include <nuttx/fs/fs.h>
-#include <nuttx/semaphore.h>
+#include <nuttx/mutex.h>
 #include <nuttx/timers/oneshot.h>
 
 #ifdef CONFIG_ONESHOT
@@ -48,7 +50,7 @@
 struct oneshot_dev_s
 {
   FAR struct oneshot_lowerhalf_s *od_lower;    /* Lower-half driver state */
-  sem_t od_exclsem;                            /* Supports mutual exclusion */
+  mutex_t od_lock;                             /* Supports mutual exclusion */
 
   /* Oneshot timer expiration notification information */
 
@@ -61,8 +63,6 @@ struct oneshot_dev_s
  * Private Function Prototypes
  ****************************************************************************/
 
-static int     oneshot_open(FAR struct file *filep);
-static int     oneshot_close(FAR struct file *filep);
 static ssize_t oneshot_read(FAR struct file *filep, FAR char *buffer,
                  size_t buflen);
 static ssize_t oneshot_write(FAR struct file *filep, FAR const char *buffer,
@@ -79,16 +79,12 @@ static void    oneshot_callback(FAR struct oneshot_lowerhalf_s *lower,
 
 static const struct file_operations g_oneshot_ops =
 {
-  oneshot_open,  /* open */
-  oneshot_close, /* close */
+  NULL,          /* open */
+  NULL,          /* close */
   oneshot_read,  /* read */
   oneshot_write, /* write */
   NULL,          /* seek */
   oneshot_ioctl, /* ioctl */
-  NULL           /* poll */
-#ifndef CONFIG_DISABLE_PSEUDOFS_OPERATIONS
-  , NULL         /* unlink */
-#endif
 };
 
 /****************************************************************************
@@ -108,38 +104,8 @@ static void oneshot_callback(FAR struct oneshot_lowerhalf_s *lower,
 
   /* Signal the waiter.. if there is one */
 
-  nxsig_notification(priv->od_pid, &priv->od_event,
-                     SI_QUEUE, &priv->od_work);
-}
-
-/****************************************************************************
- * Name: oneshot_open
- *
- * Description:
- *   This function is called whenever the PWM device is opened.
- *
- ****************************************************************************/
-
-static int oneshot_open(FAR struct file *filep)
-{
-  tmrinfo("Opening...\n");
-  DEBUGASSERT(filep != NULL && filep->f_inode != NULL);
-  return OK;
-}
-
-/****************************************************************************
- * Name: oneshot_close
- *
- * Description:
- *   This function is called when the PWM device is closed.
- *
- ****************************************************************************/
-
-static int oneshot_close(FAR struct file *filep)
-{
-  tmrinfo("Closing...\n");
-  DEBUGASSERT(filep != NULL && filep->f_inode != NULL);
-  return OK;
+  nxsig_notification(priv->od_pid, &priv->od_event, SI_QUEUE,
+                     &priv->od_work);
 }
 
 /****************************************************************************
@@ -156,7 +122,6 @@ static ssize_t oneshot_read(FAR struct file *filep, FAR char *buffer,
   /* Return zero -- usually meaning end-of-file */
 
   tmrinfo("buflen=%ld\n", (unsigned long)buflen);
-  DEBUGASSERT(filep != NULL && filep->f_inode != NULL);
   return 0;
 }
 
@@ -174,7 +139,6 @@ static ssize_t oneshot_write(FAR struct file *filep, FAR const char *buffer,
   /* Return a failure */
 
   tmrinfo("buflen=%ld\n", (unsigned long)buflen);
-  DEBUGASSERT(filep != NULL && filep->f_inode != NULL);
   return -EPERM;
 }
 
@@ -194,14 +158,13 @@ static int oneshot_ioctl(FAR struct file *filep, int cmd, unsigned long arg)
 
   tmrinfo("cmd=%d arg=%08lx\n", cmd, (unsigned long)arg);
 
-  DEBUGASSERT(filep != NULL && filep->f_inode != NULL);
   inode = filep->f_inode;
-  priv  = (FAR struct oneshot_dev_s *)inode->i_private;
+  priv  = inode->i_private;
   DEBUGASSERT(priv != NULL);
 
   /* Get exclusive access to the device structures */
 
-  ret = nxsem_wait(&priv->od_exclsem);
+  ret = nxmutex_lock(&priv->od_lock);
   if (ret < 0)
     {
       return ret;
@@ -245,7 +208,7 @@ static int oneshot_ioctl(FAR struct file *filep, int cmd, unsigned long arg)
           pid = start->pid;
           if (pid == 0)
             {
-              pid = getpid();
+              pid = nxsched_getpid();
             }
 
           priv->od_pid = pid;
@@ -296,7 +259,7 @@ static int oneshot_ioctl(FAR struct file *filep, int cmd, unsigned long arg)
         break;
     }
 
-  nxsem_post(&priv->od_exclsem);
+  nxmutex_unlock(&priv->od_lock);
   return ret;
 }
 
@@ -331,7 +294,7 @@ int oneshot_register(FAR const char *devname,
   FAR struct oneshot_dev_s *priv;
   int ret;
 
-  sninfo("devname=%s lower=%p\n", devname, lower);
+  tmrinfo("devname=%s lower=%p\n", devname, lower);
   DEBUGASSERT(devname != NULL && lower != NULL);
 
   /* Allocate a new oneshot timer driver instance */
@@ -341,22 +304,22 @@ int oneshot_register(FAR const char *devname,
 
   if (!priv)
     {
-      snerr("ERROR: Failed to allocate device structure\n");
+      tmrerr("ERROR: Failed to allocate device structure\n");
       return -ENOMEM;
     }
 
   /* Initialize the new oneshot timer driver instance */
 
   priv->od_lower = lower;
-  nxsem_init(&priv->od_exclsem, 0, 1);
+  nxmutex_init(&priv->od_lock);
 
   /* And register the oneshot timer driver */
 
   ret = register_driver(devname, &g_oneshot_ops, 0666, priv);
   if (ret < 0)
     {
-      snerr("ERROR: register_driver failed: %d\n", ret);
-      nxsem_destroy(&priv->od_exclsem);
+      tmrerr("ERROR: register_driver failed: %d\n", ret);
+      nxmutex_destroy(&priv->od_lock);
       kmm_free(priv);
     }
 

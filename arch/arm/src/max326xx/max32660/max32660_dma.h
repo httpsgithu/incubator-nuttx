@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/max326xx/max32660/max32660_dma.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -40,7 +42,7 @@
 
 /* DMA channel handle and DMA completion callback function */
 
-typedef FAR void *DMA_HANDLE;
+typedef void *DMA_HANDLE;
 typedef void (*dma_callback_t)(DMA_HANDLE handle, void *arg, int result);
 
 /* The following is used for sampling DMA registers when CONFIG DEBUG_DMA is

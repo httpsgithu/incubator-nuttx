@@ -1,6 +1,8 @@
 /****************************************************************************
  * mm/mm_gran/mm_granrelease.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -60,7 +62,7 @@ void gran_release(GRAN_HANDLE handle)
   DEBUGASSERT(priv != NULL);
 
 #ifndef CONFIG_GRAN_INTR
-  nxsem_destroy(&priv->exclsem);
+  nxmutex_destroy(&priv->lock);
 #endif
   kmm_free(priv);
 }

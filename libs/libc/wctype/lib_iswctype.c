@@ -1,8 +1,8 @@
 /****************************************************************************
  * libs/libc/wctype/lib_iswctype.c
  *
- *    Copyright (c) 2002 Red Hat Incorporated.
- *    All rights reserved.
+ * SPDX-License-Identifier: TwistedSNMP
+ * SPDX-FileCopyrightText: 2002 Red Hat Incorporated. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -37,14 +37,8 @@
  * Included Files
  ****************************************************************************/
 
-#include <nuttx/config.h>
-
-#include <string.h>
 #include <ctype.h>
 #include <wctype.h>
-#include <errno.h>
-
-#ifdef CONFIG_LIBC_WCHAR
 
 /****************************************************************************
  * Public Functions
@@ -153,11 +147,10 @@ int iswctype(wint_t c, wctype_t desc)
       return iswxdigit(c);
 
     default:
-      return 0;                 /* eliminate warning */
+      break;                 /* eliminate warning */
     }
 
   /* Otherwise unknown */
 
   return 0;
 }
-#endif

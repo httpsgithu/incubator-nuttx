@@ -1,8 +1,9 @@
 /******************************************************************************
  * drivers/wireless/spirit/lib/spirit_pktmbus.c
  *
- *   Copyright(c) 2015 STMicroelectronics
- *   Author: VMA division - AMS
+ * SPDX-License-Identifier: BSD-3-Clause
+ * SPDX-FileCopyrightText: Copyright(c) 2015 STMicroelectronics
+ * SPDX-FileContributor: Author: VMA division - AMS
  *   Version 3.2.2 08-July-2015
  *
  * Redistribution and use in source and binary forms, with or without
@@ -208,7 +209,7 @@ int spirit_pktmbus_set_format(FAR struct spirit_library_s *spirit)
  * Name: spirit_pktmbus_set_preamble
  *
  * Description:
- *   Sets how many chip sequence “01” shall be added in the preamble respect
+ *   Sets how many chip sequence '01' shall be added in the preamble respect
  *   to the minimum value as defined according to the specified sub-mode.
  *
  * Input Parameters:
@@ -260,7 +261,7 @@ uint8_t spirit_pktmbus_get_preamble(FAR struct spirit_library_s *spirit)
  * Name: spirit_pktmbus_set_postamble
  *
  * Description:
- *   Sets how many chip sequence “01” will be used in postamble
+ *   Sets how many chip sequence '01' will be used in postamble
  *
  * Input Parameters:
  *   spirit    - Reference to a Spirit library state structure instance

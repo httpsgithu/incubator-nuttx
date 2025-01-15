@@ -1,6 +1,8 @@
 /****************************************************************************
  * net/bluetooth/bluetooth_sendmsg.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -82,7 +84,6 @@ struct bluetooth_sendto_s
  ****************************************************************************/
 
 static uint16_t bluetooth_sendto_eventhandler(FAR struct net_driver_s *dev,
-                                               FAR void *pvconn,
                                                FAR void *pvpriv,
                                                uint16_t flags)
 {
@@ -104,9 +105,9 @@ static uint16_t bluetooth_sendto_eventhandler(FAR struct net_driver_s *dev,
 
   /* Make sure that this is the driver to which the socket is connected. */
 
-#warning Missing logic
+  /* #warning Missing logic */
 
-  pstate = (FAR struct bluetooth_sendto_s *)pvpriv;
+  pstate = pvpriv;
   radio  = (FAR struct radio_driver_s *)dev;
 
   ninfo("flags: %04x sent: %zd\n", flags, pstate->is_sent);
@@ -145,7 +146,7 @@ static uint16_t bluetooth_sendto_eventhandler(FAR struct net_driver_s *dev,
 
       /* Allocate an IOB to hold the frame data */
 
-      iob = net_ioballoc(false, IOBUSER_NET_SOCK_BLUETOOTH);
+      iob = net_ioballoc(false);
       if (iob == NULL)
         {
           nwarn("WARNING: Failed to allocate IOB\n");
@@ -177,9 +178,9 @@ static uint16_t bluetooth_sendto_eventhandler(FAR struct net_driver_s *dev,
 
       /* Don't allow any further call backs. */
 
-      pstate->is_cb->flags    = 0;
-      pstate->is_cb->priv     = NULL;
-      pstate->is_cb->event    = NULL;
+      pstate->is_cb->flags = 0;
+      pstate->is_cb->priv  = NULL;
+      pstate->is_cb->event = NULL;
 
       /* Wake up the waiting thread */
 
@@ -192,10 +193,10 @@ errout:
 
   /* Don't allow any further call backs. */
 
-  pstate->is_cb->flags    = 0;
-  pstate->is_cb->priv     = NULL;
-  pstate->is_cb->event    = NULL;
-  pstate->is_sent         = ret;
+  pstate->is_cb->flags = 0;
+  pstate->is_cb->priv  = NULL;
+  pstate->is_cb->event = NULL;
+  pstate->is_sent      = ret;
 
   /* Wake up the waiting thread */
 
@@ -255,7 +256,7 @@ static ssize_t bluetooth_sendto(FAR struct socket *psock,
       return -EBADF;
     }
 
-  conn = (FAR struct bluetooth_conn_s *)psock->s_conn;
+  conn = psock->s_conn;
 
   /* Verify that the address is large enough to be a valid PF_BLUETOOTH
    * address.
@@ -303,13 +304,7 @@ static ssize_t bluetooth_sendto(FAR struct socket *psock,
 
   net_lock();
   memset(&state, 0, sizeof(struct bluetooth_sendto_s));
-
-  /* This semaphore is used for signaling and, hence, should not have
-   * priority inheritance enabled.
-   */
-
   nxsem_init(&state.is_sem, 0, 0); /* Doesn't really fail */
-  nxsem_set_protocol(&state.is_sem, SEM_PRIO_NONE);
 
   state.is_sock   = psock;          /* Socket descriptor to use */
   state.is_buflen = len;            /* Number of bytes to send */
@@ -352,10 +347,10 @@ static ssize_t bluetooth_sendto(FAR struct socket *psock,
           netdev_txnotify_dev(&radio->r_dev);
 
           /* Wait for the send to complete or an error to occur.
-           * net_lockedwait will also terminate if a signal is received.
+           * net_sem_wait will also terminate if a signal is received.
            */
 
-          ret = net_lockedwait(&state.is_sem);
+          ret = net_sem_wait(&state.is_sem);
 
           /* Make sure that no further events are processed */
 
@@ -375,8 +370,8 @@ static ssize_t bluetooth_sendto(FAR struct socket *psock,
       return state.is_sent;
     }
 
-  /* If net_lockedwait failed, then we were probably reawakened by a signal.
-   * In this case, net_lockedwait will have returned negated errno
+  /* If net_sem_wait failed, then we were probably reawakened by a signal.
+   * In this case, net_sem_wait will have returned negated errno
    * appropriately.
    */
 
@@ -423,10 +418,9 @@ static ssize_t bluetooth_l2cap_send(FAR struct socket *psock,
   FAR struct bluetooth_conn_s *conn;
   ssize_t ret;
 
-  conn = (FAR struct bluetooth_conn_s *)psock->s_conn;
-  DEBUGASSERT(conn != NULL);
+  conn = psock->s_conn;
 
-  if (!_SS_ISCONNECTED(psock->s_flags))
+  if (!_SS_ISCONNECTED(conn->bc_conn.s_flags))
     {
       ret = -ENOTCONN;
     }
@@ -497,8 +491,6 @@ static ssize_t bluetooth_send(FAR struct socket *psock, FAR const void *buf,
                               size_t len, int flags)
 {
   ssize_t ret;
-
-  DEBUGASSERT(psock != NULL || buf != NULL);
 
   /* Only SOCK_RAW is supported */
 

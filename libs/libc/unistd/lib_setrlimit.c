@@ -1,6 +1,8 @@
 /****************************************************************************
  * libs/libc/unistd/lib_setrlimit.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -45,6 +47,9 @@
 int setrlimit(int resource, FAR const struct rlimit *rlp)
 {
   /* This is a dummy realization to make the compiler happy */
+
+  UNUSED(resource);
+  UNUSED(rlp);
 
   return OK;
 }

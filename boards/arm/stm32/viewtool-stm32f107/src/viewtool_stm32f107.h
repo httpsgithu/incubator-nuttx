@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/stm32/viewtool-stm32f107/src/viewtool_stm32f107.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -18,8 +20,8 @@
  *
  ****************************************************************************/
 
-#ifndef __BOARDS_ARM_STM32_VIEWTOOL_STM32F107_SRC_H
-#define __BOARDS_ARM_STM32_VIEWTOOL_STM32F107_SRC_H
+#ifndef __BOARDS_ARM_STM32_VIEWTOOL_STM32F107_SRC_VIEWTOOL_STM32F107_H
+#define __BOARDS_ARM_STM32_VIEWTOOL_STM32F107_SRC_VIEWTOOL_STM32F107_H
 
 /****************************************************************************
  * Included Files
@@ -28,6 +30,8 @@
 #include <nuttx/config.h>
 #include <nuttx/compiler.h>
 #include <stdint.h>
+
+#include "stm32_rcc.h"
 
 /****************************************************************************
  * Pre-processor Definitions
@@ -442,7 +446,7 @@ int stm32_sdinitialize(int minor);
  *
  ****************************************************************************/
 
-#ifdef CONFIG_CAN
+#ifdef CONFIG_STM32_CAN_CHARDRIVER
 int stm32_can_setup(void);
 #endif
 
@@ -461,7 +465,7 @@ int stm32_can_setup(void);
  ****************************************************************************/
 
 #if defined(CONFIG_SPI) && defined(CONFIG_SENSORS_MPL115A) && defined(CONFIG_STM32_SPI3)
-int stm32_mpl115ainitialize(FAR const char *devpath);
+int stm32_mpl115ainitialize(const char *devpath);
 #endif
 
 /****************************************************************************
@@ -505,4 +509,4 @@ int stm32_max3421e_setup(void);
 #endif
 
 #endif /* __ASSEMBLY__ */
-#endif /* __BOARDS_ARM_STM32_VIEWTOOL_STM32F107_SRC_H */
+#endif /* __BOARDS_ARM_STM32_VIEWTOOL_STM32F107_SRC_VIEWTOOL_STM32F107_H */

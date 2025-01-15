@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/z16/include/z16f/arch.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -22,8 +24,8 @@
  * only indirectly through nuttx/arch.h (via arch/arch.h)
  */
 
-#ifndef __ARCH_Z16_INCLUDE_Z16F_IRQ_H
-#define __ARCH_Z16_INCLUDE_Z16F_IRQ_H
+#ifndef __ARCH_Z16_INCLUDE_Z16F_ARCH_H
+#define __ARCH_Z16_INCLUDE_Z16F_ARCH_H
 
 /****************************************************************************
  * Included Files
@@ -58,4 +60,4 @@ extern "C"
 }
 #endif
 
-#endif /* __ARCH_Z16_INCLUDE_Z16F_IRQ_H */
+#endif /* __ARCH_Z16_INCLUDE_Z16F_ARCH_H */

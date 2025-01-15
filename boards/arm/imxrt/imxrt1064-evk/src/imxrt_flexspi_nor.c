@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/imxrt/imxrt1064-evk/src/imxrt_flexspi_nor.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -25,6 +27,7 @@
 #include <nuttx/config.h>
 
 #include <stdbool.h>
+#include <sys/param.h>
 #include <errno.h>
 #include <debug.h>
 
@@ -41,8 +44,6 @@
 
 #define NOR_PAGE_SIZE   0x0100U
 #define NOR_SECTOR_SIZE 0x1000U
-
-#define MIN(a, b) (((a) < (b)) ? (a) : (b))
 
 enum
 {
@@ -144,22 +145,22 @@ struct imxrt_flexspi_nor_dev_s
 
 /* MTD driver methods */
 
-static int imxrt_flexspi_nor_erase(FAR struct mtd_dev_s *dev,
+static int imxrt_flexspi_nor_erase(struct mtd_dev_s *dev,
                                    off_t startblock,
                                    size_t nblocks);
-static ssize_t imxrt_flexspi_nor_read(FAR struct mtd_dev_s *dev,
+static ssize_t imxrt_flexspi_nor_read(struct mtd_dev_s *dev,
                                       off_t offset,
                                       size_t nbytes,
-                                      FAR uint8_t *buffer);
-static ssize_t imxrt_flexspi_nor_bread(FAR struct mtd_dev_s *dev,
+                                      uint8_t *buffer);
+static ssize_t imxrt_flexspi_nor_bread(struct mtd_dev_s *dev,
                                        off_t startblock,
                                        size_t nblocks,
-                                       FAR uint8_t *buffer);
-static ssize_t imxrt_flexspi_nor_bwrite(FAR struct mtd_dev_s *dev,
+                                       uint8_t *buffer);
+static ssize_t imxrt_flexspi_nor_bwrite(struct mtd_dev_s *dev,
                                         off_t startblock,
                                         size_t nblocks,
-                                        FAR const uint8_t *buffer);
-static int imxrt_flexspi_nor_ioctl(FAR struct mtd_dev_s *dev,
+                                        const uint8_t *buffer);
+static int imxrt_flexspi_nor_ioctl(struct mtd_dev_s *dev,
                                    int cmd,
                                    unsigned long arg);
 
@@ -426,13 +427,13 @@ static int imxrt_flexspi_nor_enable_quad_mode(
   return 0;
 }
 
-static ssize_t imxrt_flexspi_nor_read(FAR struct mtd_dev_s *dev,
+static ssize_t imxrt_flexspi_nor_read(struct mtd_dev_s *dev,
                                       off_t offset,
                                       size_t nbytes,
-                                      FAR uint8_t *buffer)
+                                      uint8_t *buffer)
 {
-  FAR struct imxrt_flexspi_nor_dev_s *priv =
-                  (FAR struct imxrt_flexspi_nor_dev_s *)dev;
+  struct imxrt_flexspi_nor_dev_s *priv =
+                  (struct imxrt_flexspi_nor_dev_s *)dev;
   uint8_t *src;
 
   finfo("offset: %08lx nbytes: %d\n", (long)offset, (int)nbytes);
@@ -450,10 +451,10 @@ static ssize_t imxrt_flexspi_nor_read(FAR struct mtd_dev_s *dev,
   return (ssize_t)nbytes;
 }
 
-static ssize_t imxrt_flexspi_nor_bread(FAR struct mtd_dev_s *dev,
+static ssize_t imxrt_flexspi_nor_bread(struct mtd_dev_s *dev,
                                        off_t startblock,
                                        size_t nblocks,
-                                       FAR uint8_t *buffer)
+                                       uint8_t *buffer)
 {
   ssize_t nbytes;
 
@@ -473,13 +474,13 @@ static ssize_t imxrt_flexspi_nor_bread(FAR struct mtd_dev_s *dev,
   return nbytes;
 }
 
-static ssize_t imxrt_flexspi_nor_bwrite(FAR struct mtd_dev_s *dev,
+static ssize_t imxrt_flexspi_nor_bwrite(struct mtd_dev_s *dev,
                                         off_t startblock,
                                         size_t nblocks,
-                                        FAR const uint8_t *buffer)
+                                        const uint8_t *buffer)
 {
-  FAR struct imxrt_flexspi_nor_dev_s *priv =
-                  (FAR struct imxrt_flexspi_nor_dev_s *)dev;
+  struct imxrt_flexspi_nor_dev_s *priv =
+                  (struct imxrt_flexspi_nor_dev_s *)dev;
   size_t len = nblocks * NOR_PAGE_SIZE;
   off_t offset = startblock * NOR_PAGE_SIZE;
   uint8_t *src = (uint8_t *) buffer;
@@ -507,12 +508,12 @@ static ssize_t imxrt_flexspi_nor_bwrite(FAR struct mtd_dev_s *dev,
   return nblocks;
 }
 
-static int imxrt_flexspi_nor_erase(FAR struct mtd_dev_s *dev,
+static int imxrt_flexspi_nor_erase(struct mtd_dev_s *dev,
                                    off_t startblock,
                                    size_t nblocks)
 {
-  FAR struct imxrt_flexspi_nor_dev_s *priv =
-                  (FAR struct imxrt_flexspi_nor_dev_s *)dev;
+  struct imxrt_flexspi_nor_dev_s *priv =
+                  (struct imxrt_flexspi_nor_dev_s *)dev;
   size_t blocksleft = nblocks;
   uint8_t *dst = priv->ahb_base + startblock * NOR_SECTOR_SIZE;
 
@@ -537,25 +538,27 @@ static int imxrt_flexspi_nor_erase(FAR struct mtd_dev_s *dev,
   return (int)nblocks;
 }
 
-static int imxrt_flexspi_nor_ioctl(FAR struct mtd_dev_s *dev,
+static int imxrt_flexspi_nor_ioctl(struct mtd_dev_s *dev,
                                    int cmd,
                                    unsigned long arg)
 {
-  FAR struct imxrt_flexspi_nor_dev_s *priv =
-                  (FAR struct imxrt_flexspi_nor_dev_s *)dev;
+  struct imxrt_flexspi_nor_dev_s *priv =
+                  (struct imxrt_flexspi_nor_dev_s *)dev;
   int ret = -EINVAL; /* Assume good command with bad parameters */
 
-  finfo("cmd: %d \n", cmd);
+  finfo("cmd: %d\n", cmd);
 
   switch (cmd)
     {
       case MTDIOC_GEOMETRY:
         {
-          FAR struct mtd_geometry_s *geo =
-            (FAR struct mtd_geometry_s *)((uintptr_t)arg);
+          struct mtd_geometry_s *geo =
+            (struct mtd_geometry_s *)((uintptr_t)arg);
 
           if (geo)
             {
+              memset(geo, 0, sizeof(*geo));
+
               /* Populate the geometry structure with information need to
                * know the capacity and how to access the device.
                *
@@ -580,8 +583,8 @@ static int imxrt_flexspi_nor_ioctl(FAR struct mtd_dev_s *dev,
 
       case BIOC_PARTINFO:
         {
-          FAR struct partition_info_s *info =
-            (FAR struct partition_info_s *)arg;
+          struct partition_info_s *info =
+            (struct partition_info_s *)arg;
           if (info != NULL)
             {
               info->numsectors  = 32768; /* 8MB only */
@@ -646,7 +649,7 @@ int imxrt_flexspi_nor_initialize(void)
 {
   uint8_t vendor_id;
 #ifdef CONFIG_FS_LITTLEFS
-  FAR struct mtd_dev_s *mtd_dev = &g_flexspi_nor.mtd;
+  struct mtd_dev_s *mtd_dev = &g_flexspi_nor.mtd;
   int ret = -1;
 #endif
   /* Configure multiplexed pins as connected on the board */

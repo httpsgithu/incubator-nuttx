@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/lpc43xx/lpc4357-evb/src/lpc4357-evb.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -18,8 +20,8 @@
  *
  ****************************************************************************/
 
-#ifndef __BOARDS_ARM_LPC43XX_LPC4357_EVB_SRC_LPC3257_EVB_H
-#define __BOARDS_ARM_LPC43XX_LPC4357_EVB_SRC_LPC3257_EVB_H
+#ifndef __BOARDS_ARM_LPC43XX_LPC4357_EVB_SRC_LPC4357_EVB_H
+#define __BOARDS_ARM_LPC43XX_LPC4357_EVB_SRC_LPC4357_EVB_H
 
 /****************************************************************************
  * Included Files
@@ -80,4 +82,4 @@
  ****************************************************************************/
 
 #endif /* __ASSEMBLY__ */
-#endif /* __BOARDS_ARM_LPC43XX_LPC4357_EVB_SRC_LPC3257_EVB_H */
+#endif /* __BOARDS_ARM_LPC43XX_LPC4357_EVB_SRC_LPC4357_EVB_H */

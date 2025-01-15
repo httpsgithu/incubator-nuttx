@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/max326xx/common/max326_icc.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -28,7 +30,7 @@
 #include <stdbool.h>
 #include <assert.h>
 
-#include "arm_arch.h"
+#include "arm_internal.h"
 #include "hardware/max326_icc.h"
 #include "max326_periphclks.h"
 #include "max326_icc.h"
@@ -114,7 +116,7 @@ void max326_icc_invalidate(void)
  ****************************************************************************/
 
 #ifdef CONFIG_ARCH_ADDRENV
-int up_addrenv_coherent(FAR const group_addrenv_t *addrenv)
+int up_addrenv_coherent(const arch_addrenv_t *addrenv)
 {
   max326_icc_invalidate();
 }

@@ -1,6 +1,8 @@
 /****************************************************************************
  * libs/libc/spawn/lib_psa_init.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -85,7 +87,7 @@ int posix_spawnattr_init(posix_spawnattr_t *attr)
 
   /* Empty signal mask */
 
-  attr->sigmask             = 0;
+  sigemptyset(&attr->sigmask);
 
 #ifdef CONFIG_SCHED_SPORADIC
   /* Sporadic scheduling parameters */
@@ -98,10 +100,12 @@ int posix_spawnattr_init(posix_spawnattr_t *attr)
   attr->budget.tv_nsec      = param.sched_ss_init_budget.tv_nsec;
 #endif
 
-#ifndef CONFIG_ARCH_ADDRENV
   /* Default stack size */
 
-  attr->stacksize           = CONFIG_TASK_SPAWN_DEFAULT_STACKSIZE;
+  attr->stacksize           = CONFIG_POSIX_SPAWN_DEFAULT_STACKSIZE;
+
+#ifndef CONFIG_BUILD_KERNEL
+  attr->stackaddr           = NULL;
 #endif
 
   return OK;

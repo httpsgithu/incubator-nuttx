@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/x86/include/arch.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -33,12 +35,12 @@
 
 /* Include chip-specific definitions */
 
-# include <arch/chip/arch.h>
+#  include <arch/chip/arch.h>
 
 /* Include architecture-specific definitions */
 
 #ifdef CONFIG_ARCH_I486
-# include <arch/i486/arch.h>
+#  include <arch/i486/arch.h>
 #endif
 
 /****************************************************************************

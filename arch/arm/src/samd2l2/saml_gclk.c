@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/samd2l2/saml_gclk.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -29,7 +31,7 @@
 
 #include <nuttx/irq.h>
 
-#include "arm_arch.h"
+#include "arm_internal.h"
 #include "sam_gclk.h"
 
 #ifdef CONFIG_ARCH_FAMILY_SAML21
@@ -88,7 +90,7 @@ static void sam_gclck_waitsyncbusy(uint8_t gclk)
  *
  ****************************************************************************/
 
-void sam_gclk_config(FAR const struct sam_gclkconfig_s *config)
+void sam_gclk_config(const struct sam_gclkconfig_s *config)
 {
   irqstate_t flags;
   uintptr_t regaddr;

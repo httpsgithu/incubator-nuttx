@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/samd5e5/metro-m4/src/metro-m4.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -55,7 +57,7 @@
 
 #define PORT_RED_LED (PORT_OUTPUT  | PORT_PULL_NONE | PORT_OUTPUT_SET | PORTA | PORT_PIN16)
 
-#define PORT_D8	  (PORT_OUTPUT     | PORT_PULL_NONE | PORT_OUTPUT_SET | PORTA | PORT_PIN21)
+#define PORT_D8   (PORT_OUTPUT     | PORT_PULL_NONE | PORT_OUTPUT_SET | PORTA | PORT_PIN21)
 #define PORT_D9   (PORT_INTERRUPT  | PORT_PULL_NONE | PORT_INT_RISING | PORTA | PORT_PIN20)
 #define PORT_D10  (PORT_INPUT      | PORT_PULL_NONE | PORT_INT_CHANGE | PORTA | PORT_PIN18)
 
@@ -91,7 +93,7 @@
 #define HAVE_PROGMEM_CHARDEV
 #endif
 
-/* This is the on-chip progmem memroy driver minor number */
+/* This is the on-chip progmem memory driver minor number */
 
 #define PROGMEM_MTD_MINOR 0
 
@@ -143,7 +145,7 @@ void sam_automount_event(bool inserted);
 #endif
 
 #ifdef CONFIG_SAMD5E5_SERCOM5_ISI2C
-FAR struct i2c_master_s *g_i2c5_dev;
+struct i2c_master_s *g_i2c5_dev;
 int metro_m4_i2cdev_initialize(void);
 #endif
 
@@ -152,7 +154,7 @@ int sam_smartfs_initialize(void);
 #endif
 
 #ifdef CONFIG_BQ27426
-int sam_bq27426_initialize(FAR const char *devname);
+int sam_bq27426_initialize(const char *devname);
 #endif
 
 #ifdef CONFIG_DEV_GPIO

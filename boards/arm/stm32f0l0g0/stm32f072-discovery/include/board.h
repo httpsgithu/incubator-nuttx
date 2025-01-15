@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/stm32f0l0g0/stm32f072-discovery/include/board.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -28,7 +30,7 @@
 #include <nuttx/config.h>
 
 #ifndef __ASSEMBLY__
-# include <stdint.h>
+#  include <stdint.h>
 #endif
 
 /****************************************************************************
@@ -233,12 +235,12 @@
 
 /* USART 1 */
 
-#define GPIO_USART1_TX           GPIO_USART1_TX_1
-#define GPIO_USART1_RX           GPIO_USART1_RX_1
+#define GPIO_USART1_TX           (GPIO_USART1_TX_1|GPIO_SPEED_HIGH)
+#define GPIO_USART1_RX           (GPIO_USART1_RX_1|GPIO_SPEED_HIGH)
 
 /* I2C pins definition */
 
-#define GPIO_I2C1_SCL            GPIO_I2C1_SCL_1
-#define GPIO_I2C1_SDA            GPIO_I2C1_SDA_1
+#define GPIO_I2C1_SCL            (GPIO_I2C1_SCL_1|GPIO_SPEED_LOW)
+#define GPIO_I2C1_SDA            (GPIO_I2C1_SDA_1|GPIO_SPEED_LOW)
 
 #endif /* __BOARDS_ARM_STM32F0L0G0_STM32F072_DISCOVERY_INCLUDE_BOARD_H */

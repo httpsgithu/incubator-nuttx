@@ -1,6 +1,8 @@
 /****************************************************************************
  * drivers/wireless/ieee80211/bcm43xxx/bcmf_bdc.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -18,8 +20,8 @@
  *
  ****************************************************************************/
 
-#ifndef __DRIVERS_WIRELESS_IEEE80211_BCMF_BDC_H
-#define __DRIVERS_WIRELESS_IEEE80211_BCMF_BDC_H
+#ifndef __DRIVERS_WIRELESS_IEEE80211_BCM43XXX_BCMF_BDC_H
+#define __DRIVERS_WIRELESS_IEEE80211_BCM43XXX_BCMF_BDC_H
 
 /****************************************************************************
  * Included Files
@@ -83,4 +85,4 @@ int bcmf_event_unregister(FAR struct bcmf_dev_s *priv,
 
 int bcmf_event_push_config(FAR struct bcmf_dev_s *priv);
 
-#endif /* __DRIVERS_WIRELESS_IEEE80211_BCMF_BDC_H */
+#endif /* __DRIVERS_WIRELESS_IEEE80211_BCM43XXX_BCMF_BDC_H */

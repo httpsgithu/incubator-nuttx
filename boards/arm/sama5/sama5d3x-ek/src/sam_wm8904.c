@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/sama5/sama5d3x-ek/src/sam_wm8904.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -38,7 +40,7 @@
 
 #include <arch/board/board.h>
 
-#include "arm_arch.h"
+#include "arm_internal.h"
 #include "sam_pio.h"
 #include "sam_twi.h"
 #include "sam_ssc.h"
@@ -65,7 +67,7 @@ struct sama5d3ek_mwinfo_s
   /* Extensions for the sama5d3x-ek board */
 
   wm8904_handler_t handler;
-  FAR void *arg;
+  void *arg;
 };
 
 /****************************************************************************
@@ -82,9 +84,9 @@ struct sama5d3ek_mwinfo_s
  *   enable  - Enable or disable the PIO interrupt
  */
 
-static int  wm8904_attach(FAR const struct wm8904_lower_s *lower,
-                          wm8904_handler_t isr, FAR void *arg);
-static bool wm8904_enable(FAR const struct wm8904_lower_s *lower,
+static int  wm8904_attach(const struct wm8904_lower_s *lower,
+                          wm8904_handler_t isr, void *arg);
+static bool wm8904_enable(const struct wm8904_lower_s *lower,
                           bool enable);
 
 /****************************************************************************
@@ -133,8 +135,8 @@ static struct sama5d3ek_mwinfo_s g_wm8904info =
  *
  ****************************************************************************/
 
-static int wm8904_attach(FAR const struct wm8904_lower_s *lower,
-                         wm8904_handler_t isr,  FAR void *arg)
+static int wm8904_attach(const struct wm8904_lower_s *lower,
+                         wm8904_handler_t isr,  void *arg)
 {
   if (isr)
     {
@@ -158,7 +160,7 @@ static int wm8904_attach(FAR const struct wm8904_lower_s *lower,
   return OK;
 }
 
-static bool wm8904_enable(FAR const struct wm8904_lower_s *lower,
+static bool wm8904_enable(const struct wm8904_lower_s *lower,
                           bool enable)
 {
   static bool enabled;
@@ -191,7 +193,7 @@ static bool wm8904_enable(FAR const struct wm8904_lower_s *lower,
   return ret;
 }
 
-static int wm8904_interrupt(int irq, FAR void *context, FAR void *arg)
+static int wm8904_interrupt(int irq, void *context, void *arg)
 {
   /* Just forward the interrupt to the WM8904 driver */
 
@@ -232,10 +234,10 @@ static int wm8904_interrupt(int irq, FAR void *context, FAR void *arg)
 
 int sam_wm8904_initialize(int minor)
 {
-  FAR struct audio_lowerhalf_s *wm8904;
-  FAR struct audio_lowerhalf_s *pcm;
-  FAR struct i2c_master_s *i2c;
-  FAR struct i2s_dev_s *i2s;
+  struct audio_lowerhalf_s *wm8904;
+  struct audio_lowerhalf_s *pcm;
+  struct i2c_master_s *i2c;
+  struct i2s_dev_s *i2s;
   static bool initialized = false;
   char devname[12];
   int ret;
@@ -334,7 +336,7 @@ int sam_wm8904_initialize(int minor)
 
       /* Create a device name */
 
-      snprintf(devname, 12, "pcm%d",  minor);
+      snprintf(devname, sizeof(devname), "pcm%d",  minor);
 
       /* Finally, we can register the PCM/WM8904/I2C/I2S audio device.
        *

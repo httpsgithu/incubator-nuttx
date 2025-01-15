@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/stm32/stm32_otghs.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -26,13 +28,21 @@
  ****************************************************************************/
 
 #include <nuttx/config.h>
+#include <nuttx/usb/usbdev.h>
 
 #include <stdint.h>
 
-#include "stm32.h"
 #include "hardware/stm32_otghs.h"
 
 #if defined(CONFIG_STM32_OTGHS)
+
+/****************************************************************************
+ * Pre-processor Definitions
+ ****************************************************************************/
+
+/* Number of endpoints */
+
+#define STM32_NENDPOINTS             (4)          /* ep0-3 x 2 for IN and OUT */
 
 /****************************************************************************
  * Public Function Prototypes
@@ -77,7 +87,7 @@ extern "C"
 
 #ifdef CONFIG_STM32_USBHOST
 struct usbhost_connection_s;
-FAR struct usbhost_connection_s *stm32_otghshost_initialize(int controller);
+struct usbhost_connection_s *stm32_otghshost_initialize(int controller);
 #endif
 
 /****************************************************************************
@@ -91,7 +101,7 @@ FAR struct usbhost_connection_s *stm32_otghshost_initialize(int controller);
  *
  ****************************************************************************/
 
-void stm32_usbsuspend(FAR struct usbdev_s *dev, bool resume);
+void stm32_usbsuspend(struct usbdev_s *dev, bool resume);
 
 #undef EXTERN
 #if defined(__cplusplus)

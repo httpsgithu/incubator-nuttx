@@ -1,6 +1,8 @@
 /****************************************************************************
  * libs/libc/misc/lib_slcddecode.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -87,7 +89,7 @@ static uint8_t slcd_nibble(uint8_t ascii)
     }
   else
     {
-      return ascii - 'a';
+      return ascii - 'a' + 10;
     }
 }
 
@@ -177,8 +179,8 @@ enum slcdret_e slcd_decode(FAR struct lib_instream_s *stream,
 
   /* No, ungotten characters.  Get the next character from the buffer. */
 
-  ch = stream->get(stream);
-  if (ch == EOF)
+  ch = lib_stream_getc(stream);
+  if (lib_stream_eof(ch))
     {
       /* End of file/stream (or perhaps an I/O error) */
 
@@ -201,8 +203,8 @@ enum slcdret_e slcd_decode(FAR struct lib_instream_s *stream,
 
   /* Get the next character from the buffer */
 
-  ch = stream->get(stream);
-  if (ch == EOF)
+  ch = lib_stream_getc(stream);
+  if (lib_stream_eof(ch))
     {
       /* End of file/stream.  Return the escape character now.  We will
        * return the EOF indication next time.
@@ -230,8 +232,8 @@ enum slcdret_e slcd_decode(FAR struct lib_instream_s *stream,
 
   /* Get the next character from the buffer */
 
-  ch = stream->get(stream);
-  if (ch == EOF)
+  ch = lib_stream_getc(stream);
+  if (lib_stream_eof(ch))
     {
       /* End of file/stream.  Return the ESC now; return the following
        * characters later.
@@ -240,7 +242,7 @@ enum slcdret_e slcd_decode(FAR struct lib_instream_s *stream,
       return slcd_reget(state, pch, parg);
     }
 
-  /* If the next character is a hexidecimal value (with lower case
+  /* If the next character is a hexadecimal value (with lower case
    * alphabetic characters), then we are parsing a 5-byte sequence.
    */
 
@@ -271,15 +273,15 @@ enum slcdret_e slcd_decode(FAR struct lib_instream_s *stream,
     }
   else
     {
-      /* Save the first character of the two byte hexidecimal number */
+      /* Save the first character of the two byte hexadecimal number */
 
       state->buf[NDX_COUNTH] = (uint8_t)ch;
       state->nch = NCH_COUNTH;
 
       /* Get the next character from the buffer */
 
-      ch = stream->get(stream);
-      if (ch == EOF)
+      ch = lib_stream_getc(stream);
+      if (lib_stream_eof(ch))
         {
           /* End of file/stream.  Return the ESC now; return the following
            * characters later.
@@ -288,7 +290,7 @@ enum slcdret_e slcd_decode(FAR struct lib_instream_s *stream,
           return slcd_reget(state, pch, parg);
         }
 
-      /* We expect the next character to be the second byte of hexidecimal
+      /* We expect the next character to be the second byte of hexadecimal
        * count value.
        */
 
@@ -304,15 +306,15 @@ enum slcdret_e slcd_decode(FAR struct lib_instream_s *stream,
           return slcd_reget(state, pch, parg);
         }
 
-      /* Save the second character of the two byte hexidecimal number */
+      /* Save the second character of the two byte hexadecimal number */
 
       state->buf[NDX_COUNTL] = (uint8_t)ch;
       state->nch = NCH_COUNTL;
 
       /* Get the next character from the buffer */
 
-      ch = stream->get(stream);
-      if (ch == EOF)
+      ch = lib_stream_getc(stream);
+      if (lib_stream_eof(ch))
         {
           /* End of file/stream.  Return the ESC now; return the following
            * characters later.

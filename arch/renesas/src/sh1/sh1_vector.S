@@ -1,6 +1,8 @@
 /*****************************************************************************
  * arch/renesas/src/sh1/sh1_vector.S
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -27,7 +29,7 @@
 #include <arch/irq.h>		/* IRQ definitions */
 
 #include "chip.h"		/* Chip-specific settings */
-#include "up_internal.h"
+#include "renesas_internal.h"
 
 /*****************************************************************************
  * Pre-processor Definitions
@@ -39,7 +41,7 @@
 
 /* Called functions */
 
-	.globl	_up_doirq		/* C interrupt processing logic */
+	.globl	_renesas_doirq		/* C interrupt processing logic */
 
 /*****************************************************************************
  * Macros
@@ -399,11 +401,11 @@ _up_vector:
 	.long	_g_intstacktop
 #endif
 .Ldoirq:
-        .long   _up_doirq
+        .long   _renesas_doirq
         .size   _up_vector, .-_up_vector
 
 /*****************************************************************************
- * Name: _up_fullcontextrestore
+ * Name: _renesas_fullcontextrestore
  *
  * Description:
  *   restore context from a set of save registers
@@ -412,10 +414,10 @@ _up_vector:
  *
  *****************************************************************************/
 
-	.global _up_fullcontextrestore
-	.type	_up_fullcontextrestore, #function
+	.global _renesas_fullcontextrestore
+	.type	_renesas_fullcontextrestore, #function
 
-_up_fullcontextrestore:
+_renesas_fullcontextrestore:
 	/* Mask all interrupts */
 
 	stc     sr, r8
@@ -483,7 +485,7 @@ _up_fullcontextrestore:
 	.align	2
 .Lintmask:
 	.long	0x000000f0
-	.size	_up_fullcontextrestore, .-_up_fullcontextrestore
+	.size	_renesas_fullcontextrestore, .-_renesas_fullcontextrestore
 
 /************************************************************************************
  *  Name: g_intstackalloc/g_intstacktop

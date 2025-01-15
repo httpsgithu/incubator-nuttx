@@ -1,6 +1,8 @@
 /****************************************************************************
  * include/nuttx/arch.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -90,12 +92,46 @@
  * Pre-processor definitions
  ****************************************************************************/
 
+#define DEBUGPOINT_NONE          0x00
+#define DEBUGPOINT_WATCHPOINT_RO 0x01
+#define DEBUGPOINT_WATCHPOINT_WO 0x02
+#define DEBUGPOINT_WATCHPOINT_RW 0x03
+#define DEBUGPOINT_BREAKPOINT    0x04
+#define DEBUGPOINT_STEPPOINT     0x05
+
+/****************************************************************************
+ * Name: up_cpu_index
+ *
+ * Description:
+ *   Return the real core number regardless CONFIG_SMP setting
+ *
+ ****************************************************************************/
+
+#ifndef CONFIG_ARCH_HAVE_MULTICPU
+#  define up_cpu_index() 0
+#endif /* CONFIG_ARCH_HAVE_MULTICPU */
+
+/****************************************************************************
+ * Name: up_this_cpu
+ *
+ * Description:
+ *   Return the logical core number. Default implementation is 1:1 mapping,
+ *   i.e. physical=logical.
+ *
+ ****************************************************************************/
+
+#ifndef CONFIG_ARCH_HAVE_CPUID_MAPPING
+#  define up_this_cpu() up_cpu_index()
+#endif
+
 /****************************************************************************
  * Public Types
  ****************************************************************************/
 
-typedef CODE void (*sig_deliver_t)(FAR struct tcb_s *tcb);
 typedef CODE void (*phy_enable_t)(bool enable);
+typedef CODE void (*initializer_t)(void);
+typedef CODE void (*debug_callback_t)(int type, FAR void *addr, size_t size,
+                                      FAR void *arg);
 
 /****************************************************************************
  * Public Data
@@ -149,6 +185,15 @@ EXTERN volatile bool g_rtc_enabled;
 
 #endif
 
+#ifdef CONFIG_HAVE_CXXINITIALIZE
+/* _sinit and _einit are symbols exported by the linker script that mark the
+ * beginning and the end of the C++ initialization section.
+ */
+
+extern initializer_t _sinit[];
+extern initializer_t _einit[];
+#endif
+
 /****************************************************************************
  * Public Function Prototypes
  ****************************************************************************/
@@ -157,6 +202,23 @@ EXTERN volatile bool g_rtc_enabled;
  * These are standard interfaces that must be exported to the base RTOS
  * logic from architecture-specific code.
  ****************************************************************************/
+
+/****************************************************************************
+ * Name: up_fork
+ *
+ * Description:
+ *   The up_fork() function is the base of fork() function that provided in
+ *   libc, and fork() is implemented as a wrapper of up_fork() function.
+ *
+ * Returned Value:
+ *   Upon successful completion, up_fork() returns 0 to the child process
+ *   and returns the process ID of the child process to the parent process.
+ *   Otherwise, -1 is returned to the parent, no child process is created,
+ *   and errno is set to indicate the error.
+ *
+ ****************************************************************************/
+
+pid_t up_fork(void);
 
 /****************************************************************************
  * Name: up_initialize
@@ -176,6 +238,18 @@ EXTERN volatile bool g_rtc_enabled;
  ****************************************************************************/
 
 void up_initialize(void);
+
+/****************************************************************************
+ * Name: up_systempoweroff
+ *
+ * Description:
+ *   The function up_systempoweroff() will power down the MCU.  Optional!
+ *   Availability of this function is dependent upon the architecture
+ *   support.
+ *
+ ****************************************************************************/
+
+void up_systempoweroff(void) noreturn_function;
 
 /****************************************************************************
  * Name: up_systemreset
@@ -374,94 +448,26 @@ FAR void *up_stack_frame(FAR struct tcb_s *tcb, size_t frame_size);
 void up_release_stack(FAR struct tcb_s *dtcb, uint8_t ttype);
 
 /****************************************************************************
- * Name: up_unblock_task
+ * Name: up_switch_context
  *
  * Description:
- *   A task is currently in an inactive task list
- *   but has been prepped to execute.  Move the TCB to the
- *   ready-to-run list, restore its context, and start execution.
+ *   A task is currently in the ready-to-run list but has been prepped
+ *   to execute. Restore its context, and start execution.
  *
  *   This function is called only from the NuttX scheduling
  *   logic.  Interrupts will always be disabled when this
  *   function is called.
  *
  * Input Parameters:
- *   tcb: Refers to the tcb to be unblocked.  This tcb is
- *     in one of the waiting tasks lists.  It must be moved to
- *     the ready-to-run list and, if it is the highest priority
- *     ready to run task, executed.
+ *   tcb: Refers to the head task of the ready-to-run list
+ *     which will be executed.
+ *   rtcb: Refers to the running task which will be blocked.
  *
  ****************************************************************************/
 
-void up_unblock_task(FAR struct tcb_s *tcb);
-
-/****************************************************************************
- * Name: up_block_task
- *
- * Description:
- *   The currently executing task at the head of the ready to run list must
- *   be stopped.  Save its context and move it to the inactive list
- *   specified by task_state.
- *
- *   This function is called only from the NuttX scheduling logic.
- *   Interrupts will always be disabled when this function is called.
- *
- * Input Parameters:
- *   tcb: Refers to a task in the ready-to-run list (normally the task at
- *     the head of the list).  It must be stopped, its context saved and
- *     moved into one of the waiting task lists.  If it was the task at the
- *     head of the ready-to-run list, then a context switch to the new ready
- *     to run task must be performed.
- *   task_state: Specifies which waiting task list should be
- *     hold the blocked task TCB.
- *
- ****************************************************************************/
-
-void up_block_task(FAR struct tcb_s *tcb, tstate_t task_state);
-
-/****************************************************************************
- * Name: up_release_pending
- *
- * Description:
- *   When tasks become ready-to-run but cannot run because
- *   pre-emption is disabled, they are placed into a pending
- *   task list.  This function releases and makes ready-to-run
- *   all of the tasks that have collected in the pending task
- *   list.  This can cause a context switch if a new task is
- *   placed at the head of the ready to run list.
- *
- *   This function is called only from the NuttX scheduling
- *   logic when pre-emptioni is re-enabled.  Interrupts will
- *   always be disabled when this function is called.
- *
- ****************************************************************************/
-
-void up_release_pending(void);
-
-/****************************************************************************
- * Name: up_reprioritize_rtr
- *
- * Description:
- *   Called when the priority of a running or
- *   ready-to-run task changes and the reprioritization will
- *   cause a context switch.  Two cases:
- *
- *   1) The priority of the currently running task drops and the next
- *      task in the ready to run list has priority.
- *   2) An idle, ready to run task's priority has been raised above the
- *      priority of the current, running task and it now has the priority.
- *
- *   This function is called only from the NuttX scheduling
- *   logic.  Interrupts will always be disabled when this
- *   function is called.
- *
- * Input Parameters:
- *   tcb: The TCB of the task that has been reprioritized
- *   priority: The new task priority
- *
- ****************************************************************************/
-
-void up_reprioritize_rtr(FAR struct tcb_s *tcb, uint8_t priority);
+#ifndef up_switch_context
+void up_switch_context(FAR struct tcb_s *tcb, FAR struct tcb_s *rtcb);
+#endif
 
 /****************************************************************************
  * Name: up_exit
@@ -478,19 +484,19 @@ void up_reprioritize_rtr(FAR struct tcb_s *tcb, uint8_t priority);
  *
  ****************************************************************************/
 
-void up_exit() noreturn_function;
+void up_exit(int status) noreturn_function;
 
 /* Prototype is in unistd.h */
 
 /****************************************************************************
- * Name: up_assert
+ * Name: up_dump_register
  *
  * Description:
- *   Assertions may be handled in an architecture-specific way.
+ *   Register dump may be handled in an architecture-specific way.
  *
  ****************************************************************************/
 
-void up_assert(FAR const char *filename, int linenum);
+void up_dump_register(FAR void *regs);
 
 #ifdef CONFIG_ARCH_HAVE_BACKTRACE
 
@@ -512,13 +518,23 @@ void up_assert(FAR const char *filename, int linenum);
  *   tcb    - Address of the task's TCB, NULL means dump the running task
  *   buffer - Return address from the corresponding stack frame
  *   size   - Maximum number of addresses that can be stored in buffer
+ *   skip   - number of addresses to be skipped
  *
  * Returned Value:
  *   up_backtrace() returns the number of addresses returned in buffer
  *
+ * Assumptions:
+ *   Have to make sure tcb keep safe during function executing, it means
+ *   1. Tcb have to be self or not-running.  In SMP case, the running task
+ *      PC & SP cannot be backtrace, as whose get from tcb is not the newest.
+ *   2. Tcb have to keep not be freed.  In task exiting case, have to
+ *      make sure the tcb get from pid and up_backtrace in one critical
+ *      section procedure.
+ *
  ****************************************************************************/
 
-int up_backtrace(FAR struct tcb_s *tcb, FAR void **buffer, int size);
+int up_backtrace(FAR struct tcb_s *tcb,
+                 FAR void **buffer, int size, int skip);
 #endif /* CONFIG_ARCH_HAVE_BACKTRACE */
 
 /****************************************************************************
@@ -554,7 +570,7 @@ int up_backtrace(FAR struct tcb_s *tcb, FAR void **buffer, int size);
  *
  ****************************************************************************/
 
-void up_schedule_sigaction(FAR struct tcb_s *tcb, sig_deliver_t sigdeliver);
+void up_schedule_sigaction(FAR struct tcb_s *tcb);
 
 /****************************************************************************
  * Name: up_task_start
@@ -586,8 +602,6 @@ void up_task_start(main_t taskentry, int argc, FAR char *argv[])
        noreturn_function;
 #endif
 
-#if !defined(CONFIG_BUILD_FLAT) && defined(__KERNEL__) && \
-    !defined(CONFIG_DISABLE_PTHREAD)
 /****************************************************************************
  * Name: up_pthread_start
  *
@@ -613,28 +627,11 @@ void up_task_start(main_t taskentry, int argc, FAR char *argv[])
  *
  ****************************************************************************/
 
+#if !defined(CONFIG_BUILD_FLAT) && defined(__KERNEL__) && \
+    !defined(CONFIG_DISABLE_PTHREAD)
 void up_pthread_start(pthread_trampoline_t startup,
                       pthread_startroutine_t entrypt, pthread_addr_t arg)
        noreturn_function;
-
-/****************************************************************************
- * Name: up_pthread_exit
- *
- * Description:
- *   In this kernel mode build, this function will be called to execute a
- *   pthread in user-space. This kernel-mode stub will then be called
- *   transfer control to the user-mode pthread_exit.
- *
- * Input Parameters:
- *   exit       - The user-space pthread_exit function
- *   exit_value - The pointer of the pthread exit parameter
- *
- * Returned Value:
- *   None
- ****************************************************************************/
-
-void up_pthread_exit(pthread_exitroutine_t exit, FAR void *exit_value)
-        noreturn_function;
 #endif
 
 /****************************************************************************
@@ -721,6 +718,9 @@ void up_allocate_heap(FAR void **heap_start, size_t *heap_size);
  *   as determined by CONFIG_MM_KERNEL_HEAP=y.  This function allocates (and
  *   protects) the kernel-space heap.
  *
+ *   For Flat build (CONFIG_BUILD_FLAT=y), this function enables a separate
+ *   (although unprotected) heap for the kernel.
+ *
  ****************************************************************************/
 
 #ifdef CONFIG_MM_KERNEL_HEAP
@@ -797,12 +797,17 @@ void up_extraheaps_init(void);
  * Name: up_textheap_memalign
  *
  * Description:
- *   Allocate memory for text sections with the specified alignment.
+ *   Allocate memory for text with the specified alignment and sectname.
  *
  ****************************************************************************/
 
 #if defined(CONFIG_ARCH_USE_TEXT_HEAP)
+#  if defined(CONFIG_ARCH_USE_SEPARATED_SECTION)
+FAR void *up_textheap_memalign(FAR const char *sectname,
+                               size_t align, size_t size);
+#  else
 FAR void *up_textheap_memalign(size_t align, size_t size);
+#  endif
 #endif
 
 /****************************************************************************
@@ -815,6 +820,124 @@ FAR void *up_textheap_memalign(size_t align, size_t size);
 
 #if defined(CONFIG_ARCH_USE_TEXT_HEAP)
 void up_textheap_free(FAR void *p);
+#endif
+
+/****************************************************************************
+ * Name: up_textheap_heapmember
+ *
+ * Description:
+ *   Test if memory is from text heap.
+ *
+ ****************************************************************************/
+
+#if defined(CONFIG_ARCH_USE_TEXT_HEAP)
+bool up_textheap_heapmember(FAR void *p);
+#endif
+
+/****************************************************************************
+ * Name: up_textheap_data_address
+ *
+ * Description:
+ *   If an instruction bus address is specified, return the corresponding
+ *   data bus address. Otherwise, return the given address as it is.
+ *
+ *   For some platforms, up_textheap_memalign() might return memory regions
+ *   with separate instruction/data bus mappings. In that case,
+ *   up_textheap_memalign() returns the address of the instruction bus
+ *   mapping.
+ *   The instruction bus mapping might provide only limited data access.
+ *   (For example, only read-only, word-aligned access.)
+ *   You can use up_textheap_data_address() to query the corresponding data
+ *   bus mapping.
+ *
+ ****************************************************************************/
+
+#if defined(CONFIG_ARCH_USE_TEXT_HEAP)
+#if defined(CONFIG_ARCH_HAVE_TEXT_HEAP_SEPARATE_DATA_ADDRESS)
+FAR void *up_textheap_data_address(FAR void *p);
+#else
+#define up_textheap_data_address(p) ((FAR void *)p)
+#endif
+#endif
+
+/****************************************************************************
+ * Name: up_textheap_data_sync
+ *
+ * Description:
+ *   Ensure modifications made on the data bus addresses (the addresses
+ *   returned by up_textheap_data_address) fully visible on the corresponding
+ *   instruction bus addresses.
+ *
+ ****************************************************************************/
+
+#if defined(CONFIG_ARCH_USE_TEXT_HEAP)
+#if defined(CONFIG_ARCH_HAVE_TEXT_HEAP_SEPARATE_DATA_ADDRESS)
+void up_textheap_data_sync(void);
+#else
+#define up_textheap_data_sync() do {} while (0)
+#endif
+#endif
+
+/****************************************************************************
+ * Name: up_dataheap_memalign
+ *
+ * Description:
+ *   Allocate memory for data with the specified alignment and sectname.
+ *
+ ****************************************************************************/
+
+#if defined(CONFIG_ARCH_USE_DATA_HEAP)
+#  if defined(CONFIG_ARCH_USE_SEPARATED_SECTION)
+FAR void *up_dataheap_memalign(FAR const char *sectname,
+                               size_t align, size_t size);
+#  else
+FAR void *up_dataheap_memalign(size_t align, size_t size);
+#  endif
+#endif
+
+/****************************************************************************
+ * Name: up_dataheap_free
+ *
+ * Description:
+ *   Free memory allocated for data sections.
+ *
+ ****************************************************************************/
+
+#if defined(CONFIG_ARCH_USE_DATA_HEAP)
+void up_dataheap_free(FAR void *p);
+#endif
+
+/****************************************************************************
+ * Name: up_dataheap_heapmember
+ *
+ * Description:
+ *   Test if memory is from data heap.
+ *
+ ****************************************************************************/
+
+#if defined(CONFIG_ARCH_USE_DATA_HEAP)
+bool up_dataheap_heapmember(FAR void *p);
+#endif
+
+/****************************************************************************
+ * Name: up_copy_section
+ *
+ * Description:
+ *   This function copies a section from a general temporary buffer (src) to
+ *   a specific address (dest). This is typically used in architectures that
+ *   require specific handling of memory sections.
+ *
+ * Input Parameters:
+ *   dest - A pointer to the destination where the data needs to be copied.
+ *   src  - A pointer to the source from where the data needs to be copied.
+ *   n    - The number of bytes to be copied from src to dest.
+ *
+ * Returned Value:
+ *   Zero (OK) on success; a negated errno value on failure.
+ *
+ ****************************************************************************/
+#if defined(CONFIG_ARCH_USE_COPY_SECTION)
+int up_copy_section(FAR void *dest, FAR const void *src, size_t n);
 #endif
 
 /****************************************************************************
@@ -834,10 +957,47 @@ void up_textheap_free(FAR void *p);
 #endif
 
 /****************************************************************************
+ * Percpu support
+ ****************************************************************************/
+
+/****************************************************************************
+ * Name: up_update_task
+ *
+ * Description:
+ *   We can utilize percpu storage to hold information about the
+ *   current running task. If we intend to implement this feature, we would
+ *   need to define two macros that help us manage this percpu information
+ *   effectively.
+ *
+ *   up_this_task: This macro is designed to read the contents of the percpu
+ *                 register to retrieve information about the current
+ *                 running task.This allows us to quickly access
+ *                 task-specific data without having to disable interrupts,
+ *                 access global variables and obtain the current cpu index.
+ *
+ *   up_update_task: This macro is responsible for updating the contents of
+ *                   the percpu register.It is typically called during
+ *                   initialization or when a context switch occurs to ensure
+ *                   that the percpu register reflects the information of the
+ *                   newly running task.
+ *
+ * Input Parameters:
+ *   current tcb
+ *
+ * Returned Value:
+ *   current tcb
+ *
+ ****************************************************************************/
+
+#ifndef up_update_task
+#  define up_update_task(t)
+#endif
+
+/****************************************************************************
  * Address Environment Interfaces
  *
  * Low-level interfaces used in binfmt/ to instantiate tasks with address
- * environments.  These interfaces all operate on type group_addrenv_t which
+ * environments.  These interfaces all operate on type arch_addrenv_t which
  * is an abstract representation of a task group's address environment and
  * must be defined in arch/arch.h if CONFIG_ARCH_ADDRENV is defined.
  *
@@ -847,9 +1007,10 @@ void up_textheap_free(FAR void *p);
  *                         address environment
  *   up_addrenv_vdata    - Returns the virtual base address of the .bss/.data
  *                         address environment
+ *   up_addrenv_vheap    - Returns the virtual base address of the heap
+ *                         address environment
  *   up_addrenv_heapsize - Returns the size of the initial heap allocation.
  *   up_addrenv_select   - Instantiate an address environment
- *   up_addrenv_restore  - Restore an address environment
  *   up_addrenv_clone    - Copy an address environment from one location to
  *                         another.
  *
@@ -932,7 +1093,7 @@ void up_textheap_free(FAR void *p);
 
 #ifdef CONFIG_ARCH_ADDRENV
 int up_addrenv_create(size_t textsize, size_t datasize, size_t heapsize,
-                      FAR group_addrenv_t *addrenv);
+                      FAR arch_addrenv_t *addrenv);
 #endif
 
 /****************************************************************************
@@ -952,7 +1113,7 @@ int up_addrenv_create(size_t textsize, size_t datasize, size_t heapsize,
  ****************************************************************************/
 
 #ifdef CONFIG_ARCH_ADDRENV
-int up_addrenv_destroy(FAR group_addrenv_t *addrenv);
+int up_addrenv_destroy(FAR arch_addrenv_t *addrenv);
 #endif
 
 /****************************************************************************
@@ -974,7 +1135,7 @@ int up_addrenv_destroy(FAR group_addrenv_t *addrenv);
  ****************************************************************************/
 
 #ifdef CONFIG_ARCH_ADDRENV
-int up_addrenv_vtext(FAR group_addrenv_t *addrenv, FAR void **vtext);
+int up_addrenv_vtext(FAR arch_addrenv_t *addrenv, FAR void **vtext);
 #endif
 
 /****************************************************************************
@@ -1004,8 +1165,30 @@ int up_addrenv_vtext(FAR group_addrenv_t *addrenv, FAR void **vtext);
  ****************************************************************************/
 
 #ifdef CONFIG_ARCH_ADDRENV
-int up_addrenv_vdata(FAR group_addrenv_t *addrenv, uintptr_t textsize,
+int up_addrenv_vdata(FAR arch_addrenv_t *addrenv, uintptr_t textsize,
                      FAR void **vdata);
+#endif
+
+/****************************************************************************
+ * Name: up_addrenv_vheap
+ *
+ * Description:
+ *   Return the heap virtual address associated with the newly created
+ *   address environment.  This function is used by the binary loaders in
+ *   order get an address that can be used to initialize the new task.
+ *
+ * Input Parameters:
+ *   addrenv - The representation of the task address environment previously
+ *      returned by up_addrenv_create.
+ *   vheap - The location to return the virtual address.
+ *
+ * Returned Value:
+ *   Zero (OK) on success; a negated errno value on failure.
+ *
+ ****************************************************************************/
+
+#if defined(CONFIG_ARCH_ADDRENV) && defined(CONFIG_BUILD_KERNEL)
+int up_addrenv_vheap(FAR const arch_addrenv_t *addrenv, FAR void **vheap);
 #endif
 
 /****************************************************************************
@@ -1028,7 +1211,7 @@ int up_addrenv_vdata(FAR group_addrenv_t *addrenv, uintptr_t textsize,
  ****************************************************************************/
 
 #if defined(CONFIG_ARCH_ADDRENV) && defined(CONFIG_BUILD_KERNEL)
-ssize_t up_addrenv_heapsize(FAR const group_addrenv_t *addrenv);
+ssize_t up_addrenv_heapsize(FAR const arch_addrenv_t *addrenv);
 #endif
 
 /****************************************************************************
@@ -1044,12 +1227,6 @@ ssize_t up_addrenv_heapsize(FAR const group_addrenv_t *addrenv);
  * Input Parameters:
  *   addrenv - The representation of the task address environment previously
  *     returned by up_addrenv_create.
- *   oldenv
- *     The address environment that was in place before up_addrenv_select().
- *     This may be used with up_addrenv_restore() to restore the original
- *     address environment that was in place before up_addrenv_select() was
- *     called.  Note that this may be a task agnostic, platform-specific
- *     representation that may or may not be different from group_addrenv_t.
  *
  * Returned Value:
  *   Zero (OK) on success; a negated errno value on failure.
@@ -1057,29 +1234,7 @@ ssize_t up_addrenv_heapsize(FAR const group_addrenv_t *addrenv);
  ****************************************************************************/
 
 #ifdef CONFIG_ARCH_ADDRENV
-int up_addrenv_select(FAR const group_addrenv_t *addrenv,
-                      FAR save_addrenv_t *oldenv);
-#endif
-
-/****************************************************************************
- * Name: up_addrenv_restore
- *
- * Description:
- *   After an address environment has been temporarily instantiated by
- *   up_addrenv_select(), this function may be called to restore the
- *   original address environment.
- *
- * Input Parameters:
- *   oldenv - The platform-specific representation of the address environment
- *     previously returned by up_addrenv_select.
- *
- * Returned Value:
- *   Zero (OK) on success; a negated errno value on failure.
- *
- ****************************************************************************/
-
-#ifdef CONFIG_ARCH_ADDRENV
-int up_addrenv_restore(FAR const save_addrenv_t *oldenv);
+int up_addrenv_select(FAR const arch_addrenv_t *addrenv);
 #endif
 
 /****************************************************************************
@@ -1099,7 +1254,7 @@ int up_addrenv_restore(FAR const save_addrenv_t *oldenv);
  ****************************************************************************/
 
 #ifdef CONFIG_ARCH_ADDRENV
-int up_addrenv_coherent(FAR const group_addrenv_t *addrenv);
+int up_addrenv_coherent(FAR const arch_addrenv_t *addrenv);
 #endif
 
 /****************************************************************************
@@ -1120,8 +1275,8 @@ int up_addrenv_coherent(FAR const group_addrenv_t *addrenv);
  ****************************************************************************/
 
 #ifdef CONFIG_ARCH_ADDRENV
-int up_addrenv_clone(FAR const group_addrenv_t *src,
-                     FAR group_addrenv_t *dest);
+int up_addrenv_clone(FAR const arch_addrenv_t *src,
+                     FAR arch_addrenv_t *dest);
 #endif
 
 /****************************************************************************
@@ -1132,13 +1287,9 @@ int up_addrenv_clone(FAR const group_addrenv_t *src,
  *   is created that needs to share the address environment of its task
  *   group.
  *
- *   NOTE: In some platforms, nothing will need to be done in this case.
- *   Simply being a member of the group that has the address environment
- *   may be sufficient.
- *
  * Input Parameters:
- *   group - The task group to which the new thread belongs.
- *   tcb   - The TCB of the thread needing the address environment.
+ *   ptcb  - The tcb of the parent task.
+ *   tcb   - The tcb of the thread needing the address environment.
  *
  * Returned Value:
  *   Zero (OK) on success; a negated errno value on failure.
@@ -1146,7 +1297,7 @@ int up_addrenv_clone(FAR const group_addrenv_t *src,
  ****************************************************************************/
 
 #ifdef CONFIG_ARCH_ADDRENV
-int up_addrenv_attach(FAR struct task_group_s *group, FAR struct tcb_s *tcb);
+int up_addrenv_attach(FAR struct tcb_s *ptcb, FAR struct tcb_s *tcb);
 #endif
 
 /****************************************************************************
@@ -1159,12 +1310,7 @@ int up_addrenv_attach(FAR struct task_group_s *group, FAR struct tcb_s *tcb);
  *   task group is itself destroyed.  Any resources unique to this thread
  *   may be destroyed now.
  *
- *   NOTE: In some platforms, nothing will need to be done in this case.
- *   Simply being a member of the group that has the address environment
- *   may be sufficient.
- *
  * Input Parameters:
- *   group - The group to which the thread belonged.
  *   tcb - The TCB of the task or thread whose the address environment will
  *     be released.
  *
@@ -1174,7 +1320,29 @@ int up_addrenv_attach(FAR struct task_group_s *group, FAR struct tcb_s *tcb);
  ****************************************************************************/
 
 #ifdef CONFIG_ARCH_ADDRENV
-int up_addrenv_detach(FAR struct task_group_s *group, FAR struct tcb_s *tcb);
+int up_addrenv_detach(FAR struct tcb_s *tcb);
+#endif
+
+/****************************************************************************
+ * Name: up_addrenv_mprot
+ *
+ * Description:
+ *   Modify access rights to an address range.
+ *
+ * Input Parameters:
+ *   addrenv - The address environment to be modified.
+ *   addr - Base address of the region.
+ *   len - Size of the region.
+ *   prot - Access right flags.
+ *
+ * Returned Value:
+ *   Zero (OK) on success; a negated errno value on failure.
+ *
+ ****************************************************************************/
+
+#ifdef CONFIG_ARCH_ADDRENV
+int up_addrenv_mprot(FAR arch_addrenv_t *addrenv, uintptr_t addr,
+                     size_t len, int prot);
 #endif
 
 /****************************************************************************
@@ -1308,6 +1476,147 @@ int up_addrenv_kstackfree(FAR struct tcb_s *tcb);
 #endif
 
 /****************************************************************************
+ * Name: up_addrenv_find_page
+ *
+ * Description:
+ *   Find physical page mapped to user virtual address from the address
+ *   environment page directory.
+ *
+ * Input Parameters:
+ *   addrenv - The user address environment.
+ *   vaddr   - The user virtual address
+ *
+ * Returned Value:
+ *   Page physical address on success; NULL on failure.
+ *
+ ****************************************************************************/
+
+#ifdef CONFIG_ARCH_ADDRENV
+uintptr_t up_addrenv_find_page(FAR arch_addrenv_t *addrenv, uintptr_t vaddr);
+#endif
+
+/****************************************************************************
+ * Name: up_addrenv_page_vaddr
+ *
+ * Description:
+ *   Find the kernel virtual address associated with physical page.
+ *
+ * Input Parameters:
+ *   page - The page physical address.
+ *
+ * Returned Value:
+ *   Page kernel virtual address on success; NULL on failure.
+ *
+ ****************************************************************************/
+
+#ifdef CONFIG_ARCH_ADDRENV
+uintptr_t up_addrenv_page_vaddr(uintptr_t page);
+#endif
+
+/****************************************************************************
+ * Name: up_addrenv_user_vaddr
+ *
+ * Description:
+ *   Check if a virtual address is in user virtual address space.
+ *
+ * Input Parameters:
+ *   vaddr - The virtual address.
+ *
+ * Returned Value:
+ *   True if it is; false if it's not.
+ *
+ ****************************************************************************/
+
+#ifdef CONFIG_ARCH_ADDRENV
+bool up_addrenv_user_vaddr(uintptr_t vaddr);
+#endif
+
+/****************************************************************************
+ * Name: up_addrenv_page_wipe
+ *
+ * Description:
+ *   Wipe a page of physical memory, first mapping it into kernel virtual
+ *   memory.
+ *
+ * Input Parameters:
+ *   page - The page physical address.
+ *
+ * Returned Value:
+ *   None.
+ *
+ ****************************************************************************/
+
+#ifdef CONFIG_ARCH_ADDRENV
+void up_addrenv_page_wipe(uintptr_t page);
+#endif
+
+/****************************************************************************
+ * Name: up_addrenv_kmap_init
+ *
+ * Description:
+ *   Initialize the architecture specific part of the kernel mapping
+ *   interface.
+ *
+ * Input Parameters:
+ *   None.
+ *
+ * Returned Value:
+ *   Zero (OK) is returned on success; a negated errno value is returned
+ *   on failure.
+ *
+ ****************************************************************************/
+
+#if defined(CONFIG_ARCH_ADDRENV) && defined(CONFIG_MM_KMAP)
+int up_addrenv_kmap_init(void);
+#endif
+
+/****************************************************************************
+ * Name: up_addrenv_kmap_pages
+ *
+ * Description:
+ *   Map physical pages into a continuous virtual memory block.
+ *
+ * Input Parameters:
+ *   pages - A pointer to the first element in a array of physical address,
+ *     each corresponding to one page of memory.
+ *   npages - The number of pages in the list of physical pages to be mapped.
+ *   vaddr - The virtual address corresponding to the beginning of the
+ *     (continuous) virtual address region.
+ *   prot - Access right flags.
+ *
+ * Returned Value:
+ *   Zero (OK) is returned on success; a negated errno value is returned
+ *   on failure.
+ *
+ ****************************************************************************/
+
+#if defined(CONFIG_ARCH_ADDRENV) && defined(CONFIG_MM_KMAP)
+int up_addrenv_kmap_pages(FAR void **pages, unsigned int npages,
+                          uintptr_t vaddr, int prot);
+#endif
+
+/****************************************************************************
+ * Name: up_addrenv_kunmap_pages
+ *
+ * Description:
+ *   Unmap a previously mapped virtual memory region.
+ *
+ * Input Parameters:
+ *   vaddr - The virtual address corresponding to the beginning of the
+ *     (continuous) virtual address region.
+ *   npages - The number of pages to be unmapped
+ *
+ * Returned Value:
+ *   Zero (OK) is returned on success; a negated errno value is returned
+ *   on failure.
+ *
+ ****************************************************************************/
+
+#if defined(CONFIG_ARCH_ADDRENV) && defined(CONFIG_MM_KMAP)
+int up_addrenv_kunmap_pages(uintptr_t vaddr, unsigned int npages);
+#endif
+
+/****************************************************************************
  * Name: up_addrenv_pa_to_va
  *
  * Description:
@@ -1365,7 +1674,7 @@ uintptr_t up_addrenv_va_to_pa(FAR void *va);
  *
  ****************************************************************************/
 
-#ifdef CONFIG_MM_SHM
+#ifdef CONFIG_ARCH_VMA_MAPPING
 int up_shmat(FAR uintptr_t *pages, unsigned int npages, uintptr_t vaddr);
 #endif
 
@@ -1386,7 +1695,7 @@ int up_shmat(FAR uintptr_t *pages, unsigned int npages, uintptr_t vaddr);
  *
  ****************************************************************************/
 
-#ifdef CONFIG_MM_SHM
+#ifdef CONFIG_ARCH_VMA_MAPPING
 int up_shmdt(uintptr_t vaddr, unsigned int npages);
 #endif
 
@@ -1406,17 +1715,6 @@ int up_shmdt(uintptr_t vaddr, unsigned int npages);
  ****************************************************************************/
 
 void up_irqinitialize(void);
-
-/****************************************************************************
- * Name: up_interrupt_context
- *
- * Description:
- *   Return true is we are currently executing in
- *   the interrupt handler context.
- *
- ****************************************************************************/
-
-bool up_interrupt_context(void);
 
 /****************************************************************************
  * Name: up_enable_irq
@@ -1460,6 +1758,18 @@ void up_disable_irq(int irq);
 #endif
 
 /****************************************************************************
+ * Name: up_affinity_irq
+ *
+ * Description:
+ *   Set an IRQ affinity by software.
+ *
+ ****************************************************************************/
+
+#ifdef CONFIG_SMP
+void up_affinity_irq(int irq, cpu_set_t cpuset);
+#endif
+
+/****************************************************************************
  * Name: up_trigger_irq
  *
  * Description:
@@ -1468,7 +1778,7 @@ void up_disable_irq(int irq);
  ****************************************************************************/
 
 #ifdef CONFIG_ARCH_HAVE_IRQTRIGGER
-void up_trigger_irq(int irq);
+void up_trigger_irq(int irq, cpu_set_t cpuset);
 #endif
 
 /****************************************************************************
@@ -1486,17 +1796,19 @@ void up_trigger_irq(int irq);
 int up_prioritize_irq(int irq, int priority);
 #endif
 
-#ifdef CONFIG_ARCH_HAVE_TRUSTZONE
-
 /****************************************************************************
- * Name: up_set_secure_irq
+ * Name: up_secure_irq
  *
  * Description:
  *   Secure an IRQ
  *
  ****************************************************************************/
 
+#if defined(CONFIG_ARCH_TRUSTZONE_SECURE) || defined(CONFIG_ARCH_HIPRI_INTERRUPT)
 void up_secure_irq(int irq, bool secure);
+#else
+# define up_secure_irq(i, s)
+#endif
 
 /****************************************************************************
  * Name: up_secure_irq_all
@@ -1506,8 +1818,30 @@ void up_secure_irq(int irq, bool secure);
  *
  ****************************************************************************/
 
+#if defined(CONFIG_ARCH_TRUSTZONE_SECURE) || defined(CONFIG_ARCH_HIPRI_INTERRUPT)
 void up_secure_irq_all(bool secure);
+#else
+# define up_secure_irq_all(s)
+#endif
 
+/****************************************************************************
+ * Function:  up_adjtime
+ *
+ * Description:
+ *   Adjusts timer period. This call is used when adjusting timer period as
+ *   defined in adjtime() function.
+ *
+ * Input Parameters:
+ *   ppb - Adjustment in parts per billion (nanoseconds per second).
+ *         Zero is default rate, positive value makes clock run faster
+ *         and negative value slower.
+ *
+ * Assumptions:
+ *   Called from within critical section or interrupt context.
+ ****************************************************************************/
+
+#ifdef CONFIG_ARCH_HAVE_ADJTIME
+void up_adjtime(long ppb);
 #endif
 
 /****************************************************************************
@@ -1540,7 +1874,7 @@ void up_timer_initialize(void);
  * set a time in the future and get an event when that alarm goes off.
  *
  *   int up_alarm_cancel(void):  Cancel the alarm.
- *   int up_alarm_start(FAR const struct timespec *ts): Enable (or re-anable
+ *   int up_alarm_start(FAR const struct timespec *ts): Enable (or re-enable
  *     the alarm.
  * #else
  *   int up_timer_cancel(void):  Cancels the interval timer.
@@ -1566,7 +1900,7 @@ void up_timer_initialize(void);
  *
  * Description:
  *   Return the elapsed time since power-up (or, more correctly, since
- *   the archtecture-specific timer was initialized).  This function is
+ *   the architecture-specific timer was initialized).  This function is
  *   functionally equivalent to:
  *
  *      int clock_gettime(clockid_t clockid, FAR struct timespec *ts);
@@ -1594,14 +1928,9 @@ void up_timer_initialize(void);
  *
  ****************************************************************************/
 
-#if defined(CONFIG_SCHED_TICKLESS)
 int up_timer_gettime(FAR struct timespec *ts);
-#endif
-
-#ifdef CONFIG_CLOCK_TIMEKEEPING
-int up_timer_getcounter(FAR uint64_t *cycles);
-void up_timer_getmask(FAR uint64_t *mask);
-#endif
+int up_timer_gettick(FAR clock_t *ticks);
+void up_timer_getmask(FAR clock_t *mask);
 
 /****************************************************************************
  * Name: up_alarm_cancel
@@ -1638,7 +1967,11 @@ void up_timer_getmask(FAR uint64_t *mask);
  ****************************************************************************/
 
 #if defined(CONFIG_SCHED_TICKLESS) && defined(CONFIG_SCHED_TICKLESS_ALARM)
+#  ifndef CONFIG_SCHED_TICKLESS_TICK_ARGUMENT
 int up_alarm_cancel(FAR struct timespec *ts);
+#  else
+int up_alarm_tick_cancel(FAR clock_t *ticks);
+#  endif
 #endif
 
 /****************************************************************************
@@ -1667,7 +2000,11 @@ int up_alarm_cancel(FAR struct timespec *ts);
  ****************************************************************************/
 
 #if defined(CONFIG_SCHED_TICKLESS) && defined(CONFIG_SCHED_TICKLESS_ALARM)
+#  ifndef CONFIG_SCHED_TICKLESS_TICK_ARGUMENT
 int up_alarm_start(FAR const struct timespec *ts);
+#  else
+int up_alarm_tick_start(clock_t ticks);
+#  endif
 #endif
 
 /****************************************************************************
@@ -1707,7 +2044,11 @@ int up_alarm_start(FAR const struct timespec *ts);
  ****************************************************************************/
 
 #if defined(CONFIG_SCHED_TICKLESS) && !defined(CONFIG_SCHED_TICKLESS_ALARM)
+#  ifndef CONFIG_SCHED_TICKLESS_TICK_ARGUMENT
 int up_timer_cancel(FAR struct timespec *ts);
+#  else
+int up_timer_tick_cancel(FAR clock_t *ticks);
+#  endif
 #endif
 
 /****************************************************************************
@@ -1736,7 +2077,11 @@ int up_timer_cancel(FAR struct timespec *ts);
  ****************************************************************************/
 
 #if defined(CONFIG_SCHED_TICKLESS) && !defined(CONFIG_SCHED_TICKLESS_ALARM)
+#  ifndef CONFIG_SCHED_TICKLESS_TICK_ARGUMENT
 int up_timer_start(FAR const struct timespec *ts);
+#  else
+int up_timer_tick_start(clock_t ticks);
+#  endif
 #endif
 
 /****************************************************************************
@@ -1754,6 +2099,21 @@ int up_timer_start(FAR const struct timespec *ts);
  *
  * The actual declaration or definition is provided in arch/arch.h.
  * The actual implementation may be a MACRO or an inline function.
+ */
+
+/****************************************************************************
+ * Name: up_getusrsp
+ *
+ * Input Parameters:
+ *   regs - regs to get sp
+ *
+ * Returned Value:
+ *   User stack pointer.
+ *
+ ****************************************************************************/
+
+/* static inline_function uintptr_t up_getusrsp(void *regs);
+ * The actual implementation should be provided in irq.h per arch.
  */
 
 /****************************************************************************
@@ -1791,9 +2151,42 @@ int up_timer_start(FAR const struct timespec *ts);
 /* struct tls_info_s;
  * FAR struct tls_info_s *up_tls_info(void);
  *
- * The actual declaration or definition is provided in arch/tls.h.  The
- * actual implementation may be a MACRO or an inline function.
+ * The actual definition is provided in arch/arch.h as a macro. The default
+ * implementation provided here assume the arch has a "push down" stack.
  */
+
+/****************************************************************************
+ * Name: up_tls_size
+ *
+ * Description:
+ *   Get TLS (sizeof(struct tls_info_s) + tdata + tbss) section size.
+ *
+ * Returned Value:
+ *   Size of (sizeof(struct tls_info_s) + tdata + tbss).
+ *
+ ****************************************************************************/
+
+#ifdef CONFIG_SCHED_THREAD_LOCAL
+int up_tls_size(void);
+#endif
+
+/****************************************************************************
+ * Name: up_tls_initialize
+ *
+ * Description:
+ *   Initialize thread local region
+ *
+ * Input Parameters:
+ *   tls_data - The memory region to initialize
+ *
+ ****************************************************************************/
+
+#ifdef CONFIG_SCHED_THREAD_LOCAL
+struct tls_info_s;
+void up_tls_initialize(FAR struct tls_info_s *info);
+#else
+#define up_tls_initialize(x)
+#endif
 
 /****************************************************************************
  * Multiple CPU support
@@ -1865,28 +2258,6 @@ int8_t up_fetchadd8(FAR volatile int8_t *addr, int8_t value);
 int32_t up_fetchsub32(FAR volatile int32_t *addr, int32_t value);
 int16_t up_fetchsub16(FAR volatile int16_t *addr, int16_t value);
 int8_t up_fetchsub8(FAR volatile int8_t *addr, int8_t value);
-#endif
-
-/****************************************************************************
- * Name: up_cpu_index
- *
- * Description:
- *   Return an index in the range of 0 through (CONFIG_SMP_NCPUS-1) that
- *   corresponds to the currently executing CPU.
- *
- * Input Parameters:
- *   None
- *
- * Returned Value:
- *   An integer index in the range of 0 through (CONFIG_SMP_NCPUS-1) that
- *   corresponds to the currently executing CPU.
- *
- ****************************************************************************/
-
-#ifdef CONFIG_SMP
-int up_cpu_index(void);
-#else
-#  define up_cpu_index() (0)
 #endif
 
 /****************************************************************************
@@ -1965,17 +2336,14 @@ int up_cpu_idlestack(int cpu, FAR struct tcb_s *tcb, size_t stack_size);
 int up_cpu_start(int cpu);
 #endif
 
+#ifdef CONFIG_SMP
 /****************************************************************************
- * Name: up_cpu_pause
+ * Name: up_send_smp_sched
  *
  * Description:
- *   Save the state of the current task at the head of the
- *   g_assignedtasks[cpu] task list and then pause task execution on the
- *   CPU.
- *
- *   This function is called by the OS when the logic executing on one CPU
- *   needs to modify the state of the g_assignedtasks[cpu] list for another
- *   CPU.
+ *   pause task execution on the CPU
+ *   check whether there are tasks delivered to specified cpu
+ *   and try to run them.
  *
  * Input Parameters:
  *   cpu - The index of the CPU to be paused.
@@ -1984,90 +2352,21 @@ int up_cpu_start(int cpu);
  *   Zero on success; a negated errno value on failure.
  *
  * Assumptions:
- *   Called from within a critical section; up_cpu_resume() must be called
- *   later while still within the same critical section.
+ *   Called from within a critical section;
  *
  ****************************************************************************/
 
-#ifdef CONFIG_SMP
-int up_cpu_pause(int cpu);
-#endif
+int up_send_smp_sched(int cpu);
 
 /****************************************************************************
- * Name: up_cpu_pausereq
+ * Name: up_send_smp_call
  *
  * Description:
- *   Return true if a pause request is pending for this CPU.
- *
- * Input Parameters:
- *   cpu - The index of the CPU to be queried
- *
- * Returned Value:
- *   true   = a pause request is pending.
- *   false = no pasue request is pending.
+ *   Send smp call to target cpu
  *
  ****************************************************************************/
 
-#ifdef CONFIG_SMP
-bool up_cpu_pausereq(int cpu);
-#endif
-
-/****************************************************************************
- * Name: up_cpu_paused
- *
- * Description:
- *   Handle a pause request from another CPU.  Normally, this logic is
- *   executed from interrupt handling logic within the architecture-specific
- *   However, it is sometimes necessary to perform the pending pause
- *   operation in other contexts where the interrupt cannot be taken
- *   in order to avoid deadlocks.
- *
- *   This function performs the following operations:
- *
- *   1. It saves the current task state at the head of the current assigned
- *      task list.
- *   2. It waits on a spinlock, then
- *   3. Returns from interrupt, restoring the state of the new task at the
- *      head of the ready to run list.
- *
- * Input Parameters:
- *   cpu - The index of the CPU to be paused
- *
- * Returned Value:
- *   On success, OK is returned.  Otherwise, a negated errno value indicating
- *   the nature of the failure is returned.
- *
- ****************************************************************************/
-
-#ifdef CONFIG_SMP
-int up_cpu_paused(int cpu);
-#endif
-
-/****************************************************************************
- * Name: up_cpu_resume
- *
- * Description:
- *   Restart the cpu after it was paused via up_cpu_pause(), restoring the
- *   state of the task at the head of the g_assignedtasks[cpu] list, and
- *   resume normal tasking.
- *
- *   This function is called after up_cpu_pause in order ot resume operation
- *   of the CPU after modifying its g_assignedtasks[cpu] list.
- *
- * Input Parameters:
- *   cpu - The index of the CPU being resumed.
- *
- * Returned Value:
- *   Zero on success; a negated errno value on failure.
- *
- * Assumptions:
- *   Called from within a critical section; up_cpu_pause() must have
- *   previously been called within the same critical section.
- *
- ****************************************************************************/
-
-#ifdef CONFIG_SMP
-int up_cpu_resume(int cpu);
+void up_send_smp_call(cpu_set_t cpuset);
 #endif
 
 /****************************************************************************
@@ -2113,13 +2412,14 @@ char up_romgetc(FAR const char *ptr);
  * Name: up_mdelay and up_udelay
  *
  * Description:
- *   Some device drivers may require that the plaform-specific logic
+ *   Some device drivers may require that the platform-specific logic
  *   provides these timing loops for short delays.
  *
  ****************************************************************************/
 
 void up_mdelay(unsigned int milliseconds);
 void up_udelay(useconds_t microseconds);
+void up_ndelay(unsigned long nanoseconds);
 
 /****************************************************************************
  * These are standard interfaces that are exported by the OS for use by the
@@ -2188,10 +2488,27 @@ void nxsched_timer_expiration(void);
 
 #if defined(CONFIG_SCHED_TICKLESS) && defined(CONFIG_SCHED_TICKLESS_ALARM)
 void nxsched_alarm_expiration(FAR const struct timespec *ts);
+void nxsched_alarm_tick_expiration(clock_t ticks);
 #endif
 
 /****************************************************************************
- * Name: nxsched_process_cpuload
+ * Name:  nxsched_get_next_expired
+ *
+ * Description:
+ *   Get the time remaining until the next timer expiration.
+ *
+ * Input Parameters:
+ *   None
+ *
+ * Returned Value:
+ *   The time remaining until the next timer expiration.
+ *
+ ****************************************************************************/
+
+clock_t nxsched_get_next_expired(void);
+
+/****************************************************************************
+ * Name: nxsched_process_cpuload_ticks
  *
  * Description:
  *   Collect data that can be used for CPU load measurements.  When
@@ -2200,7 +2517,7 @@ void nxsched_alarm_expiration(FAR const struct timespec *ts);
  *   interface.
  *
  * Input Parameters:
- *   None
+ *   ticks - The ticks that we increment in this cpuload
  *
  * Returned Value:
  *   None
@@ -2211,15 +2528,16 @@ void nxsched_alarm_expiration(FAR const struct timespec *ts);
  *
  ****************************************************************************/
 
-#if defined(CONFIG_SCHED_CPULOAD) && defined(CONFIG_SCHED_CPULOAD_EXTCLK)
-void weak_function nxsched_process_cpuload(void);
+#ifdef CONFIG_SCHED_CPULOAD_EXTCLK
+void nxsched_process_cpuload_ticks(clock_t ticks);
+#  define nxsched_process_cpuload() nxsched_process_cpuload_ticks(1)
 #endif
 
 /****************************************************************************
  * Name: irq_dispatch
  *
  * Description:
- *   This function must be called from the achitecture-specific logic in
+ *   This function must be called from the architecture-specific logic in
  *   order to dispatch an interrupt to the appropriate, registered handling
  *   logic.
  *
@@ -2228,7 +2546,7 @@ void weak_function nxsched_process_cpuload(void);
 void irq_dispatch(int irq, FAR void *context);
 
 /****************************************************************************
- * Name: up_check_stack and friends
+ * Name: up_check_tcbstack and friends
  *
  * Description:
  *   Determine (approximately) how much stack has been used be searching the
@@ -2245,14 +2563,14 @@ void irq_dispatch(int irq, FAR void *context);
 
 #ifdef CONFIG_STACK_COLORATION
 struct tcb_s;
-size_t  up_check_tcbstack(FAR struct tcb_s *tcb);
-ssize_t up_check_tcbstack_remain(FAR struct tcb_s *tcb);
-size_t  up_check_stack(void);
-ssize_t up_check_stack_remain(void);
+size_t up_check_tcbstack(FAR struct tcb_s *tcb);
 #if defined(CONFIG_ARCH_INTERRUPTSTACK) && CONFIG_ARCH_INTERRUPTSTACK > 3
-size_t  up_check_intstack(void);
-size_t  up_check_intstack_remain(void);
+size_t up_check_intstack(int cpu);
 #endif
+#endif
+
+#if defined(CONFIG_ARCH_INTERRUPTSTACK) && CONFIG_ARCH_INTERRUPTSTACK > 3
+uintptr_t up_get_intstackbase(int cpu);
 #endif
 
 /****************************************************************************
@@ -2276,7 +2594,7 @@ size_t  up_check_intstack_remain(void);
  *
  ****************************************************************************/
 
-#if defined(CONFIG_RTC) && !defined(CONFIG_RTC_EXTERNAL)
+#if defined(CONFIG_RTC)
 int up_rtc_initialize(void);
 #endif
 
@@ -2399,6 +2717,29 @@ int up_rtc_settime(FAR const struct timespec *tp);
 #endif
 
 /****************************************************************************
+ * Name: up_rtc_adjtime
+ *
+ * Description:
+ *   Adjust RTC frequency (running rate). Used by adjtime() when RTC is used
+ *   as system time source.
+ *
+ * Input Parameters:
+ *   ppb - Adjustment in parts per billion (nanoseconds per second).
+ *         Zero is default rate, positive value makes clock run faster
+ *         and negative value slower.
+ *
+ * Returned Value:
+ *   Zero (OK) on success; a negated errno value on failure.
+ *
+ * Assumptions:
+ *   Called from within a critical section.
+ ****************************************************************************/
+
+#if defined(CONFIG_RTC_HIRES) && defined(CONFIG_RTC_ADJTIME)
+int up_rtc_adjtime(long ppb);
+#endif
+
+/****************************************************************************
  * Name: arch_phy_irq
  *
  * Description:
@@ -2477,7 +2818,7 @@ int arch_phy_irq(FAR const char *intf, xcpt_t handler, void *arg,
  *
  ****************************************************************************/
 
-int up_putc(int ch);
+void up_putc(int ch);
 
 /****************************************************************************
  * Name: up_puts
@@ -2487,7 +2828,8 @@ int up_putc(int ch);
  *
  ****************************************************************************/
 
-void up_puts(FAR const char *str);
+#define up_puts(str) up_nputs(str, ~((size_t)0))
+void up_nputs(FAR const char *str, size_t len);
 
 /****************************************************************************
  * Name: arch_sporadic_*
@@ -2513,7 +2855,7 @@ void arch_sporadic_resume(FAR struct tcb_s *tcb);
 #endif
 
 /****************************************************************************
- * Name: up_critmon_*
+ * Name: up_perf_*
  *
  * Description:
  *   The first interface simply provides the current time value in unknown
@@ -2529,11 +2871,188 @@ void arch_sporadic_resume(FAR struct tcb_s *tcb);
  *
  *   The second interface simple converts an elapsed time into well known
  *   units.
+ *
  ****************************************************************************/
 
-#ifdef CONFIG_SCHED_CRITMONITOR
-uint32_t up_critmon_gettime(void);
-void up_critmon_convert(uint32_t elapsed, FAR struct timespec *ts);
+void up_perf_init(FAR void *arg);
+clock_t up_perf_gettime(void);
+unsigned long up_perf_getfreq(void);
+void up_perf_convert(clock_t elapsed, FAR struct timespec *ts);
+
+/****************************************************************************
+ * Name: up_show_cpuinfo
+ *
+ * Description:
+ *   This function will be called when reading /proc/cpufinfo.
+ *   This function should be implemented by each arch to show its cpuinfo.
+ *
+ * Input Parameters:
+ *   buf          - The address of the user's receive buffer.
+ *   buf_size     - The size (in bytes) of the user's receive buffer.
+ *   file_off     - The /proc/cpuinfo file offset.
+ *
+ * Returned Value:
+ *   The number of bytes actually transferred into the user's receive buffer.
+ *
+ ****************************************************************************/
+
+ssize_t up_show_cpuinfo(FAR char *buf, size_t buf_size, off_t file_off);
+
+/****************************************************************************
+ * Name: up_saveusercontext
+ *
+ * Description:
+ *   Save the current thread context
+ *
+ ****************************************************************************/
+
+int up_saveusercontext(FAR void *saveregs);
+
+/****************************************************************************
+ * Name: up_fpucmp
+ *
+ * Description:
+ *   Compare FPU areas from thread context.
+ *
+ * Input Parameters:
+ *   saveregs1 - Pointer to the saved FPU registers.
+ *   saveregs2 - Pointer to the saved FPU registers.
+ *
+ * Returned Value:
+ *   True if FPU areas compare equal, False otherwise.
+ *
+ ****************************************************************************/
+
+#ifdef CONFIG_ARCH_FPU
+bool up_fpucmp(FAR const void *saveregs1, FAR const void *saveregs2);
+#else
+#define up_fpucmp(r1, r2) (true)
+#endif
+
+#ifdef CONFIG_ARCH_HAVE_DEBUG
+
+/****************************************************************************
+ * Name: up_debugpoint_add
+ *
+ * Description:
+ *   Add a debugpoint.
+ *
+ * Input Parameters:
+ *   type     - The debugpoint type. optional value:
+ *              DEBUGPOINT_WATCHPOINT_RO - Read only watchpoint.
+ *              DEBUGPOINT_WATCHPOINT_WO - Write only watchpoint.
+ *              DEBUGPOINT_WATCHPOINT_RW - Read and write watchpoint.
+ *              DEBUGPOINT_BREAKPOINT    - Breakpoint.
+ *              DEBUGPOINT_STEPPOINT     - Single step.
+ *   addr     - The address to be debugged.
+ *   size     - The watchpoint size. only for watchpoint.
+ *   callback - The callback function when debugpoint triggered.
+ *              if NULL, the debugpoint will be removed.
+ *   arg      - The argument of callback function.
+ *
+ * Returned Value:
+ *  Zero on success; a negated errno value on failure
+ *
+ ****************************************************************************/
+
+int up_debugpoint_add(int type, FAR void *addr, size_t size,
+                      debug_callback_t callback, FAR void *arg);
+
+/****************************************************************************
+ * Name: up_debugpoint_remove
+ *
+ * Description:
+ *   Remove a debugpoint.
+ *
+ * Input Parameters:
+ *   type     - The debugpoint type. optional value:
+ *              DEBUGPOINT_WATCHPOINT_RO - Read only watchpoint.
+ *              DEBUGPOINT_WATCHPOINT_WO - Write only watchpoint.
+ *              DEBUGPOINT_WATCHPOINT_RW - Read and write watchpoint.
+ *              DEBUGPOINT_BREAKPOINT    - Breakpoint.
+ *              DEBUGPOINT_STEPPOINT     - Single step.
+ *   addr     - The address to be debugged.
+ *   size     - The watchpoint size. only for watchpoint.
+ *
+ * Returned Value:
+ *  Zero on success; a negated errno value on failure
+ *
+ ****************************************************************************/
+
+int up_debugpoint_remove(int type, FAR void *addr, size_t size);
+
+#endif
+
+/****************************************************************************
+ * Name: up_alloc_irq_msi
+ *
+ * Description:
+ *  Allocate interrupts for MSI/MSI-X vector.
+ *
+ * Input Parameters:
+ *   busno - Bus num that PCI device resides
+ *   devfn - Device and function number
+ *   irq - allocated vectors array
+ *   num - number of vectors to allocate
+ *
+ * Returned Value:
+ *   >0: success, return number of allocated vectors,
+ *   <0: A negative value errno
+ *
+ ****************************************************************************/
+
+int up_alloc_irq_msi(uint8_t busno, uint32_t devfn, FAR int *irq, int num);
+
+/****************************************************************************
+ * Name: up_release_irq_msi
+ *
+ * Description:
+ *  Allocate interrupts for MSI/MSI-X vector.
+ *
+ * Input Parameters:
+ *   bus - Bus that PCI device resides
+ *   irq - vectors array to release
+ *   num - number of vectors in array
+ *
+ * Returned Value:
+ *   None
+ *
+ ****************************************************************************/
+
+void up_release_irq_msi(FAR int *irq, int num);
+
+#ifdef CONFIG_PCI
+
+/****************************************************************************
+ * Name: up_connect_irq
+ *
+ * Description:
+ *  Connect interrupt for MSI/MSI-X.
+ *
+ * Input Parameters:
+ *   irq - vectors array
+ *   num - number of vectors in array
+ *   mar - returned value for Message Address Register
+ *   mdr - returned value for Message Data Register
+ *
+ * Returned Value:
+ *   >0: success, 0: A positive value errno
+ *
+ ****************************************************************************/
+
+int up_connect_irq(FAR const int *irq, int num,
+                   FAR uintptr_t *mar, FAR uint32_t *mdr);
+
+/****************************************************************************
+ * Name: up_get_legacy_irq
+ *
+ * Description:
+ *   Reserve vector for legacy
+ *
+ ****************************************************************************/
+
+int up_get_legacy_irq(uint32_t devfn, uint8_t line, uint8_t pin);
+
 #endif
 
 #undef EXTERN

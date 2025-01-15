@@ -1,6 +1,8 @@
 /****************************************************************************
  * fs/vfs/fs_fcntl.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -33,7 +35,6 @@
 #include <nuttx/sched.h>
 #include <nuttx/cancelpt.h>
 #include <nuttx/fs/fs.h>
-#include <nuttx/net/net.h>
 
 #include "inode/inode.h"
 
@@ -56,20 +57,6 @@ static int file_vfcntl(FAR struct file *filep, int cmd, va_list ap)
       return -EBADF;
     }
 
-  /* check for operations on a socket descriptor */
-
-#ifdef CONFIG_NET
-  if (INODE_IS_SOCKET(filep->f_inode) &&
-      cmd != F_DUPFD && cmd != F_GETFD && cmd != F_SETFD)
-    {
-      /* Yes.. defer socket descriptor operations to
-       * psock_vfcntl(). The errno is not set on failures.
-       */
-
-      return psock_vfcntl(file_socket(filep), cmd, ap);
-    }
-#endif
-
   switch (cmd)
     {
       case F_DUPFD:
@@ -86,7 +73,13 @@ static int file_vfcntl(FAR struct file *filep, int cmd, va_list ap)
         {
           /* Does not set the errno variable in the event of a failure */
 
-          ret = file_dup(filep, va_arg(ap, int));
+          ret = file_dup(filep, va_arg(ap, int), 0);
+        }
+        break;
+
+      case F_DUPFD_CLOEXEC:
+        {
+          ret = file_dup(filep, va_arg(ap, int), O_CLOEXEC);
         }
         break;
 
@@ -121,14 +114,12 @@ static int file_vfcntl(FAR struct file *filep, int cmd, va_list ap)
 
           if (oflags & FD_CLOEXEC)
             {
-              filep->f_oflags |= O_CLOEXEC;
+              ret = file_ioctl(filep, FIOCLEX, NULL);
             }
           else
             {
-              filep->f_oflags &= ~O_CLOEXEC;
+              ret = file_ioctl(filep, FIONCLEX, NULL);
             }
-
-          ret = OK;
         }
         break;
 
@@ -159,11 +150,20 @@ static int file_vfcntl(FAR struct file *filep, int cmd, va_list ap)
 
         {
           int oflags = va_arg(ap, int);
+          int nonblock = !!(oflags & O_NONBLOCK);
 
-          oflags          &=  FFCNTL;
-          filep->f_oflags &= ~FFCNTL;
-          filep->f_oflags |=  oflags;
-          ret              =  OK;
+          ret = file_ioctl(filep, FIONBIO, &nonblock);
+          if (ret == OK)
+            {
+              oflags          &=  (FFCNTL & ~O_NONBLOCK);
+              filep->f_oflags &= ~(FFCNTL & ~O_NONBLOCK);
+              filep->f_oflags |=  oflags;
+
+              if ((filep->f_oflags & O_APPEND) != 0)
+                {
+                  ret = file_seek(filep, 0, SEEK_END);
+                }
+            }
         }
         break;
 
@@ -197,6 +197,12 @@ static int file_vfcntl(FAR struct file *filep, int cmd, va_list ap)
          * for the lock type which shall be set to F_UNLCK.
          */
 
+        {
+          ret = file_ioctl(filep, FIOC_GETLK,
+                           va_arg(ap, FAR struct flock *));
+        }
+
+        break;
       case F_SETLK:
         /* Set or clear a file segment lock according to the lock
          * description pointed to by the third argument, arg, taken as a
@@ -208,6 +214,12 @@ static int file_vfcntl(FAR struct file *filep, int cmd, va_list ap)
          * shall return immediately with a return value of -1.
          */
 
+        {
+          ret = file_ioctl(filep, FIOC_SETLK,
+                           va_arg(ap, FAR struct flock *));
+        }
+
+        break;
       case F_SETLKW:
         /* This command shall be equivalent to F_SETLK except that if a
          * shared or exclusive lock is blocked by other locks, the thread
@@ -218,9 +230,12 @@ static int file_vfcntl(FAR struct file *filep, int cmd, va_list ap)
          * the lock operation shall not be done.
          */
 
-        ret = -ENOSYS; /* Not implemented */
-        break;
+        {
+          ret = file_ioctl(filep, FIOC_SETLKW,
+                           va_arg(ap, FAR struct flock *));
+        }
 
+        break;
       case F_GETPATH:
         /* Get the path of the file descriptor. The argument must be a buffer
          * of size PATH_MAX or greater.
@@ -230,34 +245,28 @@ static int file_vfcntl(FAR struct file *filep, int cmd, va_list ap)
           ret = file_ioctl(filep, FIOC_FILEPATH, va_arg(ap, FAR char *));
         }
 
+        break;
+      case F_SETPIPE_SZ:
+        /* Modify the capacity of the pipe to arg bytes, but not larger than
+         * CONFIG_DEV_PIPE_MAXSIZE.
+         */
+
+        {
+          ret = file_ioctl(filep, PIPEIOC_SETSIZE, va_arg(ap, int));
+        }
+
+        break;
+      case F_GETPIPE_SZ:
+
+        /* Return the capacity of the pipe */
+
+        {
+          ret = file_ioctl(filep, PIPEIOC_GETSIZE);
+        }
+
+        break;
       default:
         break;
-    }
-
-  return ret;
-}
-
-/****************************************************************************
- * Name: nx_vfcntl
- ****************************************************************************/
-
-static int nx_vfcntl(int fd, int cmd, va_list ap)
-{
-  FAR struct file *filep;
-  int ret;
-
-  /* Get the file structure corresponding to the file descriptor. */
-
-  ret = fs_getfilep(fd, &filep);
-  if (ret >= 0)
-    {
-      DEBUGASSERT(filep != NULL);
-
-      /* Let file_vfcntl() do the real work.  The errno is not set on
-       * failures.
-       */
-
-      ret = file_vfcntl(filep, cmd, ap);
     }
 
   return ret;
@@ -306,42 +315,6 @@ int file_fcntl(FAR struct file *filep, int cmd, ...)
 }
 
 /****************************************************************************
- * Name: nx_fcntl
- *
- * Description:
- *   nx_fcntl() is similar to the standard 'fcntl' interface except that is
- *   not a cancellation point and it does not modify the errno variable.
- *
- *   nx_fcntl() is an internal NuttX interface and should not be called
- *   from applications.
- *
- * Returned Value:
- *   Returns a non-negative number on success;  A negated errno value is
- *   returned on any failure (see comments fcntl() for a list of appropriate
- *   errno values).
- *
- ****************************************************************************/
-
-int nx_fcntl(int fd, int cmd, ...)
-{
-  va_list ap;
-  int ret;
-
-  /* Setup to access the variable argument list */
-
-  va_start(ap, cmd);
-
-  /* Let nx_vfcntl() do the real work.  The errno is not set on
-   * failures.
-   */
-
-  ret = nx_vfcntl(fd, cmd, ap);
-
-  va_end(ap);
-  return ret;
-}
-
-/****************************************************************************
  * Name: fcntl
  *
  * Description:
@@ -362,6 +335,7 @@ int nx_fcntl(int fd, int cmd, ...)
 
 int fcntl(int fd, int cmd, ...)
 {
+  FAR struct file *filep;
   va_list ap;
   int ret;
 
@@ -373,13 +347,18 @@ int fcntl(int fd, int cmd, ...)
 
   va_start(ap, cmd);
 
-  /* Let nx_vfcntl() do the real work.  The errno is not set on
-   * failures.
-   */
+  /* Get the file structure corresponding to the file descriptor. */
 
-  ret = nx_vfcntl(fd, cmd, ap);
+  ret = fs_getfilep(fd, &filep);
+  if (ret >= 0)
+    {
+      /* Let file_vfcntl() do the real work.  The errno is not set on
+       * failures.
+       */
 
-  va_end(ap);
+      ret = file_vfcntl(filep, cmd, ap);
+      fs_putfilep(filep);
+    }
 
   if (ret < 0)
     {
@@ -387,6 +366,8 @@ int fcntl(int fd, int cmd, ...)
       ret = ERROR;
     }
 
+  va_end(ap);
   leave_cancellation_point();
+
   return ret;
 }

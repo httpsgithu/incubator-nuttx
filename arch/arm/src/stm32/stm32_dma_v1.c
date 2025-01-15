@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/stm32/stm32_dma_v1.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -34,7 +36,6 @@
 #include <nuttx/arch.h>
 #include <nuttx/semaphore.h>
 
-#include "arm_arch.h"
 #include "arm_internal.h"
 #include "sched/sched.h"
 #include "chip.h"
@@ -106,6 +107,7 @@ static struct stm32_dma_s g_dma[DMA_NCHANNELS] =
   {
     .chan     = 0,
     .irq      = STM32_IRQ_DMA1CH1,
+    .sem      = SEM_INITIALIZER(1),
     .base     = STM32_DMA1_BASE + STM32_DMACHAN_OFFSET(0),
   },
 #endif /* DMA1_NCHANNELS > 0 */
@@ -113,6 +115,7 @@ static struct stm32_dma_s g_dma[DMA_NCHANNELS] =
   {
     .chan     = 1,
     .irq      = STM32_IRQ_DMA1CH2,
+    .sem      = SEM_INITIALIZER(1),
     .base     = STM32_DMA1_BASE + STM32_DMACHAN_OFFSET(1),
   },
 #endif /* DMA1_NCHANNELS > 1 */
@@ -120,6 +123,7 @@ static struct stm32_dma_s g_dma[DMA_NCHANNELS] =
   {
     .chan     = 2,
     .irq      = STM32_IRQ_DMA1CH3,
+    .sem      = SEM_INITIALIZER(1),
     .base     = STM32_DMA1_BASE + STM32_DMACHAN_OFFSET(2),
   },
 #endif /* DMA1_NCHANNELS > 2 */
@@ -127,6 +131,7 @@ static struct stm32_dma_s g_dma[DMA_NCHANNELS] =
   {
     .chan     = 3,
     .irq      = STM32_IRQ_DMA1CH4,
+    .sem      = SEM_INITIALIZER(1),
     .base     = STM32_DMA1_BASE + STM32_DMACHAN_OFFSET(3),
   },
 #endif /* DMA1_NCHANNELS > 3 */
@@ -134,6 +139,7 @@ static struct stm32_dma_s g_dma[DMA_NCHANNELS] =
   {
     .chan     = 4,
     .irq      = STM32_IRQ_DMA1CH5,
+    .sem      = SEM_INITIALIZER(1),
     .base     = STM32_DMA1_BASE + STM32_DMACHAN_OFFSET(4),
   },
 #endif /* DMA1_NCHANNELS > 4 */
@@ -141,6 +147,7 @@ static struct stm32_dma_s g_dma[DMA_NCHANNELS] =
   {
     .chan     = 5,
     .irq      = STM32_IRQ_DMA1CH6,
+    .sem      = SEM_INITIALIZER(1),
     .base     = STM32_DMA1_BASE + STM32_DMACHAN_OFFSET(5),
   },
 #endif /* DMA1_NCHANNELS > 5 */
@@ -148,6 +155,7 @@ static struct stm32_dma_s g_dma[DMA_NCHANNELS] =
   {
     .chan     = 6,
     .irq      = STM32_IRQ_DMA1CH7,
+    .sem      = SEM_INITIALIZER(1),
     .base     = STM32_DMA1_BASE + STM32_DMACHAN_OFFSET(6),
   },
 #endif /* DMA1_NCHANNELS > 6 */
@@ -155,6 +163,7 @@ static struct stm32_dma_s g_dma[DMA_NCHANNELS] =
   {
     .chan     = 7,
     .irq      = STM32_IRQ_DMA1CH8,
+    .sem      = SEM_INITIALIZER(1),
     .base     = STM32_DMA1_BASE + STM32_DMACHAN_OFFSET(7),
   },
 #endif /* DMA1_NCHANNELS > 7 */
@@ -163,6 +172,7 @@ static struct stm32_dma_s g_dma[DMA_NCHANNELS] =
   {
     .chan     = 0,
     .irq      = STM32_IRQ_DMA2CH1,
+    .sem      = SEM_INITIALIZER(1),
     .base     = STM32_DMA2_BASE + STM32_DMACHAN_OFFSET(0),
   },
 #endif /* DMA2_NCHANNELS > 0 */
@@ -170,6 +180,7 @@ static struct stm32_dma_s g_dma[DMA_NCHANNELS] =
   {
     .chan     = 1,
     .irq      = STM32_IRQ_DMA2CH2,
+    .sem      = SEM_INITIALIZER(1),
     .base     = STM32_DMA2_BASE + STM32_DMACHAN_OFFSET(1),
   },
 #endif /* DMA2_NCHANNELS > 1 */
@@ -177,6 +188,7 @@ static struct stm32_dma_s g_dma[DMA_NCHANNELS] =
   {
     .chan     = 2,
     .irq      = STM32_IRQ_DMA2CH3,
+    .sem      = SEM_INITIALIZER(1),
     .base     = STM32_DMA2_BASE + STM32_DMACHAN_OFFSET(2),
   },
 #endif /* DMA2_NCHANNELS > 2 */
@@ -190,6 +202,7 @@ static struct stm32_dma_s g_dma[DMA_NCHANNELS] =
 #else
     .irq      = STM32_IRQ_DMA2CH45,
 #endif
+    .sem      = SEM_INITIALIZER(1),
     .base     = STM32_DMA2_BASE + STM32_DMACHAN_OFFSET(3),
   },
 #endif /* DMA2_NCHANNELS > 3 */
@@ -203,6 +216,7 @@ static struct stm32_dma_s g_dma[DMA_NCHANNELS] =
 #else
     .irq      = STM32_IRQ_DMA2CH45,
 #endif
+    .sem      = SEM_INITIALIZER(1),
     .base     = STM32_DMA2_BASE + STM32_DMACHAN_OFFSET(4),
   },
 #endif /* DMA2_NCHANNELS > 4 */
@@ -210,6 +224,7 @@ static struct stm32_dma_s g_dma[DMA_NCHANNELS] =
   {
     .chan     = 5,
     .irq      = STM32_IRQ_DMA2CH5,
+    .sem      = SEM_INITIALIZER(1),
     .base     = STM32_DMA2_BASE + STM32_DMACHAN_OFFSET(5),
   },
 #endif /* DMA2_NCHANNELS > 5 */
@@ -217,6 +232,7 @@ static struct stm32_dma_s g_dma[DMA_NCHANNELS] =
   {
     .chan     = 6,
     .irq      = STM32_IRQ_DMA2CH6,
+    .sem      = SEM_INITIALIZER(1),
     .base     = STM32_DMA2_BASE + STM32_DMACHAN_OFFSET(6),
   },
 #endif /* DMA2_NCHANNELS > 6 */
@@ -224,6 +240,7 @@ static struct stm32_dma_s g_dma[DMA_NCHANNELS] =
   {
     .chan     = 7,
     .irq      = STM32_IRQ_DMA2CH7,
+    .sem      = SEM_INITIALIZER(1),
     .base     = STM32_DMA2_BASE + STM32_DMACHAN_OFFSET(7),
   },
 #endif /* DMA2_NCHANNELS > 7 */
@@ -268,24 +285,6 @@ static inline void dmachan_putreg(struct stm32_dma_s *dmach,
                                   uint32_t offset, uint32_t value)
 {
   putreg32(value, dmach->base + offset);
-}
-
-/****************************************************************************
- * Name: stm32_dmatake() and stm32_dmagive()
- *
- * Description:
- *   Used to get exclusive access to a DMA channel.
- *
- ****************************************************************************/
-
-static int stm32_dmatake(FAR struct stm32_dma_s *dmach)
-{
-  return nxsem_wait_uninterruptible(&dmach->sem);
-}
-
-static inline void stm32_dmagive(FAR struct stm32_dma_s *dmach)
-{
-  nxsem_post(&dmach->sem);
 }
 
 /****************************************************************************
@@ -359,7 +358,7 @@ static int irq_to_channel_index(int irq)
  *
  ****************************************************************************/
 
-static int stm32_dmainterrupt(int irq, void *context, FAR void *arg)
+static int stm32_dmainterrupt(int irq, void *context, void *arg)
 {
   struct stm32_dma_s *dmach;
   uint32_t isr;
@@ -420,7 +419,6 @@ void weak_function arm_dma_initialize(void)
   for (chndx = 0; chndx < DMA_NCHANNELS; chndx++)
     {
       dmach = &g_dma[chndx];
-      nxsem_init(&dmach->sem, 0, 1);
 
       /* Attach DMA interrupt vectors */
 
@@ -494,7 +492,7 @@ DMA_HANDLE stm32_dmachannel(unsigned int chndef)
    * is available if it is currently being used by another driver
    */
 
-  ret = stm32_dmatake(dmach);
+  ret = nxsem_wait_uninterruptible(&dmach->sem);
   if (ret < 0)
     {
       return NULL;
@@ -541,7 +539,7 @@ void stm32_dmafree(DMA_HANDLE handle)
 
   /* Release the channel */
 
-  stm32_dmagive(dmach);
+  nxsem_post(&dmach->sem);
 }
 
 /****************************************************************************

@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/cxd56xx/cxd56_gpioint.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -129,7 +131,7 @@ extern "C"
  ****************************************************************************/
 
 int cxd56_gpioint_config(uint32_t pin, uint32_t gpiocfg, xcpt_t isr,
-                         FAR void *arg);
+                         void *arg);
 
 /****************************************************************************
  * Name: cxd56_gpioint_irq

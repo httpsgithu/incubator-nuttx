@@ -1,6 +1,8 @@
 /****************************************************************************
  * include/nuttx/spi/spi.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -443,7 +445,7 @@
 
 /* This retrieves the fields from a SPI devid */
 
-#define SPIDEVID_TYPE (devid) (((uint32_t)(devid) >> 16) & 0xffff)
+#define SPIDEVID_TYPE(devid) (((uint32_t)(devid) >> 16) & 0xffff)
 #define SPIDEVID_INDEX(devid)  ((uint32_t)(devid)        & 0xffff)
 
 /* These are standard definitions for the defined SPI device IDs.  The index
@@ -474,6 +476,8 @@
 #define SPIDEV_USBHOST(n)       SPIDEV_ID(SPIDEVTYPE_USBHOST,       (n))
 #define SPIDEV_LPWAN(n)         SPIDEV_ID(SPIDEVTYPE_LPWAN,         (n))
 #define SPIDEV_ADC(n)           SPIDEV_ID(SPIDEVTYPE_ADC,           (n))
+#define SPIDEV_MOTOR(n)         SPIDEV_ID(SPIDEVTYPE_MOTOR,         (n))
+#define SPIDEV_IMU(n)           SPIDEV_ID(SPIDEVTYPE_IMU,           (n))
 #define SPIDEV_USER(n)          SPIDEV_ID(SPIDEVTYPE_USER,          (n))
 
 /****************************************************************************
@@ -513,6 +517,8 @@ enum spi_devtype_e
   SPIDEVTYPE_USBHOST,       /* Select SPI USB host controller over SPI */
   SPIDEVTYPE_LPWAN,         /* Select SPI LPWAN controller over SPI */
   SPIDEVTYPE_ADC,           /* Select SPI ADC device */
+  SPIDEVTYPE_MOTOR,         /* Select SPI motor device */
+  SPIDEVTYPE_IMU,           /* Select SPI IMU device */
   SPIDEVTYPE_USER           /* Board-specific values start here
                              * This must always be the last definition. */
 };

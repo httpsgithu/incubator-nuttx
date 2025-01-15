@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/risc-v/src/bl602/bl602_lowputc.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -43,9 +45,7 @@
 #include "bl602_lowputc.h"
 #include "bl602_gpio.h"
 #include "bl602_hbn.h"
-#include "riscv_arch.h"
 #include "riscv_internal.h"
-
 #include "bl602_config.h"
 #include "chip.h"
 
@@ -54,7 +54,7 @@
  ****************************************************************************/
 
 #define UART_PARITY_NONE (0)
-#define UART_PARITY_ODD  (1)   
+#define UART_PARITY_ODD  (1)
 #define UART_PARITY_EVEN (2)
 
 /* Select UART parameters for the selected console */

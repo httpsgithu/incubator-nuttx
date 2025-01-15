@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/stm32l4/nucleo-l432kc/include/board.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -27,7 +29,7 @@
 
 #include <nuttx/config.h>
 #ifndef __ASSEMBLY__
-# include <stdint.h>
+#  include <stdint.h>
 #endif
 
 /* Clocking *****************************************************************/
@@ -60,6 +62,20 @@
 /* ADC */
 
 #define ADC1_DMA_CHAN DMACHAN_ADC1_1
+
+/* Analog pin selections ****************************************************/
+
+/* ADC
+ * Build time configurable pins are defined in ../src/stm32_adc.c.
+ * ADC1 with DMA: GPIO_ADC1_IN11 (PA6/A5), GPIO_ADC1_IN12 (PA7/A6).
+ * ADC1 no DMA  : GPIO_ADC1_IN11 (PA6/A5).
+ */
+
+/* DAC
+ * DAC1: GPIO_DAC1_OUT_1 (PA4/A3).
+ */
+
+#define GPIO_DAC1_OUT            GPIO_DAC1_OUT_1
 
 /* Alternate function pin selections ****************************************/
 
@@ -118,10 +134,10 @@
  * but are normally-high GPIOs.
  */
 
-#define GPIO_I2C1_D4 \
-   (GPIO_INPUT | GPIO_FLOAT | GPIO_PORTB | GPIO_PIN7)
-#define GPIO_I2C1_D5 \
-   (GPIO_INPUT | GPIO_FLOAT | GPIO_PORTB | GPIO_PIN6)
+#define GPIO_I2C1_A4 \
+   (GPIO_INPUT | GPIO_FLOAT | GPIO_PORTA | GPIO_PIN5)
+#define GPIO_I2C1_A5 \
+   (GPIO_INPUT | GPIO_FLOAT | GPIO_PORTA | GPIO_PIN6)
 #define GPIO_I2C1_SCL \
    (GPIO_I2C1_SCL_1 | GPIO_OPENDRAIN | GPIO_SPEED_50MHz | GPIO_OUTPUT_SET)
 #define GPIO_I2C1_SDA \
@@ -227,14 +243,20 @@
 /* PWM output for full bridge, uses config 1, because port E is N/A on QFP64
  * CH1     | 1(A8) 2(E9)
  * CH2     | 1(A9) 2(E11)
+ * CH3     | 1(A10) 2(E10)
+ * CH4     | 1(A11) 2(E14)
  * CHN1    | 1(A7) 2(B13) 3(E8)
  * CHN2    | 1(B0) 2(B14) 3(E10)
+ * CHN3    | 1(B1) 2(B15) 3(E12)
  */
 
 #define GPIO_TIM1_CH1OUT  GPIO_TIM1_CH1OUT_1
 #define GPIO_TIM1_CH1NOUT GPIO_TIM1_CH1N_1
 #define GPIO_TIM1_CH2OUT  GPIO_TIM1_CH2OUT_1
 #define GPIO_TIM1_CH2NOUT GPIO_TIM1_CH2N_1
+#define GPIO_TIM1_CH3OUT GPIO_TIM1_CH3OUT_1
+#define GPIO_TIM1_CH3NOUT GPIO_TIM1_CH3OUT_1
+#define GPIO_TIM1_CH4OUT GPIO_TIM1_CH4OUT_1
 
 /* LPTIM2 PWM output
  * REVISIT : Add support for the other clock sources, LSE, LSI and HSI

@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/rtl8720c/amebaz_netdev.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -18,13 +20,12 @@
  *
  ****************************************************************************/
 
-#ifndef __DRIVERS_WIRELESS_IEEE80211_AMEBAZ_AMEBAZ_NETDEV_H
+#ifndef __ARCH_ARM_SRC_RTL8720C_AMEBAZ_NETDEV_H
+#define __ARCH_ARM_SRC_RTL8720C_AMEBAZ_NETDEV_H
 
 /****************************************************************************
  * Pre-processor Definitions
  ****************************************************************************/
-
-#define __DRIVERS_WIRELESS_IEEE80211_AMEBAZ_AMEBAZ_NETDEV_H
 
 /****************************************************************************
  * Included Files
@@ -33,7 +34,7 @@
 #include "amebaz_driver.h"
 #include "amebaz_wlan.h"
 
-int   amebaz_netdev_register(FAR struct amebaz_dev_s *priv);
-void  amebaz_netdev_notify_receive(FAR struct amebaz_dev_s *priv,
+int   amebaz_netdev_register(struct amebaz_dev_s *priv);
+void  amebaz_netdev_notify_receive(struct amebaz_dev_s *priv,
                                            int index, unsigned int len);
-#endif /* __DRIVERS_WIRELESS_IEEE80211_AMEBAZ_AMEBAZ_NETDEV_H */
+#endif /* __ARCH_ARM_SRC_RTL8720C_AMEBAZ_NETDEV_H */

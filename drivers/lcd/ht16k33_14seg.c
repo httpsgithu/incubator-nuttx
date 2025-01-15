@@ -1,6 +1,8 @@
 /****************************************************************************
  * drivers/lcd/ht16k33_14seg.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -60,6 +62,7 @@
 #include <string.h>
 
 #include <nuttx/kmalloc.h>
+#include <nuttx/mutex.h>
 #include <nuttx/signal.h>
 #include <nuttx/ascii.h>
 #include <nuttx/fs/fs.h>
@@ -107,14 +110,7 @@ struct ht16k33_dev_s
   uint8_t    col;               /* Current col position to write on display  */
   uint8_t    buffer[HT16K33_MAX_COL];
   bool       pendscroll;
-  sem_t sem_excl;
-};
-
-struct lcd_instream_s
-{
-  struct lib_instream_s stream;
-  FAR const char *buffer;
-  ssize_t nbytes;
+  mutex_t    lock;
 };
 
 /****************************************************************************
@@ -137,8 +133,6 @@ static void ht16k33_clear_display(FAR struct ht16k33_dev_s *priv);
 
 /* Character driver methods */
 
-static int     ht16k33_open(FAR struct file *filep);
-static int     ht16k33_close(FAR struct file *filep);
 static ssize_t ht16k33_read(FAR struct file *filep, FAR char *buffer,
                             size_t buflen);
 static ssize_t ht16k33_write(FAR struct file *filep, FAR const char *buffer,
@@ -146,7 +140,7 @@ static ssize_t ht16k33_write(FAR struct file *filep, FAR const char *buffer,
 static off_t   ht16k33_seek(FAR struct file *filep, off_t offset,
                             int whence);
 static int     ht16k33_ioctl(FAR struct file *filep, int cmd,
-                            unsigned long arg);
+                             unsigned long arg);
 
 /****************************************************************************
  * Private Data
@@ -154,16 +148,12 @@ static int     ht16k33_ioctl(FAR struct file *filep, int cmd,
 
 static const struct file_operations g_ht16k33fops =
 {
-  ht16k33_open,   /* open */
-  ht16k33_close,  /* close */
+  NULL,           /* open */
+  NULL,           /* close */
   ht16k33_read,   /* read */
   ht16k33_write,  /* write */
   ht16k33_seek,   /* seek */
   ht16k33_ioctl,  /* ioctl */
-  NULL,           /* poll */
-#ifndef CONFIG_DISABLE_PSEUDOFS_OPERATIONS
-  NULL            /* unlink */
-#endif
 };
 
 /****************************************************************************
@@ -194,7 +184,7 @@ static inline void ht16k33_write_cmd(FAR struct ht16k33_dev_s *priv,
   msg.frequency = CONFIG_HT16K33_I2C_FREQ;   /* I2C frequency */
   msg.addr      = HT16K33_I2C_ADDR + dev_id; /* 7-bit address */
   msg.flags     = 0;                         /* Write transaction */
-  msg.buffer    = (FAR uint8_t *) data;      /* Transfer from this address */
+  msg.buffer    = data;                      /* Transfer from this address */
   msg.length    = 1;                         /* Send one byte */
 
   /* Perform the transfer */
@@ -234,11 +224,11 @@ static inline void ht16k33_write_data(FAR struct ht16k33_dev_s *priv,
 
   /* Setup the message to write data to HT16K33 */
 
-  msg.frequency = CONFIG_HT16K33_I2C_FREQ;    /* I2C frequency */
-  msg.addr      = HT16K33_I2C_ADDR + dev_id;  /* 7-bit address */
-  msg.flags     = 0;                          /* Write transaction */
-  msg.buffer    = (FAR uint8_t *) data;       /* Transfer from here */
-  msg.length    = nbytes + 1;                 /* Send cmd + nbytes */
+  msg.frequency = CONFIG_HT16K33_I2C_FREQ;   /* I2C frequency */
+  msg.addr      = HT16K33_I2C_ADDR + dev_id; /* 7-bit address */
+  msg.flags     = 0;                         /* Write transaction */
+  msg.buffer    = data;                      /* Transfer from here */
+  msg.length    = nbytes + 1;                /* Send cmd + nbytes */
 
   /* Perform the transfer */
 
@@ -415,7 +405,7 @@ static void lcd_scroll_up(FAR struct ht16k33_dev_s *priv)
   int currow;
   int curcol;
 
-  data = (FAR uint8_t *)kmm_malloc(HT16K33_MAX_COL);
+  data = kmm_malloc(HT16K33_MAX_COL);
   if (NULL == data)
     {
       lcdinfo("Failed to allocate buffer in lcd_scroll_up()\n");
@@ -443,7 +433,6 @@ static void lcd_scroll_up(FAR struct ht16k33_dev_s *priv)
   ht16k33_clear_display(priv);
 
   kmm_free(data);
-  return;
 }
 
 /****************************************************************************
@@ -709,29 +698,6 @@ static void lcd_codec_action(FAR struct ht16k33_dev_s *priv,
 }
 
 /****************************************************************************
- * Name: lcd_getstream
- *
- * Description:
- *   Get one character from the LCD codec stream.
- *
- ****************************************************************************/
-
-static int lcd_getstream(FAR struct lib_instream_s *instream)
-{
-  FAR struct lcd_instream_s *lcdstream =
-    (FAR struct lcd_instream_s *)instream;
-
-  if (lcdstream->nbytes > 0)
-    {
-      lcdstream->nbytes--;
-      lcdstream->stream.nget++;
-      return (int)*lcdstream->buffer++;
-    }
-
-  return EOF;
-}
-
-/****************************************************************************
  * Name: lcd_init
  *
  * Description:
@@ -774,37 +740,11 @@ static void lcd_init(FAR struct ht16k33_dev_s *priv)
  ****************************************************************************/
 
 static void lcd_curpos_to_fpos(FAR struct ht16k33_dev_s *priv,
-                              uint8_t row, uint8_t col, FAR off_t *fpos)
+                               uint8_t row, uint8_t col, FAR off_t *fpos)
 {
   /* the logical file position is the linear position plus any synthetic LF */
 
   *fpos = (row * HT16K33_MAX_COL) + col + row;
-}
-
-/****************************************************************************
- * Name: ht16k33_open
- *
- * Description:
- *   This function is called whenever the HT16K33 device is opened.
- *
- ****************************************************************************/
-
-static int ht16k33_open(FAR struct file *filep)
-{
-  return OK;
-}
-
-/****************************************************************************
- * Name: ht16k33_close
- *
- * Description:
- *   This routine is called when the LM-75 device is closed.
- *
- ****************************************************************************/
-
-static int ht16k33_close(FAR struct file *filep)
-{
-  return OK;
 }
 
 /****************************************************************************
@@ -822,30 +762,27 @@ static ssize_t ht16k33_read(FAR struct file *filep, FAR char *buffer,
  ****************************************************************************/
 
 static ssize_t ht16k33_write(FAR struct file *filep, FAR const char *buffer,
-                            size_t buflen)
+                             size_t buflen)
 {
   FAR struct inode *inode = filep->f_inode;
   FAR struct ht16k33_dev_s *priv = inode->i_private;
-  struct lcd_instream_s instream;
+  struct lib_meminstream_s instream;
   struct slcdstate_s state;
   enum slcdret_e result;
   uint8_t ch;
   uint8_t count;
 
-  nxsem_wait(&priv->sem_excl);
+  nxmutex_lock(&priv->lock);
 
   /* Initialize the stream for use with the SLCD CODEC */
 
-  instream.stream.get  = lcd_getstream;
-  instream.stream.nget = 0;
-  instream.buffer      = buffer;
-  instream.nbytes      = buflen;
+  lib_meminstream(&instream, buffer, buflen);
 
   /* Now decode and process every byte in the input buffer */
 
   memset(&state, 0, sizeof(struct slcdstate_s));
-  while ((result = slcd_decode(&instream.stream, &state, &ch, &count)) !=
-         SLCDRET_EOF)
+  while ((result = slcd_decode(&instream.common,
+                               &state, &ch, &count)) != SLCDRET_EOF)
     {
       /* Is there some pending scroll? */
 
@@ -937,7 +874,7 @@ static ssize_t ht16k33_write(FAR struct file *filep, FAR const char *buffer,
 
   lcd_curpos_to_fpos(priv, priv->row, priv->col, &filep->f_pos);
 
-  nxsem_post(&priv->sem_excl);
+  nxmutex_unlock(&priv->lock);
   return buflen;
 }
 
@@ -957,11 +894,11 @@ static off_t ht16k33_seek(FAR struct file *filep, off_t offset, int whence)
 {
   FAR struct inode *inode = filep->f_inode;
   FAR struct ht16k33_dev_s *priv =
-    (FAR struct ht16k33_dev_s *)inode->i_private;
+    inode->i_private;
   off_t maxpos;
   off_t pos;
 
-  nxsem_wait(&priv->sem_excl);
+  nxmutex_lock(&priv->lock);
 
   maxpos = HT16K33_MAX_ROW * HT16K33_MAX_COL + (HT16K33_MAX_ROW - 1);
   pos    = filep->f_pos;
@@ -1018,7 +955,7 @@ static off_t ht16k33_seek(FAR struct file *filep, off_t offset, int whence)
         break;
     }
 
-  nxsem_post(&priv->sem_excl);
+  nxmutex_unlock(&priv->lock);
   return pos;
 }
 
@@ -1031,7 +968,7 @@ static off_t ht16k33_seek(FAR struct file *filep, off_t offset, int whence)
  ****************************************************************************/
 
 static int ht16k33_ioctl(FAR struct file *filep, int cmd,
-                             unsigned long arg)
+                         unsigned long arg)
 {
   switch (cmd)
     {
@@ -1059,7 +996,7 @@ static int ht16k33_ioctl(FAR struct file *filep, int cmd,
         {
           FAR struct inode *inode = filep->f_inode;
           FAR struct ht16k33_dev_s *priv =
-            (FAR struct ht16k33_dev_s *)inode->i_private;
+            inode->i_private;
           FAR struct slcd_curpos_s *attr =
             (FAR struct slcd_curpos_s *)((uintptr_t)arg);
 
@@ -1072,11 +1009,11 @@ static int ht16k33_ioctl(FAR struct file *filep, int cmd,
         {
           FAR struct inode *inode = filep->f_inode;
           FAR struct ht16k33_dev_s *priv =
-            (FAR struct ht16k33_dev_s *)inode->i_private;
+            inode->i_private;
 
-          nxsem_wait(&priv->sem_excl);
+          nxmutex_lock(&priv->lock);
           *(FAR int *)((uintptr_t)arg) = 1; /* Hardcoded */
-          nxsem_post(&priv->sem_excl);
+          nxmutex_unlock(&priv->lock);
         }
         break;
 
@@ -1084,13 +1021,11 @@ static int ht16k33_ioctl(FAR struct file *filep, int cmd,
         {
           FAR struct inode *inode = filep->f_inode;
           FAR struct ht16k33_dev_s *priv =
-            (FAR struct ht16k33_dev_s *)inode->i_private;
+            inode->i_private;
 
-          nxsem_wait(&priv->sem_excl);
-
+          nxmutex_lock(&priv->lock);
           ht16k33_setcontrast(priv, 0, (uint8_t)arg);
-
-          nxsem_post(&priv->sem_excl);
+          nxmutex_unlock(&priv->lock);
         }
         break;
 
@@ -1147,7 +1082,7 @@ int ht16k33_register(int devno, FAR struct i2c_master_s *i2c)
   priv->row        = 0;
   priv->pendscroll = false;
 
-  nxsem_init(&priv->sem_excl, 0, 1);
+  nxmutex_init(&priv->lock);
 
   /* Initialize the display */
 
@@ -1155,7 +1090,7 @@ int ht16k33_register(int devno, FAR struct i2c_master_s *i2c)
 
   /* Create the character device name */
 
-  snprintf(devname, DEVNAME_FMTLEN, DEVNAME_FMT, devno);
+  snprintf(devname, sizeof(devname), DEVNAME_FMT, devno);
 
   /* Register the driver */
 
@@ -1163,6 +1098,7 @@ int ht16k33_register(int devno, FAR struct i2c_master_s *i2c)
   if (ret < 0)
     {
       snerr("ERROR: Failed to register driver: %d\n", ret);
+      nxmutex_destroy(&priv->lock);
       kmm_free(priv);
     }
 

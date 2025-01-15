@@ -31,6 +31,7 @@
 
 #include "esp32_spiram.h"
 #include "esp32_himem.h"
+#include "esp32_spiflash.h"
 #include "hardware/esp32_soc.h"
 
 /****************************************************************************
@@ -79,8 +80,6 @@
 #  define SPIRAM_BANKSWITCH_RESERVE 0
 #endif
 
-#define CACHE_BLOCKSIZE (32*1024)
-
 /* Start of the virtual address range reserved for himem use */
 
 #define VIRT_HIMEM_RANGE_START (SOC_EXTRAM_DATA_LOW + \
@@ -103,21 +102,12 @@
 
 /* Character driver methods */
 
-static int     himem_open(struct file *filep);
-static int     himem_close(struct file *filep);
 static ssize_t himem_read(struct file *filep, char *buffer,
                           size_t buflen);
 static ssize_t himem_write(struct file *filep, const char *buffer,
                            size_t buflen);
 static int     himem_ioctl(struct file *filep, int cmd,
                            unsigned long arg);
-
-/* This structure is used only for access control */
-
-struct himem_access_s
-{
-  sem_t        exclsem;  /* Supports mutual exclusion */
-};
 
 /* Metadata for a block of physical RAM */
 
@@ -136,6 +126,7 @@ typedef struct
   unsigned int ram_block: 16;
 } rangeblock_t;
 
+static spinlock_t g_descriptor_lock = SP_UNLOCKED;
 static ramblock_t *g_ram_descriptor = NULL;
 static rangeblock_t *g_range_descriptor = NULL;
 static int g_ramblockcnt = 0;
@@ -151,13 +142,12 @@ irqstate_t spinlock_flags;
 
 static const struct file_operations g_himemfops =
 {
-  himem_open,
-  himem_close,
-  himem_read,
-  himem_write,
-  NULL,
-  himem_ioctl,
-  NULL
+  NULL,             /* open   */
+  NULL,             /* close */
+  himem_read,       /* read */
+  himem_write,      /* write */
+  NULL,             /* seek */
+  himem_ioctl,      /* ioctl */
 };
 
 /****************************************************************************
@@ -172,20 +162,6 @@ static inline int ramblock_idx_valid(int ramblock_idx)
 static inline int rangeblock_idx_valid(int rangeblock_idx)
 {
   return (rangeblock_idx >= 0 && rangeblock_idx < g_rangeblockcnt);
-}
-
-static void set_bank(int virt_bank, int phys_bank, int ct)
-{
-  int r;
-
-  r = cache_sram_mmu_set(0, 0, SOC_EXTRAM_DATA_LOW + CACHE_BLOCKSIZE *
-                         virt_bank, phys_bank * CACHE_BLOCKSIZE, 32, ct);
-  DEBUGASSERT(r == 0);
-  r = cache_sram_mmu_set(1, 0, SOC_EXTRAM_DATA_LOW + CACHE_BLOCKSIZE *
-                         virt_bank, phys_bank * CACHE_BLOCKSIZE, 32, ct);
-  DEBUGASSERT(r == 0);
-
-  UNUSED(r);
 }
 
 /****************************************************************************
@@ -222,7 +198,6 @@ size_t esp_himem_reserved_area_size(void)
 
 int esp_himem_init(void)
 {
-  struct himem_access_s *priv;
   int paddr_start = (4096 * 1024) - (CACHE_BLOCKSIZE *
                      SPIRAM_BANKSWITCH_RESERVE);
   int paddr_end;
@@ -234,31 +209,20 @@ int esp_himem_init(void)
       return -ENODEV;
     }
 
-  /* Allocate a new himem access instance */
-
-  priv = (struct himem_access_s *)
-    kmm_zalloc(sizeof(struct himem_access_s));
-
-  if (!priv)
-    {
-      merr("ERROR: Failed to allocate device structure\n");
-      return -ENOMEM;
-    }
-
   maxram = esp_spiram_get_size();
 
   /* Catch double init */
 
-  /* Looks weird; last arg is empty so it expands to 'return ;' */
+  /* Looks weird; last arg is empty so it expands to 'return;' */
 
-  HIMEM_CHECK(g_ram_descriptor != NULL, "already initialized", (int) NULL);
+  HIMEM_CHECK(g_ram_descriptor != NULL, "already initialized", 0);
 
-  HIMEM_CHECK(g_range_descriptor != NULL, "already initialized", (int) NULL);
+  HIMEM_CHECK(g_range_descriptor != NULL, "already initialized", 0);
 
   /* need to have some reserved banks */
 
   HIMEM_CHECK(SPIRAM_BANKSWITCH_RESERVE == 0, "No banks reserved for \
-              himem", (int) NULL);
+              himem", 0);
 
   /* Start and end of physical reserved memory. Note it starts slightly under
    * the 4MiB mark as the reserved banks can't have an unity mapping to be
@@ -277,18 +241,17 @@ int esp_himem_init(void)
   if (g_ram_descriptor == NULL || g_range_descriptor == NULL)
     {
       merr("Cannot allocate memory for meta info. Not initializing!");
-      free(g_ram_descriptor);
-      free(g_range_descriptor);
+      kmm_free(g_ram_descriptor);
+      kmm_free(g_range_descriptor);
       return -ENOMEM;
     }
 
   /* Register the character driver */
 
-  ret = register_driver("/dev/himem", &g_himemfops, 0666, priv);
+  ret = register_driver("/dev/himem", &g_himemfops, 0666, NULL);
   if (ret < 0)
     {
       merr("ERROR: Failed to register driver: %d\n", ret);
-      kmm_free(priv);
     }
 
   minfo("Initialized. Using last %d 32KB address blocks for bank \
@@ -363,11 +326,11 @@ int esp_himem_alloc(size_t size, esp_himem_handle_t *handle_out)
       goto nomem;
     }
 
-  spinlock_flags = spin_lock_irqsave(NULL);
+  spinlock_flags = spin_lock_irqsave(&g_descriptor_lock);
 
   ok = allocate_blocks(blocks, r->block);
 
-  spin_unlock_irqrestore(NULL, spinlock_flags);
+  spin_unlock_irqrestore(&g_descriptor_lock, spinlock_flags);
   if (!ok)
     {
       goto nomem;
@@ -381,8 +344,8 @@ int esp_himem_alloc(size_t size, esp_himem_handle_t *handle_out)
 nomem:
   if (r)
     {
-      free(r->block);
-      free(r);
+      kmm_free(r->block);
+      kmm_free(r);
     }
 
   return -ENOMEM;
@@ -403,18 +366,18 @@ int esp_himem_free(esp_himem_handle_t handle)
 
   /* Mark blocks as free */
 
-  spinlock_flags = spin_lock_irqsave(NULL);
+  spinlock_flags = spin_lock_irqsave(&g_descriptor_lock);
   for (i = 0; i < handle->block_ct; i++)
     {
       g_ram_descriptor[handle->block[i]].is_alloced = false;
     }
 
-  spin_unlock_irqrestore(NULL, spinlock_flags);
+  spin_unlock_irqrestore(&g_descriptor_lock, spinlock_flags);
 
   /* Free handle */
 
-  free(handle->block);
-  free(handle);
+  kmm_free(handle->block);
+  kmm_free(handle);
   return OK;
 }
 
@@ -445,7 +408,7 @@ int esp_himem_alloc_map_range(size_t size,
   r->block_start = -1;
 
   start_free = 0;
-  spinlock_flags = spin_lock_irqsave(NULL);
+  spinlock_flags = spin_lock_irqsave(&g_descriptor_lock);
 
   for (i = 0; i < g_rangeblockcnt; i++)
     {
@@ -469,10 +432,11 @@ int esp_himem_alloc_map_range(size_t size,
 
   if (r->block_start == -1)
     {
+      spin_unlock_irqrestore(&g_descriptor_lock, spinlock_flags);
+
       /* Couldn't find enough free blocks */
 
-      free(r);
-      spin_unlock_irqrestore(NULL, spinlock_flags);
+      kmm_free(r);
       return -ENOMEM;
     }
 
@@ -483,7 +447,7 @@ int esp_himem_alloc_map_range(size_t size,
       g_range_descriptor[r->block_start + i].is_alloced = 1;
     }
 
-  spin_unlock_irqrestore(NULL, spinlock_flags);
+  spin_unlock_irqrestore(&g_descriptor_lock, spinlock_flags);
 
   /* All done. */
 
@@ -512,15 +476,15 @@ int esp_himem_free_map_range(esp_himem_rangehandle_t handle)
 
   /* We should be good to free this. Mark blocks as free. */
 
-  spinlock_flags = spin_lock_irqsave(NULL);
+  spinlock_flags = spin_lock_irqsave(&g_descriptor_lock);
 
   for (i = 0; i < handle->block_ct; i++)
     {
       g_range_descriptor[i + handle->block_start].is_alloced = 0;
     }
 
-  spin_unlock_irqrestore(NULL, spinlock_flags);
-  free(handle);
+  spin_unlock_irqrestore(&g_descriptor_lock, spinlock_flags);
+  kmm_free(handle);
   return OK;
 }
 
@@ -575,7 +539,7 @@ int esp_himem_map(esp_himem_handle_t handle,
 
   /* Map and mark as mapped */
 
-  spinlock_flags = spin_lock_irqsave(NULL);
+  spinlock_flags = spin_lock_irqsave(&g_descriptor_lock);
 
   for (i = 0; i < blockcount; i++)
     {
@@ -586,13 +550,13 @@ int esp_himem_map(esp_himem_handle_t handle,
                         handle->block[i + ram_block];
     }
 
-  spin_unlock_irqrestore(NULL, spinlock_flags);
+  spin_unlock_irqrestore(&g_descriptor_lock, spinlock_flags);
 
   for (i = 0; i < blockcount; i++)
     {
-      set_bank(VIRT_HIMEM_RANGE_BLOCKSTART + range->block_start + i +
-               range_block, handle->block[i + ram_block] +
-               PHYS_HIMEM_BLOCKSTART, 1);
+      esp32_set_bank(VIRT_HIMEM_RANGE_BLOCKSTART + range->block_start + i +
+                     range_block, handle->block[i + ram_block] +
+                     PHYS_HIMEM_BLOCKSTART, 1);
     }
 
   /* Set out pointer */
@@ -627,7 +591,7 @@ int esp_himem_unmap(esp_himem_rangehandle_t range, void *ptr,
   HIMEM_CHECK(range_block + blockcount > range->block_ct,
               "range out of bounds for handle", -EINVAL);
 
-  spinlock_flags = spin_lock_irqsave(NULL);
+  spinlock_flags = spin_lock_irqsave(&g_descriptor_lock);
 
   for (i = 0; i < blockcount; i++)
     {
@@ -640,33 +604,7 @@ int esp_himem_unmap(esp_himem_rangehandle_t range, void *ptr,
     }
 
   esp_spiram_writeback_cache();
-  spin_unlock_irqrestore(NULL, spinlock_flags);
-  return OK;
-}
-
-/****************************************************************************
- * Name: himem_open
- *
- * Description:
- *   This function is called whenever the LM-75 device is opened.
- *
- ****************************************************************************/
-
-static int himem_open(struct file *filep)
-{
-  return OK;
-}
-
-/****************************************************************************
- * Name: himem_close
- *
- * Description:
- *   This routine is called when the LM-75 device is closed.
- *
- ****************************************************************************/
-
-static int himem_close(struct file *filep)
-{
+  spin_unlock_irqrestore(&g_descriptor_lock, spinlock_flags);
   return OK;
 }
 
@@ -696,7 +634,7 @@ static ssize_t himem_write(struct file *filep, const char *buffer,
 
 static int himem_ioctl(struct file *filep, int cmd, unsigned long arg)
 {
-  int ret   = OK;
+  int ret = OK;
 
   switch (cmd)
     {

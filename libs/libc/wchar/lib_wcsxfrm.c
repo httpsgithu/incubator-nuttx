@@ -1,8 +1,8 @@
 /****************************************************************************
  * libs/libc/wchar/lib_wcsxfrm.c
  *
- *   Copyright (c)1999 Citrus Project,
- *   All rights reserved.
+ * SPDX-License-Identifier: BSD-2-Clause
+ * SPDX-FileCopyrightText: 1999 Citrus Project, All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -32,13 +32,7 @@
  * Included Files
  ****************************************************************************/
 
-#include <nuttx/config.h>
-
-#include <stddef.h>
-#include <string.h>
 #include <wchar.h>
-
-#ifdef CONFIG_LIBC_WCHAR
 
 /****************************************************************************
  * Public Functions
@@ -62,4 +56,3 @@ size_t wcsxfrm(FAR wchar_t *a, FAR const wchar_t *b, size_t n)
 {
   return wcslcpy(a, b, n);
 }
-#endif

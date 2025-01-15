@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/renesas/src/rx65n/rx65n_sigdeliver.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -32,17 +34,18 @@
 #include <nuttx/irq.h>
 #include <nuttx/arch.h>
 #include <nuttx/board.h>
+#include <arch/board/board.h>
 
 #include "sched/sched.h"
-#include "up_internal.h"
-#include "up_arch.h"
+#include "signal/signal.h"
+#include "renesas_internal.h"
 
 /****************************************************************************
  * Public Functions
  ****************************************************************************/
 
 /****************************************************************************
- * Name: up_sigdeliver
+ * Name: renesas_sigdeliver
  *
  * Description:
  *   This is the a signal handling trampoline.  When a signal action was
@@ -51,28 +54,20 @@
  *
  ****************************************************************************/
 
-void up_sigdeliver(void)
+void renesas_sigdeliver(void)
 {
   struct tcb_s *rtcb = this_task();
   uint32_t regs[XCPTCONTEXT_REGS];
-  sig_deliver_t sigdeliver;
-
-  /* Save the errno.  This must be preserved throughout the signal handling
-   * so that the user code final gets the correct errno value (probably
-   * EINTR).
-   */
-
-  int saved_errno = get_errno();
 
   board_autoled_on(LED_SIGNAL);
 
-  sinfo("rtcb=%p sigdeliver=%p sigpendactionq.head=%p\n",
-        rtcb, rtcb->xcp.sigdeliver, rtcb->sigpendactionq.head);
-  DEBUGASSERT(rtcb->xcp.sigdeliver != NULL);
+  sinfo("rtcb=%p sigpendactionq.head=%p\n",
+        rtcb, rtcb->sigpendactionq.head);
+  DEBUGASSERT((rtcb->flags & TCB_FLAG_SIGDELIVER) != 0);
 
   /* Save the real return state on the stack. */
 
-  up_copystate(regs, rtcb->xcp.regs);
+  renesas_copystate(regs, rtcb->xcp.regs);
   regs[REG_PC]   = rtcb->xcp.saved_pc;
   regs[REG_PSW]  = rtcb->xcp.saved_sr;
 
@@ -82,8 +77,7 @@ void up_sigdeliver(void)
    * signals.
    */
 
-  sigdeliver           = rtcb->xcp.sigdeliver;
-  rtcb->xcp.sigdeliver = NULL;
+  rtcb->flags &= ~TCB_FLAG_SIGDELIVER;
 
 #ifndef CONFIG_SUPPRESS_INTERRUPTS
   /* Then make sure that interrupts are enabled.  Signal handlers must always
@@ -95,7 +89,7 @@ void up_sigdeliver(void)
 
   /* Deliver the signals */
 
-  sigdeliver(rtcb);
+  nxsig_deliver(rtcb);
 
   /* Output any debug messages BEFORE restoring errno (because they may
    * alter errno), then disable interrupts again and restore the original
@@ -104,12 +98,11 @@ void up_sigdeliver(void)
 
   sinfo("Resuming\n");
   up_irq_save();
-  set_errno(saved_errno);
 
   /* Then restore the correct state for this thread of
    * execution.
    */
 
   board_autoled_off(LED_SIGNAL);
-  up_fullcontextrestore(regs);
+  renesas_fullcontextrestore(regs);
 }

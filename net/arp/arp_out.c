@@ -1,6 +1,8 @@
 /****************************************************************************
  * net/arp/arp_out.c
  *
+ * SPDX-License-Identifier: BSD-3-Clause
+ *
  *   Copyright (C) 2007-2011, 2014-2015, 2017-2018 Gregory Nutt. All rights
  *     reserved.
  *   Author: Gregory Nutt <gnutt@nuttx.org>
@@ -47,21 +49,13 @@
 #include <string.h>
 #include <debug.h>
 
+#include <nuttx/net/net.h>
 #include <nuttx/net/netdev.h>
-#include <nuttx/net/arp.h>
 
 #include "route/route.h"
 #include "arp/arp.h"
 
 #ifdef CONFIG_NET_ARP
-
-/****************************************************************************
- * Pre-processor Definitions
- ****************************************************************************/
-
-#define ETHBUF  ((struct eth_hdr_s *)&dev->d_buf[0])
-#define ARPBUF  ((struct arp_hdr_s *)&dev->d_buf[ETH_HDRLEN])
-#define IPBUF   ((struct arp_iphdr_s *)&dev->d_buf[ETH_HDRLEN])
 
 /****************************************************************************
  * Private Data
@@ -140,10 +134,21 @@ void arp_out(FAR struct net_driver_s *dev)
 {
   struct ether_addr ethaddr;
   FAR struct eth_hdr_s *peth = ETHBUF;
-  FAR struct arp_iphdr_s *pip = IPBUF;
+  FAR struct arp_iphdr_s *pip = ARPIPBUF;
   in_addr_t ipaddr;
   in_addr_t destipaddr;
   int ret;
+
+  /* ARP support is only built if the Ethernet link layer is supported.
+   * Continue and send the ARP request only if this device uses the
+   * Ethernet link layer protocol.
+   */
+
+  if (dev->d_lltype != NET_LL_ETHERNET &&
+      dev->d_lltype != NET_LL_IEEE80211)
+    {
+      return;
+    }
 
 #if defined(CONFIG_NET_PKT) || defined(CONFIG_NET_ARP_SEND)
   /* Skip sending ARP requests when the frame to be transmitted was
@@ -257,7 +262,7 @@ void arp_out(FAR struct net_driver_s *dev)
 
   /* Check if we already have this destination address in the ARP table */
 
-  ret = arp_find(ipaddr, &ethaddr);
+  ret = arp_find(ipaddr, ethaddr.ether_addr_octet, dev);
   if (ret < 0)
     {
       ninfo("ARP request for IP %08lx\n", (unsigned long)ipaddr);

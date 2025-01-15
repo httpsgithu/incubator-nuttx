@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/armv8-m/arm_initialstate.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -32,8 +34,6 @@
 #include <arch/armv8-m/nvicpri.h>
 
 #include "arm_internal.h"
-#include "arm_arch.h"
-
 #include "psr.h"
 #include "exc_return.h"
 
@@ -59,9 +59,13 @@ void up_initial_state(struct tcb_s *tcb)
 {
   struct xcptcontext *xcp = &tcb->xcp;
 
+  /* Initialize the initial exception register context structure */
+
+  memset(xcp, 0, sizeof(struct xcptcontext));
+
   /* Initialize the idle thread stack */
 
-  if (tcb->pid == 0)
+  if (tcb->pid == IDLE_PROCESS_ID)
     {
       tcb->stack_alloc_ptr = (void *)(g_idle_topstack -
                                       CONFIG_IDLETHREAD_STACKSIZE);
@@ -76,11 +80,19 @@ void up_initial_state(struct tcb_s *tcb)
 
       arm_stack_color(tcb->stack_alloc_ptr, 0);
 #endif /* CONFIG_STACK_COLORATION */
+
+      return;
     }
 
-  /* Initialize the initial exception register context structure */
+  /* Initialize the context registers to stack top */
 
-  memset(xcp, 0, sizeof(struct xcptcontext));
+  xcp->regs = (void *)((uint32_t)tcb->stack_base_ptr +
+                                 tcb->adj_stack_size -
+                                 XCPTCONTEXT_SIZE);
+
+  /* Initialize the xcp registers */
+
+  memset(xcp->regs, 0, XCPTCONTEXT_SIZE);
 
   /* Save the initial stack pointer */
 
@@ -107,6 +119,12 @@ void up_initial_state(struct tcb_s *tcb)
 
   xcp->regs[REG_XPSR]    = ARMV8M_XPSR_T;
 
+  /* All tasks need to set pic address to special register */
+
+#ifdef CONFIG_BUILD_PIC
+  __asm__ ("mov %0, r9" : "=r"(xcp->regs[REG_R9]));
+#endif
+
   /* If this task is running PIC, then set the PIC base register to the
    * address of the allocated D-Space region.
    */
@@ -132,39 +150,85 @@ void up_initial_state(struct tcb_s *tcb)
 #endif
 #endif /* CONFIG_PIC */
 
-#if !defined(CONFIG_ARMV8M_LAZYFPU) || defined(CONFIG_BUILD_PROTECTED)
   /* All tasks start via a stub function in kernel space.  So all
    * tasks must start in privileged thread mode.  If CONFIG_BUILD_PROTECTED
    * is defined, then that stub function will switch to unprivileged
    * mode before transferring control to the user task.
    */
 
-  xcp->regs[REG_EXC_RETURN] = EXC_RETURN_PRIVTHR;
+  xcp->regs[REG_EXC_RETURN] = EXC_RETURN_THREAD;
 
-#endif /* !CONFIG_ARMV8M_LAZYFPU || CONFIG_BUILD_PROTECTED */
+  xcp->regs[REG_CONTROL] = getcontrol() & ~CONTROL_NPRIV;
 
-#if !defined(CONFIG_ARMV8M_LAZYFPU) && defined(CONFIG_ARCH_FPU)
-
-  xcp->regs[REG_FPSCR] = 0;      /* REVISIT: Initial FPSCR should be configurable */
-  xcp->regs[REG_FP_RESERVED] = 0;
-
-#endif /* !CONFIG_ARMV8M_LAZYFPU && CONFIG_ARCH_FPU */
+#ifdef CONFIG_ARCH_FPU
+  xcp->regs[REG_FPSCR]  |= ARMV8M_FPSCR_LTPSIZE_NONE;
+#endif /* CONFIG_ARCH_FPU */
 
   /* Enable or disable interrupts, based on user configuration */
 
 #ifdef CONFIG_SUPPRESS_INTERRUPTS
 
-#ifdef CONFIG_ARMV8M_USEBASEPRI
   xcp->regs[REG_BASEPRI] = NVIC_SYSH_DISABLE_PRIORITY;
-#else
-  xcp->regs[REG_PRIMASK] = 1;
-#endif
 
 #else /* CONFIG_SUPPRESS_INTERRUPTS */
 
-#ifdef CONFIG_ARMV8M_USEBASEPRI
-  xcp->regs[REG_BASEPRI] = NVIC_SYSH_PRIORITY_MIN;
-#endif
+  xcp->regs[REG_BASEPRI] = 0;
 
 #endif /* CONFIG_SUPPRESS_INTERRUPTS */
 }
+
+#if CONFIG_ARCH_INTERRUPTSTACK > 7
+/****************************************************************************
+ * Name: arm_initialize_stack
+ *
+ * Description:
+ *   If interrupt stack is defined, the PSP and MSP need to be reinitialized.
+ *
+ ****************************************************************************/
+
+noinline_function void arm_initialize_stack(void)
+{
+  uint32_t stacklim = up_get_intstackbase(this_cpu());
+  uint32_t stack = stacklim + INTSTACK_SIZE;
+  uint32_t temp = 0;
+
+  __asm__ __volatile__
+    (
+      "mrs %1, CONTROL\n"
+      "tst %1, #2\n"
+      "bne 1f\n"
+
+      /* Initialize PSP */
+
+      "mrs %1, msp\n"
+      "msr psp, %1\n"
+#ifdef CONFIG_ARMV8M_STACKCHECK_HARDWARE
+      "mrs %1, msplim\n"
+      "msr psplim, %1\n"
+#endif
+      "isb sy\n"
+
+      /* Select PSP */
+
+      "mrs %1, CONTROL\n"
+      "orr %1, #2\n"
+      "msr CONTROL, %1\n"
+      "isb sy\n"
+
+      /* Initialize MSP */
+
+      "1:\n"
+      "msr msp, %0\n"
+#ifdef CONFIG_ARMV8M_STACKCHECK_HARDWARE
+      "msr msplim, %2\n"
+#endif
+      "isb sy\n"
+      :
+#ifdef CONFIG_ARMV8M_STACKCHECK_HARDWARE
+      : "r" (stack), "r" (temp), "r" (stacklim)
+#else
+      : "r" (stack), "r" (temp)
+#endif
+      : "memory");
+}
+#endif

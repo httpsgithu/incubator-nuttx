@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/stm32/olimexino-stm32/src/olimexino-stm32.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -28,6 +30,8 @@
 #include <nuttx/config.h>
 #include <nuttx/compiler.h>
 #include <stdint.h>
+
+#include "stm32.h"
 
 /****************************************************************************
  * Pre-processor Definitions
@@ -208,7 +212,7 @@ int board_usbmsc_initialize(int port);
  *
  ****************************************************************************/
 
-#ifdef CONFIG_CAN
+#ifdef CONFIG_STM32_CAN_CHARDRIVER
 int stm32_can_setup(void);
 #endif
 

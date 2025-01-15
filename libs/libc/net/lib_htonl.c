@@ -1,6 +1,8 @@
 /****************************************************************************
  * libs/libc/net/lib_htonl.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -33,21 +35,10 @@
 
 uint32_t htonl(uint32_t hl)
 {
-#ifdef CONFIG_ENDIAN_BIG
-  return hl;
-#else
-  return (((hl) >> 24) |
-          (((hl) >>  8) & 0x0000ff00) |
-          (((hl) <<  8) & 0x00ff0000) |
-           ((hl) << 24));
-#endif
+  return HTONL(hl);
 }
 
 uint32_t ntohl(uint32_t nl)
 {
-#ifdef CONFIG_ENDIAN_BIG
-  return nl;
-#else
-  return htonl(nl);
-#endif
+  return NTOHL(nl);
 }

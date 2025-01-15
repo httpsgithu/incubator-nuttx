@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/imxrt/imxrt_mpuinit.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -25,6 +27,7 @@
 #include <nuttx/config.h>
 
 #include <assert.h>
+#include <sys/param.h>
 
 #include <nuttx/userspace.h>
 
@@ -34,20 +37,13 @@
 #include "hardware/imxrt_memorymap.h"
 
 #include "imxrt_mpuinit.h"
+#include "arm_internal.h"
 
 #ifdef CONFIG_ARM_MPU
 
 /****************************************************************************
  * Pre-processor Definitions
  ****************************************************************************/
-
-#ifndef MAX
-#  define MAX(a,b) a > b ? a : b
-#endif
-
-#ifndef MIN
-#  define MIN(a,b) a < b ? a : b
-#endif
 
 #ifndef CONFIG_ARMV7M_DCACHE
   /*  With Dcache off:
@@ -98,6 +94,10 @@ void imxrt_mpu_initialize(void)
 
   mpu_showtype();
 
+  /* Reset MPU if enabled */
+
+  mpu_reset();
+
 #ifdef CONFIG_ARMV7M_DCACHE
   /* Memory barrier */
 
@@ -126,6 +126,9 @@ void imxrt_mpu_initialize(void)
 
   mpu_user_intsram(datastart, dataend - datastart);
 #else
+#  if defined(CONFIG_ARCH_FAMILY_IMXRT117x)
+#     include "imxrt117x_mpuinit.c"
+#  else
   mpu_configure_region(0xc0000000, 512 * 1024 * 1024,
                        MPU_RASR_TEX_DEV  | /* Device
                                             * Not Cacheable
@@ -197,7 +200,7 @@ void imxrt_mpu_initialize(void)
                                             * Not Shareable      */
                        MPU_RASR_AP_RWRW);  /* P:RW   U:RW
                                             * Instruction access */
-
+#endif /* CONFIG_ARCH_FAMILY_IMXRT117x */
   mpu_control(true, true, true);
   return;
 #endif

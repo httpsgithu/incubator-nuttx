@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/nrf52/hardware/nrf52_utils.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -27,6 +29,8 @@
 
 #include <nuttx/config.h>
 
+#include "arm_internal.h"
+
 /****************************************************************************
  * Public Function Prototypes / Inline Functions
  ****************************************************************************/
@@ -41,6 +45,16 @@
  ****************************************************************************/
 
 void nrf52_clrpend(int irq);
+
+/****************************************************************************
+ * Name: nrf52_easydma_valid
+ *
+ * Description:
+ *   Validate if easyDMA transfer is possible.
+ *
+ ****************************************************************************/
+
+bool nrf52_easydma_valid(uint32_t addr);
 
 /****************************************************************************
  * Name: nrf52832_errdata_init

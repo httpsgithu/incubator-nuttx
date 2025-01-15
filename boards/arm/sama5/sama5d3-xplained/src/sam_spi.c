@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/sama5/sama5d3-xplained/src/sam_spi.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -32,7 +34,7 @@
 #include <nuttx/spi/spi.h>
 #include <arch/board/board.h>
 
-#include "arm_arch.h"
+#include "arm_internal.h"
 #include "chip.h"
 #include "sam_pio.h"
 #include "sam_spi.h"
@@ -163,14 +165,14 @@ void sam_spi1select(uint32_t devid, bool selected)
  ****************************************************************************/
 
 #ifdef CONFIG_SAMA5_SPI0
-uint8_t sam_spi0status(FAR struct spi_dev_s *dev, uint32_t devid)
+uint8_t sam_spi0status(struct spi_dev_s *dev, uint32_t devid)
 {
   return 0;
 }
 #endif
 
 #ifdef CONFIG_SAMA5_SPI0
-uint8_t sam_spi1status(FAR struct spi_dev_s *dev, uint32_t devid)
+uint8_t sam_spi1status(struct spi_dev_s *dev, uint32_t devid)
 {
   return 0;
 }

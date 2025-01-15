@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/sam34/sam_rtt.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -18,8 +20,8 @@
  *
  ****************************************************************************/
 
-#ifndef __ARCH_ARM_SRC_SAM34_RTT_H
-#define __ARCH_ARM_SRC_SAM34_RTT_H
+#ifndef __ARCH_ARM_SRC_SAM34_SAM_RTT_H
+#define __ARCH_ARM_SRC_SAM34_SAM_RTT_H
 
 /****************************************************************************
  * Included Files
@@ -69,7 +71,7 @@ extern "C"
  *
  ****************************************************************************/
 
-void sam_rttinitialize(FAR const char *devpath);
+void sam_rttinitialize(const char *devpath);
 
 #endif // CONFIG_SAM34_RTT
 
@@ -80,4 +82,4 @@ void sam_rttinitialize(FAR const char *devpath);
 
 #endif /* __ASSEMBLY__ */
 #endif /* CONFIG_TIMER */
-#endif /* __ARCH_ARM_SRC_SAM34_RTT_H */
+#endif /* __ARCH_ARM_SRC_SAM34_SAM_RTT_H */

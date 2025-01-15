@@ -1,6 +1,7 @@
 /****************************************************************************
  * net/neighbor/neighbor.h
- * Header file for database of link-local neighbors, used by IPv6 code.
+ *
+ * SPDX-License-Identifier: Apache-2.0
  *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -171,7 +172,7 @@ void neighbor_ethernet_out(FAR struct net_driver_s *dev);
  * Input Parameters:
  *   snapshot  - Location to return the Neighbor table copy
  *   nentries  - The size of the user provided 'dest' in entries, each of
- *               size sizeof(struct arp_entry_s)
+ *               size sizeof(struct neighbor_entry_s)
  *
  * Returned Value:
  *   On success, the number of entries actually copied is returned.  Unused

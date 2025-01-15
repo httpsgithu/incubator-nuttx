@@ -1,6 +1,8 @@
 /****************************************************************************
  * fs/mmap/fs_munmap.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -23,6 +25,7 @@
  ****************************************************************************/
 
 #include <nuttx/config.h>
+#include <nuttx/mm/map.h>
 
 #include <sys/types.h>
 #include <sys/mman.h>
@@ -32,134 +35,58 @@
 #include <assert.h>
 #include <debug.h>
 
+#include <nuttx/sched.h>
 #include <nuttx/kmalloc.h>
 
 #include "inode/inode.h"
 #include "fs_rammap.h"
+#include "sched/sched.h"
 
 /****************************************************************************
  * Private Functions
  ****************************************************************************/
 
-static int file_munmap_(FAR void *start, size_t length, bool kernel)
+static int file_munmap_(FAR void *start, size_t length,
+                        enum mm_map_type_e type)
 {
-#ifdef CONFIG_FS_RAMMAP
-  FAR struct fs_rammap_s *prev;
-  FAR struct fs_rammap_s *curr;
-  FAR void *newaddr;
-  unsigned int offset;
-  int ret;
+  FAR struct tcb_s *tcb = this_task();
+  FAR struct task_group_s *group = tcb->group;
+  FAR struct mm_map_entry_s *entry = NULL;
+  FAR struct mm_map_s *mm = get_current_mm();
+  int ret = OK;
 
-  /* Find a region containing this start and length in the list of regions */
-
-  ret = nxsem_wait(&g_rammaps.exclsem);
-  if (ret < 0)
-    {
-      return ret;
-    }
-
-  /* Search the list of regions */
-
-  for (prev = NULL, curr = g_rammaps.head; curr;
-       prev = curr, curr = curr->flink)
-    {
-      /* Does this region include any part of the specified range? */
-
-      if ((uintptr_t)start < (uintptr_t)curr->addr + curr->length &&
-          (uintptr_t)start + length >= (uintptr_t)curr->addr)
-        {
-          break;
-        }
-    }
-
-  /* Did we find the region */
-
-  if (!curr)
-    {
-      ferr("ERROR: Region not found\n");
-      ret = -EINVAL;
-      goto errout_with_semaphore;
-    }
-
-  /* Get the offset from the beginning of the region and the actual number
-   * of bytes to "unmap".  All mappings must extend to the end of the region.
-   * There is no support for free a block of memory but leaving a block of
-   * memory at the end.  This is a consequence of using kumm_realloc() to
-   * simulate the unmapping.
+  /* Iterate through all the mappings and call the underlying
+   * unmap for every mapping where "start" lies
+   * break loop on any errors.
+   *
+   * Get exclusive access to mm_map for this
    */
 
-  offset = start - curr->addr;
-  if (offset + length < curr->length)
+  ret = mm_map_lock();
+  if (ret == OK)
     {
-      ferr("ERROR: Cannot umap without unmapping to the end\n");
-      ret = -ENOSYS;
-      goto errout_with_semaphore;
+      entry = mm_map_find(mm, start, length);
+
+      /* If entry don't find, the start and length is invalid. */
+
+      if (entry == NULL)
+        {
+          ret = -EINVAL;
+          goto unlock;
+        }
+
+      do
+        {
+          DEBUGASSERT(entry->munmap);
+          ret = entry->munmap(group, entry, start, length);
+        }
+      while (ret == OK && (entry = mm_map_find(mm, start, length)));
+
+unlock:
+      mm_map_unlock();
     }
 
-  /* Okay.. the region is beging umapped to the end.  Make sure the length
-   * indicates that.
-   */
-
-  length = curr->length - offset;
-
-  /* Are we unmapping the entire region (offset == 0)? */
-
-  if (length >= curr->length)
-    {
-      /* Yes.. remove the mapping from the list */
-
-      if (prev)
-        {
-          prev->flink = curr->flink;
-        }
-      else
-        {
-          g_rammaps.head = curr->flink;
-        }
-
-      /* Then free the region */
-
-      if (kernel)
-        {
-          kmm_free(curr);
-        }
-      else
-        {
-          kumm_free(curr);
-        }
-    }
-
-  /* No.. We have been asked to "unmap' only a portion of the memory
-   * (offset > 0).
-   */
-
-  else
-    {
-      if (kernel)
-        {
-          newaddr = kmm_realloc(curr->addr,
-                               sizeof(struct fs_rammap_s) + length);
-        }
-      else
-        {
-          newaddr = kumm_realloc(curr->addr,
-                                sizeof(struct fs_rammap_s) + length);
-        }
-
-      DEBUGASSERT(newaddr == (FAR void *)(curr->addr));
-      UNUSED(newaddr); /* May not be used */
-      curr->length = length;
-    }
-
-  nxsem_post(&g_rammaps.exclsem);
-  return OK;
-
-errout_with_semaphore:
-  nxsem_post(&g_rammaps.exclsem);
   return ret;
-#else
-  return OK;
-#endif /* CONFIG_FS_RAMMAP */
 }
 
 /****************************************************************************
@@ -177,7 +104,7 @@ errout_with_semaphore:
 
 int file_munmap(FAR void *start, size_t length)
 {
-  return file_munmap_(start, length, true);
+  return file_munmap_(start, length, MAP_KERNEL);
 }
 
 /****************************************************************************
@@ -196,19 +123,19 @@ int file_munmap(FAR void *start, size_t length)
  *   1. mmap() is the API that is used to support direct access to random
  *     access media under the following very restrictive conditions:
  *
- *     a. The filesystem supports the FIOC_MMAP ioctl command.  Any file
+ *     a. The filesystem implements the mmap file operation.  Any file
  *        system that maps files contiguously on the media should support
  *        this ioctl. (vs. file system that scatter files over the media
  *        in non-contiguous sectors).  As of this writing, ROMFS is the
  *        only file system that meets this requirement.
  *     b. The underlying block driver supports the BIOC_XIPBASE ioctl
  *        command that maps the underlying media to a randomly accessible
- *        address. At  present, only the RAM/ROM disk driver does this.
+ *        address. At present, only the RAM/ROM disk driver does this.
  *
- *     munmap() is still not required in this first case.  In this first
- *     The mapped address is a static address in the MCUs address space
- *     does not need to be munmapped.  Support for munmap() in this case
- *     provided by the simple definition in sys/mman.h:
+ *     munmap() is still not required in this first case. The mapped address
+ *     is a static address in the MCUs address space does not need to be
+ *     munmapped.  Support for munmap() in this case provided by the simple
+ *     definition in sys/mman.h:
  *
  *        #define munmap(start, length)
  *
@@ -219,10 +146,10 @@ int file_munmap(FAR void *start, size_t length)
  *
  * Input Parameters:
  *   start   The start address of the mapping to delete.  For this
- *           simplified munmap() implementation, the *must* be the start
+ *           simplified munmap() implementation, the must be the start
  *           address of the memory region (the same address returned by
  *           mmap()).
- *   length  The length region to be umapped.
+ *   length  The length region to be unmapped.
  *
  * Returned Value:
  *   On success, munmap() returns 0, on failure -1, and errno is set
@@ -234,7 +161,7 @@ int munmap(FAR void *start, size_t length)
 {
   int ret;
 
-  ret = file_munmap_(start, length, false);
+  ret = file_munmap_(start, length, MAP_USER);
   if (ret < 0)
     {
       set_errno(-ret);

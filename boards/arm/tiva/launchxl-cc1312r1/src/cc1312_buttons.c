@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/tiva/launchxl-cc1312r1/src/cc1312_buttons.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -29,8 +31,6 @@
 
 #include <nuttx/arch.h>
 #include <nuttx/board.h>
-#include <nuttx/irq.h>
-
 #include <nuttx/irq.h>
 
 #include "tiva_gpio.h"
@@ -108,7 +108,7 @@ uint32_t board_buttons(void)
  ****************************************************************************/
 
 #if defined(CONFIG_ARCH_IRQBUTTONS) && defined(CONFIG_TIVA_GPIOIRQS)
-int board_button_irq(int id, xcpt_t irqhandler, FAR void *arg)
+int board_button_irq(int id, xcpt_t irqhandler, void *arg)
 {
   irqstate_t flags;
   int irq;

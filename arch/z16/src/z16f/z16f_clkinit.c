@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/z16/src/z16f/z16f_clkinit.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -23,6 +25,7 @@
  ****************************************************************************/
 
 #include "chip.h"
+#include "z16_internal.h"
 
 /****************************************************************************
  * Pre-processor Definitions

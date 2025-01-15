@@ -1,6 +1,8 @@
 /****************************************************************************
  * libs/libc/stdlib/lib_openpty.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -28,17 +30,48 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <limits.h>
 
 #include <nuttx/serial/pty.h>
 
 /****************************************************************************
- * Private Functions
+ * Public Functions
  ****************************************************************************/
 
-static int openmaster(void)
+/****************************************************************************
+ * Name: posix_openpt
+ *
+ * Description:
+ *   The posix_openpt() function establish a connection between a master
+ *   device for a pseudo-terminal and a file descriptor. The file descriptor
+ *   is used by other I/O functions that refer to that pseudo-terminal.
+ *
+ *   The file status flags and file access modes of the open file description
+ *   shall be set according to the value of oflag.
+ *
+ *   Values for oflag are constructed by a bitwise-inclusive OR of flags from
+ *   the following list, defined in <fcntl.h>:
+ *
+ *   O_RDWR
+ *       Open for reading and writing.
+ *   O_NOCTTY
+ *       If set posix_openpt() shall not cause the terminal device to become
+ *       the controlling terminal for the process.
+ *
+ *   The behavior of other values for the oflag argument is unspecified.
+ *
+ * Returned Value:
+ *   Upon successful completion, the posix_openpt() function shall open
+ *   a master pseudo-terminal device and return a non-negative integer
+ *   representing the lowest numbered unused file descriptor. Otherwise,
+ *   -1 shall be returned and errno set to indicate the error.
+ *
+ ****************************************************************************/
+
+int posix_openpt(int oflag)
 {
 #ifdef CONFIG_PSEUDOTERM_SUSV1
-  return open("dev/ptmx", O_RDWR);
+  return open("/dev/ptmx", oflag);
 #else
   int minor;
 
@@ -47,14 +80,14 @@ static int openmaster(void)
       char devname[16];
       int fd;
 
-      snprintf(devname, 16, "/dev/pty%d", minor);
-      fd = open(devname, O_RDWR);
+      snprintf(devname, sizeof(devname), "/dev/pty%d", minor);
+      fd = open(devname, oflag);
       if (fd < 0)
         {
           /* Fail, register and try again */
 
           pty_register(minor);
-          fd = open(devname, O_RDWR);
+          fd = open(devname, oflag);
         }
 
       if (fd >= 0)
@@ -68,10 +101,6 @@ static int openmaster(void)
 }
 
 /****************************************************************************
- * Public Functions
- ****************************************************************************/
-
-/****************************************************************************
  * Name: openpty
  *
  * Description:
@@ -83,8 +112,8 @@ static int openmaster(void)
  *   the slave will be set to the values in win.
  *
  * Returned Value:
- *  If a call to openpty() is not successful, -1 is returned and
- *  errno is set to indicate the error.  Otherwise, return 0.
+ *   If a call to openpty() is not successful, -1 is returned and
+ *   errno is set to indicate the error.  Otherwise, return 0.
  *
  ****************************************************************************/
 
@@ -96,7 +125,7 @@ int openpty(FAR int *master, FAR int *slave, FAR char *name,
 
   /* Open the pseudo terminal master */
 
-  ret = openmaster();
+  ret = posix_openpt(O_RDWR);
   if (ret < 0)
     {
       return ret;
@@ -136,7 +165,7 @@ int openpty(FAR int *master, FAR int *slave, FAR char *name,
 
   if (name != NULL)
     {
-      strcpy(name, buf);
+      strlcpy(name, buf, NAME_MAX);
     }
 
   /* Configure the pseudo terminal slave */

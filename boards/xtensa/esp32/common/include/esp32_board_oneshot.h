@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/xtensa/esp32/common/include/esp32_board_oneshot.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -18,8 +20,8 @@
  *
  ****************************************************************************/
 
-#ifndef __BOARDS_XTENSA_ESP32_COMMON_INCLUDE_BOARD_ONESHOT_H
-#define __BOARDS_XTENSA_ESP32_COMMON_INCLUDE_BOARD_ONESHOT_H
+#ifndef __BOARDS_XTENSA_ESP32_COMMON_INCLUDE_ESP32_BOARD_ONESHOT_H
+#define __BOARDS_XTENSA_ESP32_COMMON_INCLUDE_ESP32_BOARD_ONESHOT_H
 
 /****************************************************************************
  * Included Files
@@ -78,4 +80,4 @@ int esp32_oneshot_init(int timer, uint16_t resolution);
 #endif
 
 #endif /* __ASSEMBLY__ */
-#endif /* __BOARDS_XTENSA_ESP32_COMMON_INCLUDE_BOARD_ONESHOT_H */
+#endif /* __BOARDS_XTENSA_ESP32_COMMON_INCLUDE_ESP32_BOARD_ONESHOT_H */

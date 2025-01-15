@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/c5471/c5471_irq.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -25,11 +27,10 @@
 #include <nuttx/config.h>
 
 #include <stdint.h>
-#include <nuttx/irq.h>
+#include <nuttx/arch.h>
 
 #include "arm.h"
 #include "chip.h"
-#include "arm_arch.h"
 #include "arm_internal.h"
 
 /****************************************************************************
@@ -40,18 +41,6 @@
 #define ILR_PRIORITY      0x0000001E
 
 /****************************************************************************
- * Public Data
- ****************************************************************************/
-
-/* g_current_regs[] holds a references to the current interrupt level
- * register storage structure.  If is non-NULL only during interrupt
- * processing.  Access to g_current_regs[] must be through the macro
- * CURRENT_REGS for portability.
- */
-
-volatile uint32_t *g_current_regs[1];
-
-/****************************************************************************
  * Private Data
  ****************************************************************************/
 
@@ -59,7 +48,7 @@ volatile uint32_t *g_current_regs[1];
  * because we know that correct IRAM area is 0xffc00000.
  */
 
-extern int _svectors; /* Type does not matter */
+extern up_vector_t _svectors[];
 
 /* The C5471 has FLASH at the low end of memory.  The rrload bootloaer will
  * catch all interrupts and re-vector them to vectors stored in IRAM.  The
@@ -68,7 +57,7 @@ extern int _svectors; /* Type does not matter */
 
 static up_vector_t g_vectorinittab[] =
 {
-  (up_vector_t)NULL,
+  NULL,
   arm_vectorundefinsn,
   arm_vectorsvc,
   arm_vectorprefetch,
@@ -126,7 +115,7 @@ static inline void up_ackfiq(unsigned int irq)
 static inline void up_vectorinitialize(void)
 {
   up_vector_t *src  = g_vectorinittab;
-  up_vector_t *dest = (up_vector_t *)&_svectors;
+  up_vector_t *dest = _svectors;
   int i;
 
   for (i = 0; i < NVECTORS; i++)
@@ -165,12 +154,11 @@ void up_irqinitialize(void)
   /* Initialize hardware interrupt vectors */
 
   up_vectorinitialize();
-  CURRENT_REGS = NULL;
 
   /* And finally, enable interrupts */
 
 #ifndef CONFIG_SUPPRESS_INTERRUPTS
-  up_irq_restore(PSR_MODE_SVC | PSR_F_BIT);
+  up_irq_restore(PSR_MODE_SYS | PSR_F_BIT);
 #endif
 }
 

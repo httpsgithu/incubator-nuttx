@@ -1,6 +1,8 @@
 /****************************************************************************
  * libs/libc/termios/lib_isatty.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -27,6 +29,7 @@
  * Included Files
  ****************************************************************************/
 
+#include <unistd.h>
 #include <termios.h>
 
 /****************************************************************************
@@ -45,8 +48,6 @@
  *   returns true if the file descriptor is associated with a driver that
  *   responds wo tcgetattr() without an error -- that it, the driver supports
  *   the NuttX TCGETS ioctl command.
- *
- *   Of course, that can only be true if CONFIG_SERIAL_TERMIOS=y.
  *
  ****************************************************************************/
 

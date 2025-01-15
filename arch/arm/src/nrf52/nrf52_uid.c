@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/nrf52/nrf52_uid.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -24,8 +26,7 @@
 
 #include <nuttx/config.h>
 
-#include "arm_arch.h"
-
+#include "arm_internal.h"
 #include "nrf52_uid.h"
 
 #include "hardware/nrf52_ficr.h"
@@ -34,7 +35,7 @@
  * Public Functions
  ****************************************************************************/
 
-void nrf52_get_uniqueid(uint8_t uniqueid[])
+void nrf52_get_uniqueid(uint8_t uniqueid[8])
 {
   uint32_t uid0 = getreg32(NRF52_FICR_BASE + NRF52_FICR_DEVICEID0_OFFSET);
   uint32_t uid1 = getreg32(NRF52_FICR_BASE + NRF52_FICR_DEVICEID1_OFFSET);

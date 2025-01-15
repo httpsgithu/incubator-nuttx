@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/xtensa/esp32/esp32-ethernet-kit/src/esp32-ethernet-kit.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -18,8 +20,8 @@
  *
  ****************************************************************************/
 
-#ifndef __BOARDS_XTENSA_ESP32_ESP32_ETHERNETKIT_SRC_ESP32_ETHERNETKIT_H
-#define __BOARDS_XTENSA_ESP32_ESP32_ETHERNETKIT_SRC_ESP32_ETHERNETKIT_H
+#ifndef __BOARDS_XTENSA_ESP32_ESP32_ETHERNET_KIT_SRC_ESP32_ETHERNET_KIT_H
+#define __BOARDS_XTENSA_ESP32_ESP32_ETHERNET_KIT_SRC_ESP32_ETHERNET_KIT_H
 
 /****************************************************************************
  * Included Files
@@ -100,4 +102,4 @@ int esp32_mmcsd_initialize(int minor);
 int esp32_spiflash_init(void);
 
 #endif /* __ASSEMBLY__ */
-#endif /* __BOARDS_XTENSA_ESP32_ESP32_ETHERNETKIT_SRC_ESP32_ETHERNETKIT_H */
+#endif /* __BOARDS_XTENSA_ESP32_ESP32_ETHERNET_KIT_SRC_ESP32_ETHERNET_KIT_H */

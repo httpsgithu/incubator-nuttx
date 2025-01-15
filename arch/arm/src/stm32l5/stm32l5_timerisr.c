@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/stm32l5/stm32l5_timerisr.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -33,8 +35,6 @@
 #include "nvic.h"
 #include "clock/clock.h"
 #include "arm_internal.h"
-#include "arm_arch.h"
-
 #include "chip.h"
 #include "stm32l5.h"
 
@@ -136,7 +136,7 @@ void up_timer_initialize(void)
 
   /* Attach the timer interrupt vector */
 
-  (void)irq_attach(STM32L5_IRQ_SYSTICK, (xcpt_t)stm32l5_timerisr, NULL);
+  irq_attach(STM32L5_IRQ_SYSTICK, (xcpt_t)stm32l5_timerisr, NULL);
 
   /* Enable SysTick interrupts */
 

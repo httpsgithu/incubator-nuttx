@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/nrf52/hardware/nrf52_wdt.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -33,8 +35,6 @@
  ****************************************************************************/
 
 /* WDT Register Offsets *****************************************************/
-
-/* Registers for the WDT function: */
 
 #define NRF52_WDT_TASKS_START_OFFSET      0x0000  /* Start the watchdog */
 #define NRF52_WDT_EVENTS_TIMEOUT_OFFSET   0x0100  /* Watchdog timeout */

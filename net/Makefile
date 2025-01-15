@@ -1,6 +1,8 @@
 ############################################################################
 # net/Makefile
 #
+# SPDX-License-Identifier: Apache-2.0
+#
 # Licensed to the Apache Software Foundation (ASF) under one or more
 # contributor license agreements.  See the NOTICE file distributed with
 # this work for additional information regarding copyright ownership.  The
@@ -28,6 +30,7 @@ NET_CSRCS = net_initialize.c
 
 include socket/Make.defs
 include inet/Make.defs
+include ipfrag/Make.defs
 include netdev/Make.defs
 include arp/Make.defs
 include icmp/Make.defs
@@ -46,14 +49,17 @@ include sixlowpan/Make.defs
 include bluetooth/Make.defs
 include ieee802154/Make.defs
 include devif/Make.defs
+include ipfilter/Make.defs
 include ipforward/Make.defs
+include nat/Make.defs
+include netfilter/Make.defs
 include route/Make.defs
 include procfs/Make.defs
 include usrsock/Make.defs
 include utils/Make.defs
 endif
 
-CFLAGS += ${shell $(INCDIR) "$(CC)" $(TOPDIR)$(DELIM)net}
+CFLAGS += ${INCDIR_PREFIX}$(TOPDIR)$(DELIM)net
 
 ASRCS = $(SOCK_ASRCS) $(NETDEV_ASRCS) $(NET_ASRCS)
 AOBJS = $(ASRCS:.S=$(OBJEXT))

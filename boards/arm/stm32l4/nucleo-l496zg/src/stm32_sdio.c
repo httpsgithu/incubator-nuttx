@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/stm32l4/nucleo-l496zg/src/stm32_sdio.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -56,9 +58,9 @@
  * Private Data
  ****************************************************************************/
 
-static FAR struct sdio_dev_s *g_sdio_dev;
+static struct sdio_dev_s *g_sdio_dev;
 #ifdef HAVE_NCD
-static bool g_sd_inserted = 0xff; /* Impossible value */
+static bool g_sd_inserted;
 #endif
 
 /****************************************************************************
@@ -74,7 +76,7 @@ static bool g_sd_inserted = 0xff; /* Impossible value */
  ****************************************************************************/
 
 #ifdef HAVE_NCD
-static int stm32l4_ncd_interrupt(int irq, FAR void *context)
+static int stm32l4_ncd_interrupt(int irq, void *context)
 {
   bool present;
 
@@ -106,10 +108,6 @@ int stm32l4_sdio_initialize(void)
   int ret;
 
 #ifdef HAVE_NCD
-  /* Card detect */
-
-  bool cd_status;
-
   /* Configure the card detect GPIO */
 
   stm32l4_configgpio(GPIO_SDMMC1_NCD);
@@ -149,10 +147,10 @@ int stm32l4_sdio_initialize(void)
 #ifdef HAVE_NCD
   /* Use SD card detect pin to check if a card is g_sd_inserted */
 
-  cd_status = !stm32l4_gpioread(GPIO_SDMMC1_NCD);
-  finfo("Card detect : %d\n", cd_status);
+  g_sd_inserted = !stm32l4_gpioread(GPIO_SDMMC1_NCD);
+  finfo("Card detect : %d\n", g_sd_inserted);
 
-  sdio_mediachange(g_sdio_dev, cd_status);
+  sdio_mediachange(g_sdio_dev, g_sd_inserted);
 #else
   /* Assume that the SD card is inserted.  What choice do we have? */
 

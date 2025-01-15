@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/rtl8720c/amebaz_coex.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -24,6 +26,8 @@
 
 #include <stdio.h>
 #include <string.h>
+#include <sys/param.h>
+
 #include "amebaz_coex.h"
 
 /****************************************************************************
@@ -86,22 +90,19 @@ static void rtk_notify_info_to_wifi(uint8_t length, uint8_t *report_info)
 }
 
 void bt_coex_handle_cmd_complete_evt(uint16_t opcode, uint16_t cause,
-                                              uint8_t total_len, uint8_t *p)
+                                     uint8_t total_len, uint8_t *p)
 {
-  (void)cause;
   if (opcode == HCI_VENDOR_MAILBOX_CMD)
     {
-      uint8_t status;
       status = *p++; /* jump the double subcmd */
 
       total_len--;
       if (total_len <= 1)
         {
-          printf("bt_coex_handle_cmd_complete_evt: not reprot to wifi");
-          return ;
+          printf("bt_coex_handle_cmd_complete_evt: not report to wifi");
+          return;
         }
 
-      (void)status;
       rltk_coex_mailbox_to_wifi(p, total_len);
 
       /* rtk_parse_vendor_mailbox_cmd_evt(p, total_len, status); */
@@ -113,9 +114,6 @@ void bt_coex_handle_specific_evt(uint8_t *p, uint8_t len)
   rltk_coex_mailbox_to_wifi(p, len);
 }
 
-#ifndef MIN
-#  define MIN(a,b) (a < b ? a : b)
-#endif
 static const char *bt_hex_real(const void *buf, size_t len)
 {
   static const char hex[] = "0123456789abcdef";
@@ -149,10 +147,10 @@ static void bt_coex_dump_buf(net_buf_simple *tmp_buf)
 
 static int bt_coex_unpack_xiaomi_vendor_cmd(net_buf_simple *tmp_buf)
 {
-  if (tmp_buf-> data[0] == 0x25 && tmp_buf-> data[1] == 0x00)
+  if (tmp_buf->data[0] == 0x25 && tmp_buf->data[1] == 0x00)
     {
-      tmp_buf -> data += 2;
-      tmp_buf -> len -= 2;
+      tmp_buf->data += 2;
+      tmp_buf->len -= 2;
       return 1;
     }
 

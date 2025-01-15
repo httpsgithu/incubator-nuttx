@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/lc823450/lc823450_pwm.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -88,7 +90,7 @@ extern "C"
  * Public Function Prototypes
  ****************************************************************************/
 
-EXTERN FAR struct pwm_lowerhalf_s *lc823450_pwminitialize(int timer);
+EXTERN struct pwm_lowerhalf_s *lc823450_pwminitialize(int timer);
 
 #undef EXTERN
 #if defined(__cplusplus)

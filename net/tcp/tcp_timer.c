@@ -1,6 +1,7 @@
 /****************************************************************************
  * net/tcp/tcp_timer.c
- * Poll for the availability of TCP TX data
+ *
+ * SPDX-License-Identifier: BSD-3-Clause
  *
  *   Copyright (C) 2007-2010, 2015-2016, 2018, 2020 Gregory Nutt. All rights
  *     reserved.
@@ -49,6 +50,8 @@
 #include <stdint.h>
 #include <assert.h>
 #include <debug.h>
+#include <time.h>
+#include <stdlib.h>
 
 #include <nuttx/net/netconfig.h>
 #include <nuttx/net/net.h>
@@ -56,6 +59,7 @@
 #include <nuttx/net/netstats.h>
 #include <nuttx/net/tcp.h>
 
+#include "netdev/netdev.h"
 #include "devif/devif.h"
 #include "socket/socket.h"
 #include "tcp/tcp.h"
@@ -75,8 +79,301 @@
 #define ACK_DELAY (1)
 
 /****************************************************************************
+ * Private Functions
+ ****************************************************************************/
+
+/****************************************************************************
+ * Name: tcp_get_timeout
+ *
+ * Description:
+ *   Gets the time of the next timeout
+ *
+ * Input Parameters:
+ *   conn - The TCP "connection" to poll for TX data
+ *
+ * Returned Value:
+ *   int - The time required for the next expiry (units: half-seconds)
+ *
+ * Assumptions:
+ *   conn is not NULL.
+ *   The connection (conn) is bound to the polling device (dev).
+ *
+ ****************************************************************************/
+
+static int tcp_get_timeout(FAR struct tcp_conn_s *conn)
+{
+  int timeout = conn->timer;
+
+#ifdef CONFIG_NET_TCP_KEEPALIVE
+  if (timeout == 0)
+    {
+      /* The conn->keeptimer units is decisecond and the timeout
+       * units is half-seconds, therefore they need to be unified.
+       */
+
+      timeout = conn->keeptimer / DSEC_PER_HSEC;
+    }
+  else if (conn->keeptimer > 0 && timeout > conn->keeptimer / DSEC_PER_HSEC)
+    {
+      timeout = conn->keeptimer / DSEC_PER_HSEC;
+    }
+#endif
+
+  return timeout;
+}
+
+/****************************************************************************
+ * Name: tcp_timer_expiry
+ *
+ * Description:
+ *   Handle a TCP timer expiration for the provided TCP connection
+ *   Restart a TCP timer if need to
+ *
+ * Input Parameters:
+ *   arg - The TCP "connection" to poll for TX data
+ *
+ * Returned Value:
+ *   None
+ *
+ * Assumptions:
+ *   arg is not NULL.
+ *   The connection (arg) is bound to the polling device (dev).
+ *
+ ****************************************************************************/
+
+static void tcp_timer_expiry(FAR void *arg)
+{
+  FAR struct tcp_conn_s *conn = NULL;
+
+  net_lock();
+
+  while ((conn = tcp_nextconn(conn)) != NULL)
+    {
+      if (conn == arg)
+        {
+          conn->timeout = true;
+          netdev_txnotify_dev(conn->dev);
+          break;
+        }
+    }
+
+  net_unlock();
+}
+
+/****************************************************************************
+ * Name: tcp_xmit_probe
+ *
+ * Description:
+ *   TCP retransmission probe packet
+ *
+ * Input Parameters:
+ *   dev    - The device driver structure to use in the send operation
+ *   conn   - The TCP "connection" to poll for TX data
+ *
+ * Returned Value:
+ *   None
+ *
+ * Assumptions:
+ *   dev is not NULL.
+ *   conn is not NULL.
+ *
+ ****************************************************************************/
+
+static void tcp_xmit_probe(FAR struct net_driver_s *dev,
+                           FAR struct tcp_conn_s *conn)
+{
+  /* And send the probe.
+   * The packet we send must have these properties:
+   *
+   *   - TCP_ACK flag (only) is set.
+   *   - Sequence number is the sequence number of
+   *     previously ACKed data, i.e., the expected
+   *     sequence number minus one.
+   *
+   * tcp_send() will send the TCP sequence number as
+   * conn->sndseq.  Rather than creating a new
+   * interface, we spoof tcp_end() here:
+   */
+
+  uint16_t hdrlen = tcpip_hdrsize(conn);
+  uint32_t saveseq = tcp_getsequence(conn->sndseq);
+  tcp_setsequence(conn->sndseq, saveseq - 1);
+
+  tcp_send(dev, conn, TCP_ACK, hdrlen);
+
+  tcp_setsequence(conn->sndseq, saveseq);
+}
+
+/****************************************************************************
  * Public Functions
  ****************************************************************************/
+
+/****************************************************************************
+ * Name: tcp_update_timer
+ *
+ * Description:
+ *   Update the TCP timer for the provided TCP connection,
+ *   The timeout is accurate
+ *
+ * Input Parameters:
+ *   conn - The TCP "connection" to poll for TX data
+ *
+ * Returned Value:
+ *   None
+ *
+ * Assumptions:
+ *   conn is not NULL.
+ *   The connection (conn) is bound to the polling device (dev).
+ *
+ ****************************************************************************/
+
+void tcp_update_timer(FAR struct tcp_conn_s *conn)
+{
+  sclock_t timeout = tcp_get_timeout(conn);
+
+  if (timeout > 0)
+    {
+#ifdef CONFIG_NET_SOLINGER
+      /* Re-update tcp timeout */
+
+      if (conn->ltimeout != 0)
+        {
+          sclock_t ticks = conn->ltimeout - clock_systime_ticks();
+
+          if (ticks <= 0)
+            {
+              timeout = 0;
+            }
+          else if (timeout > TICK2HSEC(ticks))
+            {
+              timeout = TICK2HSEC(ticks);
+            }
+        }
+#endif
+
+      if (work_available(&conn->work) ||
+          TICK2HSEC(work_timeleft(&conn->work)) != timeout)
+        {
+          work_queue(LPWORK, &conn->work, tcp_timer_expiry,
+                     conn, HSEC2TICK(timeout));
+        }
+    }
+  else
+    {
+      work_cancel(LPWORK, &conn->work);
+    }
+}
+
+/****************************************************************************
+ * Name: tcp_update_retrantimer
+ *
+ * Description:
+ *   Update the retransmit TCP timer for the provided TCP connection,
+ *   The timeout is accurate
+ *
+ * Input Parameters:
+ *   conn    - The TCP "connection" to poll for TX data
+ *   timeout - Time for the next timeout
+ *
+ * Returned Value:
+ *   None
+ *
+ * Assumptions:
+ *   conn is not NULL.
+ *   The connection (conn) is bound to the polling device (dev).
+ *
+ ****************************************************************************/
+
+void tcp_update_retrantimer(FAR struct tcp_conn_s *conn, int timeout)
+{
+  conn->timer = timeout;
+  tcp_update_timer(conn);
+}
+
+/****************************************************************************
+ * Name: tcp_update_keeptimer
+ *
+ * Description:
+ *   Update the keeplive TCP timer for the provided TCP connection,
+ *   The timeout is accurate
+ *
+ * Input Parameters:
+ *   conn    - The TCP "connection" to poll for TX data
+ *   timeout - Time for the next timeout
+ *
+ * Returned Value:
+ *   None
+ *
+ * Assumptions:
+ *   conn is not NULL.
+ *   The connection (conn) is bound to the polling device (dev).
+ *
+ ****************************************************************************/
+
+#ifdef CONFIG_NET_TCP_KEEPALIVE
+void tcp_update_keeptimer(FAR struct tcp_conn_s *conn, int timeout)
+{
+  conn->keeptimer = timeout;
+  tcp_update_timer(conn);
+}
+#endif
+
+/****************************************************************************
+ * Name: tcp_stop_timer
+ *
+ * Description:
+ *   Stop TCP timer for the provided TCP connection
+ *   When the connection is closed
+ *
+ * Input Parameters:
+ *   conn - The TCP "connection" to poll for TX data
+ *
+ * Returned Value:
+ *   None
+ *
+ * Assumptions:
+ *   conn is not NULL.
+ *
+ ****************************************************************************/
+
+void tcp_stop_timer(FAR struct tcp_conn_s *conn)
+{
+  work_cancel(LPWORK, &conn->work);
+}
+
+/****************************************************************************
+ * Name: tcp_set_zero_probe
+ *
+ * Description:
+ *   Update the TCP probe timer for the provided TCP connection,
+ *   The timeout is accurate
+ *
+ * Input Parameters:
+ *   conn   - The TCP "connection" to poll for TX data
+ *   flags  - Set of connection events
+ *
+ * Returned Value:
+ *   None
+ *
+ * Assumptions:
+ *   conn is not NULL.
+ *
+ ****************************************************************************/
+
+void tcp_set_zero_probe(FAR struct tcp_conn_s *conn, uint16_t flags)
+{
+  if ((conn->tcpstateflags & TCP_ESTABLISHED) &&
+      ((flags & TCP_NEWDATA) == 0) && conn->tx_unacked <= 0 &&
+      (flags & (TCP_POLL | TCP_REXMIT | TCP_ACKDATA)) &&
+#ifdef CONFIG_NET_TCP_WRITE_BUFFERS
+      !(sq_empty(&conn->write_q)) &&
+#endif
+      !conn->timeout && !conn->zero_probe)
+    {
+      tcp_update_retrantimer(conn, TCP_RTO_MIN);
+      conn->zero_probe = true;
+    }
+}
 
 /****************************************************************************
  * Name: tcp_timer
@@ -87,7 +384,6 @@
  * Input Parameters:
  *   dev  - The device driver structure to use in the send operation
  *   conn - The TCP "connection" to poll for TX data
- *   hsec - The polling interval in units of halves of a second
  *
  * Returned Value:
  *   None
@@ -100,9 +396,9 @@
  *
  ****************************************************************************/
 
-void tcp_timer(FAR struct net_driver_s *dev, FAR struct tcp_conn_s *conn,
-               int hsec)
+void tcp_timer(FAR struct net_driver_s *dev, FAR struct tcp_conn_s *conn)
 {
+  int hsec = tcp_get_timeout(conn);
   uint16_t result;
   uint8_t hdrlen;
 
@@ -117,30 +413,14 @@ void tcp_timer(FAR struct net_driver_s *dev, FAR struct tcp_conn_s *conn,
   /* Set up for the callback.  We can't know in advance if the application
    * is going to send a IPv4 or an IPv6 packet, so this setup may not
    * actually be used.  Furthermore, the TCP logic is required to call
-   * tcp_ipv4_select() or tcp_ipv6_select() prior to sending any packets.
+   * tcp_ip_select() prior to sending any packets.
    * We will try to set the correct value here basic on the binding of
    * the connection.
    */
 
-#ifdef CONFIG_NET_IPv4
-#ifdef CONFIG_NET_IPv6
-  if (conn->domain == PF_INET)
-#endif
-    {
-      hdrlen = IPv4TCP_HDRLEN;
-      tcp_ipv4_select(dev);
-    }
-#endif /* CONFIG_NET_IPv4 */
+  tcp_ip_select(conn);
 
-#ifdef CONFIG_NET_IPv6
-#ifdef CONFIG_NET_IPv4
-  else
-#endif
-    {
-      hdrlen = IPv6TCP_HDRLEN;
-      tcp_ipv6_select(dev);
-    }
-#endif /* CONFIG_NET_IPv6 */
+  hdrlen = tcpip_hdrsize(conn);
 
   /* Increase the TCP sequence number */
 
@@ -158,6 +438,31 @@ void tcp_timer(FAR struct net_driver_s *dev, FAR struct tcp_conn_s *conn,
       return;
     }
 
+#ifdef CONFIG_NET_SOLINGER
+  /* Send reset immediately if linger timeout */
+
+  if (conn->ltimeout != 0 &&
+      ((sclock_t)(conn->ltimeout - clock_systime_ticks()) <= 0))
+    {
+      conn->tcpstateflags = TCP_CLOSED;
+      ninfo("TCP state: TCP_CLOSED\n");
+
+      /* We call tcp_callback() with TCP_TIMEDOUT to
+       * inform the application that the connection has
+       * timed out.
+       */
+
+      tcp_callback(dev, conn, TCP_TIMEDOUT);
+
+      /* We also send a reset packet to the remote host. */
+
+      tcp_send(dev, conn, TCP_RST | TCP_ACK, hdrlen);
+
+      goto done;
+    }
+  else
+#endif
+
   /* Check if the connection is in a state in which we simply wait
    * for the connection to time out. If so, we increase the
    * connection's timer and remove the connection if it times
@@ -167,19 +472,13 @@ void tcp_timer(FAR struct net_driver_s *dev, FAR struct tcp_conn_s *conn,
   if (conn->tcpstateflags == TCP_TIME_WAIT ||
       conn->tcpstateflags == TCP_FIN_WAIT_2)
     {
-      unsigned int newtimer;
-
-      /* Increment the connection timer */
-
-      newtimer = (unsigned int)conn->timer + hsec;
-
       /* Check if the timer exceeds the timeout value */
 
-      if (newtimer >= (TCP_TIME_WAIT_TIMEOUT * HSEC_PER_SEC))
+      if (conn->timer <= hsec)
         {
-          /* Set the timer to the maximum value */
+          /* Set the timer to zero value */
 
-          conn->timer = TCP_TIME_WAIT_TIMEOUT * HSEC_PER_SEC;
+          conn->timer         = 0;
           conn->tcpstateflags = TCP_CLOSED;
 
           /* Notify upper layers about the timeout */
@@ -190,9 +489,9 @@ void tcp_timer(FAR struct net_driver_s *dev, FAR struct tcp_conn_s *conn,
         }
       else
         {
-          /* No timeout. Just update the incremented timer */
+          /* No timeout. Just update the decremented timer */
 
-          conn->timer = newtimer;
+          conn->timer -= hsec;
         }
     }
   else if (conn->tcpstateflags != TCP_CLOSED)
@@ -228,28 +527,8 @@ void tcp_timer(FAR struct net_driver_s *dev, FAR struct tcp_conn_s *conn,
               if (conn->tcpstateflags == TCP_SYN_RCVD &&
                   conn->nrtx >= TCP_MAXSYNRTX)
                 {
-                  FAR struct tcp_conn_s *listener;
-
                   conn->tcpstateflags = TCP_CLOSED;
                   ninfo("TCP state: TCP_SYN_RCVD->TCP_CLOSED\n");
-
-                  /* Find the listener for this connection. */
-
-#if defined(CONFIG_NET_IPv4) && defined(CONFIG_NET_IPv6)
-                  listener = tcp_findlistener(&conn->u, conn->lport,
-                                              conn->domain);
-#else
-                  listener = tcp_findlistener(&conn->u, conn->lport);
-#endif
-                  if (listener != NULL)
-                    {
-                      /* We call tcp_callback() for the connection with
-                       * TCP_TIMEDOUT to inform the listener that the
-                       * connection has timed out.
-                       */
-
-                      tcp_callback(dev, listener, TCP_TIMEDOUT);
-                    }
 
                   /* We also send a reset packet to the remote host. */
 
@@ -259,7 +538,7 @@ void tcp_timer(FAR struct net_driver_s *dev, FAR struct tcp_conn_s *conn,
 
                   conn->crefs = 0;
                   tcp_free(conn);
-                  goto done;
+                  return;
                 }
 
               /* Otherwise, check for a timeout on an established connection.
@@ -269,7 +548,12 @@ void tcp_timer(FAR struct net_driver_s *dev, FAR struct tcp_conn_s *conn,
 
               else if (
 #ifdef CONFIG_NET_TCP_WRITE_BUFFERS
+#  ifdef CONFIG_NET_SENDFILE
+                  (!conn->sendfile && conn->expired > 0) ||
+                  (conn->sendfile && conn->nrtx >= TCP_MAXRTX) ||
+#  else
                   conn->expired > 0 ||
+#  endif
 #else
                   conn->nrtx >= TCP_MAXRTX ||
 #endif
@@ -295,8 +579,9 @@ void tcp_timer(FAR struct net_driver_s *dev, FAR struct tcp_conn_s *conn,
 
               /* Exponential backoff. */
 
-              conn->timer = TCP_RTO << (conn->nrtx > 4 ? 4: conn->nrtx);
-              (conn->nrtx)++;
+              conn->rto = TCP_RTO << (conn->nrtx > 4 ? 4: conn->nrtx);
+              tcp_update_retrantimer(conn, conn->rto);
+              conn->nrtx++;
 
               /* Ok, so we need to retransmit. We do this differently
                * depending on which state we are in. In ESTABLISHED, we
@@ -317,6 +602,11 @@ void tcp_timer(FAR struct net_driver_s *dev, FAR struct tcp_conn_s *conn,
                      * SYNACK.
                      */
 
+#if !defined(CONFIG_NET_TCP_WRITE_BUFFERS)
+                    tcp_setsequence(conn->sndseq, conn->rexmit_seq);
+#else
+                    /* REVISIT for the buffered mode */
+#endif
                     tcp_synack(dev, conn, TCP_ACK | TCP_SYN);
                     goto done;
 
@@ -324,6 +614,11 @@ void tcp_timer(FAR struct net_driver_s *dev, FAR struct tcp_conn_s *conn,
 
                     /* In the SYN_SENT state, we retransmit out SYN. */
 
+#if !defined(CONFIG_NET_TCP_WRITE_BUFFERS)
+                    tcp_setsequence(conn->sndseq, conn->rexmit_seq);
+#else
+                    /* REVISIT for the buffered mode */
+#endif
                     tcp_synack(dev, conn, TCP_SYN);
                     goto done;
 
@@ -336,6 +631,25 @@ void tcp_timer(FAR struct net_driver_s *dev, FAR struct tcp_conn_s *conn,
 
                     result = tcp_callback(dev, conn, TCP_REXMIT);
                     tcp_rexmit(dev, conn, result);
+
+#ifdef CONFIG_NET_TCP_CC_NEWRENO
+                    /* If conn is TCP_INFR, it should enter to slow start */
+
+                    if (conn->flags & TCP_INFR)
+                      {
+                        conn->flags &= ~TCP_INFR;
+                      }
+
+                    /* update the max_cwnd */
+
+                    conn->max_cwnd = (conn->max_cwnd + 7 * conn->cwnd) >> 3;
+
+                    /* reset cwnd and ssthresh, refers to RFC5861. */
+
+                    conn->ssthresh =
+                                    MAX(conn->tx_unacked / 2, 2 * conn->mss);
+                    conn->cwnd = conn->mss;
+#endif
                     goto done;
 
                   case TCP_FIN_WAIT_1:
@@ -344,6 +658,11 @@ void tcp_timer(FAR struct net_driver_s *dev, FAR struct tcp_conn_s *conn,
 
                     /* In all these states we should retransmit a FINACK. */
 
+#if !defined(CONFIG_NET_TCP_WRITE_BUFFERS)
+                    tcp_setsequence(conn->sndseq, conn->rexmit_seq);
+#else
+                    /* REVISIT for the buffered mode */
+#endif
                     tcp_send(dev, conn, TCP_FIN | TCP_ACK, hdrlen);
                     goto done;
                 }
@@ -361,31 +680,17 @@ void tcp_timer(FAR struct net_driver_s *dev, FAR struct tcp_conn_s *conn,
 
           if (conn->keepalive)
             {
-              socktimeo_t timeo;
-              uint32_t saveseq;
-
-              /* If this is the first probe, then the keepstart time is
-               * the time that the last ACK or data was received from the
-               * remote.
-               *
-               * On subsequent retries, keepstart is the time that the
-               * last probe was sent.
-               */
-
-              if (conn->keepretries > 0)
-                {
-                  timeo = (socktimeo_t)conn->keepintvl;
-                }
-              else
-                {
-                  timeo = (socktimeo_t)conn->keepidle;
-                }
-
               /* Yes... has the idle period elapsed with no data or ACK
                * received from the remote peer?
                */
 
-              if (net_timeo(conn->keeptime, timeo))
+              if (conn->keeptimer > hsec * DSEC_PER_HSEC)
+                {
+                  /* Will not yet decrement to zero */
+
+                  conn->keeptimer -= hsec * DSEC_PER_HSEC;
+                }
+              else
                 {
                   /* Yes.. Has the retry count expired? */
 
@@ -400,48 +705,7 @@ void tcp_timer(FAR struct net_driver_s *dev, FAR struct tcp_conn_s *conn,
                     }
                   else
                     {
-                      unsigned int tcpiplen;
-
-                      /* No.. we need to send another probe.
-                       * Get the size of the IP and TCP header.
-                       */
-
-#ifdef CONFIG_NET_IPv4
-#ifdef CONFIG_NET_IPv6
-                      if (conn->domain == PF_INET)
-#endif
-                        {
-                          tcpiplen = IPv4_HDRLEN + TCP_HDRLEN;
-                        }
-#endif
-#ifdef CONFIG_NET_IPv6
-#ifdef CONFIG_NET_IPv4
-                      else
-#endif
-                        {
-                          tcpiplen = IPv6_HDRLEN + TCP_HDRLEN;
-                        }
-#endif
-
-                      /* And send the probe.
-                       * The packet we send must have these properties:
-                       *
-                       *   - TCP_ACK flag (only) is set.
-                       *   - Sequence number is the sequence number of
-                       *     previously ACKed data, i.e., the expected
-                       *     sequence number minus one.
-                       *
-                       * tcp_send() will send the TCP sequence number as
-                       * conn->sndseq.  Rather than creating a new
-                       * interface, we spoof tcp_end() here:
-                       */
-
-                      saveseq = tcp_getsequence(conn->sndseq);
-                      tcp_setsequence(conn->sndseq, saveseq - 1);
-
-                      tcp_send(dev, conn, TCP_ACK, tcpiplen);
-
-                      tcp_setsequence(conn->sndseq, saveseq);
+                      tcp_xmit_probe(dev, conn);
 
 #ifdef CONFIG_NET_TCP_WRITE_BUFFERS
                       /* Increment the un-ACKed sequence number */
@@ -450,7 +714,7 @@ void tcp_timer(FAR struct net_driver_s *dev, FAR struct tcp_conn_s *conn,
 #endif
                       /* Update for the next probe */
 
-                      conn->keeptime = clock_systime_ticks();
+                      conn->keeptimer = conn->keepintvl;
                       conn->keepretries++;
                     }
 
@@ -458,6 +722,53 @@ void tcp_timer(FAR struct net_driver_s *dev, FAR struct tcp_conn_s *conn,
                 }
             }
 #endif
+
+          /* Is this an established connected with
+           * Zero window probe enabled?
+           */
+
+          if (conn->zero_probe)
+            {
+              if (conn->timer > hsec)
+                {
+                  /* Will not yet decrement to zero */
+
+                  conn->timer -= hsec;
+                }
+              else
+                {
+                  /* Yes.. Has the retry count expired? */
+
+                  if (conn->nrtx >= TCP_MAXRTX)
+                    {
+                      /* Yes... stop the network monitor, closing the
+                       * connection and all sockets associated with the
+                       * connection.
+                       */
+
+                      conn->zero_probe = false;
+                      tcp_stop_monitor(conn, TCP_ABORT);
+                    }
+                  else
+                    {
+                      tcp_xmit_probe(dev, conn);
+
+#ifdef CONFIG_NET_TCP_WRITE_BUFFERS
+                      /* Increment the un-ACKed sequence number */
+
+                      conn->sndseq_max++;
+#endif
+
+                      /* Update for the next probe */
+
+                      conn->nrtx++;
+                      conn->timer = MIN((TCP_RTO_MIN << conn->nrtx),
+                                        TCP_RTO_MAX);
+                    }
+
+                  goto done;
+                }
+            }
 
 #ifdef CONFIG_NET_TCP_DELAYED_ACK
           /* Handle delayed acknowledgments.  Is there a segment with a
@@ -506,7 +817,7 @@ void tcp_timer(FAR struct net_driver_s *dev, FAR struct tcp_conn_s *conn,
   dev->d_len = 0;
 
 done:
-  return;
+  tcp_update_timer(conn);
 }
 
 #endif /* CONFIG_NET && CONFIG_NET_TCP */

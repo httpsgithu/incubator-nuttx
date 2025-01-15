@@ -1,6 +1,7 @@
 /****************************************************************************
  * include/nuttx/power/battery_ioctl.h
- * NuttX Battery IOCTLs definition
+ *
+ * SPDX-License-Identifier: Apache-2.0
  *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -54,6 +55,10 @@
 #define BATIOC_CHGDSG        _BATIOC(0x000E)
 #define BATIOC_CLEARFAULTS   _BATIOC(0x000F)
 #define BATIOC_COULOMBS      _BATIOC(0x0010)
+#define BATIOC_CHIPID        _BATIOC(0x0011)
+#define BATIOC_GET_VOLTAGE   _BATIOC(0x0012)
+#define BATIOC_VOLTAGE_INFO  _BATIOC(0x0013)
+#define BATIOC_GET_PROTOCOL  _BATIOC(0x0014)
 
 /* Special input values for BATIOC_INPUT_CURRENT that may optionally
  * be supported by lower-half driver:
@@ -108,6 +113,15 @@ enum battery_health_e
   BATTERY_HEALTH_DISCONNECTED   /* Battery is not connected */
 };
 
+/* battery charge protocol type */
+
+enum battery_protocol_e
+{
+  BATTERY_PROTOCOL_DEFAULT = 0,         /* Battery charge protocol of adapter is DEFAULT */
+  BATTERY_PROTOCOL_QC3P0 = 1 << 0,      /* Battery charge protocol of adapter is QC 3.0 */
+  BATTERY_PROTOCOL_TX_XIAOMI = 1 << 1,  /* Battery charge protocol of TX is xiaomi standard */
+};
+
 /* Battery operation message */
 
 struct batio_operate_msg_s
@@ -131,6 +145,12 @@ enum batio_operate_e
   BATIO_OPRTN_SYSON,
   BATIO_OPRTN_RESET,
   BATIO_OPRTN_WDOG,
+  BATIO_OPRTN_SHIPMODE,
+  BATIO_OPRTN_CUTOFF_CURRENT,
+  BATIO_OPRTN_VBUS_STATE,
+  BATIO_OPRTN_CAPACITY,
+  BATIO_OPRTN_CHARGER_STATE,
+  BATIO_OPRTN_HEALTH,
   BATIO_OPRTN_END
 };
 

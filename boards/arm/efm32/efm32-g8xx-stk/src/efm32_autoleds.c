@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/efm32/efm32-g8xx-stk/src/efm32_autoleds.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -32,9 +34,7 @@
 #include <arch/board/board.h>
 
 #include "chip.h"
-#include "arm_arch.h"
 #include "arm_internal.h"
-
 #include "efm32_gpio.h"
 #include "efm32-g8xx-stk.h"
 

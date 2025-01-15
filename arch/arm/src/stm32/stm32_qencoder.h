@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/stm32/stm32_qencoder.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -122,7 +124,7 @@
  *
  ****************************************************************************/
 
-int stm32_qeinitialize(FAR const char *devpath, int tim);
+int stm32_qeinitialize(const char *devpath, int tim);
 
 #ifdef CONFIG_STM32_QENCODER_INDEX_PIN
 /****************************************************************************

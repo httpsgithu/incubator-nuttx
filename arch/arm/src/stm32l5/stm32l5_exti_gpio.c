@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/stm32l5/stm32l5_exti_gpio.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -34,7 +36,7 @@
 
 #include <arch/irq.h>
 
-#include "arm_arch.h"
+#include "arm_internal.h"
 #include "chip.h"
 #include "stm32l5_gpio.h"
 #include "stm32l5_exti.h"
@@ -65,7 +67,7 @@ static struct gpio_callback_s g_gpio_handlers[16];
  * Interrupt Service Routine - Dispatcher
  ****************************************************************************/
 
-static int stm32l5_exti0_15_isr(int irq, void *context, FAR void *arg)
+static int stm32l5_exti0_15_isr(int irq, void *context, void *arg)
 {
   int ret = OK;
   int exti;

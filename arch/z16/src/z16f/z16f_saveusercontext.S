@@ -1,6 +1,8 @@
 /*************************************************************************
  * arch/z16/src/z16f/z16f_saveusercontext.asm
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -30,7 +32,7 @@
  * External References / External Definitions
  *************************************************************************/
 
-	xdef	_z16_saveusercontext
+	xdef	_up_saveusercontext
 
 /*************************************************************************
  * Data Allocation
@@ -44,7 +46,7 @@
  *************************************************************************/
 
 /*************************************************************************
- * Name: z16_saveusercontext
+ * Name: up_saveusercontext
  *
  * Description:
  *   Save the current user context.
@@ -59,7 +61,7 @@
  *
  *************************************************************************/
 
-_z16_saveusercontext:
+_up_saveusercontext:
 	/* Save the flags (needed to restore the interrupt state) */
 
 	ld.ub	r3, Z16F_CNTRL_FLAGS	/* Fetch the flags register (zero padded) */

@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/cxd56xx/cxd56_sdhci.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -29,6 +31,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <string.h>
+#include <sys/param.h>
 #include <assert.h>
 #include <debug.h>
 #include <errno.h>
@@ -47,7 +50,7 @@
 #include <arch/board/board.h>
 
 #include "chip.h"
-#include "arm_arch.h"
+#include "arm_internal.h"
 #include "cxd56_sdhci.h"
 #include "cxd56_clock.h"
 #include "cxd56_pinconfig.h"
@@ -68,7 +71,7 @@
 #  error "Callback support requires CONFIG_SCHED_WORKQUEUE and CONFIG_SCHED_HPWORK"
 #endif
 
-#if !defined(CONFIG_MMCSD_MULTIBLOCK_DISABLE) && !defined(CONFIG_SDIO_BLOCKSETUP)
+#if (CONFIG_MMCSD_MULTIBLOCK_LIMIT != 1) && !defined(CONFIG_SDIO_BLOCKSETUP)
 #  error "This driver requires CONFIG_SDIO_BLOCKSETUP"
 #endif
 
@@ -211,10 +214,6 @@
 #define SDIO_OCR_NUM_FUNCTIONS(ocr) (((ocr) >> 28) & 0x7)
 #define SDIO_FUNC_NUM_MAX       (7)
 
-#ifndef MIN
-#  define MIN(a, b) ((a) < (b) ? (a) : (b))
-#endif
-
 #define SDIO_BLOCK_TIMEOUT      200
 #define SDIO_BLOCK_SIZE         512
 
@@ -261,8 +260,8 @@ struct cxd56_sdiodev_s
   bool usedma;
   bool dmasend_prepare;
   size_t   receive_size;
-  uint8_t  *aligned_buffer;           /* Used to buffer alignment */
-  uint8_t  *receive_buffer;           /* Used to keep receive buffer address */
+  uint8_t *aligned_buffer;            /* Used to buffer alignment */
+  uint8_t *receive_buffer;            /* Used to keep receive buffer address */
   uint32_t dma_cmd;
   uint32_t dmasend_cmd;
   uint32_t dmasend_regcmd;
@@ -308,8 +307,6 @@ struct cxd56_sdhcregs_s
 
 /* Low-level helpers ********************************************************/
 
-static int  cxd56_takesem(struct cxd56_sdiodev_s *priv);
-#define     cxd56_givesem(priv) (nxsem_post(&(priv)->waitsem))
 static void cxd56_configwaitints(struct cxd56_sdiodev_s *priv,
               uint32_t waitints, sdio_eventset_t waitevents,
               sdio_eventset_t wkupevents);
@@ -351,68 +348,68 @@ static void cxd56_endtransfer(struct cxd56_sdiodev_s *priv,
 
 /* Interrupt Handling *******************************************************/
 
-static int cxd56_interrupt(int irq, FAR void *context, FAR void *arg);
+static int cxd56_interrupt(int irq, void *context, void *arg);
 
 /* SDIO interface methods ***************************************************/
 
 /* Mutual exclusion */
 
 #ifdef CONFIG_SDIO_MUXBUS
-static int cxd56_sdio_lock(FAR struct sdio_dev_s *dev, bool lock);
+static int cxd56_sdio_lock(struct sdio_dev_s *dev, bool lock);
 #endif
 
 /* Initialization/setup */
 
-static void cxd56_sdio_sdhci_reset(FAR struct sdio_dev_s *dev);
-static sdio_capset_t cxd56_sdio_capabilities(FAR struct sdio_dev_s *dev);
-static sdio_statset_t cxd56_sdio_status(FAR struct sdio_dev_s *dev);
-static void cxd56_sdio_widebus(FAR struct sdio_dev_s *dev, bool enable);
+static void cxd56_sdio_sdhci_reset(struct sdio_dev_s *dev);
+static sdio_capset_t cxd56_sdio_capabilities(struct sdio_dev_s *dev);
+static sdio_statset_t cxd56_sdio_status(struct sdio_dev_s *dev);
+static void cxd56_sdio_widebus(struct sdio_dev_s *dev, bool enable);
 static void cxd56_sdio_frequency(uint32_t frequency);
-static void cxd56_sdio_clock(FAR struct sdio_dev_s *dev,
+static void cxd56_sdio_clock(struct sdio_dev_s *dev,
               enum sdio_clock_e rate);
-static int  cxd56_sdio_attach(FAR struct sdio_dev_s *dev);
+static int  cxd56_sdio_attach(struct sdio_dev_s *dev);
 
 /* Command/Status/Data Transfer */
 
-static int  cxd56_sdio_sendcmd(FAR struct sdio_dev_s *dev,
+static int  cxd56_sdio_sendcmd(struct sdio_dev_s *dev,
               uint32_t cmd, uint32_t arg);
-static void cxd56_blocksetup(FAR struct sdio_dev_s *dev,
+static void cxd56_blocksetup(struct sdio_dev_s *dev,
               unsigned int blocklen, unsigned int nblocks);
 #ifndef CONFIG_SDIO_DMA
-static int  cxd56_sdio_recvsetup(FAR struct sdio_dev_s *dev,
-              FAR uint8_t *buffer, size_t nbytes);
-static int  cxd56_sdio_sendsetup(FAR struct sdio_dev_s *dev,
-              FAR const uint8_t *buffer, uint32_t nbytes);
+static int  cxd56_sdio_recvsetup(struct sdio_dev_s *dev,
+              uint8_t *buffer, size_t nbytes);
+static int  cxd56_sdio_sendsetup(struct sdio_dev_s *dev,
+              const uint8_t *buffer, uint32_t nbytes);
 #endif
-static int  cxd56_sdio_cancel(FAR struct sdio_dev_s *dev);
+static int  cxd56_sdio_cancel(struct sdio_dev_s *dev);
 
-static int  cxd56_sdio_waitresponse(FAR struct sdio_dev_s *dev,
+static int  cxd56_sdio_waitresponse(struct sdio_dev_s *dev,
               uint32_t cmd);
-static int  cxd56_sdio_recvshortcrc(FAR struct sdio_dev_s *dev, uint32_t cmd,
+static int  cxd56_sdio_recvshortcrc(struct sdio_dev_s *dev, uint32_t cmd,
               uint32_t *rshort);
-static int  cxd56_sdio_recvlong(FAR struct sdio_dev_s *dev, uint32_t cmd,
+static int  cxd56_sdio_recvlong(struct sdio_dev_s *dev, uint32_t cmd,
               uint32_t rlong[4]);
-static int  cxd56_sdio_recvshort(FAR struct sdio_dev_s *dev, uint32_t cmd,
+static int  cxd56_sdio_recvshort(struct sdio_dev_s *dev, uint32_t cmd,
               uint32_t *rshort);
 
 /* EVENT handler */
 
-static void cxd56_sdio_waitenable(FAR struct sdio_dev_s *dev,
+static void cxd56_sdio_waitenable(struct sdio_dev_s *dev,
               sdio_eventset_t eventset, uint32_t timeout);
-static sdio_eventset_t cxd56_sdio_eventwait(FAR struct sdio_dev_s *dev);
-static void cxd56_sdio_callbackenable(FAR struct sdio_dev_s *dev,
+static sdio_eventset_t cxd56_sdio_eventwait(struct sdio_dev_s *dev);
+static void cxd56_sdio_callbackenable(struct sdio_dev_s *dev,
               sdio_eventset_t eventset);
-static int  cxd56_sdio_registercallback(FAR struct sdio_dev_s *dev,
+static int  cxd56_sdio_registercallback(struct sdio_dev_s *dev,
               worker_t callback, void *arg);
 
 /* DMA */
 
 #ifdef CONFIG_SDIO_DMA
-static int  cxd56_sdio_admasetup(FAR const uint8_t *buffer, size_t buflen);
-static int  cxd56_sdio_dmarecvsetup(FAR struct sdio_dev_s *dev,
-              FAR uint8_t *buffer, size_t buflen);
-static int  cxd56_sdio_dmasendsetup(FAR struct sdio_dev_s *dev,
-              FAR const uint8_t *buffer, size_t buflen);
+static int  cxd56_sdio_admasetup(const uint8_t *buffer, size_t buflen);
+static int  cxd56_sdio_dmarecvsetup(struct sdio_dev_s *dev,
+              uint8_t *buffer, size_t buflen);
+static int  cxd56_sdio_dmasendsetup(struct sdio_dev_s *dev,
+              const uint8_t *buffer, size_t buflen);
 #endif
 
 /* Initialization/uninitialization/reset ************************************/
@@ -466,6 +463,7 @@ struct cxd56_sdiodev_s g_sdhcdev =
       .dmasendsetup     = cxd56_sdio_sendsetup,
 #endif
     },
+  .waitsem = SEM_INITIALIZER(0),
 };
 
 /* Register logging support */
@@ -477,33 +475,12 @@ static struct cxd56_sdhcregs_s g_sampleregs[DEBUG_NSAMPLES];
 /* DMA */
 
 #ifdef CONFIG_SDIO_DMA
-static FAR uint32_t cxd56_sdhci_adma_dscr[CXD56_SDIO_MAX_LEN_ADMA_DSCR * 2];
+static uint32_t cxd56_sdhci_adma_dscr[CXD56_SDIO_MAX_LEN_ADMA_DSCR * 2];
 #endif
 
 /****************************************************************************
  * Private Functions
  ****************************************************************************/
-
-/****************************************************************************
- * Name: cxd56_takesem
- *
- * Description:
- *   Take the wait semaphore (handling false alarm wakeups due to the receipt
- *   of signals).
- *
- * Input Parameters:
- *   dev - Instance of the SDIO device driver state structure.
- *
- * Returned Value:
- *   Normally OK, but may return -ECANCELED in the rare event that the task
- *   has been canceled.
- *
- ****************************************************************************/
-
-static int cxd56_takesem(struct cxd56_sdiodev_s *priv)
-{
-  return nxsem_wait_uninterruptible(&priv->waitsem);
-}
 
 /****************************************************************************
  * Name: cxd56_configwaitints
@@ -1006,7 +983,7 @@ static void cxd56_endwait(struct cxd56_sdiodev_s *priv,
 
   /* Wake up the waiting thread */
 
-  cxd56_givesem(priv);
+  nxsem_post(&priv->waitsem);
 }
 
 /****************************************************************************
@@ -1105,7 +1082,7 @@ static void cxd56_endtransfer(struct cxd56_sdiodev_s *priv,
  *
  ****************************************************************************/
 
-static int cxd56_interrupt(int irq, FAR void *context, FAR void *arg)
+static int cxd56_interrupt(int irq, void *context, void *arg)
 {
   struct cxd56_sdiodev_s *priv = &g_sdhcdev;
   uint32_t enabled;
@@ -1257,7 +1234,7 @@ static int cxd56_interrupt(int irq, FAR void *context, FAR void *arg)
  ****************************************************************************/
 
 #ifdef CONFIG_SDIO_MUXBUS
-static int cxd56_sdio_lock(FAR struct sdio_dev_s *dev, bool lock)
+static int cxd56_sdio_lock(struct sdio_dev_s *dev, bool lock)
 {
   /* Enable SD clock only while accessing to the SDIO. */
 
@@ -1288,9 +1265,9 @@ static int cxd56_sdio_lock(FAR struct sdio_dev_s *dev, bool lock)
  *
  ****************************************************************************/
 
-static void cxd56_sdio_sdhci_reset(FAR struct sdio_dev_s *dev)
+static void cxd56_sdio_sdhci_reset(struct sdio_dev_s *dev)
 {
-  FAR struct cxd56_sdiodev_s *priv = (FAR struct cxd56_sdiodev_s *)dev;
+  struct cxd56_sdiodev_s *priv = (struct cxd56_sdiodev_s *)dev;
   uint32_t regval;
   int32_t timeout = 100;
 
@@ -1338,16 +1315,6 @@ static void cxd56_sdio_sdhci_reset(FAR struct sdio_dev_s *dev)
 
   /* Initialize the SDHC slot structure data structure */
 
-  /* Initialize semaphores */
-
-  nxsem_init(&priv->waitsem, 0, 0);
-
-  /* The waitsem semaphore is used for signaling and, hence, should not have
-   * priority inheritance enabled.
-   */
-
-  nxsem_set_protocol(&priv->waitsem, SEM_PRIO_NONE);
-
   /* The next phase of the hardware reset would be to set the SYSCTRL INITA
    * bit to send 80 clock ticks for card to power up and then reset the card
    * with CMD0.  This is done elsewhere.
@@ -1387,12 +1354,14 @@ static void cxd56_sdio_sdhci_reset(FAR struct sdio_dev_s *dev)
  *
  ****************************************************************************/
 
-static sdio_capset_t cxd56_sdio_capabilities(FAR struct sdio_dev_s *dev)
+static sdio_capset_t cxd56_sdio_capabilities(struct sdio_dev_s *dev)
 {
   sdio_capset_t caps = 0;
 
 #ifdef CONFIG_CXD56_SDIO_WIDTH_D1_ONLY
   caps |= SDIO_CAPS_1BIT_ONLY;
+#else
+  caps |= SDIO_CAPS_4BIT;
 #endif
 #ifdef CONFIG_CXD56_SDIO_DMA
   caps |= SDIO_CAPS_DMASUPPORTED;
@@ -1422,7 +1391,7 @@ static sdio_capset_t cxd56_sdio_capabilities(FAR struct sdio_dev_s *dev)
  *
  ****************************************************************************/
 
-static sdio_statset_t cxd56_sdio_status(FAR struct sdio_dev_s *dev)
+static sdio_statset_t cxd56_sdio_status(struct sdio_dev_s *dev)
 {
   struct cxd56_sdiodev_s *priv = (struct cxd56_sdiodev_s *)dev;
   return priv->cdstatus;
@@ -1445,7 +1414,7 @@ static sdio_statset_t cxd56_sdio_status(FAR struct sdio_dev_s *dev)
  *
  ****************************************************************************/
 
-static void cxd56_sdio_widebus(FAR struct sdio_dev_s *dev, bool wide)
+static void cxd56_sdio_widebus(struct sdio_dev_s *dev, bool wide)
 {
   uint32_t regval;
 
@@ -1515,7 +1484,7 @@ static void cxd56_sdio_frequency(uint32_t frequency)
   putreg32(regval, CXD56_SDHCI_SYSCTL);
 }
 
-static void cxd56_sdio_clock(FAR struct sdio_dev_s *dev,
+static void cxd56_sdio_clock(struct sdio_dev_s *dev,
                              enum sdio_clock_e rate)
 {
   uint32_t regval;
@@ -1637,7 +1606,7 @@ static void cxd56_sdio_clock(FAR struct sdio_dev_s *dev,
  *
  ****************************************************************************/
 
-static int cxd56_sdio_attach(FAR struct sdio_dev_s *dev)
+static int cxd56_sdio_attach(struct sdio_dev_s *dev)
 {
   int ret;
 
@@ -1685,7 +1654,7 @@ static int cxd56_sdio_attach(FAR struct sdio_dev_s *dev)
  *
  ****************************************************************************/
 
-static int cxd56_sdio_sendcmd(FAR struct sdio_dev_s *dev, uint32_t cmd,
+static int cxd56_sdio_sendcmd(struct sdio_dev_s *dev, uint32_t cmd,
                               uint32_t arg)
 {
 #ifdef CONFIG_SDIO_DMA
@@ -1884,7 +1853,7 @@ static int cxd56_sdio_sendcmd(FAR struct sdio_dev_s *dev, uint32_t cmd,
  *
  ****************************************************************************/
 
-static void cxd56_blocksetup(FAR struct sdio_dev_s *dev,
+static void cxd56_blocksetup(struct sdio_dev_s *dev,
                              unsigned int blocklen, unsigned int nblocks)
 {
   struct cxd56_sdiodev_s *priv = (struct cxd56_sdiodev_s *)dev;
@@ -1925,8 +1894,8 @@ static void cxd56_blocksetup(FAR struct sdio_dev_s *dev,
  ****************************************************************************/
 
 #ifndef CONFIG_SDIO_DMA
-static int cxd56_sdio_recvsetup(FAR struct sdio_dev_s *dev,
-                                FAR uint8_t *buffer, size_t nbytes)
+static int cxd56_sdio_recvsetup(struct sdio_dev_s *dev,
+                                uint8_t *buffer, size_t nbytes)
 {
   struct cxd56_sdiodev_s *priv = (struct cxd56_sdiodev_s *)dev;
 
@@ -1983,8 +1952,8 @@ static int cxd56_sdio_recvsetup(FAR struct sdio_dev_s *dev,
  ****************************************************************************/
 
 #ifndef CONFIG_SDIO_DMA
-static int cxd56_sdio_sendsetup(FAR struct sdio_dev_s *dev,
-                                FAR const uint8_t *buffer, size_t nbytes)
+static int cxd56_sdio_sendsetup(struct sdio_dev_s *dev,
+                                const uint8_t *buffer, size_t nbytes)
 {
   struct cxd56_sdiodev_s *priv = (struct cxd56_sdiodev_s *)dev;
 
@@ -2035,7 +2004,7 @@ static int cxd56_sdio_sendsetup(FAR struct sdio_dev_s *dev,
  *
  ****************************************************************************/
 
-static int cxd56_sdio_cancel(FAR struct sdio_dev_s *dev)
+static int cxd56_sdio_cancel(struct sdio_dev_s *dev)
 {
   struct cxd56_sdiodev_s *priv = (struct cxd56_sdiodev_s *)dev;
   uint32_t regval;
@@ -2120,7 +2089,7 @@ static int cxd56_sdio_cancel(FAR struct sdio_dev_s *dev)
  *
  ****************************************************************************/
 
-static int cxd56_sdio_waitresponse(FAR struct sdio_dev_s *dev, uint32_t cmd)
+static int cxd56_sdio_waitresponse(struct sdio_dev_s *dev, uint32_t cmd)
 {
   uint32_t errors;
   int32_t  timeout = SDHCI_CMDTIMEOUT;
@@ -2227,7 +2196,7 @@ static int cxd56_sdio_waitresponse(FAR struct sdio_dev_s *dev, uint32_t cmd)
  *
  ****************************************************************************/
 
-static int cxd56_sdio_recvshortcrc(FAR struct sdio_dev_s *dev, uint32_t cmd,
+static int cxd56_sdio_recvshortcrc(struct sdio_dev_s *dev, uint32_t cmd,
                                 uint32_t *rshort)
 {
   uint32_t regval;
@@ -2314,7 +2283,7 @@ static int cxd56_sdio_recvshortcrc(FAR struct sdio_dev_s *dev, uint32_t cmd,
   return ret;
 }
 
-static int cxd56_sdio_recvlong(FAR struct sdio_dev_s *dev, uint32_t cmd,
+static int cxd56_sdio_recvlong(struct sdio_dev_s *dev, uint32_t cmd,
                                uint32_t rlong[4])
 {
   uint32_t regval;
@@ -2387,7 +2356,7 @@ static int cxd56_sdio_recvlong(FAR struct sdio_dev_s *dev, uint32_t cmd,
   return ret;
 }
 
-static int cxd56_sdio_recvshort(FAR struct sdio_dev_s *dev, uint32_t cmd,
+static int cxd56_sdio_recvshort(struct sdio_dev_s *dev, uint32_t cmd,
                                 uint32_t *rshort)
 {
   uint32_t regval;
@@ -2492,7 +2461,7 @@ static int cxd56_sdio_recvshort(FAR struct sdio_dev_s *dev, uint32_t cmd,
  *
  ****************************************************************************/
 
-static void cxd56_sdio_waitenable(FAR struct sdio_dev_s *dev,
+static void cxd56_sdio_waitenable(struct sdio_dev_s *dev,
                              sdio_eventset_t eventset, uint32_t timeout)
 {
   struct cxd56_sdiodev_s *priv = (struct cxd56_sdiodev_s *)dev;
@@ -2571,7 +2540,7 @@ static void cxd56_sdio_waitenable(FAR struct sdio_dev_s *dev,
  *
  ****************************************************************************/
 
-static sdio_eventset_t cxd56_sdio_eventwait(FAR struct sdio_dev_s *dev)
+static sdio_eventset_t cxd56_sdio_eventwait(struct sdio_dev_s *dev)
 {
   struct cxd56_sdiodev_s *priv = (struct cxd56_sdiodev_s *)dev;
   sdio_eventset_t wkupevent = 0;
@@ -2599,7 +2568,7 @@ static sdio_eventset_t cxd56_sdio_eventwait(FAR struct sdio_dev_s *dev)
        * there will be no wait.
        */
 
-      ret = cxd56_takesem(priv);
+      ret = nxsem_wait_uninterruptible(&priv->waitsem);
       if (ret < 0)
         {
           /* Task canceled.  Cancel the wdog (assuming it was started) and
@@ -2641,7 +2610,7 @@ static sdio_eventset_t cxd56_sdio_eventwait(FAR struct sdio_dev_s *dev)
 
   cxd56_configwaitints(priv, 0, 0, 0);
 #ifdef CONFIG_SDIO_DMA
-  priv->xfrflags   = 0;
+  priv->xfrflags = 0;
   if (priv->aligned_buffer)
     {
       if (priv->dma_cmd == MMCSD_CMD17 || priv->dma_cmd == MMCSD_CMD18)
@@ -2655,7 +2624,6 @@ static sdio_eventset_t cxd56_sdio_eventwait(FAR struct sdio_dev_s *dev)
       /* Free aligned buffer */
 
       kmm_free(priv->aligned_buffer);
-
       priv->aligned_buffer = NULL;
     }
 #endif
@@ -2686,7 +2654,7 @@ static sdio_eventset_t cxd56_sdio_eventwait(FAR struct sdio_dev_s *dev)
  *
  ****************************************************************************/
 
-static void cxd56_sdio_callbackenable(FAR struct sdio_dev_s *dev,
+static void cxd56_sdio_callbackenable(struct sdio_dev_s *dev,
                                  sdio_eventset_t eventset)
 {
   struct cxd56_sdiodev_s *priv = (struct cxd56_sdiodev_s *)dev;
@@ -2720,7 +2688,7 @@ static void cxd56_sdio_callbackenable(FAR struct sdio_dev_s *dev,
  *
  ****************************************************************************/
 
-static int cxd56_sdio_registercallback(FAR struct sdio_dev_s *dev,
+static int cxd56_sdio_registercallback(struct sdio_dev_s *dev,
                                   worker_t callback, void *arg)
 {
   struct cxd56_sdiodev_s *priv = (struct cxd56_sdiodev_s *)dev;
@@ -2754,7 +2722,7 @@ static int cxd56_sdio_registercallback(FAR struct sdio_dev_s *dev,
  ****************************************************************************/
 
 #ifdef CONFIG_SDIO_DMA
-static int cxd56_sdio_admasetup(FAR const uint8_t *buffer, size_t buflen)
+static int cxd56_sdio_admasetup(const uint8_t *buffer, size_t buflen)
 {
   uint32_t dscr_top = CXD56_PHYSADDR(cxd56_sdhci_adma_dscr);
   uint32_t dscr_l;
@@ -2823,12 +2791,12 @@ static int cxd56_sdio_admasetup(FAR const uint8_t *buffer, size_t buflen)
  ****************************************************************************/
 
 #ifdef CONFIG_SDIO_DMA
-static int cxd56_sdio_dmarecvsetup(FAR struct sdio_dev_s *dev,
-                                   FAR uint8_t *buffer, size_t buflen)
+static int cxd56_sdio_dmarecvsetup(struct sdio_dev_s *dev,
+                                   uint8_t *buffer, size_t buflen)
 {
   struct cxd56_sdiodev_s *priv = (struct cxd56_sdiodev_s *)dev;
   unsigned int blocksize;
-  int          ret = OK;
+  int ret = OK;
 
   DEBUGASSERT(priv != NULL && buffer != NULL && buflen > 0);
   DEBUGASSERT(((uint32_t)buffer & 3) == 0);
@@ -2909,6 +2877,7 @@ static int cxd56_sdio_dmarecvsetup(FAR struct sdio_dev_s *dev,
 
   cxd56_sample(priv, SAMPLENDX_AFTER_SETUP);
   return OK;
+
 error:
 
   /* Free allocated align buffer */
@@ -2940,8 +2909,8 @@ error:
  ****************************************************************************/
 
 #ifdef CONFIG_SDIO_DMA
-static int cxd56_sdio_dmasendsetup(FAR struct sdio_dev_s *dev,
-                              FAR const uint8_t *buffer, size_t buflen)
+static int cxd56_sdio_dmasendsetup(struct sdio_dev_s *dev,
+                              const uint8_t *buffer, size_t buflen)
 {
   uint32_t r1;
   int      ret = OK;
@@ -3034,6 +3003,7 @@ static int cxd56_sdio_dmasendsetup(FAR struct sdio_dev_s *dev,
   cxd56_configxfrints(priv, SDHCI_DMADONE_INTS);
 
   return OK;
+
 error:
 
   /* Free allocated align buffer */
@@ -3163,7 +3133,7 @@ static void cxd56_sdio_callback(void *arg)
           mcinfo("Queuing callback to %p(%p)\n",
                  priv->callback, priv->cbarg);
 
-          work_queue(HPWORK, &priv->cbwork, (worker_t)priv->callback,
+          work_queue(HPWORK, &priv->cbwork, priv->callback,
                      priv->cbarg, delay);
         }
       else
@@ -3198,7 +3168,7 @@ static void cxd56_sdio_callback(void *arg)
  *
  ****************************************************************************/
 
-FAR struct sdio_dev_s *cxd56_sdhci_initialize(int slotno)
+struct sdio_dev_s *cxd56_sdhci_initialize(int slotno)
 {
   uint32_t regval;
 #ifdef CONFIG_SDIO_DMA
@@ -3293,7 +3263,7 @@ FAR struct sdio_dev_s *cxd56_sdhci_initialize(int slotno)
  *
  ****************************************************************************/
 
-FAR struct sdio_dev_s *cxd56_sdhci_finalize(int slotno)
+struct sdio_dev_s *cxd56_sdhci_finalize(int slotno)
 {
   uint32_t regval;
 
@@ -3308,7 +3278,7 @@ FAR struct sdio_dev_s *cxd56_sdhci_finalize(int slotno)
 
   /* SD clock disable */
 
-  cxd56_sdio_clock(&(priv->dev), CLOCK_SDIO_DISABLED);
+  cxd56_sdio_clock(&priv->dev, CLOCK_SDIO_DISABLED);
 
   /* Power OFF for SDIO */
 
@@ -3349,7 +3319,7 @@ FAR struct sdio_dev_s *cxd56_sdhci_finalize(int slotno)
  *
  ****************************************************************************/
 
-void cxd56_sdhci_mediachange(FAR struct sdio_dev_s *dev)
+void cxd56_sdhci_mediachange(struct sdio_dev_s *dev)
 {
   struct cxd56_sdiodev_s *priv = (struct cxd56_sdiodev_s *)dev;
   sdio_statset_t cdstatus;
@@ -3391,11 +3361,6 @@ void cxd56_sdhci_mediachange(FAR struct sdio_dev_s *dev)
 
   if (cdstatus != priv->cdstatus)
     {
-      if (priv->cdstatus & SDIO_STATUS_PRESENT)
-        {
-          priv->cbevents &= SDIOMEDIA_INSERTED;
-        }
-
       mediachange = 1;
     }
 
@@ -3422,7 +3387,7 @@ void cxd56_sdhci_mediachange(FAR struct sdio_dev_s *dev)
  *
  ****************************************************************************/
 
-void cxd56_sdhci_wrprotect(FAR struct sdio_dev_s *dev, bool wrprotect)
+void cxd56_sdhci_wrprotect(struct sdio_dev_s *dev, bool wrprotect)
 {
   struct cxd56_sdiodev_s *priv = (struct cxd56_sdiodev_s *)dev;
   irqstate_t flags;
@@ -3454,7 +3419,7 @@ void cxd56_sdhci_wrprotect(FAR struct sdio_dev_s *dev, bool wrprotect)
  *
  ****************************************************************************/
 
-void cxd56_sdio_resetstatus(FAR struct sdio_dev_s *dev)
+void cxd56_sdio_resetstatus(struct sdio_dev_s *dev)
 {
   struct cxd56_sdiodev_s *priv = (struct cxd56_sdiodev_s *)dev;
   priv->cdstatus = 0;

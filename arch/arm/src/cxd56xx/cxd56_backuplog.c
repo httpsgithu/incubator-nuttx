@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/cxd56xx/cxd56_backuplog.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -251,7 +253,7 @@ void *up_backuplog_alloc(const char *name, size_t size)
     {
       if (0 == header->entry[index].size)
         {
-          strncpy(header->entry[index].name, name, CXD56_LOG_ENTRY_NAME);
+          strlcpy(header->entry[index].name, name, CXD56_LOG_ENTRY_NAME);
           header->entry[index].addr = (void *)((uint32_t)header +
                                                (allocated << AREASHIFT));
           header->entry[index].size = size;
@@ -303,8 +305,6 @@ void up_backuplog_free(const char *name)
     }
 
   leave_critical_section(flags);
-
-  return;
 }
 
 /****************************************************************************

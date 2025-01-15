@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/stm32h7/stm32_uart.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -493,7 +495,7 @@ void stm32_serial_dma_poll(void);
  *
  ****************************************************************************/
 
-FAR uart_dev_t *stm32_serial_get_uart(int uart_num);
+uart_dev_t *stm32_serial_get_uart(int uart_num);
 
 #undef EXTERN
 #if defined(__cplusplus)

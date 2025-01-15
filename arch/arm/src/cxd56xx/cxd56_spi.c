@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/cxd56xx/cxd56_spi.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -37,12 +39,10 @@
 #include <arch/chip/pm.h>
 #include <nuttx/irq.h>
 #include <nuttx/arch.h>
-#include <nuttx/semaphore.h>
+#include <nuttx/mutex.h>
 #include <nuttx/spi/spi.h>
 
 #include "arm_internal.h"
-#include "arm_arch.h"
-
 #include "chip.h"
 
 #include "cxd56_spi.h"
@@ -71,7 +71,7 @@ struct cxd56_spidev_s
 #ifdef CONFIG_CXD56_SPI_INTERRUPTS
   uint8_t          spiirq;      /* SPI IRQ number */
 #endif
-  sem_t            exclsem;     /* Held while chip is selected for mutual exclusion */
+  mutex_t          lock;        /* Held while chip is selected for mutual exclusion */
   uint32_t         frequency;   /* Requested clock frequency */
   uint32_t         actual;      /* Actual clock frequency */
   uint8_t          nbits;       /* Width of word in bits (4 to 16) */
@@ -94,46 +94,46 @@ struct cxd56_spidev_s
 
 /* Helpers */
 
-static inline uint32_t spi_getreg(FAR struct cxd56_spidev_s *priv,
+static inline uint32_t spi_getreg(struct cxd56_spidev_s *priv,
                                   uint8_t offset);
-static inline void spi_putreg(FAR struct cxd56_spidev_s *priv,
+static inline void spi_putreg(struct cxd56_spidev_s *priv,
                               uint8_t offset, uint32_t value);
 
 /* DMA support */
 
 #ifdef CONFIG_CXD56_DMAC
-static void unused_code spi_dmaexchange(FAR struct spi_dev_s *dev,
-                                        FAR const void *txbuffer,
-                                        FAR void *rxbuffer, size_t nwords);
-static void spi_dmatrxwait(FAR struct cxd56_spidev_s *priv);
+static void unused_code spi_dmaexchange(struct spi_dev_s *dev,
+                                        const void *txbuffer,
+                                        void *rxbuffer, size_t nwords);
+static void spi_dmatrxwait(struct cxd56_spidev_s *priv);
 static void spi_dmatxcallback(DMA_HANDLE handle, uint8_t status, void *data);
 static void spi_dmarxcallback(DMA_HANDLE handle, uint8_t status, void *data);
-static void spi_dmatxsetup(FAR struct cxd56_spidev_s *priv,
-                           FAR const void *txbuffer, size_t nwords);
-static void spi_dmarxsetup(FAR struct cxd56_spidev_s *priv,
-                           FAR const void *rxbuffer, size_t nwords);
+static void spi_dmatxsetup(struct cxd56_spidev_s *priv,
+                           const void *txbuffer, size_t nwords);
+static void spi_dmarxsetup(struct cxd56_spidev_s *priv,
+                           const void *rxbuffer, size_t nwords);
 #ifndef CONFIG_SPI_EXCHANGE
-static void spi_dmasndblock(FAR struct spi_dev_s *dev,
-                            FAR const void *buffer, size_t nwords);
+static void spi_dmasndblock(struct spi_dev_s *dev,
+                            const void *buffer, size_t nwords);
 #endif
 #endif
 
 /* SPI methods */
 
-static int spi_lock(FAR struct spi_dev_s *dev, bool lock);
-static uint32_t spi_setfrequency(FAR struct spi_dev_s *dev,
+static int spi_lock(struct spi_dev_s *dev, bool lock);
+static uint32_t spi_setfrequency(struct spi_dev_s *dev,
                                  uint32_t frequency);
-static void spi_setmode(FAR struct spi_dev_s *dev, enum spi_mode_e mode);
-static void spi_setbits(FAR struct spi_dev_s *dev, int nbits);
-static uint32_t spi_send(FAR struct spi_dev_s *dev, uint32_t wd);
-static void unused_code spi_exchange(FAR struct spi_dev_s *dev,
-                                     FAR const void *txbuffer,
-                                     FAR void *rxbuffer,
+static void spi_setmode(struct spi_dev_s *dev, enum spi_mode_e mode);
+static void spi_setbits(struct spi_dev_s *dev, int nbits);
+static uint32_t spi_send(struct spi_dev_s *dev, uint32_t wd);
+static void unused_code spi_exchange(struct spi_dev_s *dev,
+                                     const void *txbuffer,
+                                     void *rxbuffer,
                                      size_t nwords);
 #ifndef CONFIG_SPI_EXCHANGE
-static void spi_sndblock(FAR struct spi_dev_s *dev, FAR const void *buffer,
+static void spi_sndblock(struct spi_dev_s *dev, const void *buffer,
                          size_t nwords);
-static void spi_recvblock(FAR struct spi_dev_s *dev, FAR void *buffer,
+static void spi_recvblock(struct spi_dev_s *dev, void *buffer,
                           size_t nwords);
 #endif
 
@@ -181,15 +181,19 @@ static const struct spi_ops_s g_spi4ops =
 static struct cxd56_spidev_s g_spi4dev =
 {
   .spidev            =
-                        {
-                         &g_spi4ops
-                        },
+  {
+    .ops             = &g_spi4ops,
+  },
   .spibase           = CXD56_IMG_SPI_BASE,
   .spibasefreq       = 0,
   .port              = 4,
   .initialized       = 0,
 #ifdef CONFIG_CXD56_SPI_INTERRUPTS
   .spiirq            = CXD56_IRQ_IMG_SPI,
+#endif
+  .lock              = NXMUTEX_INITIALIZER,
+#ifdef CONFIG_CXD56_DMAC
+  .dmasem            = SEM_INITIALIZER(0),
 #endif
 };
 
@@ -224,15 +228,19 @@ static const struct spi_ops_s g_spi5ops =
 static struct cxd56_spidev_s g_spi5dev =
 {
   .spidev            =
-                        {
-                         &g_spi5ops
-                        },
+  {
+    .ops             = &g_spi5ops,
+  },
   .spibase           = CXD56_IMG_WSPI_BASE,
   .spibasefreq       = 0,
   .port              = 5,
   .initialized       = 0,
 #ifdef CONFIG_CXD56_SPI_INTERRUPTS
   .spiirq            = CXD56_IRQ_IMG_WSPI,
+#endif
+  .lock              = NXMUTEX_INITIALIZER,
+#ifdef CONFIG_CXD56_DMAC
+  .dmasem            = SEM_INITIALIZER(0),
 #endif
 };
 #endif
@@ -266,15 +274,19 @@ static const struct spi_ops_s g_spi0ops =
 static struct cxd56_spidev_s g_spi0dev =
 {
   .spidev            =
-                        {
-                         &g_spi0ops
-                        },
+  {
+    .ops             = &g_spi0ops,
+  },
   .spibase           = CXD56_SPIM_BASE,
   .spibasefreq       = 0,
   .port              = 0,
   .initialized       = 0,
 #ifdef CONFIG_CXD56_SPI_INTERRUPTS
   .spiirq            = CXD56_IRQ_SPIM,
+#endif
+  .lock              = NXMUTEX_INITIALIZER,
+#ifdef CONFIG_CXD56_DMAC
+  .dmasem            = SEM_INITIALIZER(0),
 #endif
 };
 #endif
@@ -308,15 +320,19 @@ static const struct spi_ops_s g_spi3ops =
 static struct cxd56_spidev_s g_spi3dev =
 {
   .spidev            =
-                        {
-                         &g_spi3ops
-                        },
+  {
+    .ops             = &g_spi3ops,
+  },
   .spibase           = CXD56_SCU_SPI_BASE,
   .spibasefreq       = 0,
   .port              = 3,
   .initialized       = 0,
 #ifdef CONFIG_CXD56_SPI_INTERRUPTS
   .spiirq            = CXD56_IRQ_SCU_SPI,
+#endif
+  .lock              = NXMUTEX_INITIALIZER,
+#ifdef CONFIG_CXD56_DMAC
+  .dmasem            = SEM_INITIALIZER(0),
 #endif
 };
 #endif
@@ -349,7 +365,7 @@ static struct pm_cpu_freqlock_s g_hold_lock =
  *
  ****************************************************************************/
 
-static inline uint32_t spi_getreg(FAR struct cxd56_spidev_s *priv,
+static inline uint32_t spi_getreg(struct cxd56_spidev_s *priv,
                                   uint8_t offset)
 {
   return getreg32(priv->spibase + (uint32_t)offset);
@@ -371,7 +387,7 @@ static inline uint32_t spi_getreg(FAR struct cxd56_spidev_s *priv,
  *
  ****************************************************************************/
 
-static inline void spi_putreg(FAR struct cxd56_spidev_s *priv,
+static inline void spi_putreg(struct cxd56_spidev_s *priv,
                               uint8_t offset, uint32_t value)
 {
   putreg32(value, priv->spibase + (uint32_t)offset);
@@ -398,19 +414,19 @@ static inline void spi_putreg(FAR struct cxd56_spidev_s *priv,
  *
  ****************************************************************************/
 
-static int spi_lock(FAR struct spi_dev_s *dev, bool lock)
+static int spi_lock(struct spi_dev_s *dev, bool lock)
 {
-  FAR struct cxd56_spidev_s *priv = (FAR struct cxd56_spidev_s *)dev;
+  struct cxd56_spidev_s *priv = (struct cxd56_spidev_s *)dev;
 
   if (lock)
     {
-      /* Take the semaphore (perhaps waiting) */
+      /* Take the mutex (perhaps waiting) */
 
-      return nxsem_wait_uninterruptible(&priv->exclsem);
+      return nxmutex_lock(&priv->lock);
     }
   else
     {
-      return nxsem_post(&priv->exclsem);
+      return nxmutex_unlock(&priv->lock);
     }
 }
 
@@ -429,10 +445,10 @@ static int spi_lock(FAR struct spi_dev_s *dev, bool lock)
  *
  ****************************************************************************/
 
-static uint32_t spi_setfrequency(FAR struct spi_dev_s *dev,
+static uint32_t spi_setfrequency(struct spi_dev_s *dev,
                                  uint32_t frequency)
 {
-  FAR struct cxd56_spidev_s *priv = (FAR struct cxd56_spidev_s *)dev;
+  struct cxd56_spidev_s *priv = (struct cxd56_spidev_s *)dev;
   uint32_t divisor;
   uint32_t actual;
 
@@ -498,9 +514,9 @@ static uint32_t spi_setfrequency(FAR struct spi_dev_s *dev,
  *
  ****************************************************************************/
 
-static void spi_setmode(FAR struct spi_dev_s *dev, enum spi_mode_e mode)
+static void spi_setmode(struct spi_dev_s *dev, enum spi_mode_e mode)
 {
-  FAR struct cxd56_spidev_s *priv = (FAR struct cxd56_spidev_s *)dev;
+  struct cxd56_spidev_s *priv = (struct cxd56_spidev_s *)dev;
   uint32_t regval;
   uint32_t cr1val;
 
@@ -583,9 +599,9 @@ static void spi_setmode(FAR struct spi_dev_s *dev, enum spi_mode_e mode)
  *
  ****************************************************************************/
 
-static void spi_setbits(FAR struct spi_dev_s *dev, int nbits)
+static void spi_setbits(struct spi_dev_s *dev, int nbits)
 {
-  FAR struct cxd56_spidev_s *priv = (FAR struct cxd56_spidev_s *)dev;
+  struct cxd56_spidev_s *priv = (struct cxd56_spidev_s *)dev;
   uint32_t regval;
 
   /* Has the number of bits changed? */
@@ -648,9 +664,9 @@ static void spi_setbits(FAR struct spi_dev_s *dev, int nbits)
  *
  ****************************************************************************/
 
-static uint32_t spi_send(FAR struct spi_dev_s *dev, uint32_t wd)
+static uint32_t spi_send(struct spi_dev_s *dev, uint32_t wd)
 {
-  FAR struct cxd56_spidev_s *priv = (FAR struct cxd56_spidev_s *)dev;
+  struct cxd56_spidev_s *priv = (struct cxd56_spidev_s *)dev;
   register uint32_t regval;
   register uint32_t cr1val = 0;
 
@@ -726,25 +742,25 @@ static uint32_t spi_send(FAR struct spi_dev_s *dev, uint32_t wd)
  *
  ****************************************************************************/
 
-static void spi_do_exchange(FAR struct spi_dev_s *dev,
-                            FAR const void *txbuffer, FAR void *rxbuffer,
+static void spi_do_exchange(struct spi_dev_s *dev,
+                            const void *txbuffer, void *rxbuffer,
                             size_t nwords)
 {
-  FAR struct cxd56_spidev_s *priv = (FAR struct cxd56_spidev_s *)dev;
+  struct cxd56_spidev_s *priv = (struct cxd56_spidev_s *)dev;
   uint32_t regval                 = 0;
 
   union
   {
-    FAR const uint8_t *p8;
-    FAR const uint16_t *p16;
-    FAR const void *pv;
+    const uint8_t *p8;
+    const uint16_t *p16;
+    const void *pv;
   } tx;
 
   union
   {
-    FAR uint8_t *p8;
-    FAR uint16_t *p16;
-    FAR void *pv;
+    uint8_t *p8;
+    uint16_t *p16;
+    void *pv;
   } rx;
 
   uint32_t data;
@@ -861,11 +877,11 @@ static void spi_do_exchange(FAR struct spi_dev_s *dev,
  *
  ****************************************************************************/
 
-static void spi_exchange(FAR struct spi_dev_s *dev, FAR const void *txbuffer,
-                         FAR void *rxbuffer, size_t nwords)
+static void spi_exchange(struct spi_dev_s *dev, const void *txbuffer,
+                         void *rxbuffer, size_t nwords)
 {
 #ifdef CONFIG_CXD56_DMAC
-  FAR struct cxd56_spidev_s *priv = (FAR struct cxd56_spidev_s *)dev;
+  struct cxd56_spidev_s *priv = (struct cxd56_spidev_s *)dev;
 
 #ifdef CONFIG_CXD56_SPI_DMATHRESHOLD
   size_t dmath = CONFIG_CXD56_SPI_DMATHRESHOLD;
@@ -905,7 +921,7 @@ static void spi_exchange(FAR struct spi_dev_s *dev, FAR const void *txbuffer,
  ****************************************************************************/
 
 #ifndef CONFIG_SPI_EXCHANGE
-static void spi_sndblock(FAR struct spi_dev_s *dev, FAR const void *buffer,
+static void spi_sndblock(struct spi_dev_s *dev, const void *buffer,
                          size_t nwords)
 {
   return spi_exchange(dev, buffer, NULL, nwords);
@@ -931,7 +947,7 @@ static void spi_sndblock(FAR struct spi_dev_s *dev, FAR const void *buffer,
  *
  ****************************************************************************/
 
-static void spi_recvblock(FAR struct spi_dev_s *dev, FAR void *buffer,
+static void spi_recvblock(struct spi_dev_s *dev, void *buffer,
                           size_t nwords)
 {
   return spi_exchange(dev, NULL, buffer, nwords);
@@ -1083,7 +1099,7 @@ static void cxd56_spi_pincontrol(int ch, bool on)
 
 static int spi4_colockchange(uint8_t id)
 {
-  FAR struct cxd56_spidev_s *priv = &g_spi4dev;
+  struct cxd56_spidev_s *priv = &g_spi4dev;
 
   switch (id)
     {
@@ -1114,7 +1130,7 @@ static int spi4_colockchange(uint8_t id)
 
 static int spi5_colockchange(uint8_t id)
 {
-  FAR struct cxd56_spidev_s *priv = &g_spi5dev;
+  struct cxd56_spidev_s *priv = &g_spi5dev;
 
   switch (id)
     {
@@ -1148,9 +1164,9 @@ static int spi5_colockchange(uint8_t id)
  *
  ****************************************************************************/
 
-FAR struct spi_dev_s *cxd56_spibus_initialize(int port)
+struct spi_dev_s *cxd56_spibus_initialize(int port)
 {
-  FAR struct cxd56_spidev_s *priv;
+  struct cxd56_spidev_s *priv;
   uint32_t regval;
   int i;
 
@@ -1244,11 +1260,7 @@ FAR struct spi_dev_s *cxd56_spibus_initialize(int port)
 
   /* Select a default frequency of approx. 400KHz */
 
-  spi_setfrequency((FAR struct spi_dev_s *)priv, 400000);
-
-  /* Initialize the SPI semaphore that enforces mutually exclusive access */
-
-  nxsem_init(&priv->exclsem, 0, 1);
+  spi_setfrequency((struct spi_dev_s *)priv, 400000);
 
 #ifdef CONFIG_CXD56_SPI3_SCUSEQ
   /* Enable the SPI, but not enable port 3 when SCU support enabled.
@@ -1300,9 +1312,9 @@ FAR struct spi_dev_s *cxd56_spibus_initialize(int port)
  ****************************************************************************/
 
 void cxd56_spi_dmaconfig(int port, int chtype, DMA_HANDLE handle,
-                         FAR dma_config_t *conf)
+                         dma_config_t *conf)
 {
-  FAR struct cxd56_spidev_s *priv = NULL;
+  struct cxd56_spidev_s *priv = NULL;
 
   switch (port)
     {
@@ -1328,29 +1340,17 @@ void cxd56_spi_dmaconfig(int port, int chtype, DMA_HANDLE handle,
         {
           /* TX DMA setting */
 
+          priv->dmaenable = true;
           priv->txdmach = handle;
           memcpy(&priv->txconfig, conf, sizeof(dma_config_t));
-
-          if (!priv->dmaenable)
-            {
-              nxsem_init(&priv->dmasem, 0, 0);
-              nxsem_set_protocol(&priv->dmasem, SEM_PRIO_NONE);
-              priv->dmaenable = true;
-            }
         }
       else if ((chtype == CXD56_SPI_DMAC_CHTYPE_RX) && (!priv->rxdmach))
         {
           /* RX DMA setting */
 
+          priv->dmaenable = true;
           priv->rxdmach = handle;
           memcpy(&priv->rxconfig, conf, sizeof(dma_config_t));
-
-          if (!priv->dmaenable)
-            {
-              nxsem_init(&priv->dmasem, 0, 0);
-              nxsem_set_protocol(&priv->dmasem, SEM_PRIO_NONE);
-              priv->dmaenable = true;
-            }
         }
     }
 }
@@ -1372,9 +1372,9 @@ void cxd56_spi_dmaconfig(int port, int chtype, DMA_HANDLE handle,
  *
  ****************************************************************************/
 
-void spi_flush(FAR struct spi_dev_s *dev)
+void spi_flush(struct spi_dev_s *dev)
 {
-  FAR struct cxd56_spidev_s *priv = (FAR struct cxd56_spidev_s *)dev;
+  struct cxd56_spidev_s *priv = (struct cxd56_spidev_s *)dev;
   uint32_t regval                 = 0;
 
   /* Prohibit the clock change during SPI transfer */
@@ -1440,11 +1440,11 @@ void spi_flush(FAR struct spi_dev_s *dev)
  *
  ****************************************************************************/
 
-static void spi_dmaexchange(FAR struct spi_dev_s *dev,
-                            FAR const void *txbuffer,
-                            FAR void *rxbuffer, size_t nwords)
+static void spi_dmaexchange(struct spi_dev_s *dev,
+                            const void *txbuffer,
+                            void *rxbuffer, size_t nwords)
 {
-  FAR struct cxd56_spidev_s *priv = (FAR struct cxd56_spidev_s *)dev;
+  struct cxd56_spidev_s *priv = (struct cxd56_spidev_s *)dev;
   uint32_t regval                 = 0;
 
   DEBUGASSERT(priv && priv->spibase);
@@ -1505,8 +1505,8 @@ static void spi_dmaexchange(FAR struct spi_dev_s *dev,
  *
  ****************************************************************************/
 
-static void spi_dmasndblock(FAR struct spi_dev_s *dev,
-                            FAR const void *buffer, size_t nwords)
+static void spi_dmasndblock(struct spi_dev_s *dev,
+                            const void *buffer, size_t nwords)
 {
   spi_dmaexchange(dev, buffer, NULL, nwords);
 }
@@ -1519,8 +1519,8 @@ static void spi_dmasndblock(FAR struct spi_dev_s *dev,
  *
  ****************************************************************************/
 
-static void spi_dmarecvblock(FAR struct spi_dev_s *dev,
-                             FAR const void *buffer, size_t nwords)
+static void spi_dmarecvblock(struct spi_dev_s *dev,
+                             const void *buffer, size_t nwords)
 {
   spi_dmaexchange(dev, NULL, buffer, nwords);
 }
@@ -1536,7 +1536,7 @@ static void spi_dmarecvblock(FAR struct spi_dev_s *dev,
 
 static void spi_dmatxcallback(DMA_HANDLE handle, uint8_t status, void *data)
 {
-  FAR struct cxd56_spidev_s *priv = (FAR struct cxd56_spidev_s *)data;
+  struct cxd56_spidev_s *priv = (struct cxd56_spidev_s *)data;
 
   /* Wake-up the SPI driver */
 
@@ -1558,7 +1558,7 @@ static void spi_dmatxcallback(DMA_HANDLE handle, uint8_t status, void *data)
 
 static void spi_dmarxcallback(DMA_HANDLE handle, uint8_t status, void *data)
 {
-  FAR struct cxd56_spidev_s *priv = (FAR struct cxd56_spidev_s *)data;
+  struct cxd56_spidev_s *priv = (struct cxd56_spidev_s *)data;
 
   /* Wake-up the SPI driver */
 
@@ -1578,8 +1578,8 @@ static void spi_dmarxcallback(DMA_HANDLE handle, uint8_t status, void *data)
  *
  ****************************************************************************/
 
-static void spi_dmatxsetup(FAR struct cxd56_spidev_s *priv,
-                           FAR const void *txbuffer, size_t nwords)
+static void spi_dmatxsetup(struct cxd56_spidev_s *priv,
+                           const void *txbuffer, size_t nwords)
 {
   uint32_t dst;
   uint32_t val;
@@ -1601,8 +1601,8 @@ static void spi_dmatxsetup(FAR struct cxd56_spidev_s *priv,
  *
  ****************************************************************************/
 
-static void spi_dmarxsetup(FAR struct cxd56_spidev_s *priv,
-                           FAR const void *rxbuffer, size_t nwords)
+static void spi_dmarxsetup(struct cxd56_spidev_s *priv,
+                           const void *rxbuffer, size_t nwords)
 {
   uint32_t src;
   uint32_t val;
@@ -1624,7 +1624,7 @@ static void spi_dmarxsetup(FAR struct cxd56_spidev_s *priv,
  *
  ****************************************************************************/
 
-static void spi_dmatrxwait(FAR struct cxd56_spidev_s *priv)
+static void spi_dmatrxwait(struct cxd56_spidev_s *priv)
 {
   uint32_t val;
 

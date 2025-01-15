@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/sam34/sam4s_nand.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -43,7 +45,7 @@
 #include <nuttx/irq.h>
 #include <arch/board/board.h>
 #include "hardware/sam4s_pinmap.h"
-#include "arm_arch.h"
+#include "arm_internal.h"
 #include "sam4s_nand.h"
 
 /****************************************************************************
@@ -149,7 +151,10 @@ static int nand_wait_ready(struct sam_nandcs_s *priv)
 
   /* The ready/busy (R/nB) signal of the NAND Flash  */
 
-  while (!sam_gpioread(priv->rb));
+  while (!sam_gpioread(priv->rb))
+    {
+    }
+
   WRITE_COMMAND8(&priv->raw, COMMAND_STATUS);
 
   /* Issue command */
@@ -434,8 +439,8 @@ static int nand_rawwrite(struct nand_raw_s *raw, off_t block,
   int ret = OK;
 
   DEBUGASSERT(raw);
-  finfo("block=%d page=%d data=%p spare=%p\n",
-        (int)block, page, data, spare);
+  finfo("block=%" PRIdOFF " page=%d data=%p spare=%p\n",
+        block, page, data, spare);
 
   /* Get page and spare sizes */
 
@@ -539,9 +544,7 @@ struct mtd_dev_s *sam_nand_initialize(int cs)
   priv->cs             = cs;
   priv->rb             = GPIO_SMC_RB;
 
-  /* Initialize the NAND hardware for this CS */
-
-  /**
+  /* Initialize the NAND hardware for this CS
    * Note: The initialization is shown for the reference purpose only, and
    * for other MCUs, refer to the Package and Pinout chapter of the
    * respective data sheet.

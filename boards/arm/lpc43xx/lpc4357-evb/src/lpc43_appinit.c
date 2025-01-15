@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/lpc43xx/lpc4357-evb/src/lpc43_appinit.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -68,7 +70,7 @@
 #ifdef CONFIG_LPC43_SPIFI
 static int nsh_spifi_initialize(void)
 {
-  FAR struct mtd_dev_s *mtd;
+  struct mtd_dev_s *mtd;
   int ret;
 
   /* Initialize the SPIFI interface and create the MTD driver instance */

@@ -1,6 +1,8 @@
 /****************************************************************************
  * graphics/nxglib/pwfb/pwfb_getrectangle.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -128,7 +130,7 @@ void NXGL_FUNCNAME(pwfb_getrectangle, NXGLIB_SUFFIX)
   rows  = rect->pt2.y - rect->pt1.y + 1;
 
 #if NXGLIB_BITSPERPIXEL < 8
-# ifdef CONFIG_NX_PACKEDMSFIRST
+#  ifdef CONFIG_NX_PACKEDMSFIRST
 
   /* Get the mask for pixels that are ordered so that they pack from the
    * MS byte down.
@@ -136,14 +138,14 @@ void NXGL_FUNCNAME(pwfb_getrectangle, NXGLIB_SUFFIX)
 
   leadmask = (uint8_t)(0xff >> (8 - NXGL_REMAINDERX(rect->pt1.x)));
   tailmask = (uint8_t)(0xff << (8 - NXGL_REMAINDERX(rect->pt2.x - 1)));
-# else
+#  else
   /* Get the mask for pixels that are ordered so that they pack from the
    * LS byte up.
    */
 
   leadmask = (uint8_t)(0xff << (8 - NXGL_REMAINDERX(rect->pt1.x)));
   tailmask = (uint8_t)(0xff >> (8 - NXGL_REMAINDERX(rect->pt1.x - 1)));
-# endif
+#  endif
 #endif
 
   /* sline = address of the first pixel in the top row of the source in

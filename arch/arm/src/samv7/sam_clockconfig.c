@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/samv7/sam_clockconfig.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -30,9 +32,7 @@
 #include <nuttx/arch.h>
 #include <arch/board/board.h>
 
-#include "arm_arch.h"
 #include "arm_internal.h"
-
 #include "sam_clockconfig.h"
 #include "hardware/sam_pmc.h"
 #include "hardware/sam_eefc.h"
@@ -126,7 +126,7 @@ static inline void sam_supcsetup(void)
 
   if ((getreg32(SAM_SUPC_SR) & SUPC_SR_OSCSEL) == 0)
     {
-      uint32_t delay;
+      volatile uint32_t delay;
 
       putreg32((SUPC_CR_XTALSEL | SUPR_CR_KEY), SAM_SUPC_CR);
       for (delay = 0;

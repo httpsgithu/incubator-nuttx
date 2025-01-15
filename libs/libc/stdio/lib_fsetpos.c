@@ -1,6 +1,8 @@
 /****************************************************************************
  * libs/libc/stdio/lib_fsetpos.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -61,5 +63,5 @@ int fsetpos(FAR FILE *stream, FAR fpos_t *pos)
     }
 #endif
 
-  return fseek(stream, (FAR off_t)*pos, SEEK_SET);
+  return fseeko(stream, *pos, SEEK_SET);
 }

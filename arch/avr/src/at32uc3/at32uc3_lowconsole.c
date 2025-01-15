@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/avr/src/at32uc3/at32uc3_lowconsole.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -31,8 +33,7 @@
 #include <nuttx/irq.h>
 #include <arch/board/board.h>
 
-#include "up_arch.h"
-#include "up_internal.h"
+#include "avr_internal.h"
 #include "at32uc3.h"
 #include "at32uc3_pm.h"
 #include "at32uc3_usart.h"
@@ -349,7 +350,7 @@ void up_consoleinit(void)
 
 #endif
 
-  /* Enable selected clocks (and disabled unselected clocks) */
+  /* Enable selected clocks (and disable unselected clocks) */
 
   regval = getreg32(AVR32_PM_PBAMASK);
   regval &= ~(PM_PBAMASK_USART0 | PM_PBAMASK_USART1 | PM_PBAMASK_USART2);
@@ -357,7 +358,7 @@ void up_consoleinit(void)
   putreg32(regval, AVR32_PM_PBAMASK);
 
   /* Then configure the console here (if it is not going to be configured
-   * by up_earlyserialinit()).
+   * by avr_earlyserialinit()).
    */
 
 #if defined(HAVE_SERIAL_CONSOLE) && !defined(USE_EARLYSERIALINIT)
@@ -368,14 +369,14 @@ void up_consoleinit(void)
 }
 
 /****************************************************************************
- * Name: up_lowputc
+ * Name: avr_lowputc
  *
  * Description:
  *   Output one byte on the serial console
  *
  ****************************************************************************/
 
-void up_lowputc(char ch)
+void avr_lowputc(char ch)
 {
 #ifdef HAVE_SERIAL_CONSOLE
   /* Wait until the TX to become ready */

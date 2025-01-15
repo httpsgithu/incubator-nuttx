@@ -1,6 +1,8 @@
 /****************************************************************************
  * fs/vfs/fs_ioctl.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -31,6 +33,7 @@
 #include <assert.h>
 
 #include "inode/inode.h"
+#include "lock.h"
 
 /****************************************************************************
  * Private Functions
@@ -40,7 +43,7 @@
  * Name: file_vioctl
  ****************************************************************************/
 
-int file_vioctl(FAR struct file *filep, int req, va_list ap)
+static int file_vioctl(FAR struct file *filep, int req, va_list ap)
 {
   FAR struct inode *inode;
   unsigned long arg;
@@ -67,74 +70,128 @@ int file_vioctl(FAR struct file *filep, int req, va_list ap)
       ret = inode->u.i_ops->ioctl(filep, req, arg);
     }
 
-  /* Check for File system IOCTL commands that can be implemented via
-   * fcntl()
-   */
-
-  if (ret != -ENOTTY)
-    {
-      return ret;
-    }
-
   switch (req)
     {
       case FIONBIO:
-        {
-          FAR int *nonblock = (FAR int *)(uintptr_t)arg;
-          if (nonblock && *nonblock)
-            {
-              ret = file_fcntl(filep, F_SETFL,
-                              file_fcntl(filep, F_GETFL) | O_NONBLOCK);
-            }
-          else
-            {
-              ret = file_fcntl(filep, F_SETFL,
-                              file_fcntl(filep, F_GETFL) & ~O_NONBLOCK);
-            }
-        }
+        if (ret == OK || ret == -ENOTTY)
+          {
+            FAR int *nonblock = (FAR int *)(uintptr_t)arg;
+            if (nonblock && *nonblock)
+              {
+                filep->f_oflags |= O_NONBLOCK;
+              }
+            else
+              {
+                filep->f_oflags &= ~O_NONBLOCK;
+              }
+
+            ret = OK;
+          }
         break;
 
       case FIOCLEX:
-        ret = file_fcntl(filep, F_SETFD,
-                         file_fcntl(filep, F_GETFD) | FD_CLOEXEC);
+        if (ret == OK || ret == -ENOTTY)
+          {
+            filep->f_oflags |= O_CLOEXEC;
+            ret = OK;
+          }
         break;
 
       case FIONCLEX:
-        ret = file_fcntl(filep, F_SETFD,
-                         file_fcntl(filep, F_GETFD) & ~FD_CLOEXEC);
+        if (ret == OK || ret == -ENOTTY)
+          {
+            filep->f_oflags &= ~O_CLOEXEC;
+            ret = OK;
+          }
         break;
 
       case FIOC_FILEPATH:
-        if (!INODE_IS_MOUNTPT(inode))
+        if (ret == -ENOTTY && !INODE_IS_MOUNTPT(inode))
           {
-            ret = inode_getpath(inode, (FAR char *)(uintptr_t)arg);
+            ret = inode_getpath(inode, (FAR char *)(uintptr_t)arg, PATH_MAX);
           }
         break;
+
+      case FIOC_GETLK:
+        if (ret == -ENOTTY)
+          {
+            ret = file_getlk(filep, (FAR struct flock *)(uintptr_t)arg);
+          }
+        break;
+
+      case FIOC_SETLK:
+        if (ret == -ENOTTY)
+          {
+            ret = file_setlk(filep, (FAR struct flock *)(uintptr_t)arg,
+                             true);
+          }
+        break;
+
+      case FIOC_SETLKW:
+        if (ret == -ENOTTY)
+          {
+            ret = file_setlk(filep, (FAR struct flock *)(uintptr_t)arg,
+                             false);
+          }
+        break;
+
+#ifdef CONFIG_FDSAN
+      case FIOC_SETTAG_FDSAN:
+        filep->f_tag_fdsan = *(FAR uint64_t *)arg;
+        ret = OK;
+        break;
+
+      case FIOC_GETTAG_FDSAN:
+        *(FAR uint64_t *)arg = filep->f_tag_fdsan;
+        ret = OK;
+        break;
+#endif
+
+#ifdef CONFIG_FDCHECK
+      case FIOC_SETTAG_FDCHECK:
+        filep->f_tag_fdcheck = *(FAR uint8_t *)arg;
+        ret = OK;
+        break;
+
+      case FIOC_GETTAG_FDCHECK:
+        *(FAR uint8_t *)arg = filep->f_tag_fdcheck;
+        ret = OK;
+        break;
+#endif
+
+#ifndef CONFIG_DISABLE_MOUNTPOINT
+      case BIOC_BLKSSZGET:
+        if (ret == -ENOTTY && inode->u.i_ops != NULL &&
+            inode->u.i_ops->ioctl != NULL)
+          {
+            struct geometry geo;
+            ret = inode->u.i_ops->ioctl(filep, BIOC_GEOMETRY,
+                                        (unsigned long)(uintptr_t)&geo);
+            if (ret >= 0)
+              {
+                *(FAR blksize_t *)(uintptr_t)arg = geo.geo_sectorsize;
+              }
+          }
+        break;
+
+      case BIOC_BLKGETSIZE:
+        if (ret == -ENOTTY && inode->u.i_ops != NULL &&
+            inode->u.i_ops->ioctl != NULL)
+          {
+            struct geometry geo;
+            ret = inode->u.i_ops->ioctl(filep, BIOC_GEOMETRY,
+                                        (unsigned long)(uintptr_t)&geo);
+            if (ret >= 0)
+              {
+                *(FAR blkcnt_t *)(uintptr_t)arg = geo.geo_nsectors;
+              }
+          }
+        break;
+
+#endif
     }
 
   return ret;
-}
-
-/****************************************************************************
- * Name: nx_vioctl
- ****************************************************************************/
-
-static int nx_vioctl(int fd, int req, va_list ap)
-{
-  FAR struct file *filep;
-  int ret;
-
-  /* Get the file structure corresponding to the file descriptor. */
-
-  ret = fs_getfilep(fd, &filep);
-  if (ret < 0)
-    {
-      return ret;
-    }
-
-  /* Let file_vioctl() do the real work. */
-
-  return file_vioctl(filep, req, ap);
 }
 
 /****************************************************************************
@@ -174,37 +231,6 @@ int file_ioctl(FAR struct file *filep, int req, ...)
 }
 
 /****************************************************************************
- * Name: nx_ioctl
- *
- * Description:
- *   nx_ioctl() is similar to the standard 'ioctl' interface except that is
- *   not a cancellation point and it does not modify the errno variable.
- *
- *   nx_ioctl() is an internal NuttX interface and should not be called from
- *   applications.
- *
- * Returned Value:
- *   Returns a non-negative number on success;  A negated errno value is
- *   returned on any failure (see comments ioctl() for a list of appropriate
- *   errno values).
- *
- ****************************************************************************/
-
-int nx_ioctl(int fd, int req, ...)
-{
-  va_list ap;
-  int ret;
-
-  /* Let nx_vioctl() do the real work. */
-
-  va_start(ap, req);
-  ret = nx_vioctl(fd, req, ap);
-  va_end(ap);
-
-  return ret;
-}
-
-/****************************************************************************
  * Name: ioctl
  *
  * Description:
@@ -234,20 +260,33 @@ int nx_ioctl(int fd, int req, ...)
 
 int ioctl(int fd, int req, ...)
 {
+  FAR struct file *filep;
   va_list ap;
   int ret;
 
-  /* Let nx_vioctl() do the real work. */
+  /* Get the file structure corresponding to the file descriptor. */
 
-  va_start(ap, req);
-  ret = nx_vioctl(fd, req, ap);
-  va_end(ap);
-
+  ret = fs_getfilep(fd, &filep);
   if (ret < 0)
     {
-      set_errno(-ret);
-      ret = ERROR;
+      goto err;
+    }
+
+  /* Let file_vioctl() do the real work. */
+
+  va_start(ap, req);
+  ret = file_vioctl(filep, req, ap);
+  va_end(ap);
+
+  fs_putfilep(filep);
+  if (ret < 0)
+    {
+      goto err;
     }
 
   return ret;
+
+err:
+  set_errno(-ret);
+  return ERROR;
 }

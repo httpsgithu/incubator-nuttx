@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/xtensa/esp32/common/include/esp32_board_i2c.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -18,8 +20,8 @@
  *
  ****************************************************************************/
 
-#ifndef __BOARDS_XTENSA_ESP32_COMMON_INCLUDE_BOARD_I2C_H
-#define __BOARDS_XTENSA_ESP32_COMMON_INCLUDE_BOARD_I2C_H
+#ifndef __BOARDS_XTENSA_ESP32_COMMON_INCLUDE_ESP32_BOARD_I2C_H
+#define __BOARDS_XTENSA_ESP32_COMMON_INCLUDE_ESP32_BOARD_I2C_H
 
 /****************************************************************************
  * Included Files
@@ -48,7 +50,7 @@ extern "C"
  * Name: esp32_i2c_register
  *
  * Description:
- *   registar an ESP32 I2C interface.
+ *   Register an ESP32 I2C interface.
  *
  * Returned Value:
  *   Zero (OK) is returned on success; A negated errno value is returned
@@ -66,4 +68,4 @@ int esp32_i2c_register(int bus);
 #endif
 
 #endif /* __ASSEMBLY__ */
-#endif /* __BOARDS_XTENSA_ESP32_COMMON_INCLUDE_BOARD_I2C_H */
+#endif /* __BOARDS_XTENSA_ESP32_COMMON_INCLUDE_ESP32_BOARD_I2C_H */

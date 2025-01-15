@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/tiva/lm3s6432-s2e/src/lm3s6432-s2e.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -18,8 +20,8 @@
  *
  ****************************************************************************/
 
-#ifndef __BOARDS_ARM_TIVA_LM3S6432_S2E_SRC_LM3S6432S2E_H
-#define __BOARDS_ARM_TIVA_LM3S6432_S2E_SRC_LM3S6432S2E_H
+#ifndef __BOARDS_ARM_TIVA_LM3S6432_S2E_SRC_LM3S6432_S2E_H
+#define __BOARDS_ARM_TIVA_LM3S6432_S2E_SRC_LM3S6432_S2E_H
 
 /****************************************************************************
  * Included Files
@@ -106,4 +108,4 @@
 void weak_function lm_ssidev_initialize(void);
 
 #endif /* __ASSEMBLY__ */
-#endif /* __BOARDS_ARM_TIVA_LM3S6432_S2E_SRC_LM3S6432S2E_H */
+#endif /* __BOARDS_ARM_TIVA_LM3S6432_S2E_SRC_LM3S6432_S2E_H */

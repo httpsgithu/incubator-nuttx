@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/armv8-m/arm_trigger_irq.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -30,7 +32,7 @@
 #include <nuttx/arch.h>
 #include <arch/irq.h>
 
-#include "arm_arch.h"
+#include "arm_internal.h"
 #include "nvic.h"
 
 #ifdef CONFIG_ARCH_HAVE_IRQTRIGGER
@@ -47,7 +49,7 @@
  *
  ****************************************************************************/
 
-void up_trigger_irq(int irq)
+void up_trigger_irq(int irq, cpu_set_t cpuset)
 {
   uint32_t pend_bit = 0;
 

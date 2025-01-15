@@ -1,6 +1,8 @@
 /****************************************************************************
  * sched/semaphore/sem_destroy.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -56,70 +58,34 @@
  *
  ****************************************************************************/
 
-int nxsem_destroy (FAR sem_t *sem)
+int nxsem_destroy(FAR sem_t *sem)
 {
-  /* Assure a valid semaphore is specified */
+  int32_t old;
 
-  if (sem != NULL)
+  DEBUGASSERT(sem != NULL);
+
+  /* There is really no particular action that we need
+   * take to destroy a semaphore.  We will just reset
+   * the count to some reasonable value (0) and release
+   * ownership.
+   *
+   * Check if other threads are waiting on the semaphore.
+   * In this case, the behavior is undefined.  We will:
+   * leave the count unchanged but still return OK.
+   */
+
+  old = atomic_read(NXSEM_COUNT(sem));
+  do
     {
-      /* There is really no particular action that we need
-       * take to destroy a semaphore.  We will just reset
-       * the count to some reasonable value (1) and release
-       * ownership.
-       *
-       * Check if other threads are waiting on the semaphore.
-       * In this case, the behavior is undefined.  We will:
-       * leave the count unchanged but still return OK.
-       */
-
-      if (sem->semcount >= 0)
+      if (old < 0)
         {
-          sem->semcount = 1;
+          break;
         }
-
-      /* Release holders of the semaphore */
-
-      nxsem_destroyholder(sem);
-      return OK;
     }
+  while (!atomic_try_cmpxchg_release(NXSEM_COUNT(sem), &old, 1));
 
-  return -EINVAL;
-}
+  /* Release holders of the semaphore */
 
-/****************************************************************************
- * Name: sem_destroy
- *
- * Description:
- *   This function is used to destroy the un-named semaphore indicated by
- *   'sem'.  Only a semaphore that was created using nxsem_init() may be
- *   destroyed using sem_destroy(); the effect of calling sem_destroy() with
- *   a named semaphore is undefined.  The effect of subsequent use of the
- *   semaphore sem is undefined until sem is re-initialized by another call
- *   to nxsem_init().
- *
- *   The effect of destroying a semaphore upon which other processes are
- *   currently blocked is undefined.
- *
- * Input Parameters:
- *   sem - Semaphore to be destroyed.
- *
- * Returned Value:
- *   This function is a application interface.  It returns zero (OK) if
- *   successful.  Otherwise, -1 (ERROR) is returned and the errno value is
- *   set appropriately.
- *
- ****************************************************************************/
-
-int sem_destroy (FAR sem_t *sem)
-{
-  int ret;
-
-  ret = nxsem_destroy(sem);
-  if (ret < 0)
-    {
-      set_errno(-ret);
-      ret = ERROR;
-    }
-
-  return ret;
+  nxsem_destroyholder(sem);
+  return OK;
 }

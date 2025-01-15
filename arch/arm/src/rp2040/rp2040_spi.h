@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/rp2040/rp2040_spi.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -95,7 +97,7 @@ extern "C"
  *
  ****************************************************************************/
 
-FAR struct spi_dev_s *rp2040_spibus_initialize(int port);
+struct spi_dev_s *rp2040_spibus_initialize(int port);
 
 /****************************************************************************
  * Name:  rp2040_spiXselect, rp2040_spiXstatus, and rp2040_spiXcmddata
@@ -114,26 +116,26 @@ FAR struct spi_dev_s *rp2040_spibus_initialize(int port);
  ****************************************************************************/
 
 #ifdef CONFIG_RP2040_SPI0
-void  rp2040_spi0select(FAR struct spi_dev_s *dev,
+void  rp2040_spi0select(struct spi_dev_s *dev,
                         uint32_t devid,
                         bool selected);
-uint8_t rp2040_spi0status(FAR struct spi_dev_s *dev,
+uint8_t rp2040_spi0status(struct spi_dev_s *dev,
                           uint32_t devid);
 #ifdef CONFIG_SPI_CMDDATA
-int rp2040_spi0cmddata(FAR struct spi_dev_s *dev,
+int rp2040_spi0cmddata(struct spi_dev_s *dev,
                        uint32_t devid,
                        bool cmd);
 #endif
 #endif
 
 #ifdef CONFIG_RP2040_SPI1
-void  rp2040_spi1select(FAR struct spi_dev_s *dev,
+void  rp2040_spi1select(struct spi_dev_s *dev,
                         uint32_t devid,
                         bool selected);
-uint8_t rp2040_spi1status(FAR struct spi_dev_s *dev,
+uint8_t rp2040_spi1status(struct spi_dev_s *dev,
                           uint32_t devid);
 #ifdef CONFIG_SPI_CMDDATA
-int rp2040_spi1cmddata(FAR struct spi_dev_s *dev,
+int rp2040_spi1cmddata(struct spi_dev_s *dev,
                        uint32_t devid,
                        bool cmd);
 #endif
@@ -155,7 +157,7 @@ int rp2040_spi1cmddata(FAR struct spi_dev_s *dev,
  *
  ****************************************************************************/
 
-void spi_flush(FAR struct spi_dev_s *dev);
+void spi_flush(struct spi_dev_s *dev);
 
 /****************************************************************************
  * Name: rp2040_spiXregister
@@ -179,13 +181,13 @@ void spi_flush(FAR struct spi_dev_s *dev);
 
 #ifdef CONFIG_SPI_CALLBACK
 #ifdef CONFIG_RP2040_SPI0
-int rp2040_spi0register(FAR struct spi_dev_s *dev,
-                        spi_mediachange_t callback, FAR void *arg);
+int rp2040_spi0register(struct spi_dev_s *dev,
+                        spi_mediachange_t callback, void *arg);
 #endif
 
 #ifdef CONFIG_RP2040_SPI1
-int rp2040_spi1register(FAR struct spi_dev_s *dev,
-                        spi_mediachange_t callback, FAR void *arg);
+int rp2040_spi1register(struct spi_dev_s *dev,
+                        spi_mediachange_t callback, void *arg);
 #endif
 #endif
 

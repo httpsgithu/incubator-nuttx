@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/samv7/hardware/sam_matrix.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -51,7 +53,7 @@
 #  define SAM_MATRIX_MCFG11_OFFSET       0x002c /* Master Configuration Register 11 */
                                                 /* 0x0030-0x003c: Reserved */
 #define SAM_MATRIX_SCFG_OFFSET(n)        (0x0040+((n)<<2))
-# define SAM_MATRIX_SCFG0_OFFSET         0x0040 /* Slave Configuration Register 0 */
+#  define SAM_MATRIX_SCFG0_OFFSET        0x0040 /* Slave Configuration Register 0 */
 #  define SAM_MATRIX_SCFG1_OFFSET        0x0044 /* Slave Configuration Register 1 */
 #  define SAM_MATRIX_SCFG2_OFFSET        0x0048 /* Slave Configuration Register 2 */
 #  define SAM_MATRIX_SCFG3_OFFSET        0x004c /* Slave Configuration Register 3 */

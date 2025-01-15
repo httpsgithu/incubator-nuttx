@@ -1,6 +1,8 @@
 /****************************************************************************
  * net/inet/ipv6_getpeername.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -69,6 +71,7 @@
 int ipv6_getpeername(FAR struct socket *psock, FAR struct sockaddr *addr,
                      FAR socklen_t *addrlen)
 {
+  FAR struct socket_conn_s *conn = psock->s_conn;
   FAR struct sockaddr_in6 *outaddr = (FAR struct sockaddr_in6 *)addr;
   net_ipv6addr_t *ripaddr;
 
@@ -86,7 +89,7 @@ int ipv6_getpeername(FAR struct socket *psock, FAR struct sockaddr *addr,
 
   /* Verify that the socket has been connected */
 
-  if (_SS_ISCONNECTED(psock->s_flags) == 0)
+  if (_SS_ISCONNECTED(conn->s_flags) == 0)
     {
       return -ENOTCONN;
     }
@@ -98,8 +101,7 @@ int ipv6_getpeername(FAR struct socket *psock, FAR struct sockaddr *addr,
 #ifdef NET_TCP_HAVE_STACK
       case SOCK_STREAM:
         {
-          FAR struct tcp_conn_s *tcp_conn =
-            (FAR struct tcp_conn_s *)psock->s_conn;
+          FAR struct tcp_conn_s *tcp_conn = psock->s_conn;
 
           outaddr->sin6_port = tcp_conn->lport; /* Already in network byte order */
           ripaddr            = &tcp_conn->u.ipv6.raddr;
@@ -110,8 +112,7 @@ int ipv6_getpeername(FAR struct socket *psock, FAR struct sockaddr *addr,
 #ifdef NET_UDP_HAVE_STACK
       case SOCK_DGRAM:
         {
-          FAR struct udp_conn_s *udp_conn =
-            (FAR struct udp_conn_s *)psock->s_conn;
+          FAR struct udp_conn_s *udp_conn = psock->s_conn;
 
           outaddr->sin6_port = udp_conn->lport; /* Already in network byte order */
           ripaddr            = &udp_conn->u.ipv6.raddr;

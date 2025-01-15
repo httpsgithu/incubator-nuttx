@@ -1,6 +1,8 @@
 /****************************************************************************
  * libs/libc/machine/xtensa/arch_strcpy.S
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -27,6 +29,10 @@
 #include <arch/chip/core-isa.h>
 #include <arch/xtensa/xtensa_abi.h>
 
+#include "libc.h"
+
+#ifdef LIBC_BUILD_STRCPY
+
 /****************************************************************************
  * Public Functions
  ****************************************************************************/
@@ -35,9 +41,9 @@
   .begin schedule
   .align  4
   .literal_position
-  .global strcpy
-  .type strcpy, @function
-strcpy:
+  .global ARCH_LIBCFUN(strcpy)
+  .type ARCH_LIBCFUN(strcpy), @function
+ARCH_LIBCFUN(strcpy):
   ENTRY(16)
   /* a2 = dst, a3 = src */
 
@@ -75,7 +81,6 @@ strcpy:
   addi  a10, a10, 2 # advance dst pointer
   bnez  a8, .Lsrcaligned
 1:  RET(16)
-
 
 /* dst is word-aligned; src is word-aligned.  */
 
@@ -240,4 +245,6 @@ strcpy:
 #endif /* 0 */
   .end schedule
 
-  .size strcpy, . - strcpy
+  .size ARCH_LIBCFUN(strcpy), . - ARCH_LIBCFUN(strcpy)
+
+#endif

@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/lpc43xx/lpc43_tickless_rit.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -35,24 +37,18 @@
 #include <errno.h>
 #include <time.h>
 
+#include <sys/param.h>
+
 #include <nuttx/irq.h>
 #include <nuttx/arch.h>
 #include <nuttx/clock.h>
 #include <arch/board/board.h>
 
-#include "arm_arch.h"
+#include "arm_internal.h"
 #include "chip.h"
 #include "hardware/lpc43_rit.h"
 
 #ifdef CONFIG_SCHED_TICKLESS
-
-/****************************************************************************
- * Pre-processor Definitions
- ****************************************************************************/
-
-#ifndef min
-#  define min(a,b) (a < b ? a : b)
-#endif
 
 /****************************************************************************
  * Private Data
@@ -124,11 +120,6 @@ static inline void lpc43_tl_set_mask(uint32_t value)
     }
 }
 
-static inline uint32_t lpc43_tl_get_mask(void)
-{
-  return mask_cache;
-}
-
 static inline bool lpc43_tl_get_ctrl_bit(uint32_t bit)
 {
   return ((ctrl_cache & bit)?true:false);
@@ -166,11 +157,6 @@ static inline void lpc43_tl_set_enable(bool value)
   lpc43_tl_set_ctrl_bit(RIT_CTRL_EN, value);
 }
 
-static inline bool lpc43_tl_get_enable(void)
-{
-  return lpc43_tl_get_ctrl_bit(RIT_CTRL_EN);
-}
-
 static inline void lpc43_tl_clear_interrupt(void)
 {
   putreg32(ctrl_cache | RIT_CTRL_INT, LPC43_RIT_CTRL);
@@ -195,9 +181,9 @@ static uint32_t common_dev(uint32_t a, uint32_t b)
   return a;
 }
 
-static void lpc43_tl_add(FAR const struct timespec *ts1,
-                         FAR const struct timespec *ts2,
-                         FAR struct timespec *ts3)
+static void lpc43_tl_add(const struct timespec *ts1,
+                         const struct timespec *ts2,
+                         struct timespec *ts3)
 {
   time_t sec = ts1->tv_sec + ts2->tv_sec;
   long nsec  = ts1->tv_nsec + ts2->tv_nsec;
@@ -212,9 +198,9 @@ static void lpc43_tl_add(FAR const struct timespec *ts1,
   ts3->tv_nsec = nsec;
 }
 
-static void lpc43_tl_sub(FAR const struct timespec *ts1,
-                         FAR const struct timespec *ts2,
-                         FAR struct timespec *ts3)
+static void lpc43_tl_sub(const struct timespec *ts1,
+                         const struct timespec *ts2,
+                         struct timespec *ts3)
 {
   time_t sec;
   long nsec;
@@ -247,12 +233,12 @@ static void lpc43_tl_sub(FAR const struct timespec *ts1,
   ts3->tv_nsec = nsec;
 }
 
-static inline uint32_t lpc43_tl_ts2tick(FAR const struct timespec *ts)
+static inline uint32_t lpc43_tl_ts2tick(const struct timespec *ts)
 {
   return (ts->tv_sec * LPC43_CCLK + (ts->tv_nsec / MIN_NSEC * MIN_TICKS));
 }
 
-static uint32_t lpc43_tl_tick2ts(uint32_t ticks, FAR struct timespec *ts,
+static uint32_t lpc43_tl_tick2ts(uint32_t ticks, struct timespec *ts,
                                  bool with_rest)
 {
   uint32_t ticks_whole;
@@ -438,13 +424,13 @@ static bool lpc43_tl_set_calc_arm(uint32_t curr, uint32_t to_set, bool arm)
 
   if (curr < TO_RESET_NEXT)
     {
-      calc_time = min(TO_RESET_NEXT, to_set);
+      calc_time = MIN(TO_RESET_NEXT, to_set);
     }
   else
     {
       if (curr < TO_END)
         {
-          calc_time = min(curr + RESET_TICKS, to_set);
+          calc_time = MIN(curr + RESET_TICKS, to_set);
         }
       else
         {
@@ -521,7 +507,7 @@ static inline void lpc43_tl_alarm(uint32_t curr)
 
 /* Interrupt handler */
 
-static int lpc43_tl_isr(int irq, FAR void *context, FAR void *arg)
+static int lpc43_tl_isr(int irq, void *context, void *arg)
 {
   lpc43_tl_sync_up();
 
@@ -623,7 +609,7 @@ void up_timer_initialize(void)
 
 /* No reg changes, only processing */
 
-int up_timer_gettime(FAR struct timespec *ts)
+int up_timer_gettime(struct timespec *ts)
 {
   lpc43_tl_sync_up();
 
@@ -664,7 +650,7 @@ int up_timer_gettime(FAR struct timespec *ts)
   return OK;
 }
 
-int up_alarm_cancel(FAR struct timespec *ts)
+int up_alarm_cancel(struct timespec *ts)
 {
   lpc43_tl_sync_up();
 
@@ -683,7 +669,7 @@ int up_alarm_cancel(FAR struct timespec *ts)
   return OK;
 }
 
-int up_alarm_start(FAR const struct timespec *ts)
+int up_alarm_start(const struct timespec *ts)
 {
   lpc43_tl_sync_up();
 
@@ -727,7 +713,7 @@ int up_alarm_start(FAR const struct timespec *ts)
 }
 
 #ifndef CONFIG_SCHED_TICKLESS_ALARM
-int up_timer_cancel(FAR struct timespec *ts)
+int up_timer_cancel(struct timespec *ts)
 {
   lpc43_tl_sync_up();
 
@@ -744,7 +730,7 @@ int up_timer_cancel(FAR struct timespec *ts)
   return OK;
 }
 
-int up_timer_start(FAR const struct timespec *ts)
+int up_timer_start(const struct timespec *ts)
 {
   lpc43_tl_sync_up();
 

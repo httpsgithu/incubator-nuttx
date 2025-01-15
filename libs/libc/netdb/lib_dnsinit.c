@@ -1,6 +1,8 @@
 /****************************************************************************
  * libs/libc/netdb/lib_dnsinit.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -30,8 +32,8 @@
 
 #include <arpa/inet.h>
 
-#include <nuttx/semaphore.h>
-
+#include <nuttx/sched.h>
+#include <nuttx/mutex.h>
 #include "netdb/lib_dns.h"
 
 /****************************************************************************
@@ -40,133 +42,59 @@
 
 /* Protects DNS cache, nameserver list and notify list. */
 
-static sem_t g_dns_sem = SEM_INITIALIZER(1);
+static rmutex_t g_dns_lock = NXRMUTEX_INITIALIZER;
 
 /****************************************************************************
- * Public Data
- ****************************************************************************/
-
-#if defined(CONFIG_NETDB_DNSSERVER_IPv6) && !defined(CONFIG_NETDB_RESOLVCONF)
-
-/* This is the default IPv6 DNS server address */
-
-static const uint16_t g_ipv6_hostaddr[8] =
-{
-  HTONS(CONFIG_NETDB_DNSSERVER_IPv6ADDR_1),
-  HTONS(CONFIG_NETDB_DNSSERVER_IPv6ADDR_2),
-  HTONS(CONFIG_NETDB_DNSSERVER_IPv6ADDR_3),
-  HTONS(CONFIG_NETDB_DNSSERVER_IPv6ADDR_4),
-  HTONS(CONFIG_NETDB_DNSSERVER_IPv6ADDR_5),
-  HTONS(CONFIG_NETDB_DNSSERVER_IPv6ADDR_6),
-  HTONS(CONFIG_NETDB_DNSSERVER_IPv6ADDR_7),
-  HTONS(CONFIG_NETDB_DNSSERVER_IPv6ADDR_8)
-};
-#endif
-
-/****************************************************************************
- * Private Functions
+ * Public Functions
  ****************************************************************************/
 
 /****************************************************************************
- * Name: dns_initialize
+ * Name: dns_lock
  *
  * Description:
- *   Make sure that the DNS client has been properly initialized for use.
+ *   Take the DNS lock, ignoring errors due to the receipt of signals.
  *
  ****************************************************************************/
 
-bool dns_initialize(void)
+void dns_lock(void)
 {
-#ifndef CONFIG_NETDB_RESOLVCONF
-  int nservers;
-
-  dns_semtake();
-  nservers = g_dns_nservers;
-  dns_semgive();
-
-  /* Has at least one DNS server IP address been assigned? */
-
-  if (nservers == 0)
-    {
-#if defined(CONFIG_NETDB_DNSSERVER_IPv4)
-      struct sockaddr_in addr4;
-      int ret;
-
-      /* No, configure the default IPv4 DNS server address */
-
-      addr4.sin_family      = AF_INET;
-      addr4.sin_port        = HTONS(DNS_DEFAULT_PORT);
-      addr4.sin_addr.s_addr = HTONL(CONFIG_NETDB_DNSSERVER_IPv4ADDR);
-
-      ret = dns_add_nameserver((FAR struct sockaddr *)&addr4,
-                               sizeof(struct sockaddr_in));
-      if (ret < 0)
-        {
-          return false;
-        }
-
-#elif defined(CONFIG_NETDB_DNSSERVER_IPv6)
-      struct sockaddr_in6 addr6;
-      int ret;
-
-      /* No, configure the default IPv6 DNS server address */
-
-      addr6.sin6_family = AF_INET6;
-      addr6.sin6_port   = HTONS(DNS_DEFAULT_PORT);
-      memcpy(addr6.sin6_addr.s6_addr, g_ipv6_hostaddr, 16);
-
-      ret = dns_add_nameserver((FAR struct sockaddr *)&addr6,
-                               sizeof(struct sockaddr_in6));
-      if (ret < 0)
-        {
-          return false;
-        }
-
-#else
-      /* Then we are not ready to perform DNS queries */
-
-      return false;
-#endif
-    }
-#endif /* !CONFIG_NETDB_RESOLVCONF */
-
-  return true;
+  nxrmutex_lock(&g_dns_lock);
 }
 
 /****************************************************************************
- * Name: dns_semtake
+ * Name: dns_unlock
  *
  * Description:
- *   Take the DNS semaphore, ignoring errors due to the receipt of signals.
+ *   Release the DNS lock
  *
  ****************************************************************************/
 
-void dns_semtake(void)
+void dns_unlock(void)
 {
-  int errcode = 0;
-  int ret;
-
-  do
-    {
-      ret = _SEM_WAIT(&g_dns_sem);
-      if (ret < 0)
-        {
-          errcode = _SEM_ERRNO(ret);
-          DEBUGASSERT(errcode == EINTR || errcode == ECANCELED);
-        }
-    }
-  while (ret < 0 && errcode == EINTR);
+  nxrmutex_unlock(&g_dns_lock);
 }
 
 /****************************************************************************
- * Name: dns_semgive
+ * Name: dns_breaklock
  *
  * Description:
- *   Release the DNS semaphore
+ *   Break the DNS lock
+ ****************************************************************************/
+
+void dns_breaklock(FAR unsigned int *count)
+{
+  nxrmutex_breaklock(&g_dns_lock, count);
+}
+
+/****************************************************************************
+ * Name: dns_restorelock
+ *
+ * Description:
+ *   Restore the DNS lock
  *
  ****************************************************************************/
 
-void dns_semgive(void)
+void dns_restorelock(unsigned int count)
 {
-  DEBUGVERIFY(_SEM_POST(&g_dns_sem));
+  nxrmutex_restorelock(&g_dns_lock, count);
 }

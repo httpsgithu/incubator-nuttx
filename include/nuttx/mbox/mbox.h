@@ -1,6 +1,8 @@
 /****************************************************************************
  * include/nuttx/mbox/mbox.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -21,14 +23,14 @@
 #ifndef __INCLUDE_NUTTX_MBOX_MBOX_H
 #define __INCLUDE_NUTTX_MBOX_MBOX_H
 
-#ifdef CONFIG_MBOX
-
 /****************************************************************************
  * Included Files
  ****************************************************************************/
 
-#include <nuttx/config.h>
+#include <nuttx/compiler.h>
+
 #include <stdbool.h>
+#include <stdint.h>
 
 /****************************************************************************
  * Pre-processor Definitions
@@ -127,5 +129,4 @@ extern "C"
 }
 #endif
 
-#endif /* CONFIG_MBOX */
 #endif /* __INCLUDE_NUTTX_MBOX_MBOX_H */

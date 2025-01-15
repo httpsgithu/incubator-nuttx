@@ -1,6 +1,8 @@
 /****************************************************************************
  * graphics/nxglib/cursor/nxglib_cursor_backup.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -68,8 +70,8 @@ void NXGL_FUNCNAME(nxglib_cursor_backup, NXGLIB_SUFFIX)
   FAR uint8_t *fbmem;
   FAR const uint8_t *sline;
   FAR uint8_t *dline;
-  FAR const FAR NXGL_PIXEL_T *src;
-  FAR FAR NXGL_PIXEL_T *dest;
+  FAR const NXGL_PIXEL_T *src;
+  FAR NXGL_PIXEL_T *dest;
   nxgl_coord_t width;
   nxgl_coord_t height;
   nxgl_coord_t sstride;

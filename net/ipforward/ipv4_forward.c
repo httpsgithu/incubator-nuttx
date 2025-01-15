@@ -1,6 +1,8 @@
 /****************************************************************************
  * net/ipforward/ipv4_forward.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -37,7 +39,10 @@
 #include "netdev/netdev.h"
 #include "utils/utils.h"
 #include "sixlowpan/sixlowpan.h"
+#include "icmp/icmp.h"
+#include "ipfilter/ipfilter.h"
 #include "ipforward/ipforward.h"
+#include "nat/nat.h"
 #include "devif/devif.h"
 
 #if defined(CONFIG_NET_IPFORWARD) && defined(CONFIG_NET_IPv4)
@@ -147,12 +152,6 @@ static int ipv4_decr_ttl(FAR struct ipv4_hdr_s *ipv4)
   ttl = (int)ipv4->ttl - 1;
   if (ttl <= 0)
     {
-#ifdef CONFIG_NET_ICMP
-      /* Return an ICMP error packet back to the sender. */
-
-#  warning Missing logic
-#endif
-
       /* Return zero which must cause the packet to be dropped */
 
       return 0;
@@ -179,7 +178,7 @@ static int ipv4_decr_ttl(FAR struct ipv4_hdr_s *ipv4)
     }
   else
     {
-      sum = htons(sum);
+      sum = HTONS(sum);
     }
 
   ipv4->ipchksum = ~sum;
@@ -218,11 +217,36 @@ static int ipv4_dev_forward(FAR struct net_driver_s *dev,
 #endif
   int ret;
 
-  /* Verify that the full packet will fit within the forwarding devices MTU.
-   * We provide no support for fragmenting forwarded packets.
+#ifdef CONFIG_NET_IPFILTER
+  /* Do filter before forwarding, to make sure we drop silently before
+   * replying any other errors.
    */
 
-  if (NET_LL_HDRLEN(fwddev) + dev->d_len > NETDEV_PKTSIZE(fwddev))
+  ret = ipv4_filter_fwd(dev, fwddev, ipv4);
+  if (ret < 0)
+    {
+      ninfo("Drop/Reject FORWARD packet due to filter %d\n", ret);
+
+      /* Let ipv4_forward reply the reject. */
+
+      if (ret == IPFILTER_TARGET_REJECT)
+        {
+          ret = -ENETUNREACH;
+        }
+
+      goto errout;
+    }
+#endif
+
+  /* Verify that the full packet will fit within the forwarding device's MTU
+   * if DF is set.
+   */
+
+  if (NET_LL_HDRLEN(fwddev) + dev->d_len > NETDEV_PKTSIZE(fwddev)
+#ifdef CONFIG_NET_IPFRAG
+      && (ipv4->ipoffset[0] & (IP_FLAG_DONTFRAG >> 8))
+#endif
+     )
     {
       nwarn("WARNING: Packet > MTU... Dropping\n");
       ret = -EFBIG;
@@ -244,8 +268,8 @@ static int ipv4_dev_forward(FAR struct net_driver_s *dev,
   /* Initialize the easy stuff in the forwarding structure */
 
   fwd->f_dev    = fwddev;  /* Forwarding device */
-#ifdef CONFIG_NET_IPv5
-  fwd->f_domain = PF_INET; /* IPv64 address domain */
+#ifdef CONFIG_NET_IPv6
+  fwd->f_domain = PF_INET; /* IPv4 address domain */
 #endif
 
 #ifdef CONFIG_DEBUG_NET_WARN
@@ -269,62 +293,41 @@ static int ipv4_dev_forward(FAR struct net_driver_s *dev,
     }
 #endif
 
-  /* Try to allocate the head of an IOB chain.  If this fails, the
-   * packet will be dropped; we are not operating in a context
-   * where waiting for an IOB is a good idea
-   */
+  /* Relay the device buffer */
 
-  fwd->f_iob = iob_tryalloc(false, IOBUSER_NET_IPFORWARD);
-  if (fwd->f_iob == NULL)
-    {
-      nwarn("WARNING: iob_tryalloc() failed\n");
-      ret = -ENOMEM;
-      goto errout_with_fwd;
-    }
-
-  /* Copy the L2/L3 headers plus any following payload into an IOB chain.
-   * iob_trycopin() will not wait, but will fail there are no available
-   * IOBs.
-   *
-   * REVISIT: Consider an alternative design that does not require data
-   * copying.  This would require a pool of d_buf's that are managed by
-   * the network rather than the network device.
-   */
-
-  ret = iob_trycopyin(fwd->f_iob, (FAR const uint8_t *)ipv4,
-                      dev->d_len, 0, false, IOBUSER_NET_IPFORWARD);
-  if (ret < 0)
-    {
-      nwarn("WARNING: iob_trycopyin() failed: %d\n", ret);
-      goto errout_with_iobchain;
-    }
+  fwd->f_iob = dev->d_iob;
 
   /* Decrement the TTL in the copy of the IPv4 header (retaining the
    * original TTL in the source to handle the broadcast case).  If the
    * TLL decrements to zero, then do not forward the packet.
    */
 
-  ret = ipv4_decr_ttl((FAR struct ipv4_hdr_s *)fwd->f_iob->io_data);
+  ret = ipv4_decr_ttl(ipv4);
   if (ret < 1)
     {
       nwarn("WARNING: Hop limit exceeded... Dropping!\n");
       ret = -EMULTIHOP;
-      goto errout_with_iobchain;
+      goto errout_with_fwd;
     }
+
+#ifdef CONFIG_NET_NAT44
+  /* Try NAT outbound, rule matching will be performed in NAT module. */
+
+  ret = ipv4_nat_outbound(fwd->f_dev, ipv4, NAT_MANIP_SRC);
+  if (ret < 0)
+    {
+      nwarn("WARNING: Performing NAT44 outbound failed, dropping!\n");
+      goto errout_with_fwd;
+    }
+#endif
 
   /* Then set up to forward the packet according to the protocol. */
 
   ret = ipfwd_forward(fwd);
   if (ret >= 0)
     {
-      dev->d_len = 0;
+      netdev_iob_clear(dev);
       return OK;
-    }
-
-errout_with_iobchain:
-  if (fwd != NULL && fwd->f_iob != NULL)
-    {
-      iob_free_chain(fwd->f_iob, IOBUSER_NET_IPFORWARD);
     }
 
 errout_with_fwd:
@@ -358,13 +361,24 @@ errout:
  ****************************************************************************/
 
 #ifdef CONFIG_NET_IPFORWARD_BROADCAST
-int ipv4_forward_callback(FAR struct net_driver_s *fwddev, FAR void *arg)
+static int ipv4_forward_callback(FAR struct net_driver_s *fwddev,
+                                 FAR void *arg)
 {
   FAR struct net_driver_s *dev = (FAR struct net_driver_s *)arg;
   FAR struct ipv4_hdr_s *ipv4;
+  FAR struct iob_s *iob;
   int ret;
 
-  DEBUGASSERT(fwddev != NULL && dev != NULL && dev->d_buf != NULL);
+  DEBUGASSERT(fwddev != NULL);
+
+  /* Only IFF_UP device and non-loopback device need forward packet */
+
+  if (!IFF_IS_UP(fwddev->d_flags) || fwddev->d_lltype == NET_LL_LOOPBACK)
+    {
+      return OK;
+    }
+
+  DEBUGASSERT(dev != NULL && dev->d_buf != NULL);
 
   /* Check if we are forwarding on the same device that we received the
    * packet from.
@@ -372,20 +386,34 @@ int ipv4_forward_callback(FAR struct net_driver_s *fwddev, FAR void *arg)
 
   if (fwddev != dev)
     {
+      /* Backup the forward IP packet */
+
+      iob = netdev_iob_clone(dev, true);
+      if (iob == NULL)
+        {
+          nerr("ERROR: IOB clone failed when forwarding broadcast.\n");
+          return -ENOMEM;
+        }
+
       /* Recover the pointer to the IPv4 header in the receiving device's
        * d_buf.
        */
 
-      ipv4 = (FAR struct ipv4_hdr_s *)&dev->d_buf[NET_LL_HDRLEN(dev)];
+      ipv4 = IPv4BUF;
 
       /* Send the packet asynchrously on the forwarding device. */
 
       ret = ipv4_dev_forward(dev, fwddev, ipv4);
       if (ret < 0)
         {
+          iob_free_chain(iob);
           nwarn("WARNING: ipv4_dev_forward failed: %d\n", ret);
           return ret;
         }
+
+      /* Restore device iob with backup iob */
+
+      netdev_iob_replace(dev, iob);
     }
 
   return OK;
@@ -431,6 +459,10 @@ int ipv4_forward(FAR struct net_driver_s *dev, FAR struct ipv4_hdr_s *ipv4)
   in_addr_t srcipaddr;
   FAR struct net_driver_s *fwddev;
   int ret;
+#if defined(CONFIG_NET_ICMP) && !defined(CONFIG_NET_ICMP_NO_STACK)
+  int icmp_reply_type;
+  int icmp_reply_code;
+#endif /* CONFIG_NET_ICMP */
 
   /* Search for a device that can forward this packet. */
 
@@ -441,7 +473,8 @@ int ipv4_forward(FAR struct net_driver_s *dev, FAR struct ipv4_hdr_s *ipv4)
   if (fwddev == NULL)
     {
       nwarn("WARNING: Not routable\n");
-      return (ssize_t)-ENETUNREACH;
+      ret = -ENETUNREACH;
+      goto drop;
     }
 
   /* Check if we are forwarding on the same device that we received the
@@ -492,8 +525,48 @@ int ipv4_forward(FAR struct net_driver_s *dev, FAR struct ipv4_hdr_s *ipv4)
 
 drop:
   ipv4_dropstats(ipv4);
+
+#if defined(CONFIG_NET_ICMP) && !defined(CONFIG_NET_ICMP_NO_STACK)
+  /* Reply ICMP to the sender for particular errors. */
+
+  switch (ret)
+    {
+      case -ENETUNREACH:
+        icmp_reply_type = ICMP_DEST_UNREACHABLE;
+        icmp_reply_code = ICMP_NET_UNREACH;
+        goto reply;
+
+      case -EFBIG:
+        icmp_reply_type = ICMP_DEST_UNREACHABLE;
+        icmp_reply_code = ICMP_FRAG_NEEDED;
+        goto reply;
+
+      case -EMULTIHOP:
+        icmp_reply_type = ICMP_TIME_EXCEEDED;
+        icmp_reply_code = ICMP_EXC_TTL;
+        goto reply;
+
+      default:
+        break; /* We don't know how to reply, just go on (to drop). */
+    }
+#endif /* CONFIG_NET_ICMP */
+
   dev->d_len = 0;
   return ret;
+
+#if defined(CONFIG_NET_ICMP) && !defined(CONFIG_NET_ICMP_NO_STACK)
+reply:
+#  ifdef CONFIG_NET_NAT44
+  /* Before we reply ICMP, call NAT outbound to try to translate destination
+   * address & port back to original status.
+   */
+
+  ipv4_nat_outbound(dev, ipv4, NAT_MANIP_DST);
+#  endif /* CONFIG_NET_NAT44 */
+
+  icmp_reply(dev, icmp_reply_type, icmp_reply_code);
+  return OK;
+#endif /* CONFIG_NET_ICMP */
 }
 
 /****************************************************************************

@@ -1,6 +1,8 @@
 /****************************************************************************
  * drivers/wireless/ieee802154/mrf24j40/mrf24j40_radif.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -18,8 +20,8 @@
  *
  ****************************************************************************/
 
-#ifndef __DRIVERS_WIRELESS_IEEE802154_MRF24J40_RADIF_H
-#define __DRIVERS_WIRELESS_IEEE802154_MRF24J40_RADIF_H
+#ifndef __DRIVERS_WIRELESS_IEEE802154_MRF24J40_MRF24J40_RADIF_H
+#define __DRIVERS_WIRELESS_IEEE802154_MRF24J40_MRF24J40_RADIF_H
 
 int mrf24j40_bind(FAR struct ieee802154_radio_s *radio,
                   FAR struct ieee802154_radiocb_s *radiocb);
@@ -57,4 +59,4 @@ int mrf24j40_beaconstop(FAR struct ieee802154_radio_s *radio);
 int mrf24j40_sfupdate(FAR struct ieee802154_radio_s *radio,
                       FAR const struct ieee802154_superframespec_s *sfspec);
 
-#endif /* __DRIVERS_WIRELESS_IEEE802154_MRF24J40_RADIF_H */
+#endif /* __DRIVERS_WIRELESS_IEEE802154_MRF24J40_MRF24J40_RADIF_H */

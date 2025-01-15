@@ -1,6 +1,8 @@
 /****************************************************************************
  * net/bluetooth/bluetooth_poll.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -63,7 +65,7 @@
  ****************************************************************************/
 
 void bluetooth_poll(FAR struct net_driver_s *dev,
-                     FAR struct bluetooth_conn_s *conn)
+                    FAR struct bluetooth_conn_s *conn)
 {
   FAR struct radio_driver_s *radio;
 
@@ -87,7 +89,7 @@ void bluetooth_poll(FAR struct net_driver_s *dev,
        * REVISIT: Need to pass the meta data and the IOB through the callback
        */
 
-#warning Missing logic
+      /* #warning Missing logic */
 
       /* Perform the application callback */
 

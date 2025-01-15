@@ -1,14 +1,11 @@
 /****************************************************************************
  * libs/libc/net/lib_inetpton.c
  *
- *   Copyright (C) 2012 Gregory Nutt. All rights reserved.
- *   Author: Gregory Nutt <gnutt@nuttx.org>
- *
- * Includes some logic extracted from hwport_ftpd, written by Jaehyuk Cho
- * <minzkn@minzkn.com> which was released under the BSD license.
- *
- *   Copyright (C) HWPORT.COM. All rights reserved.
- *   Author: JAEHYUK CHO <mailto:minzkn@minzkn.com>
+ * SPDX-License-Identifier: BSD-3-Clause
+ * SPDX-FileCopyrightText: 2012 Gregory Nutt. All rights reserved.
+ * SPDX-FileCopyrightText: HWPORT.COM. All rights reserved.
+ * SPDX-FileContributor: Gregory Nutt <gnutt@nuttx.org>
+ * SPDX-FileContributor: JAEHYUK CHO <mailto:minzkn@minzkn.com>
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -107,7 +104,7 @@ static int inet_ipv4_pton(FAR const char *src, FAR void *dest)
 
   memset(dest, 0, sizeof(struct in_addr));
 
-  ip        = (uint8_t *)dest;
+  ip        = (FAR uint8_t *)dest;
   srcoffset = 0;
   numoffset = 0;
   ndots     = 0;
@@ -297,7 +294,8 @@ static int inet_ipv6_pton(FAR const char *src, FAR void *dest)
 
               if (nrsep > 0)
                 {
-                  memcpy(dest + (16 - (nrsep << 1)), &rip[0], nrsep << 1);
+                  memcpy((FAR uint8_t *)dest +
+                         (16 - (nrsep << 1)), &rip[0], nrsep << 1);
                 }
 
               /* Return 1 if the conversion succeeds */

@@ -1,6 +1,8 @@
 /****************************************************************************
  * mm/umm_heap/umm_calloc.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -24,6 +26,7 @@
 
 #include <nuttx/config.h>
 
+#include <errno.h>
 #include <stdlib.h>
 
 #include <nuttx/mm/mm.h>
@@ -48,29 +51,40 @@ FAR void *calloc(size_t n, size_t elem_size)
 #if defined(CONFIG_ARCH_ADDRENV) && defined(CONFIG_BUILD_KERNEL)
   /* Use zalloc() because it implements the sbrk() logic */
 
-  FAR void *ret = NULL;
+  FAR void *mem = NULL;
+  /* Verify input parameters
+   *
+   * elem_size or n is zero treats as valid input.
+   *
+   * Assure that the following multiplication cannot overflow the size_t
+   * type, i.e., that:  SIZE_MAX >= n * elem_size
+   *
+   * Refer to SEI CERT C Coding Standard.
+   */
 
-  /* Verify input parameters */
-
-  if (n > 0 && elem_size > 0)
+  if (elem_size == 0 || n <= (SIZE_MAX / elem_size))
     {
-      /* Assure that the following multiplication cannot overflow the size_t
-       * type, i.e., that:  SIZE_MAX >= n * elem_size
-       *
-       * Refer to SEI CERT C Coding Standard.
-       */
+      /* Use zalloc() because it implements the sbrk() logic */
 
-      if (n <= (SIZE_MAX / elem_size))
-        {
-          ret = zalloc(n * elem_size);
-        }
+      mem = zalloc(n * elem_size);
     }
 
-  return ret;
-
+  return mem;
 #else
   /* Use mm_calloc() because it implements the clear */
 
-  return mm_calloc(USR_HEAP, n, elem_size);
+  FAR void *mem = mm_calloc(USR_HEAP, n, elem_size);
+
+  if (mem == NULL)
+    {
+      set_errno(ENOMEM);
+    }
+  else
+    {
+      mm_notify_pressure(mm_heapfree(USR_HEAP),
+                         mm_heapfree_largest(USR_HEAP));
+    }
+
+  return mem;
 #endif
 }

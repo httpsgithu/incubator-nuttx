@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/kinetis/freedom-k64f/src/k64_i2c.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -33,16 +35,16 @@
 
 #if defined(CONFIG_KINETIS_I2C0)
 
-# if defined(CONFIG_SENSORS_FXOS8700CQ)
-#  include "nuttx/sensors/fxos8700cq.h"
-# endif
+#  if defined(CONFIG_SENSORS_FXOS8700CQ)
+#    include "nuttx/sensors/fxos8700cq.h"
+#  endif
 
 /****************************************************************************
  * Public Data
  ****************************************************************************/
 
 #ifdef CONFIG_KINETIS_I2C0
-FAR struct i2c_master_s * g_i2c0_dev;
+struct i2c_master_s * g_i2c0_dev;
 #endif
 
 /****************************************************************************

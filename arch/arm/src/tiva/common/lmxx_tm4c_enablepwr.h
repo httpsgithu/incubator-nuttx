@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/tiva/common/lmxx_tm4c_enablepwr.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -27,7 +29,7 @@
 
 #include <nuttx/config.h>
 
-#include "arm_arch.h"
+#include "arm_internal.h"
 #include "chip.h"
 #include "hardware/tiva_sysctrl.h"
 

@@ -1,8 +1,8 @@
 /****************************************************************************
  * drivers/wireless/bluetooth/bt_uart.h
  *
- *   Copyright (c) 2016, Intel Corporation
- *   All rights reserved.
+ * SPDX-License-Identifier: BSD-3-Clause
+ * SPDX-FileCopyrightText: 2016, Intel Corporation. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -78,7 +78,6 @@ struct btuart_upperhalf_s
   /* Work queue support */
 
   struct work_s work;
-  volatile bool busy;
 };
 
 /****************************************************************************
@@ -91,5 +90,8 @@ int btuart_send(FAR struct bt_driver_s *dev,
                 enum bt_buf_type_e type,
                 FAR void *data, size_t len);
 int btuart_open(FAR struct bt_driver_s *dev);
+void btuart_close(FAR struct bt_driver_s *dev);
+int btuart_ioctl(FAR struct bt_driver_s *dev,
+                 int cmd, unsigned long arg);
 
 #endif /* __DRIVER_WIRELESS_BLUETOOTH_BT_UART_H */

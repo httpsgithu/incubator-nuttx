@@ -41,7 +41,7 @@ endchoice
 config ARCH_MIPS32
 	bool
 	default n
-	select ARCH_HAVE_VFORK
+	select ARCH_HAVE_FORK
 
 config ARCH_MIPS_M4K
 	bool
@@ -58,8 +58,8 @@ config ARCH_MIPS_M5150
 	select ARCH_HAVE_MICROMIPS
 
 config ARCH_HAVE_EIC
-  bool
-  default n
+	bool
+	default n
 
 config ARCH_HAVE_MICROMIPS
 	bool

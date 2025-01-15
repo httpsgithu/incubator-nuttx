@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/sim/include/arch.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -24,18 +26,5 @@
 
 #ifndef __ARCH_SIM_INCLUDE_ARCH_H
 #define __ARCH_SIM_INCLUDE_ARCH_H
-
-/****************************************************************************
- * Inline functions
- ****************************************************************************/
-
-/****************************************************************************
- * Name: up_getsp
- ****************************************************************************/
-
-static inline uintptr_t up_getsp(void)
-{
-  return (uintptr_t)__builtin_frame_address(0);
-}
 
 #endif /* __ARCH_SIM_INCLUDE_ARCH_H */

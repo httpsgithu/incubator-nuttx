@@ -1,6 +1,8 @@
 /****************************************************************************
  * drivers/usbdev/usbdev_trprintf.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -97,10 +99,10 @@ void usbtrace_trprintf(trprintf_t trprintf, uint16_t event, uint16_t value)
     case TRACE_DEVINIT:
 #ifdef CONFIG_USBDEV_TRACE_STRINGS
       trprintf("%-18s   : %-40s %04x\n", "DCD initialize",
-               TRACE_DATA(event), "Initialized", value);
+               "Initialized", value);
 #else
       trprintf("%-18s   : %04x\n", "DCD initialize",
-               TRACE_DATA(event), value);
+               value);
 #endif
       break;
 

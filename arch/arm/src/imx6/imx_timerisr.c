@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/imx6/imx_timerisr.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -31,7 +33,7 @@
 #include <nuttx/arch.h>
 #include <arch/irq.h>
 
-#include "arm_arch.h"
+#include "arm_internal.h"
 #include "gic.h"
 #include "hardware/imx_ccm.h"
 #include "hardware/imx_gpt.h"
@@ -118,7 +120,7 @@ static void imx_output_compare(uint32_t sr, uint32_t of)
  *
  ****************************************************************************/
 
-static int imx_timerisr(int irq, uint32_t *regs, FAR void *arg)
+static int imx_timerisr(int irq, uint32_t *regs, void *arg)
 {
   /* Sample the SR (once) */
 
@@ -179,7 +181,7 @@ void up_timer_initialize(void)
 
   putreg32(0, IMX_GPT_IR);
 
-  /* Configure Output Mode to unconnected/ disconnected—Write zeros in OM3,
+  /* Configure Output Mode to unconnected/ disconnected-Write zeros in OM3,
    * OM2, and OM1 in GPT_CR.
    */
 
@@ -187,7 +189,7 @@ void up_timer_initialize(void)
   cr |=  (GPT_CR_OM1_DISCON | GPT_CR_OM2_DISCON | GPT_CR_OM3_DISCON);
   putreg32(cr, IMX_GPT_CR);
 
-  /* Disable Input Capture Modes—Write zeros in IM1 and IM2 in GPT_CR */
+  /* Disable Input Capture Modes-Write zeros in IM1 and IM2 in GPT_CR */
 
   cr &= ~(GPT_CR_IM1_MASK     | GPT_CR_IM2_MASK);
   cr |=  (GPT_CR_IM1_DISABLED | GPT_CR_IM2_DISABLED);

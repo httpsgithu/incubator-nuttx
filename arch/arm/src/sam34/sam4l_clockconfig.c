@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/sam34/sam4l_clockconfig.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -29,8 +31,6 @@
 
 #include <arch/irq.h>
 #include <arch/board/board.h>
-
-#include "arm_arch.h"
 
 #include "arm_internal.h"
 #include "hardware/sam4l_pm.h"
@@ -922,6 +922,8 @@ static inline void sam_setdividers(void)
  *
  ****************************************************************************/
 
+#if BOARD_CPU_FREQUENCY > FLASH_MAXFREQ_PS1_HSDIS_FWS0 && \
+    BOARD_CPU_FREQUENCY <= FLASH_MAXFREQ_PS1_HSDIS_FWS1
 static inline void sam_enable_fastwakeup(void)
 {
   uint32_t regval;
@@ -932,6 +934,7 @@ static inline void sam_enable_fastwakeup(void)
           SAM_BPM_UNLOCK);
   putreg32(regval, SAM_BPM_PMCON);
 }
+#endif
 
 /****************************************************************************
  * Name: set_flash_waitstate

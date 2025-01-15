@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/stm32/hardware/stm32f33xxx_opamp.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -18,8 +20,8 @@
  *
  ****************************************************************************/
 
-#ifndef __ARCH_ARM_SRC_STM32_HARDWARE_STM32_OPAMP_H
-#define __ARCH_ARM_SRC_STM32_HARDWARE_STM32_OPAMP_H
+#ifndef __ARCH_ARM_SRC_STM32_HARDWARE_STM32F33XXX_OPAMP_H
+#define __ARCH_ARM_SRC_STM32_HARDWARE_STM32F33XXX_OPAMP_H
 
 /****************************************************************************
  * Included Files
@@ -99,4 +101,4 @@
 #define OPAMP_CSR_OUTCAL            (1 << 30)                       /* Bit 30: OPAMP output status flag */
 #define OPAMP_CSR_LOCK              (1 << 31)                       /* Bit 31: OPAMP 2 lock */
 
-#endif /* __ARCH_ARM_SRC_STM32_HARDWARE_STM32_OPAMP_H */
+#endif /* __ARCH_ARM_SRC_STM32_HARDWARE_STM32F33XXX_OPAMP_H */

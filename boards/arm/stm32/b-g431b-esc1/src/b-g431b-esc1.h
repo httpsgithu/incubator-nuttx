@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/stm32/b-g431b-esc1/src/b-g431b-esc1.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  *  Licensed to the Apache Software Foundation (ASF) under one or more
  *  contributor license agreements.  See the NOTICE file distributed with
  *  this work for additional information regarding copyright ownership.  The
@@ -30,6 +32,16 @@
 /****************************************************************************
  * Pre-processor Definitions
  ****************************************************************************/
+
+/* procfs File System */
+
+#ifdef CONFIG_FS_PROCFS
+#  ifdef CONFIG_NSH_PROC_MOUNTPOINT
+#    define STM32_PROCFS_MOUNTPOINT CONFIG_NSH_PROC_MOUNTPOINT
+#  else
+#    define STM32_PROCFS_MOUNTPOINT "/proc"
+#  endif
+#endif
 
 /* LED definitions **********************************************************/
 
@@ -88,6 +100,16 @@
                          GPIO_PORTB | GPIO_PIN8)
 #endif
 
+/* CAN_TERM - PC14 */
+
+#define GPIO_CANTERM (GPIO_OUTPUT|GPIO_PUSHPULL|GPIO_SPEED_50MHz| \
+                      GPIO_OUTPUT_CLEAR|GPIO_PORTC|GPIO_PIN14)
+
+/* GPIO_BEMF */
+
+#define GPIO_GPIOBEMF (GPIO_OUTPUT|GPIO_PUSHPULL|GPIO_SPEED_50MHz| \
+                       GPIO_OUTPUT_CLEAR|GPIO_PORTB|GPIO_PIN5)
+
 /****************************************************************************
  * Public Data
  ****************************************************************************/
@@ -138,6 +160,30 @@ int stm32_adc_setup(void);
 
 #ifdef CONFIG_STM32_FOC
 int stm32_foc_setup(void);
+#endif
+
+/****************************************************************************
+ * Name: stm32_can_setup
+ *
+ * Description:
+ *  Initialize CAN and register the CAN device
+ *
+ ****************************************************************************/
+
+#ifdef CONFIG_STM32_FDCAN_CHARDRIVER
+int stm32_can_setup(void);
+#endif
+
+/****************************************************************************
+ * Name: stm32_cansock_setup
+ *
+ * Description:
+ *  Initialize CAN socket interface
+ *
+ ****************************************************************************/
+
+#ifdef CONFIG_STM32_FDCAN_SOCKET
+int stm32_cansock_setup(void);
 #endif
 
 #endif /* __BOARDS_ARM_STM32_B_G431B_ESC1_SRC_B_G431B_ESC1_H */

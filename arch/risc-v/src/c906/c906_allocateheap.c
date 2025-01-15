@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/risc-v/src/c906/c906_allocateheap.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -28,8 +30,6 @@
 #include <nuttx/userspace.h>
 
 #include <nuttx/arch.h>
-#include <nuttx/board.h>
-#include <arch/board/board.h>
 
 #include "c906.h"
 
@@ -124,9 +124,11 @@ void up_allocate_kheap(void **heap_start, size_t *heap_size)
 #endif
 
 /****************************************************************************
- * Name: up_addregion
+ * Name: riscv_addregion
  ****************************************************************************/
 
-void up_addregion(void)
+#if CONFIG_MM_REGIONS > 1
+void riscv_addregion(void)
 {
 }
+#endif

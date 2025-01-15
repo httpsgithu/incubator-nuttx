@@ -1,6 +1,8 @@
 /****************************************************************************
  * net/netdev/netdown_notifier.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -105,16 +107,15 @@ int netdown_notifier_setup(worker_t worker, FAR struct net_driver_s *dev,
  *         netdown_notifier_setup().
  *
  * Returned Value:
- *   Zero (OK) is returned on success; a negated errno value is returned on
- *   any failure.
+ *   None.
  *
  ****************************************************************************/
 
-int netdown_notifier_teardown(int key)
+void netdown_notifier_teardown(int key)
 {
   /* This is just a simple wrapper around work_notifier_teardown(). */
 
-  return work_notifier_teardown(key);
+  work_notifier_teardown(key);
 }
 
 /****************************************************************************

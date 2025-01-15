@@ -37,7 +37,7 @@
 #include <arpa/inet.h>
 #include <net/if.h>
 
-#include <crc8.h>
+#include <nuttx/crc8.h>
 #include <nuttx/wdog.h>
 #include <nuttx/irq.h>
 #include <nuttx/arch.h>
@@ -48,7 +48,6 @@
 #include <nuttx/net/ioctl.h>
 #include <nuttx/net/net.h>
 #include <nuttx/net/mii.h>
-#include <nuttx/net/arp.h>
 #include <nuttx/net/netdev.h>
 
 #ifdef CONFIG_NET_PKT
@@ -113,10 +112,6 @@
 
 #define EMAC_TX_TO              (60 * CLK_TCK)
 
-/* TCP/IP periodic poll process = 1 seconds */
-
-#define EMAC_WDDELAY            (1 * CLK_TCK)
-
 /* Ethernet control frame pause timeout */
 
 #define EMAC_PAUSE_TIME         (0x1648)
@@ -151,7 +146,9 @@
 
 /* Reset PHY chip pins */
 
-#define EMAC_PHYRST_PIN         (CONFIG_ESP32_ETH_PHY_RSTPIN)
+#ifdef CONFIG_ESP32_ETH_ENABLE_PHY_RSTPIN
+#  define EMAC_PHYRST_PIN       (CONFIG_ESP32_ETH_PHY_RSTPIN)
+#endif
 
 /* PHY chip address in SMI bus */
 
@@ -170,13 +167,6 @@
 #define ETHWORK                 LPWORK
 
 /* Operation ****************************************************************/
-
-/* Get smaller values */
-
-#ifdef MIN
-#  undef MIN
-#  define MIN(a,b) (((a)<(b))?(a):(b))
-#endif
 
 /* Check if current TX description is busy */
 
@@ -201,7 +191,6 @@ struct esp32_emac_s
   uint8_t               mbps100 : 1; /* 100MBps operation (vs 10 MBps) */
   uint8_t               fduplex : 1; /* Full (vs. half) duplex */
 
-  struct wdog_s         txpoll;      /* TX poll timer */
   struct wdog_s         txtimeout;   /* TX timeout timer */
 
   struct work_s         txwork;      /* For deferring TX work to the work queue */
@@ -209,7 +198,8 @@ struct esp32_emac_s
   struct work_s         timeoutwork; /* For TX timeout work to the work queue */
   struct work_s         pollwork;    /* For deferring poll work to the work queue */
 
-  int                   cpuint;      /* SPI interrupt ID */
+  uint8_t               cpu;         /* CPU ID */
+  int                   cpuint;      /* CPU interrupt assigned to EMAC */
 
   sq_queue_t            freeb;       /* The free buffer list */
 
@@ -243,6 +233,7 @@ struct esp32_emac_s
  ****************************************************************************/
 
 static struct esp32_emac_s s_esp32_emac;
+static mutex_t g_lock = NXMUTEX_INITIALIZER;
 
 /****************************************************************************
  * Private Function Prototypes
@@ -252,7 +243,6 @@ static int emac_ifdown(struct net_driver_s *dev);
 static int emac_ifup(struct net_driver_s *dev);
 static void emac_dopoll(struct esp32_emac_s *priv);
 static void emac_txtimeout_expiry(wdparm_t arg);
-static void emac_poll_expiry(wdparm_t arg);
 
 /****************************************************************************
  * External Function Prototypes
@@ -482,6 +472,29 @@ static int emac_read_mac(uint8_t *mac)
       return -EINVAL;
     }
 
+#ifdef CONFIG_ESP_MAC_ADDR_UNIVERSE_ETH
+  mac[5] += 3;
+#else
+  mac[5] += 1;
+  uint8_t tmp = mac[0];
+  for (i = 0; i < 64; i++)
+    {
+      mac[0] = tmp | 0x02;
+      mac[0] ^= i << 2;
+
+      if (mac[0] != tmp)
+        {
+          break;
+        }
+    }
+
+  if (i >= 64)
+    {
+      wlerr("Failed to generate ethernet MAC\n");
+      return -1;
+    }
+#endif
+
   return 0;
 }
 
@@ -518,7 +531,9 @@ static void emac_init_gpio(void)
   esp32_gpio_matrix_out(EMAC_MDIO_PIN, EMAC_MDO_O_IDX, 0, 0);
   esp32_gpio_matrix_in(EMAC_MDIO_PIN, EMAC_MDI_I_IDX, 0);
 
+#ifdef CONFIG_ESP32_ETH_ENABLE_PHY_RSTPIN
   esp32_configgpio(EMAC_PHYRST_PIN, OUTPUT | PULLUP);
+#endif
 }
 
 /****************************************************************************
@@ -545,11 +560,14 @@ static int emac_config(void)
   uint32_t regval;
   uint8_t macaddr[6];
 
+#ifdef CONFIG_ESP32_ETH_ENABLE_PHY_RSTPIN
+
   /* Hardware reset PHY chip */
 
   esp32_gpiowrite(EMAC_PHYRST_PIN, false);
-  nxsig_usleep(50);
+  up_udelay(50);
   esp32_gpiowrite(EMAC_PHYRST_PIN, true);
+#endif
 
   /* Open hardware clock */
 
@@ -580,7 +598,7 @@ static int emac_config(void)
           break;
         }
 
-      nxsig_usleep(10);
+      up_udelay(10);
     }
 
   if (i >= EMAC_RESET_TO)
@@ -590,8 +608,7 @@ static int emac_config(void)
       return -ETIMEDOUT;
     }
 
-  /**
-   * Enable transmission options:
+  /* Enable transmission options:
    *
    *   - 100M
    *   - Full duplex
@@ -604,8 +621,7 @@ static int emac_config(void)
 
   emac_set_reg(EMAC_FFR_OFFSET, EMAC_PMF_E);
 
-  /**
-   * Enable flow control options:
+  /* Enable flow control options:
    *
    *   - PT-28 Time slot
    *   - RX flow control
@@ -618,8 +634,7 @@ static int emac_config(void)
            (EMAC_PAUSE_TIME << EMAC_CFPT_S);
   emac_set_reg(EMAC_FCR_OFFSET, regval);
 
-  /**
-   * Enable DMA options:
+  /* Enable DMA options:
    *
    *   - Drop error frame
    *   - Send frame when filled into FiFO
@@ -629,8 +644,7 @@ static int emac_config(void)
   regval = EMAC_FSF_E | EMAC_FTF_E | EMAC_OSF_E;
   emac_set_reg(EMAC_DMA_OMR_OFFSET, regval);
 
-  /**
-   * Enable DMA bus options:
+  /* Enable DMA bus options:
    *
    *   - Mixed burst mode
    *   - Address align beast
@@ -929,7 +943,7 @@ static int emac_read_phy(uint16_t dev_addr,
 
   for (i = 0; i < EMAC_READPHY_TO; i++)
     {
-      nxsig_usleep(100);
+      up_udelay(100);
 
       val = emac_get_reg(EMAC_MAR_OFFSET);
       if (!(val & EMAC_PIB))
@@ -991,7 +1005,7 @@ static int emac_write_phy(uint16_t dev_addr,
 
   for (i = 0; i < EMAC_WRITEPHY_TO; i++)
     {
-      nxsig_usleep(100);
+      up_udelay(100);
 
       val = emac_get_reg(EMAC_MAR_OFFSET);
       if (!(val & EMAC_PIB))
@@ -1034,7 +1048,7 @@ static int emac_wait_linkup(struct esp32_emac_s *priv)
 
   for (i = 0; i < EMAC_WAITLINK_TO; i++)
     {
-      nxsig_usleep(10);
+      up_udelay(10);
 
       ret = emac_read_phy(EMAC_PHY_ADDR, MII_MSR, &val);
       if (ret != 0)
@@ -1171,7 +1185,7 @@ static int emac_init_phy(struct esp32_emac_s *priv)
 
   for (i = 0; i < EMAC_RSTPHY_TO; i++)
     {
-      nxsig_usleep(100);
+      up_udelay(100);
 
       ret = emac_read_phy(EMAC_PHY_ADDR, MII_MCR, &val);
       if (ret != 0)
@@ -1376,11 +1390,8 @@ static void emac_rx_interrupt_work(void *arg)
         {
           ninfo("IPv4 frame\n");
 
-          /* Handle ARP on input then give the IPv4 packet to the network
-           * layer
-           */
+          /* Receive an IPv4 packet from the network device */
 
-          arp_ipin(&priv->dev);
           ipv4_input(&priv->dev);
 
           /* If the above function invocation resulted in data that should be
@@ -1389,21 +1400,6 @@ static void emac_rx_interrupt_work(void *arg)
 
           if (priv->dev.d_len > 0)
             {
-              /* Update the Ethernet header with the correct MAC address */
-
-#ifdef CONFIG_NET_IPv6
-              if (IFF_IS_IPv4(priv->dev.d_flags))
-#endif
-                {
-                  arp_out(&priv->dev);
-                }
-#ifdef CONFIG_NET_IPv6
-              else
-                {
-                  neighbor_out(&priv->dev);
-                }
-#endif
-
               /* And send the packet */
 
               emac_transmit(priv);
@@ -1426,21 +1422,6 @@ static void emac_rx_interrupt_work(void *arg)
 
           if (priv->dev.d_len > 0)
             {
-              /* Update the Ethernet header with the correct MAC address */
-
-#ifdef CONFIG_NET_IPv4
-              if (IFF_IS_IPv4(priv->dev.d_flags))
-                {
-                  arp_out(&priv->dev);
-                }
-              else
-#endif
-#ifdef CONFIG_NET_IPv6
-                {
-                  neighbor_out(&priv->dev);
-                }
-#endif
-
               /* And send the packet */
 
               emac_transmit(priv);
@@ -1449,13 +1430,13 @@ static void emac_rx_interrupt_work(void *arg)
       else
 #endif
 #ifdef CONFIG_NET_ARP
-      if (eth_hdr->type == htons(ETHTYPE_ARP))
+      if (eth_hdr->type == HTONS(ETHTYPE_ARP))
         {
           ninfo("ARP frame\n");
 
           /* Handle ARP packet */
 
-          arp_arpin(&priv->dev);
+          arp_input(&priv->dev);
 
           /* If the above function invocation resulted in data that should be
            * sent out on the network, the field d_len will set to a value > 0
@@ -1589,66 +1570,32 @@ static int emac_txpoll(struct net_driver_s *dev)
 
   DEBUGASSERT(priv->dev.d_buf != NULL);
 
-  /* If the polling resulted in data that should be sent out on the network,
-   * the field d_len is set to a value == 0.
+  /* Send the packet */
+
+  emac_transmit(priv);
+  DEBUGASSERT(dev->d_len == 0 && dev->d_buf == NULL);
+
+  /* Check if the current TX descriptor is owned by the Ethernet DMA
+   * or CPU. We cannot perform the TX poll if we are unable to accept
+   * another packet for transmission.
    */
 
-  if (priv->dev.d_len == 0)
+  if (TX_IS_BUSY(priv))
     {
-      return 0;
-    }
-
-  /* Look up the destination MAC address and add it to the Ethernet
-   * header.
-   */
-
-#ifdef CONFIG_NET_IPv4
-#ifdef CONFIG_NET_IPv6
-  if (IFF_IS_IPv4(priv->dev.d_flags))
-#endif
-    {
-      arp_out(&priv->dev);
-    }
-#endif /* CONFIG_NET_IPv4 */
-
-#ifdef CONFIG_NET_IPv6
-#ifdef CONFIG_NET_IPv4
-  else
-#endif
-    {
-      neighbor_out(&priv->dev);
-    }
-#endif /* CONFIG_NET_IPv6 */
-
-  if (!devif_loopback(&priv->dev))
-    {
-      /* Send the packet */
-
-      emac_transmit(priv);
-      DEBUGASSERT(dev->d_len == 0 && dev->d_buf == NULL);
-
-      /* Check if the current TX descriptor is owned by the Ethernet DMA
-       * or CPU. We cannot perform the TX poll if we are unable to accept
-       * another packet for transmission.
+      /* We have to terminate the poll if we have no more descriptors
+       * available for another transfer.
        */
 
-      if (TX_IS_BUSY(priv))
-        {
-          /* We have to terminate the poll if we have no more descriptors
-           * available for another transfer.
-           */
-
-          return -EBUSY;
-        }
-
-      dev->d_buf = (uint8_t *)emac_alloc_buffer(priv);
-      if (dev->d_buf == NULL)
-        {
-          return -ENOMEM;
-        }
-
-      dev->d_len = EMAC_BUF_LEN;
+      return -EBUSY;
     }
+
+  dev->d_buf = (uint8_t *)emac_alloc_buffer(priv);
+  if (dev->d_buf == NULL)
+    {
+      return -ENOMEM;
+    }
+
+  dev->d_len = EMAC_BUF_LEN;
 
   /* If zero is returned, the polling will continue until all connections
    * have been examined.
@@ -1693,12 +1640,12 @@ static void emac_dopoll(struct esp32_emac_s *priv)
         {
           /* never reach */
 
-          return ;
+          return;
         }
 
       dev->d_len = EMAC_BUF_LEN;
 
-      devif_timer(dev, 0, emac_txpoll);
+      devif_poll(dev, emac_txpoll);
 
       if (dev->d_buf)
         {
@@ -1744,101 +1691,6 @@ static void emac_txavail_work(void *arg)
     }
 
   net_unlock();
-}
-
-/****************************************************************************
- * Function: emac_txavail_work
- *
- * Description:
- *   Perform an out-of-cycle poll on the worker thread.
- *
- * Input Parameters:
- *   arg  - Reference to the NuttX driver state structure (cast to void*)
- *
- * Returned Value:
- *   None
- *
- * Assumptions:
- *   Called on the higher priority worker thread.
- *
- ****************************************************************************/
-
-static void emac_poll_work(void *arg)
-{
-  int ret;
-  struct esp32_emac_s *priv = (struct esp32_emac_s *)arg;
-  struct net_driver_s *dev = &priv->dev;
-
-  ninfo("ifup: %d\n", priv->ifup);
-
-  /* Ignore the notification if the interface is not yet up */
-
-  net_lock();
-
-  /* Poll the network for new XMIT data */
-
-  if (!TX_IS_BUSY(priv))
-    {
-      DEBUGASSERT(dev->d_len == 0 && dev->d_buf == NULL);
-
-      dev->d_buf = (uint8_t *)emac_alloc_buffer(priv);
-      if (!dev->d_buf)
-        {
-          /* never reach */
-
-          return ;
-        }
-
-      dev->d_len = EMAC_BUF_LEN;
-
-      devif_timer(dev, EMAC_WDDELAY , emac_txpoll);
-
-      if (dev->d_buf)
-        {
-          emac_free_buffer(priv, dev->d_buf);
-
-          dev->d_buf = NULL;
-          dev->d_len = 0;
-        }
-    }
-
-  ret = wd_start(&priv->txpoll, EMAC_WDDELAY,
-                 emac_poll_expiry, (wdparm_t)priv);
-  if (ret)
-    {
-      nerr("ERROR: Failed to start TX poll timer");
-    }
-
-  net_unlock();
-}
-
-/****************************************************************************
- * Function: emac_poll_expiry
- *
- * Description:
- *   Periodic timer handler.  Called from the timer interrupt handler.
- *
- * Input Parameters:
- *   arg  - The argument
- *
- * Returned Value:
- *   None
- *
- * Assumptions:
- *   Global interrupts are disabled by the watchdog logic.
- *
- ****************************************************************************/
-
-static void emac_poll_expiry(wdparm_t arg)
-{
-  struct esp32_emac_s *priv = (struct esp32_emac_s *)arg;
-
-  /* Schedule to perform the interrupt processing on the worker thread. */
-
-  if (priv->ifup)
-    {
-      work_queue(ETHWORK, &priv->pollwork, emac_poll_work, priv, 0);
-    }
 }
 
 /****************************************************************************
@@ -1902,11 +1754,6 @@ static int emac_ifup(struct net_driver_s *dev)
 
   emac_start();
 
-  /* Set and activate a timer process */
-
-  wd_start(&priv->txpoll, EMAC_WDDELAY,
-           emac_poll_expiry, (wdparm_t)priv);
-
   /* Enable the Ethernet interrupt */
 
   up_enable_irq(ESP32_IRQ_EMAC);
@@ -1948,11 +1795,12 @@ static int emac_ifdown(struct net_driver_s *dev)
 
   emac_reset_regbits(EMAC_CR_OFFSET, EMAC_TX_E | EMAC_RX_E);
 
-  up_disable_irq(priv->cpuint);
+  /* Disable the Ethernet interrupt */
 
-  /* Cancel the TX poll timer and TX timeout timers */
+  up_disable_irq(ESP32_IRQ_EMAC);
 
-  wd_cancel(&priv->txpoll);
+  /* Cancel the TX timeout timers */
+
   wd_cancel(&priv->txtimeout);
 
   /* Reset ethernet MAC and disable clock */
@@ -2100,10 +1948,15 @@ static int emac_rmmac(struct net_driver_s *dev, const uint8_t *mac)
 #ifdef CONFIG_NETDEV_IOCTL
 static int emac_ioctl(struct net_driver_s *dev, int cmd, unsigned long arg)
 {
-#if defined(CONFIG_NETDEV_PHY_IOCTL) && defined(CONFIG_ARCH_PHY_INTERRUPT)
-  struct esp32_emacmac_s *priv = NET2PRIV(dev);
-#endif
   int ret;
+
+  /* Get exclusive access to the device structures */
+
+  ret = nxmutex_lock(&g_lock);
+  if (ret < 0)
+    {
+      return ret;
+    }
 
   switch (cmd)
     {
@@ -2156,11 +2009,10 @@ static int emac_ioctl(struct net_driver_s *dev, int cmd, unsigned long arg)
         break;
     }
 
+  nxmutex_unlock(&g_lock);
   return ret;
-#else
-  return -EINVAL;
-#endif /* CONFIG_NETDEV_IOCTL */
 }
+#endif /* CONFIG_NETDEV_IOCTL */
 
 /****************************************************************************
  * Public Functions
@@ -2190,7 +2042,8 @@ int esp32_emac_init(void)
 
   memset(priv, 0, sizeof(struct esp32_emac_s));
 
-  priv->cpuint = esp32_setup_irq(0, ESP32_PERIPH_EMAC,
+  priv->cpu = this_cpu();
+  priv->cpuint = esp32_setup_irq(priv->cpu, ESP32_PERIPH_EMAC,
                                  1, ESP32_CPUINT_LEVEL);
   if (priv->cpuint < 0)
     {
@@ -2241,14 +2094,14 @@ int esp32_emac_init(void)
   return 0;
 
 errout_with_attachirq:
-  esp32_teardown_irq(0, ESP32_PERIPH_EMAC, priv->cpuint);
+  esp32_teardown_irq(priv->cpu, ESP32_PERIPH_EMAC, priv->cpuint);
 
 error:
   return ret;
 }
 
 /****************************************************************************
- * Function: up_netinitialize
+ * Function: xtensa_netinitialize
  *
  * Description:
  *   This is the "standard" network initialization logic called from the
@@ -2263,7 +2116,7 @@ error:
  ****************************************************************************/
 
 #if !defined(CONFIG_NETDEV_LATEINIT)
-void up_netinitialize(void)
+void xtensa_netinitialize(void)
 {
   esp32_emac_init();
 }

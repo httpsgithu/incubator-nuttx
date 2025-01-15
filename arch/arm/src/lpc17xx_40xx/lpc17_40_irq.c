@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/lpc17xx_40xx/lpc17_40_irq.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -35,9 +37,7 @@
 
 #include "nvic.h"
 #include "ram_vectors.h"
-#include "arm_arch.h"
 #include "arm_internal.h"
-
 #include "lpc17_40_gpio.h"
 #include "lpc17_40_clrpend.h"
 
@@ -59,24 +59,6 @@
 
 #define NVIC_ENA_OFFSET    (0)
 #define NVIC_CLRENA_OFFSET (NVIC_IRQ0_31_CLEAR - NVIC_IRQ0_31_ENABLE)
-
-/****************************************************************************
- * Public Data
- ****************************************************************************/
-
-/* g_current_regs[] holds a references to the current interrupt level
- * register storage structure.  If is non-NULL only during interrupt
- * processing.  Access to g_current_regs[] must be through the macro
- * CURRENT_REGS for portability.
- */
-
-volatile uint32_t *g_current_regs[1];
-
-/* This is the address of the  exception vector table (determined by the
- * linker script).
- */
-
-extern uint32_t _vectors[];
 
 /****************************************************************************
  * Private Functions
@@ -137,8 +119,7 @@ static void lpc17_40_dumpnvic(const char *msg, int irq)
 
 /****************************************************************************
  * Name: lpc17_40_nmi, lpc17_40_busfault, lpc17_40_usagefault,
- *       lpc17_40_pendsv, lpc17_40_dbgmonitor, lpc17_40_pendsv,
- *       lpc17_40_reserved
+ *       lpc17_40_pendsv, lpc17_40_pendsv, lpc17_40_reserved
  *
  * Description:
  *   Handlers for various exceptions.  None are handled and all are fatal
@@ -148,7 +129,7 @@ static void lpc17_40_dumpnvic(const char *msg, int irq)
  ****************************************************************************/
 
 #ifdef CONFIG_DEBUG_FEATURES
-static int lpc17_40_nmi(int irq, FAR void *context, FAR void *arg)
+static int lpc17_40_nmi(int irq, void *context, void *arg)
 {
   up_irq_save();
   _err("PANIC!!! NMI received\n");
@@ -156,39 +137,17 @@ static int lpc17_40_nmi(int irq, FAR void *context, FAR void *arg)
   return 0;
 }
 
-static int lpc17_40_busfault(int irq, FAR void *context, FAR void *arg)
+static int lpc17_40_pendsv(int irq, void *context, void *arg)
 {
-  up_irq_save();
-  _err("PANIC!!! Bus fault received\n");
-  PANIC();
-  return 0;
-}
-
-static int lpc17_40_usagefault(int irq, FAR void *context, FAR void *arg)
-{
-  up_irq_save();
-  _err("PANIC!!! Usage fault received\n");
-  PANIC();
-  return 0;
-}
-
-static int lpc17_40_pendsv(int irq, FAR void *context, FAR void *arg)
-{
+#ifndef CONFIG_ARCH_HIPRI_INTERRUPT
   up_irq_save();
   _err("PANIC!!! PendSV received\n");
   PANIC();
+#endif
   return 0;
 }
 
-static int lpc17_40_dbgmonitor(int irq, FAR void *context, FAR void *arg)
-{
-  up_irq_save();
-  _err("PANIC!!! Debug Monitor received\n");
-  PANIC();
-  return 0;
-}
-
-static int lpc17_40_reserved(int irq, FAR void *context, FAR void *arg)
+static int lpc17_40_reserved(int irq, void *context, void *arg)
 {
   up_irq_save();
   _err("PANIC!!! Reserved interrupt\n");
@@ -206,7 +165,6 @@ static int lpc17_40_reserved(int irq, FAR void *context, FAR void *arg)
  *
  ****************************************************************************/
 
-#ifdef CONFIG_ARMV7M_USEBASEPRI
 static inline void lpc17_40_prioritize_syscall(int priority)
 {
   uint32_t regval;
@@ -218,7 +176,6 @@ static inline void lpc17_40_prioritize_syscall(int priority)
   regval |= (priority << NVIC_SYSH_PRIORITY_PR11_SHIFT);
   putreg32(regval, NVIC_SYSH8_11_PRIORITY);
 }
-#endif
 
 /****************************************************************************
  * Name: lpc17_40_irqinfo
@@ -360,10 +317,6 @@ void up_irqinitialize(void)
       putreg32(DEFPRIORITY32, regaddr);
     }
 
-  /* currents_regs is non-NULL only while processing an interrupt */
-
-  CURRENT_REGS = NULL;
-
   /* Attach the SVCall and Hard Fault exception handlers.  The SVCall
    * exception is used for performing context switches; The Hard Fault
    * must also be caught because a SVCall may show up as a Hard Fault
@@ -378,9 +331,8 @@ void up_irqinitialize(void)
 #ifdef CONFIG_ARCH_IRQPRIO
   /* up_prioritize_irq(LPC17_40_IRQ_PENDSV, NVIC_SYSH_PRIORITY_MIN); */
 #endif
-#ifdef CONFIG_ARMV7M_USEBASEPRI
+
   lpc17_40_prioritize_syscall(NVIC_SYSH_SVCALL_PRIORITY);
-#endif
 
   /* If the MPU is enabled, then attach and enable the Memory Management
    * Fault handler.
@@ -398,10 +350,11 @@ void up_irqinitialize(void)
 #ifndef CONFIG_ARM_MPU
   irq_attach(LPC17_40_IRQ_MEMFAULT, arm_memfault, NULL);
 #endif
-  irq_attach(LPC17_40_IRQ_BUSFAULT, lpc17_40_busfault, NULL);
-  irq_attach(LPC17_40_IRQ_USAGEFAULT, lpc17_40_usagefault, NULL);
+  irq_attach(LPC17_40_IRQ_BUSFAULT, arm_busfault, NULL);
+  irq_attach(LPC17_40_IRQ_USAGEFAULT, arm_usagefault, NULL);
   irq_attach(LPC17_40_IRQ_PENDSV, lpc17_40_pendsv, NULL);
-  irq_attach(LPC17_40_IRQ_DBGMONITOR, lpc17_40_dbgmonitor, NULL);
+  arm_enable_dbgmonitor();
+  irq_attach(LPC17_40_IRQ_DBGMONITOR, arm_dbgmonitor, NULL);
   irq_attach(LPC17_40_IRQ_RESERVED, lpc17_40_reserved, NULL);
 #endif
 

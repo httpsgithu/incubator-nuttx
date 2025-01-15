@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/avr/include/arch.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -32,9 +34,9 @@
 #include <nuttx/config.h>
 
 #ifdef CONFIG_ARCH_FAMILY_AVR32
-# include <arch/avr32/arch.h>
+#  include <arch/avr32/arch.h>
 #else
-# include <arch/avr/arch.h>
+#  include <arch/avr/arch.h>
 #endif
 
 /****************************************************************************

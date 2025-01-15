@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/include/efm32/efm32g_irq.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -22,8 +24,8 @@
  * through nuttx/irq.h
  */
 
-#ifndef __ARCH_ARM_INCLUDE_EFM32G_IRQ_H
-#define __ARCH_ARM_INCLUDE_EFM32G_IRQ_H
+#ifndef __ARCH_ARM_INCLUDE_EFM32_EFM32G_IRQ_H
+#define __ARCH_ARM_INCLUDE_EFM32_EFM32G_IRQ_H
 
 /****************************************************************************
  * Included Files
@@ -105,4 +107,4 @@ extern "C"
 #endif
 #endif
 
-#endif /* __ARCH_ARM_INCLUDE_EFM32G_IRQ_H */
+#endif /* __ARCH_ARM_INCLUDE_EFM32_EFM32G_IRQ_H */

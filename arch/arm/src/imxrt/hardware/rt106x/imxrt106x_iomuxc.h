@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/imxrt/hardware/rt106x/imxrt106x_iomuxc.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -18,8 +20,8 @@
  *
  ****************************************************************************/
 
-#ifndef __ARCH_ARM_SRC_IMXRT_HARDWARE_IMXRT106X_IOMUXC_H
-#define __ARCH_ARM_SRC_IMXRT_HARDWARE_IMXRT106X_IOMUXC_H
+#ifndef __ARCH_ARM_SRC_IMXRT_HARDWARE_RT106X_IMXRT106X_IOMUXC_H
+#define __ARCH_ARM_SRC_IMXRT_HARDWARE_RT106X_IMXRT106X_IOMUXC_H
 
 /****************************************************************************
  * Included Files
@@ -1515,7 +1517,10 @@
 #define GPR_GPR1_ENET1_CLK_SEL                                  (1 << 13)
 #define GPR_GPR1_ENET2_CLK_SEL                                  (1 << 14)
 #define GPR_GPR1_USB_EXP_MODE_EN                                (1 << 15)
-#define GPR_GPR1_ENET1_TX_CLK_OUT_EN                            (1 << 17)
+#define GPR_GPR1_ENET1_TX_DIR_IN                                (0 << 17)
+#define GPR_GPR1_ENET1_TX_DIR_OUT                               (1 << 17)
+#define GPR_GPR1_ENET2_TX_DIR_IN                                (0 << 18)
+#define GPR_GPR1_ENET2_TX_DIR_OUT                               (1 << 18)
 #define GPR_GPR1_SAI1_MCLK_DIR_IN                               (0 << 19)
 #define GPR_GPR1_SAI1_MCLK_DIR_OUT                              (1 << 19)
 #define GPR_GPR1_SAI2_MCLK_DIR_IN                               (0 << 20)
@@ -2061,7 +2066,7 @@
 
 #define GPR_GPR16_INIT_ITCM_EN                                  (1 << 0)
 #define GPR_GPR16_INIT_DTCM_EN                                  (1 << 1)
-#define GPR_GPR16_FLEXRAM_BANK_CFG_SELF                         (1 << 2)
+#define GPR_GPR16_FLEXRAM_BANK_CFG_SEL                          (1 << 2)
 #define GPR_GPR16_CM7_INIT_VTOR_SHIFT                           (7)
 #define GPR_GPR16_CM7_INIT_VTOR_MASK                            (0xffffff1 << GPR_GPR16_CM7_INIT_VTOR_SHIFT)
 #define GPR_GPR16_CM7_INIT_VTOR(n)                              (((uint32_t)(n) & 0x1ffffff)) << GPR_GPR16_CM7_INIT_VTOR_SHIFT)
@@ -2528,4 +2533,4 @@
 #define GPR_GPR34_SIP_TEST_MUX_BOOT_PIN_SEL(n)                  ((uint32_t)(n) << GPR_GPR34_SIP_TEST_MUX_BOOT_PIN_SEL_SHIFT)
 #define GPR_GPR34_SIP_TEST_MUX_QSPI_SIP_EN                      (1 << 8)
 
-#endif /* __ARCH_ARM_SRC_IMXRT_HARDWARE_IMXRT106X_IOMUXC_H */
+#endif /* __ARCH_ARM_SRC_IMXRT_HARDWARE_RT106X_IMXRT106X_IOMUXC_H */

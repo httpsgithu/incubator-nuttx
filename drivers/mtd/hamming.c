@@ -1,7 +1,8 @@
 /****************************************************************************
  * drivers/mtd/hamming.c
  *
- *   Copyright (c) 2011, Atmel Corporation
+ * SPDX-License-Identifier: BSD-3-Clause
+ * SPDX-FileCopyrightText: Copyright (c) 2011, Atmel Corporation
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -37,9 +38,7 @@
  ****************************************************************************/
 
 #include <nuttx/config.h>
-#include <nuttx/mtd/nand_config.h>
 
-#include <stdint.h>
 #include <assert.h>
 #include <debug.h>
 
@@ -372,7 +371,8 @@ static int hamming_verify256(FAR uint8_t *data, FAR const uint8_t *original)
  *
  ****************************************************************************/
 
-void hamming_compute256x(FAR const uint8_t *data, size_t size, uint8_t *code)
+void hamming_compute256x(FAR const uint8_t *data, size_t size,
+                         FAR uint8_t *code)
 {
   ssize_t remaining = (ssize_t)size;
   DEBUGASSERT((size & 0xff) == 0);

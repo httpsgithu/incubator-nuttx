@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/efm32/efm32_timer.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -33,7 +35,7 @@
  ****************************************************************************/
 
 void efm32_timer_reset(uintptr_t base);
-void efm32_timer_dumpregs(uintptr_t base, FAR const char *msg);
+void efm32_timer_dumpregs(uintptr_t base, const char *msg);
 int efm32_timer_set_freq(uintptr_t base, uint32_t clk_freq, uint32_t freq);
 
 #endif /* __ARCH_ARM_SRC_EFM32_EFM32_TIMER_H */

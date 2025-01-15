@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/stm32h7/stm32_exti_gpio.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -33,7 +35,7 @@
 
 #include <arch/irq.h>
 
-#include "arm_arch.h"
+#include "arm_internal.h"
 #include "chip.h"
 #include "stm32_gpio.h"
 #include "stm32_exti.h"
@@ -42,7 +44,10 @@
  * families
  */
 
-#if defined(CONFIG_STM32H7_STM32H7X3XX) || defined(CONFIG_STM32H7_STM32H7X7XX)
+#if defined(CONFIG_STM32H7_STM32H7X3XX) || \
+    defined(CONFIG_STM32H7_STM32H7B3XX) || \
+    defined(CONFIG_STM32H7_STM32H7X5XX) || \
+    defined(CONFIG_STM32H7_STM32H7X7XX)
 
 /****************************************************************************
  * Private Types
@@ -372,4 +377,4 @@ int stm32_gpiosetevent(uint32_t pinset, bool risingedge, bool fallingedge,
   return OK;
 }
 
-#endif /* CONFIG_STM32H7_STM32H7X3XX || CONFIG_STM32H7_STM32H7X7XX */
+#endif /* CONFIG_STM32H7_STM32H7X3XX || CONFIG_STM32H7_STM32H7X7XX || CONFIG_STM32H7_STM32H7B3XX */

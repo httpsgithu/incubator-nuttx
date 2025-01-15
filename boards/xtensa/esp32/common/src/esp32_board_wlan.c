@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/xtensa/esp32/common/src/esp32_board_wlan.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -71,7 +73,7 @@ int board_wlan_init(void)
       wlerr("ERROR: Failed to initialize Wi-Fi station\n");
       return ret;
     }
-#endif
+#endif /* ESP32_WLAN_HAS_STA */
 
 #ifdef ESP32_WLAN_HAS_SOFTAP
   ret = esp32_wlan_softap_initialize();
@@ -80,7 +82,7 @@ int board_wlan_init(void)
       wlerr("ERROR: Failed to initialize Wi-Fi softAP\n");
       return ret;
     }
-#endif
+#endif /* ESP32_WLAN_HAS_SOFTAP */
 
   return ret;
 }

@@ -1,6 +1,8 @@
 /****************************************************************************
  * sched/mqueue/mq_msgqfree.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -52,19 +54,18 @@
 
 void nxmq_free_msgq(FAR struct mqueue_inode_s *msgq)
 {
-  FAR struct mqueue_msg_s *curr;
-  FAR struct mqueue_msg_s *next;
+  FAR struct mqueue_msg_s *entry;
+  FAR struct mqueue_msg_s *tmp;
 
   /* Deallocate any stranded messages in the message queue. */
 
-  curr = (FAR struct mqueue_msg_s *)msgq->msglist.head;
-  while (curr)
+  list_for_every_entry_safe(&msgq->msglist, entry,
+                            tmp, struct mqueue_msg_s, node)
     {
       /* Deallocate the message structure. */
 
-      next = curr->next;
-      nxmq_free_msg(curr);
-      curr = next;
+      list_delete(&entry->node);
+      nxmq_free_msg(entry);
     }
 
   /* Then deallocate the message queue itself */

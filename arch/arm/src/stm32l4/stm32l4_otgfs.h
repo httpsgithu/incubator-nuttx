@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/stm32l4/stm32l4_otgfs.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -40,6 +42,14 @@
 #else
 #  error "Unsupported STM32L4 chip"
 #endif
+
+/****************************************************************************
+ * Pre-processor Definitions
+ ****************************************************************************/
+
+/* Number of endpoints */
+
+#define STM32L4_NENDPOINTS  (6)          /* ep0-5 x 2 for IN and OUT */
 
 /****************************************************************************
  * Public Functions Prototypes
@@ -83,7 +93,7 @@ extern "C"
 
 #ifdef CONFIG_USBHOST
 struct usbhost_connection_s;
-FAR struct
+struct
 usbhost_connection_s *stm32l4_otgfshost_initialize(int controller);
 #endif
 
@@ -98,7 +108,7 @@ usbhost_connection_s *stm32l4_otgfshost_initialize(int controller);
  *
  ****************************************************************************/
 
-void stm32l4_usbsuspend(FAR struct usbdev_s *dev, bool resume);
+void stm32l4_usbsuspend(struct usbdev_s *dev, bool resume);
 
 #undef EXTERN
 #if defined(__cplusplus)

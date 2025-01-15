@@ -1,6 +1,8 @@
 /****************************************************************************
  * libs/libnx/nxmu/nx_eventhandler.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -146,7 +148,11 @@ int nx_eventhandler(NXHANDLE handle)
     }
   while (nbytes < 0);
 
-  DEBUGASSERT(nbytes >= sizeof(struct nxclimsg_s));
+  if (nbytes < sizeof(struct nxclimsg_s))
+    {
+      _NX_SETERRNO(EBADMSG);
+      return ERROR;
+    }
 
   /* Dispatch the message appropriately */
 

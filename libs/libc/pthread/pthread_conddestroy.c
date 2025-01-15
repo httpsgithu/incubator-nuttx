@@ -1,6 +1,8 @@
 /****************************************************************************
  * libs/libc/pthread/pthread_conddestroy.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -56,7 +58,7 @@ int pthread_cond_destroy(FAR pthread_cond_t *cond)
   int ret = OK;
   int sval = 0;
 
-  sinfo("cond=0x%p\n", cond);
+  sinfo("cond=%p\n", cond);
 
   if (!cond)
     {

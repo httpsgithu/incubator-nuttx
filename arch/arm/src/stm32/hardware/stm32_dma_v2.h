@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/stm32/hardware/stm32_dma_v2.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -18,8 +20,8 @@
  *
  ****************************************************************************/
 
-#ifndef __ARCH_ARM_SRC_STM32_HARDWARE_STM32_DMA_V2_DMA_H
-#define __ARCH_ARM_SRC_STM32_HARDWARE_STM32_DMA_V2_DMA_H
+#ifndef __ARCH_ARM_SRC_STM32_HARDWARE_STM32_DMA_V2_H
+#define __ARCH_ARM_SRC_STM32_HARDWARE_STM32_DMA_V2_H
 
 /****************************************************************************
  * Pre-processor Definitions
@@ -556,4 +558,4 @@
 #define DMAMAP_TIM8_TRIG           STM32_DMA_MAP(DMA2,DMA_STREAM7,DMA_CHAN7)
 #define DMAMAP_TIM8_COM            STM32_DMA_MAP(DMA2,DMA_STREAM7,DMA_CHAN7)
 
-#endif /* __ARCH_ARM_SRC_STM32_HARDWARE_STM32_DMA_V2_DMA_H */
+#endif /* __ARCH_ARM_SRC_STM32_HARDWARE_STM32_DMA_V2_H */

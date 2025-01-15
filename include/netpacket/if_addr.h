@@ -1,6 +1,8 @@
 /****************************************************************************
  * include/netpacket/if_addr.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -85,6 +87,8 @@ struct ifaddrmsg
  *
  * IFA_FLAGS is a u32 attribute that extends the u8 field ifa_flags.
  * If present, the value from struct ifaddrmsg will be ignored.
+ *
+ * IFA_RT_PRIORITY is a u32 attribute, priority/metric for prefix route
  */
 
 enum
@@ -98,6 +102,7 @@ enum
   IFA_CACHEINFO,
   IFA_MULTICAST,
   IFA_FLAGS,
+  IFA_RT_PRIORITY,
   __IFA_MAX,
 };
 

@@ -1,6 +1,8 @@
 /****************************************************************************
  * fs/vfs/fs_lseek.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -57,7 +59,7 @@
 off_t file_seek(FAR struct file *filep, off_t offset, int whence)
 {
   FAR struct inode *inode;
-  int ret;
+  off_t ret;
 
   DEBUGASSERT(filep);
   inode =  filep->f_inode;
@@ -66,7 +68,7 @@ off_t file_seek(FAR struct file *filep, off_t offset, int whence)
 
   if (inode && inode->u.i_ops && inode->u.i_ops->seek)
     {
-      ret = (int)inode->u.i_ops->seek(filep, offset, whence);
+      ret = inode->u.i_ops->seek(filep, offset, whence);
       if (ret < 0)
         {
           return ret;
@@ -84,15 +86,13 @@ off_t file_seek(FAR struct file *filep, off_t offset, int whence)
             /* FALLTHROUGH */
 
           case SEEK_SET:
-            if (offset >= 0)
-              {
-                filep->f_pos = offset; /* Might be beyond the end-of-file */
-                break;
-              }
-            else
+            if (offset < 0)
               {
                 return -EINVAL;
               }
+
+            filep->f_pos = offset; /* Might be beyond the end-of-file */
+
             break;
 
           case SEEK_END:
@@ -123,7 +123,7 @@ off_t file_seek(FAR struct file *filep, off_t offset, int whence)
 off_t nx_seek(int fd, off_t offset, int whence)
 {
   FAR struct file *filep;
-  int ret;
+  off_t ret;
 
   /* Get the file structure corresponding to the file descriptor. */
 
@@ -133,11 +133,11 @@ off_t nx_seek(int fd, off_t offset, int whence)
       return ret;
     }
 
-  DEBUGASSERT(filep != NULL);
-
   /* Then let file_seek do the real work */
 
-  return file_seek(filep, offset, whence);
+  ret = file_seek(filep, offset, whence);
+  fs_putfilep(filep);
+  return ret;
 }
 
 /****************************************************************************

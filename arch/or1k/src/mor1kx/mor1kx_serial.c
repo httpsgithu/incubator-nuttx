@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/or1k/src/mor1kx/mor1kx_serial.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -38,8 +40,7 @@
 
 #include <arch/board/board.h>
 
-#include "up_arch.h"
-#include "up_internal.h"
+#include "or1k_internal.h"
 
 /****************************************************************************
  * Pre-processor Definitions
@@ -52,11 +53,19 @@
 #define OR1K_DIVISOR (OR1K_SYS_CLK / (16*OR1K_BAUD))
 
 /****************************************************************************
+ * Private Data
+ ****************************************************************************/
+
+#ifdef HAVE_SERIAL_CONSOLE
+static spinlock_t g_serial_lock = SP_UNLOCKED;
+#endif
+
+/****************************************************************************
  * Public Functions
  ****************************************************************************/
 
 /****************************************************************************
- * Name: up_earlyserialinit
+ * Name: or1k_earlyserialinit
  *
  * Description:
  *   Performs the low level USART initialization early in debug so that the
@@ -66,7 +75,7 @@
  ****************************************************************************/
 
 #ifdef USE_EARLYSERIALINIT
-void up_earlyserialinit(void)
+void or1k_earlyserialinit(void)
 {
   /* Disable all USARTS */
 
@@ -79,7 +88,7 @@ void up_earlyserialinit(void)
 #endif
 
 /****************************************************************************
- * Name: up_serialinit
+ * Name: or1k_serialinit
  *
  * Description:
  *   Register serial console and serial ports.
@@ -87,7 +96,7 @@ void up_earlyserialinit(void)
  ****************************************************************************/
 
 #ifdef USE_SERIALDRIVER
-void up_serialinit(void)
+void or1k_serialinit(void)
 {
   /* Register the console */
 
@@ -107,7 +116,7 @@ void up_serialinit(void)
  *
  ****************************************************************************/
 
-int up_putc(int ch)
+void up_putc(int ch)
 {
 #ifdef HAVE_SERIAL_CONSOLE
   irqstate_t flags;
@@ -116,20 +125,10 @@ int up_putc(int ch)
    * interrupts from firing in the serial driver code.
    */
 
-  flags = enter_critical_section();
-
-  /* Check for LF */
-
-  if (ch == '\n')
-    {
-      /* Add CR */
-
-      /* or1k_lowputc('\r'); */
-    }
+  flags = spin_lock_irqsave(&g_serial_lock);
 
   /* or1k_lowputc(ch); */
 
-  leave_critical_section(flags);
+  spin_unlock_irqrestore(&g_serial_lock, flags);
 #endif
-  return ch;
 }

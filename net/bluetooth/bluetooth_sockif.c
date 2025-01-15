@@ -1,6 +1,8 @@
 /****************************************************************************
  * net/bluetooth/bluetooth_sockif.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -48,7 +50,7 @@
  * Private Function Prototypes
  ****************************************************************************/
 
-static int        bluetooth_setup(FAR struct socket *psock, int protocol);
+static int        bluetooth_setup(FAR struct socket *psock);
 static sockcaps_t bluetooth_sockcaps(FAR struct socket *psock);
 static void       bluetooth_addref(FAR struct socket *psock);
 static int        bluetooth_bind(FAR struct socket *psock,
@@ -57,14 +59,8 @@ static int        bluetooth_getsockname(FAR struct socket *psock,
                     FAR struct sockaddr *addr, FAR socklen_t *addrlen);
 static int        bluetooth_getpeername(FAR struct socket *psock,
                     FAR struct sockaddr *addr, FAR socklen_t *addrlen);
-static int        bluetooth_listen(FAR struct socket *psock, int backlog);
 static int        bluetooth_connect(FAR struct socket *psock,
                     FAR const struct sockaddr *addr, socklen_t addrlen);
-static int        bluetooth_accept(FAR struct socket *psock,
-                    FAR struct sockaddr *addr, FAR socklen_t *addrlen,
-                    FAR struct socket *newsock);
-static int        bluetooth_poll_local(FAR struct socket *psock,
-                    FAR struct pollfd *fds, bool setup);
 static int        bluetooth_close(FAR struct socket *psock);
 
 /* Protocol Specific Interfaces */
@@ -87,10 +83,10 @@ const struct sock_intf_s g_bluetooth_sockif =
   bluetooth_bind,        /* si_bind */
   bluetooth_getsockname, /* si_getsockname */
   bluetooth_getpeername, /* si_getpeername */
-  bluetooth_listen,      /* si_listen */
+  NULL,                  /* si_listen */
   bluetooth_connect,     /* si_connect */
-  bluetooth_accept,      /* si_accept */
-  bluetooth_poll_local,  /* si_poll */
+  NULL,                  /* si_accept */
+  NULL,                  /* si_poll */
   bluetooth_sendmsg,     /* si_sendmsg */
   bluetooth_recvmsg,     /* si_recvmsg */
   bluetooth_close        /* si_close */
@@ -149,7 +145,6 @@ static int bluetooth_sockif_alloc(FAR struct socket *psock)
  * Input Parameters:
  *   psock    A pointer to a user allocated socket structure to be
  *            initialized.
- *   protocol (see sys/socket.h)
  *
  * Returned Value:
  *   Zero (OK) is returned on success.  Otherwise, a negated errno value is
@@ -157,16 +152,16 @@ static int bluetooth_sockif_alloc(FAR struct socket *psock)
  *
  ****************************************************************************/
 
-static int bluetooth_setup(FAR struct socket *psock, int protocol)
+static int bluetooth_setup(FAR struct socket *psock)
 {
   /* Allocate the appropriate connection structure.  This reserves the
    * connection structure, it is unallocated at this point.  It will not
    * actually be initialized until the socket is connected.
    *
-   * Only SOCK_RAW is supported
+   * SOCK_RAW and SOCK_CTRL are supported
    */
 
-  if (psock->s_type == SOCK_RAW)
+  if (psock->s_type == SOCK_RAW || psock->s_type == SOCK_CTRL)
     {
       return bluetooth_sockif_alloc(psock);
     }
@@ -187,7 +182,7 @@ static int bluetooth_setup(FAR struct socket *psock, int protocol)
  *           queried.
  *
  * Returned Value:
- *   The set of socket cababilities is returned.
+ *   The set of socket capabilities is returned.
  *
  ****************************************************************************/
 
@@ -215,10 +210,9 @@ static void bluetooth_addref(FAR struct socket *psock)
 {
   FAR struct bluetooth_conn_s *conn;
 
-  DEBUGASSERT(psock != NULL && psock->s_conn != NULL &&
-              psock->s_type == SOCK_RAW);
+  DEBUGASSERT(psock->s_type == SOCK_RAW || psock->s_type == SOCK_CTRL);
 
-  conn = (FAR struct bluetooth_conn_s *)psock->s_conn;
+  conn = psock->s_conn;
   DEBUGASSERT(conn->bc_crefs > 0 && conn->bc_crefs < 255);
   conn->bc_crefs++;
 }
@@ -257,9 +251,7 @@ static int bluetooth_connect(FAR struct socket *psock,
   FAR struct sockaddr_l2 *btaddr;
   int ret = OK;
 
-  DEBUGASSERT(psock != NULL || addr != NULL);
-  conn = (FAR struct bluetooth_conn_s *)psock->s_conn;
-  DEBUGASSERT(conn != NULL);
+  conn = psock->s_conn;
 
   /* Verify the address family */
 
@@ -292,58 +284,6 @@ static int bluetooth_connect(FAR struct socket *psock,
 }
 
 /****************************************************************************
- * Name: bluetooth_accept
- *
- * Description:
- *   The bluetooth_accept function is used with connection-based socket types
- *   (SOCK_STREAM, SOCK_SEQPACKET and SOCK_RDM). It extracts the first
- *   connection request on the queue of pending connections, creates a new
- *   connected socket with mostly the same properties as 'sockfd', and
- *   allocates a new socket descriptor for the socket, which is returned. The
- *   newly created socket is no longer in the listening state. The original
- *   socket 'sockfd' is unaffected by this call.  Per file descriptor flags
- *   are not inherited across an bluetooth_accept.
- *
- *   The 'sockfd' argument is a socket descriptor that has been created with
- *   socket(), bound to a local address with bind(), and is listening for
- *   connections after a call to listen().
- *
- *   On return, the 'addr' structure is filled in with the address of the
- *   connecting entity. The 'addrlen' argument initially contains the size
- *   of the structure pointed to by 'addr'; on return it will contain the
- *   actual length of the address returned.
- *
- *   If no pending connections are present on the queue, and the socket is
- *   not marked as non-blocking, bluetooth_accept blocks the caller until a
- *   connection is present. If the socket is marked non-blocking and no
- *   pending connections are present on the queue, bluetooth_accept returns
- *   EAGAIN.
- *
- * Input Parameters:
- *   psock    Reference to the listening socket structure
- *   addr     Receives the address of the connecting client
- *   addrlen  Input: allocated size of 'addr',
- *            Return: returned size of 'addr'
- *   newsock  Location to return the accepted socket information.
- *
- * Returned Value:
- *   Returns 0 (OK) on success.  On failure, it returns a negated errno
- *   value.  See accept() for a description of the appropriate error value.
- *
- * Assumptions:
- *   The network is locked.
- *
- ****************************************************************************/
-
-static int bluetooth_accept(FAR struct socket *psock,
-                            FAR struct sockaddr *addr,
-                            FAR socklen_t *addrlen,
-                            FAR struct socket *newsock)
-{
-  return -EAFNOSUPPORT;
-}
-
-/****************************************************************************
  * Name: bluetooth_bind
  *
  * Description:
@@ -367,8 +307,6 @@ static int bluetooth_accept(FAR struct socket *psock,
 static int bluetooth_bind(FAR struct socket *psock,
                           FAR const struct sockaddr *addr, socklen_t addrlen)
 {
-  DEBUGASSERT(psock != NULL && addr != NULL);
-
   /* Verify that a valid address has been provided */
 
   if (addr->sa_family != AF_BLUETOOTH)
@@ -444,18 +382,21 @@ static int bluetooth_l2cap_bind(FAR struct socket *psock,
 
   /* Bind a PF_BLUETOOTH socket to an network device.
    *
-   * Only SOCK_RAW is supported
+   * SOCK_RAW and SOCK_CTRL are supported
    */
 
-  if (psock->s_type != SOCK_RAW)
+  if (psock == NULL || psock->s_conn == NULL ||
+      (psock->s_type != SOCK_RAW && psock->s_type != SOCK_CTRL))
     {
       nerr("ERROR: Invalid socket type: %u\n", psock->s_type);
       return -EBADF;
     }
 
+  conn = psock->s_conn;
+
   /* Verify that the socket is not already bound. */
 
-  if (_SS_ISBOUND(psock->s_flags))
+  if (_SS_ISBOUND(conn->bc_conn.s_flags))
     {
       nerr("ERROR: Already bound\n");
       return -EINVAL;
@@ -466,8 +407,6 @@ static int bluetooth_l2cap_bind(FAR struct socket *psock,
    * REVISIT: Currently and explicit address must be assigned.  Should we
    * support some moral equivalent to INADDR_ANY?
    */
-
-  conn = (FAR struct bluetooth_conn_s *)psock->s_conn;
 
   conn->bc_proto = psock->s_proto;
 
@@ -516,24 +455,25 @@ static int bluetooth_hci_bind(FAR struct socket *psock,
 
   /* Bind a PF_BLUETOOTH socket to an network device.
    *
-   * Only SOCK_RAW is supported
+   * SOCK_RAW and SOCK_CTRL are supported
    */
 
-  if (psock->s_type != SOCK_RAW)
+  if (psock == NULL || psock->s_conn == NULL ||
+      (psock->s_type != SOCK_RAW && psock->s_type != SOCK_CTRL))
     {
       nerr("ERROR: Invalid socket type: %u\n", psock->s_type);
       return -EBADF;
     }
 
+  conn = psock->s_conn;
+
   /* Verify that the socket is not already bound. */
 
-  if (_SS_ISBOUND(psock->s_flags))
+  if (_SS_ISBOUND(conn->bc_conn.s_flags))
     {
       nerr("ERROR: Already bound\n");
       return -EINVAL;
     }
-
-  conn = (FAR struct bluetooth_conn_s *)psock->s_conn;
 
   conn->bc_proto = psock->s_proto;
   conn->bc_channel = hciaddr->hci_channel;
@@ -578,10 +518,7 @@ static int bluetooth_getsockname(FAR struct socket *psock,
   FAR struct sockaddr_l2 tmp;
   socklen_t copylen;
 
-  DEBUGASSERT(psock != NULL && addr != NULL && addrlen != NULL);
-
-  conn = (FAR struct bluetooth_conn_s *)psock->s_conn;
-  DEBUGASSERT(conn != NULL);
+  conn = psock->s_conn;
 
   /* Create a copy of the full address on the stack */
 
@@ -640,15 +577,12 @@ static int bluetooth_getpeername(FAR struct socket *psock,
   FAR struct sockaddr_l2 tmp;
   socklen_t copylen;
 
-  DEBUGASSERT(psock != NULL && addr != NULL && addrlen != NULL);
-
   if (psock->s_proto != BTPROTO_L2CAP)
     {
       return -EPFNOSUPPORT;
     }
 
-  conn = (FAR struct bluetooth_conn_s *)psock->s_conn;
-  DEBUGASSERT(conn != NULL);
+  conn = psock->s_conn;
 
   /* Create a copy of the full address on the stack */
 
@@ -669,65 +603,6 @@ static int bluetooth_getpeername(FAR struct socket *psock,
 
   *addrlen = copylen;
   return OK;
-}
-
-/****************************************************************************
- * Name: bluetooth_listen
- *
- * Description:
- *   To accept connections, a socket is first created with psock_socket(), a
- *   willingness to accept incoming connections and a queue limit for
- *   incoming connections are specified with psock_listen(), and then the
- *   connections are accepted with psock_accept().  For the case of
- *   PF_BLUETOOTH sockets, psock_listen() calls this function.  The listen()
- *   call does not apply only to PF_BLUETOOTH sockets.
- *
- * Input Parameters:
- *   psock    Reference to an internal, boound socket structure.
- *   backlog  The maximum length the queue of pending connections may grow.
- *            If a connection request arrives with the queue full, the client
- *            may receive an error with an indication of ECONNREFUSED or,
- *            if the underlying protocol supports retransmission, the request
- *            may be ignored so that retries succeed.
- *
- * Returned Value:
- *   On success, zero is returned. On error, a negated errno value is
- *   returned.  See listen() for the set of appropriate error values.
- *
- ****************************************************************************/
-
-int bluetooth_listen(FAR struct socket *psock, int backlog)
-{
-  return -EOPNOTSUPP;
-}
-
-/****************************************************************************
- * Name: bluetooth_poll
- *
- * Description:
- *   The standard poll() operation redirects operations on socket descriptors
- *   to net_poll which, indiectly, calls to function.
- *
- * Input Parameters:
- *   psock - An instance of the internal socket structure.
- *   fds   - The structure describing the events to be monitored, OR NULL if
- *           this is a request to stop monitoring events.
- *   setup - true: Setup up the poll; false: Teardown the poll
- *
- * Returned Value:
- *  0: Success; Negated errno on failure
- *
- ****************************************************************************/
-
-static int bluetooth_poll_local(FAR struct socket *psock,
-                                 FAR struct pollfd *fds, bool setup)
-{
-  /* We should need to support some kind of write ahead buffering for this
-   * feature.
-   */
-
-#warning Missing logic
-  return -ENOSYS;
 }
 
 /****************************************************************************
@@ -752,9 +627,10 @@ static int bluetooth_close(FAR struct socket *psock)
 
   switch (psock->s_type)
     {
-      /* Only SOCK_RAW is supported */
+      /* SOCK_RAW and SOCK_CTRL are supported */
 
       case SOCK_RAW:
+      case SOCK_CTRL:
         {
           FAR struct bluetooth_conn_s *conn = psock->s_conn;
 

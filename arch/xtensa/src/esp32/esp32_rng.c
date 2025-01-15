@@ -26,13 +26,14 @@
 #include <stdbool.h>
 #include <stdio.h>
 #include <string.h>
+#include <sys/param.h>
 #include <debug.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <nuttx/fs/fs.h>
 #include <nuttx/irq.h>
 #include <nuttx/arch.h>
-#include <nuttx/semaphore.h>
+#include <nuttx/mutex.h>
 #include <nuttx/fs/ioctl.h>
 #include <nuttx/drivers/drivers.h>
 
@@ -43,22 +44,15 @@
 #include "hardware/wdev_reg.h"
 #include "esp32_clockconfig.h"
 
+#include "esp_random.h"
+
 #if defined(CONFIG_ESP32_RNG)
 #if defined(CONFIG_DEV_RANDOM) || defined(CONFIG_DEV_URANDOM_ARCH)
-
-/****************************************************************************
- * Pre-processor Definitions
- ****************************************************************************/
-
-#ifndef MIN
-#define MIN(a, b) (((a) < (b)) ? (a) : (b))
-#endif
 
 /****************************************************************************
  * Private Function Prototypes
  ****************************************************************************/
 
-static int esp32_rng_initialize(void);
 static ssize_t esp32_rng_read(struct file *filep, char *buffer,
                               size_t buflen);
 /****************************************************************************
@@ -68,75 +62,26 @@ static ssize_t esp32_rng_read(struct file *filep, char *buffer,
 struct rng_dev_s
 {
   uint8_t *rd_buf;
-  sem_t    rd_sem;         /* semaphore for read RNG data */
+  mutex_t  rd_lock;       /* mutex for read RNG data */
 };
 
 /****************************************************************************
  * Private Data
  ****************************************************************************/
 
-static struct rng_dev_s g_rngdev;
+static struct rng_dev_s g_rngdev =
+{
+  .rd_lock = NXMUTEX_INITIALIZER,
+};
 
 static const struct file_operations g_rngops =
 {
-  .read  = esp32_rng_read,       /* read */
+  .read = esp32_rng_read,       /* read */
 };
 
 /****************************************************************************
  * Private functions
  ****************************************************************************/
-
-/****************************************************************************
- * Name: esp32_random
- ****************************************************************************/
-
-uint32_t IRAM_ATTR esp_random(void)
-{
-  /* The PRNG which implements WDEV_RANDOM register gets 2 bits
-   * of extra entropy from a hardware randomness source every APB clock cycle
-   * (provided Wi-Fi or BT are enabled). To make sure entropy is not drained
-   * faster than it is added, this function needs to wait for at least 16 APB
-   * clock cycles after reading previous word. This implementation may
-   * actually wait a bit longer due to extra time spent in arithmetic and
-   * branch statements.
-   *
-   * As a (probably unnecessary) precaution to avoid returning the
-   * RNG state as-is, the result is XORed with additional
-   * WDEV_RND_REG reads while waiting.
-   */
-
-  uint32_t cpu_to_apb_freq_ratio = esp_clk_cpu_freq() / esp_clk_apb_freq();
-
-  static uint32_t last_ccount = 0;
-  uint32_t ccount;
-  uint32_t result = 0;
-
-  do
-    {
-      ccount = XTHAL_GET_CCOUNT();
-      result ^= getreg32(WDEV_RND_REG);
-    }
-  while (ccount - last_ccount < cpu_to_apb_freq_ratio * 16);
-
-  last_ccount = ccount;
-  return result ^ getreg32(WDEV_RND_REG);
-}
-
-/****************************************************************************
- * Name: esp32_rng_initialize
- ****************************************************************************/
-
-static int esp32_rng_initialize(void)
-{
-  _info("Initializing RNG\n");
-
-  memset(&g_rngdev, 0, sizeof(struct rng_dev_s));
-
-  nxsem_init(&g_rngdev.rd_sem, 0, 1);
-  nxsem_set_protocol(&g_rngdev.rd_sem, SEM_PRIO_NONE);
-
-  return OK;
-}
 
 /****************************************************************************
  * Name: esp32_rng_read
@@ -149,7 +94,7 @@ static ssize_t esp32_rng_read(struct file *filep, char *buffer,
   ssize_t read_len;
   uint8_t *rd_buf = (uint8_t *)buffer;
 
-  if (nxsem_wait(&priv->rd_sem) != OK)
+  if (nxmutex_lock(&priv->rd_lock) != OK)
     {
       return -EBUSY;
     }
@@ -168,10 +113,9 @@ static ssize_t esp32_rng_read(struct file *filep, char *buffer,
       buflen -= to_copy;
     }
 
-  /* Release rd_sem for next read */
+  /* Release rd_lock for next read */
 
-  nxsem_post(&priv->rd_sem);
-
+  nxmutex_unlock(&priv->rd_lock);
   return read_len;
 }
 
@@ -197,7 +141,6 @@ static ssize_t esp32_rng_read(struct file *filep, char *buffer,
 #ifdef CONFIG_DEV_RANDOM
 void devrandom_register(void)
 {
-  esp32_rng_initialize();
   register_driver("/dev/random", &g_rngops, 0444, NULL);
 }
 #endif
@@ -219,9 +162,6 @@ void devrandom_register(void)
 #ifdef CONFIG_DEV_URANDOM_ARCH
 void devurandom_register(void)
 {
-#ifndef CONFIG_DEV_RANDOM
-  esp32_rng_initialize();
-#endif
   register_driver("/dev/urandom", &g_rngops, 0444, NULL);
 }
 #endif

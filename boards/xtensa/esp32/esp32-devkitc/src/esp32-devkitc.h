@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/xtensa/esp32/esp32-devkitc/src/esp32-devkitc.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -46,6 +48,10 @@
 
 #define GPIO_LED1             2
 
+/* PCNT Quadrature Encoder IDs */
+
+#define PCNT_QE0_ID           0
+
 /* MCP2515 Interrupt pin */
 
 #define GPIO_MCP2515_IRQ      22
@@ -61,6 +67,19 @@
 
 #define ONESHOT_TIMER         1
 #define ONESHOT_RESOLUTION_US 1
+
+/* RMT gpio */
+
+#define RMT_RXCHANNEL       1
+#define RMT_TXCHANNEL       0
+
+#ifdef CONFIG_RMT_LOOP_TEST_MODE
+#  define RMT_INPUT_PIN     0
+#  define RMT_OUTPUT_PIN    0
+#else
+#  define RMT_INPUT_PIN     2
+#  define RMT_OUTPUT_PIN    4
+#endif
 
 /****************************************************************************
  * Public Types
@@ -110,6 +129,18 @@ int esp32_gpio_init(void);
 #endif
 
 /****************************************************************************
+ * Name: esp32_ledc_setup
+ *
+ * Description:
+ *   Initialize LEDC PWM and register the PWM device.
+ *
+ ****************************************************************************/
+
+#ifdef CONFIG_ESP32_LEDC
+int esp32_pwm_setup(void);
+#endif
+
+/****************************************************************************
  * Name: board_spidev_initialize
  *
  * Description:
@@ -126,6 +157,97 @@ int esp32_gpio_init(void);
 
 #ifdef CONFIG_SPI_DRIVER
 int board_spidev_initialize(int bus);
+#endif
+
+/****************************************************************************
+ * Name: esp32_twai_setup
+ *
+ * Description:
+ *  Initialize TWAI and register the TWAI device
+ *
+ ****************************************************************************/
+#ifdef CONFIG_ESP32_TWAI
+int esp32_twai_setup(void);
+#endif
+
+/****************************************************************************
+ * Name: board_i2sdev_initialize
+ *
+ * Description:
+ *   This function is called by platform-specific, setup logic to configure
+ *   and register the generic I2S audio driver.  This function will register
+ *   the driver as /dev/audio/pcm[x] where x is determined by the I2S port
+ *   number.
+ *
+ * Input Parameters:
+ *   port       - The I2S port used for the device
+ *   enable_tx  - Register device as TX if true
+ *   enable_rx  - Register device as RX if true
+ *
+ * Returned Value:
+ *   Zero is returned on success.  Otherwise, a negated errno value is
+ *   returned to indicate the nature of the failure.
+ *
+ ****************************************************************************/
+
+#if defined(CONFIG_ESP32_I2S0) && !defined(CONFIG_AUDIO_CS4344) || \
+    defined(CONFIG_ESP32_I2S1)
+int board_i2sdev_initialize(int port, bool enable_tx, bool enable_rx);
+#endif
+
+/****************************************************************************
+ * Name: esp32_cs4344_initialize
+ *
+ * Description:
+ *   This function is called by platform-specific, setup logic to configure
+ *   and register the CS4344 device.  This function will register the driver
+ *   as /dev/audio/pcm[x] where x is determined by the I2S port number.
+ *
+ * Input Parameters:
+ *   port  - The I2S port used for the device
+ *
+ * Returned Value:
+ *   Zero is returned on success.  Otherwise, a negated errno value is
+ *   returned to indicate the nature of the failure.
+ *
+ ****************************************************************************/
+
+#ifdef CONFIG_AUDIO_CS4344
+int esp32_cs4344_initialize(int port);
+#endif
+
+/****************************************************************************
+ * Name:  board_ws2812_initialize
+ *
+ * Description:
+ *   This function may called from application-specific logic during its
+ *   to perform board-specific initialization of the ws2812 device
+ *
+ *
+ ****************************************************************************/
+
+#  ifdef CONFIG_WS2812
+#    ifndef CONFIG_WS2812_NON_SPI_DRIVER
+int board_ws2812_initialize(int devno, int spino, uint16_t nleds);
+#    else
+int board_ws2812_initialize(
+    int devno,
+    uint16_t nleds,
+    void *dev);
+#    endif
+#  endif
+
+/****************************************************************************
+ * Name:  openeth_initialize
+ *
+ * Description:
+ *   This function may called from application-specific logic during its
+ *   to perform board-specific initialization of the Open ETH interface
+ *
+ *
+ ****************************************************************************/
+#ifdef CONFIG_ESP32_OPENETH
+int esp_openeth_initialize(void);
 #endif
 
 #endif /* __ASSEMBLY__ */

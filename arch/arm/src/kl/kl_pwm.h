@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/kl/kl_pwm.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -18,8 +20,8 @@
  *
  ****************************************************************************/
 
-#ifndef __ARCH_ARM_SRC_KL_KINETIS_PWM_H
-#define __ARCH_ARM_SRC_KL_KINETIS_PWM_H
+#ifndef __ARCH_ARM_SRC_KL_KL_PWM_H
+#define __ARCH_ARM_SRC_KL_KL_PWM_H
 
 /****************************************************************************
  * Included Files
@@ -173,7 +175,7 @@ extern "C"
  *
  ****************************************************************************/
 
-FAR struct pwm_lowerhalf_s *kl_pwminitialize(int timer);
+struct pwm_lowerhalf_s *kl_pwminitialize(int timer);
 
 #undef EXTERN
 #if defined(__cplusplus)
@@ -182,4 +184,4 @@ FAR struct pwm_lowerhalf_s *kl_pwminitialize(int timer);
 
 #endif /* __ASSEMBLY__ */
 #endif /* CONFIG_KL_TPMx_PWM */
-#endif /* __ARCH_ARM_SRC_KL_KINETIS_PWM_H */
+#endif /* __ARCH_ARM_SRC_KL_KL_PWM_H */

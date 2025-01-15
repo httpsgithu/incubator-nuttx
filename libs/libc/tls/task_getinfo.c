@@ -1,6 +1,8 @@
 /****************************************************************************
  * libs/libc/tls/task_getinfo.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -24,9 +26,7 @@
 
 #include <nuttx/config.h>
 
-#include <nuttx/sched.h>
 #include <nuttx/tls.h>
-#include <arch/tls.h>
 
 /****************************************************************************
  * Public Functions
@@ -49,7 +49,7 @@
 
 FAR struct task_info_s *task_get_info(void)
 {
-  FAR struct tls_info_s *info = up_tls_info();
+  FAR struct tls_info_s *info = tls_get_info();
 
   return info->tl_task;
 }

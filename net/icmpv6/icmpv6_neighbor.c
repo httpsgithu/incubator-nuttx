@@ -1,6 +1,8 @@
 /****************************************************************************
  * net/icmpv6/icmpv6_neighbor.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -73,7 +75,6 @@ struct icmpv6_neighbor_s
  ****************************************************************************/
 
 static uint16_t icmpv6_neighbor_eventhandler(FAR struct net_driver_s *dev,
-                                             FAR void *pvconn,
                                              FAR void *priv, uint16_t flags)
 {
   FAR struct icmpv6_neighbor_s *state = (FAR struct icmpv6_neighbor_s *)priv;
@@ -107,6 +108,13 @@ static uint16_t icmpv6_neighbor_eventhandler(FAR struct net_driver_s *dev,
 
           /* REVISIT: No timeout. Just wait for the next polling cycle */
 
+          return flags;
+        }
+
+      /* Prepare device buffer */
+
+      if (netdev_iob_prepare(dev, false, 0) != OK)
+        {
           return flags;
         }
 
@@ -155,6 +163,8 @@ static uint16_t icmpv6_neighbor_eventhandler(FAR struct net_driver_s *dev,
  *   ICMPv6 Neighbor Advertisement.
  *
  * Input Parameters:
+ *   dev      The suggested device driver structure to do the solicitation,
+ *            can be NULL for auto decision, must set for link-local ipaddr.
  *   ipaddr   The IPv6 address to be queried.
  *
  * Returned Value:
@@ -170,9 +180,9 @@ static uint16_t icmpv6_neighbor_eventhandler(FAR struct net_driver_s *dev,
  *
  ****************************************************************************/
 
-int icmpv6_neighbor(const net_ipv6addr_t ipaddr)
+int icmpv6_neighbor(FAR struct net_driver_s *dev,
+                    const net_ipv6addr_t ipaddr)
 {
-  FAR struct net_driver_s *dev;
   struct icmpv6_notify_s notify;
   struct icmpv6_neighbor_s state;
   net_ipv6addr_t lookup;
@@ -196,7 +206,11 @@ int icmpv6_neighbor(const net_ipv6addr_t ipaddr)
 
   /* Get the device that can route this request */
 
-  dev = netdev_findby_ripv6addr(g_ipv6_unspecaddr, ipaddr);
+  if (!dev)
+    {
+      dev = netdev_findby_ripv6addr(g_ipv6_unspecaddr, ipaddr);
+    }
+
   if (!dev)
     {
       nerr("ERROR: Unreachable: %08lx\n", (unsigned long)ipaddr);
@@ -204,9 +218,20 @@ int icmpv6_neighbor(const net_ipv6addr_t ipaddr)
       goto errout;
     }
 
+  /* Neighbor support is only built if the Ethernet link layer is supported.
+   * Continue and send the Solicitation only if this device uses the
+   * Ethernet link layer protocol.
+   */
+
+  if (dev->d_lltype != NET_LL_ETHERNET &&
+      dev->d_lltype != NET_LL_IEEE80211)
+    {
+      return OK;
+    }
+
   /* Check if the destination address is on the local network. */
 
-  if (net_ipv6addr_maskcmp(ipaddr, dev->d_ipv6addr, dev->d_ipv6netmask))
+  if (NETDEV_V6ADDR_ONLINK(dev, ipaddr) || net_is_addr_linklocal(ipaddr))
     {
       /* Yes.. use the input address for the lookup */
 
@@ -250,21 +275,14 @@ int icmpv6_neighbor(const net_ipv6addr_t ipaddr)
       goto errout_with_lock;
     }
 
-  /* Initialize the state structure with the network locked.
-   *
-   * This semaphore is used for signaling and, hence, should not have
-   * priority inheritance enabled.
-   */
-
   nxsem_init(&state.snd_sem, 0, 0);        /* Doesn't really fail */
-  nxsem_set_protocol(&state.snd_sem, SEM_PRIO_NONE);
 
   state.snd_retries = 0;                       /* No retries yet */
   net_ipv6addr_copy(state.snd_ipaddr, lookup); /* IP address to query */
 
   /* Remember the routing device name */
 
-  strncpy((FAR char *)state.snd_ifname, (FAR const char *)dev->d_ifname,
+  strlcpy((FAR char *)state.snd_ifname, (FAR const char *)dev->d_ifname,
           IFNAMSIZ);
 
   /* Now loop, testing if the address mapping is in the Neighbor Table and
@@ -308,12 +326,12 @@ int icmpv6_neighbor(const net_ipv6addr_t ipaddr)
       netdev_txnotify_dev(dev);
 
       /* Wait for the send to complete or an error to occur.
-       * net_lockedwait will also terminate if a signal is received.
+       * net_sem_wait will also terminate if a signal is received.
        */
 
       do
         {
-          net_lockedwait(&state.snd_sem);
+          net_sem_wait(&state.snd_sem);
         }
       while (!state.snd_sent);
 

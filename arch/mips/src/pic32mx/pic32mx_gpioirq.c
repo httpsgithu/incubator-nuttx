@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/mips/src/pic32mx/pic32mx_gpioirq.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -31,7 +33,7 @@
 #include <nuttx/arch.h>
 #include <arch/board/board.h>
 
-#include "mips_arch.h"
+#include "mips_internal.h"
 #include "pic32mx_gpio.h"
 #include "pic32mx.h"
 
@@ -84,7 +86,7 @@ static inline bool pic32mx_pullup(uint16_t pinset)
  *
  ****************************************************************************/
 
-static int pic32mx_cninterrupt(int irq, FAR void *context)
+static int pic32mx_cninterrupt(int irq, void *context)
 {
   int status;
   int ret = OK;
@@ -116,7 +118,7 @@ static int pic32mx_cninterrupt(int irq, FAR void *context)
 
   /* Clear the pending interrupt */
 
-  up_clrpend_irq(PIC32MX_IRQ_CN);
+  mips_clrpend_irq(PIC32MX_IRQ_CN);
   return ret;
 }
 

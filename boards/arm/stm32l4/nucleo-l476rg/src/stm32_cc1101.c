@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/stm32l4/nucleo-l476rg/src/stm32_cc1101.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -29,7 +31,6 @@
 
 #include <nuttx/arch.h>
 #include <nuttx/board.h>
-#include <nuttx/config.h>
 #include <nuttx/kmalloc.h>
 #include <nuttx/wqueue.h>
 #include <nuttx/spi/spi.h>
@@ -65,7 +66,7 @@ static void cc1101_wait(struct cc1101_dev_s *dev, uint32_t pin)
  *
  ****************************************************************************/
 
-static void cc1101_irq(FAR struct cc1101_dev_s *dev, bool enable)
+static void cc1101_irq(struct cc1101_dev_s *dev, bool enable)
 {
   if (enable)
     {
@@ -84,7 +85,7 @@ static void cc1101_irq(FAR struct cc1101_dev_s *dev, bool enable)
  *
  ****************************************************************************/
 
-static void cc1101_pwr(FAR struct cc1101_dev_s *dev, bool enable)
+static void cc1101_pwr(struct cc1101_dev_s *dev, bool enable)
 {
 }
 
@@ -102,8 +103,8 @@ static void cc1101_pwr(FAR struct cc1101_dev_s *dev, bool enable)
 
 int stm32l4_cc1101_initialize(void)
 {
-  FAR struct spi_dev_s *spi    = NULL;
-  FAR struct cc1101_dev_s *dev = NULL;
+  struct spi_dev_s *spi    = NULL;
+  struct cc1101_dev_s *dev = NULL;
 
   spi = stm32l4_spibus_initialize(CONFIG_CC1101_SPIDEV);
   if (spi == NULL)

@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/armv7-a/arm_initialstate.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -31,7 +33,6 @@
 
 #include "arm.h"
 #include "arm_internal.h"
-#include "arm_arch.h"
 
 /****************************************************************************
  * Public Functions
@@ -55,10 +56,17 @@ void up_initial_state(struct tcb_s *tcb)
 {
   struct xcptcontext *xcp = &tcb->xcp;
   uint32_t cpsr;
+#ifdef CONFIG_ARCH_KERNEL_STACK
+  uint32_t *kstack = xcp->kstack;
+#endif
+
+  /* Initialize the initial exception register context structure */
+
+  memset(xcp, 0, sizeof(struct xcptcontext));
 
   /* Initialize the idle thread stack */
 
-  if (tcb->pid == 0)
+  if (tcb->pid == IDLE_PROCESS_ID)
     {
       tcb->stack_alloc_ptr = (void *)(g_idle_topstack -
                                       CONFIG_IDLETHREAD_STACKSIZE);
@@ -73,11 +81,23 @@ void up_initial_state(struct tcb_s *tcb)
 
       arm_stack_color(tcb->stack_alloc_ptr, 0);
 #endif /* CONFIG_STACK_COLORATION */
+
+      return;
     }
 
-  /* Initialize the initial exception register context structure */
+#ifdef CONFIG_ARCH_KERNEL_STACK
+  xcp->kstack = kstack;
+#endif
 
-  memset(xcp, 0, sizeof(struct xcptcontext));
+  /* Initialize the context registers to stack top */
+
+  xcp->regs = (void *)((uint32_t)tcb->stack_base_ptr +
+                                 tcb->adj_stack_size -
+                                 XCPTCONTEXT_SIZE);
+
+  /* Initialize the xcp registers */
+
+  memset(xcp->regs, 0, XCPTCONTEXT_SIZE);
 
   /* Save the initial stack pointer */
 
@@ -110,7 +130,7 @@ void up_initial_state(struct tcb_s *tcb)
    * privileges will be dropped before transitioning to user code.
    */
 
-  cpsr = PSR_MODE_SVC;
+  cpsr = PSR_MODE_SYS;
 
   /* Enable or disable interrupts, based on user configuration */
 
@@ -119,15 +139,19 @@ void up_initial_state(struct tcb_s *tcb)
 
   cpsr |= (PSR_I_BIT | PSR_F_BIT);
 
-#else /* CONFIG_SUPPRESS_INTERRUPTS */
-  /* Leave IRQs enabled (Also FIQs if CONFIG_ARMV7A_DECODEFIQ is selected) */
+#elif defined(CONFIG_ARCH_TRUSTZONE_SECURE)
+  /* In tee, we need to disable the IRQ interrupt to make the A core
+   * policy consistent with the M core.
+   */
 
-#ifndef CONFIG_ARMV7A_DECODEFIQ
+  cpsr |= PSR_I_BIT;
+#elif !defined(CONFIG_ARCH_HIPRI_INTERRUPT)
+  /* Leave IRQs enabled (Also FIQs if CONFIG_ARCH_TRUSTZONE_SECURE or
+   * CONFIG_ARCH_HIPRI_INTERRUPT is selected)
+   */
 
   cpsr |= PSR_F_BIT;
-
-#endif /* !CONFIG_ARMV7A_DECODEFIQ */
-#endif /* CONFIG_SUPPRESS_INTERRUPTS */
+#endif
 
 #ifdef CONFIG_ARM_THUMB
   cpsr |= PSR_T_BIT;

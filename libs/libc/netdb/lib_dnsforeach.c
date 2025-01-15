@@ -1,6 +1,8 @@
 /****************************************************************************
  * libs/libc/netdb/lib_dnsforeach.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -80,9 +82,10 @@ int dns_foreach_nameserver(dns_callback_t callback, FAR void *arg)
   char line[DNS_MAX_LINE];
   FAR char *addrstr;
   FAR char *ptr;
+  unsigned int count;
   uint16_t port;
   int keylen;
-  int ret;
+  int ret = OK;
 
   /* Open the resolver configuration file */
 
@@ -95,6 +98,8 @@ int dns_foreach_nameserver(dns_callback_t callback, FAR void *arg)
       DEBUGASSERT(ret < 0);
       return ret;
     }
+
+  dns_lock();
 
   keylen = strlen(NETDB_DNS_KEYWORD);
   while (fgets(line, DNS_MAX_LINE, stream) != NULL)
@@ -167,12 +172,13 @@ int dns_foreach_nameserver(dns_callback_t callback, FAR void *arg)
                   tmp = atoi(portstr);
                   if (tmp != 0)
                     {
-                      port = htons(tmp);
+                      port = HTONS(tmp);
                     }
                 }
             }
 #endif /* CONFIG_NETDB_RESOLVCONF_NONSTDPORT */
 
+          memset(&u, 0, sizeof(u));
 #ifdef CONFIG_NET_IPv4
           /* Try to convert the IPv4 address */
 
@@ -184,8 +190,10 @@ int dns_foreach_nameserver(dns_callback_t callback, FAR void *arg)
             {
               u.ipv4.sin_family = AF_INET;
               u.ipv4.sin_port   = port;
+              dns_breaklock(&count);
               ret = callback(arg, (FAR struct sockaddr *)&u.ipv4,
                              sizeof(struct sockaddr_in));
+              dns_restorelock(count);
             }
           else
 #endif
@@ -203,8 +211,10 @@ int dns_foreach_nameserver(dns_callback_t callback, FAR void *arg)
                 {
                   u.ipv6.sin6_family = AF_INET6;
                   u.ipv6.sin6_port   = port;
+                  dns_breaklock(&count);
                   ret = callback(arg, (FAR struct sockaddr *)&u.ipv6,
                                  sizeof(struct sockaddr_in6));
+                  dns_restorelock(count);
                 }
               else
 #endif
@@ -218,14 +228,14 @@ int dns_foreach_nameserver(dns_callback_t callback, FAR void *arg)
 
           if (ret != OK)
             {
-              fclose(stream);
-              return ret;
+              break;
             }
         }
     }
 
+  dns_unlock();
   fclose(stream);
-  return OK;
+  return ret;
 }
 
 #else /* CONFIG_NETDB_RESOLVCONF */
@@ -233,10 +243,11 @@ int dns_foreach_nameserver(dns_callback_t callback, FAR void *arg)
 int dns_foreach_nameserver(dns_callback_t callback, FAR void *arg)
 {
   FAR struct sockaddr *addr;
+  unsigned int count;
   int ret = OK;
   int i;
 
-  dns_semtake();
+  dns_lock();
   for (i = 0; i < g_dns_nservers; i++)
     {
 #ifdef CONFIG_NET_IPv4
@@ -253,9 +264,9 @@ int dns_foreach_nameserver(dns_callback_t callback, FAR void *arg)
 
           /* Perform the callback */
 
-          dns_semgive();
+          dns_breaklock(&count);
           ret = callback(arg, addr, sizeof(struct sockaddr_in));
-          dns_semtake();
+          dns_restorelock(count);
         }
       else
 #endif
@@ -274,9 +285,9 @@ int dns_foreach_nameserver(dns_callback_t callback, FAR void *arg)
 
           /* Perform the callback */
 
-          dns_semgive();
+          dns_breaklock(&count);
           ret = callback(arg, addr, sizeof(struct sockaddr_in6));
-          dns_semtake();
+          dns_restorelock(count);
         }
       else
 #endif
@@ -292,7 +303,7 @@ int dns_foreach_nameserver(dns_callback_t callback, FAR void *arg)
         }
     }
 
-  dns_semgive();
+  dns_unlock();
   return ret;
 }
 

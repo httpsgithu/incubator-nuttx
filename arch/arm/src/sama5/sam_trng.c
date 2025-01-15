@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/sama5/sam_trng.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -34,11 +36,10 @@
 #include <nuttx/arch.h>
 #include <nuttx/fs/fs.h>
 #include <nuttx/drivers/drivers.h>
+#include <nuttx/mutex.h>
 #include <nuttx/semaphore.h>
 
-#include "arm_arch.h"
 #include "arm_internal.h"
-
 #include "sam_periphclks.h"
 #include "sam_trng.h"
 
@@ -51,7 +52,7 @@
 
 /* Interrupts */
 
-static int sam_interrupt(int irq, void *context, FAR void *arg);
+static int sam_interrupt(int irq, void *context, void *arg);
 
 /* Character driver methods */
 
@@ -63,7 +64,7 @@ static ssize_t sam_read(struct file *filep, char *buffer, size_t);
 
 struct trng_dev_s
 {
-  sem_t exclsem;            /* Enforces exclusive access to the TRNG */
+  mutex_t lock;             /* Enforces exclusive access to the TRNG */
   sem_t waitsem;            /* Wait for buffer full  */
   uint32_t *samples;        /* Current buffer being filled */
   size_t maxsamples;        /* Size of the current buffer (in 32-bit words) */
@@ -75,17 +76,17 @@ struct trng_dev_s
  * Private Data
  ****************************************************************************/
 
-static struct trng_dev_s g_trngdev;
+static struct trng_dev_s g_trngdev =
+{
+  .lock = NXMUTEX_INITIALIZER,
+  .waitsem = SEM_INITIALIZER(0),
+};
 
 static const struct file_operations g_trngops =
 {
   NULL,            /* open */
   NULL,            /* close */
   sam_read,        /* read */
-  NULL,            /* write */
-  NULL,            /* seek */
-  NULL,            /* ioctl */
-  NULL             /* poll */
 };
 
 /****************************************************************************
@@ -105,7 +106,7 @@ static const struct file_operations g_trngops =
  *
  ****************************************************************************/
 
-static int sam_interrupt(int irq, void *context, FAR void *arg)
+static int sam_interrupt(int irq, void *context, void *arg)
 {
   uint32_t odata;
 
@@ -235,7 +236,7 @@ static ssize_t sam_read(struct file *filep, char *buffer, size_t buflen)
 
   /* Get exclusive access to the TRNG hardware */
 
-  ret = nxsem_wait(&g_trngdev.exclsem);
+  ret = nxmutex_lock(&g_trngdev.lock);
   if (ret < 0)
     {
       return ret;
@@ -305,7 +306,7 @@ errout:
 
   /* Release our lock on the TRNG hardware */
 
-  nxsem_post(&g_trngdev.exclsem);
+  nxmutex_unlock(&g_trngdev.lock);
 
   finfo("Return %d\n", (int)retval);
   return retval;
@@ -330,21 +331,6 @@ static int sam_rng_initialize(void)
   int ret;
 
   finfo("Initializing TRNG hardware\n");
-
-  /* Initialize the device structure */
-
-  memset(&g_trngdev, 0, sizeof(struct trng_dev_s));
-
-  /* Initialize semphores */
-
-  nxsem_init(&g_trngdev.exclsem, 0, 1);
-  nxsem_init(&g_trngdev.waitsem, 0, 0);
-
-  /* The waitsem semaphore is used for signaling and, hence, should not have
-   * priority inheritance enabled.
-   */
-
-  nxsem_set_protocol(&g_trngdev.waitsem, SEM_PRIO_NONE);
 
   /* Enable clocking to the TRNG */
 
@@ -400,7 +386,7 @@ void devrandom_register(void)
   ret = sam_rng_initialize();
   if (ret >= 0)
     {
-      ret = register_driver("/dev/random", &g_trngops, 0644, NULL);
+      ret = register_driver("/dev/random", &g_trngops, 0444, NULL);
       if (ret < 0)
         {
           ferr("ERROR: Failed to register /dev/random\n");
@@ -433,7 +419,7 @@ void devurandom_register(void)
   if (ret >= 0)
 #endif
     {
-      ret = register_driver("/dev/urandom", &g_trngops, 0644, NULL);
+      ret = register_driver("/dev/urandom", &g_trngops, 0444, NULL);
       if (ret < 0)
         {
           ferr("ERROR: Failed to register /dev/urandom\n");

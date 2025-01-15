@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/imxrt/hardware/rt102x/imxrt102x_ccm.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -18,8 +20,8 @@
  *
  ****************************************************************************/
 
-#ifndef __ARCH_ARM_SRC_IMXRT_HARDWARE_IMXRT102X_CCM_H
-#define __ARCH_ARM_SRC_IMXRT_HARDWARE_IMXRT102X_CCM_H
+#ifndef __ARCH_ARM_SRC_IMXRT_HARDWARE_RT102X_IMXRT102X_CCM_H
+#define __ARCH_ARM_SRC_IMXRT_HARDWARE_RT102X_IMXRT102X_CCM_H
 
 /****************************************************************************
  * Included Files
@@ -200,7 +202,7 @@
                                                            /* Bits 13-15: Reserved */
 #define CCM_CBCDR_SEMC_PODF_SHIFT                (16)      /* Bits 16-18: Post divider for SEMC clock */
 #define CCM_CBCDR_SEMC_PODF_MASK                 (0x7 << CCM_CBCDR_SEMC_PODF_SHIFT)
-# define CCM_CBCDR_SEMC_PODF(n)                  ((uint32_t)(n) << CCM_CBCDR_SEMC_PODF_SHIFT)
+#  define CCM_CBCDR_SEMC_PODF(n)                 ((uint32_t)(n) << CCM_CBCDR_SEMC_PODF_SHIFT)
                                                            /* Bits 19-24: Reserved */
 #define CCM_CBCDR_PERIPH_CLK_SEL_SHIFT           (25)      /* Bit 25:     Selector for peripheral main clock */
 #define CCM_CBCDR_PERIPH_CLK_SEL_MASK            (1 << CCM_CBCDR_PERIPH_CLK_SEL_SHIFT)
@@ -838,19 +840,19 @@
 
 /* Analog ENET PLL Control Register */
 
-#define CCM_ANALOG_PLL_ENET_ENET0_DIV_SELECT_SHIFT      (0)       /* Bits 0-1:    Controls the frequency of the ethernet0 reference clock */
-#define CCM_ANALOG_PLL_ENET_ENET0_DIV_SELECT_MASK       (0x3 << CCM_ANALOG_PLL_ENET_ENET0_DIV_SELECT_SHIFT)
-#  define CCM_ANALOG_PLL_ENET_ENET0_DIV_SELECT_25MHZ    ((uint32_t)(0) << CCM_ANALOG_PLL_ENET_ENET0_DIV_SELECT_SHIFT)
-#  define CCM_ANALOG_PLL_ENET_ENET0_DIV_SELECT_50MHZ    ((uint32_t)(1) << CCM_ANALOG_PLL_ENET_ENET0_DIV_SELECT_SHIFT)
-#  define CCM_ANALOG_PLL_ENET_ENET0_DIV_SELECT_100MHZ   ((uint32_t)(2) << CCM_ANALOG_PLL_ENET_ENET0_DIV_SELECT_SHIFT)
-#  define CCM_ANALOG_PLL_ENET_ENET0_DIV_SELECT_125MHZ   ((uint32_t)(3) << CCM_ANALOG_PLL_ENET_ENET0_DIV_SELECT_SHIFT)
+#define CCM_ANALOG_PLL_ENET_ENET1_DIV_SELECT_SHIFT      (0)       /* Bits 0-1:    Controls the frequency of the ethernet0 reference clock */
+#define CCM_ANALOG_PLL_ENET_ENET1_DIV_SELECT_MASK       (0x3 << CCM_ANALOG_PLL_ENET_ENET1_DIV_SELECT_SHIFT)
+#  define CCM_ANALOG_PLL_ENET_ENET1_DIV_SELECT_25MHZ    ((uint32_t)(0) << CCM_ANALOG_PLL_ENET_ENET1_DIV_SELECT_SHIFT)
+#  define CCM_ANALOG_PLL_ENET_ENET1_DIV_SELECT_50MHZ    ((uint32_t)(1) << CCM_ANALOG_PLL_ENET_ENET1_DIV_SELECT_SHIFT)
+#  define CCM_ANALOG_PLL_ENET_ENET1_DIV_SELECT_100MHZ   ((uint32_t)(2) << CCM_ANALOG_PLL_ENET_ENET1_DIV_SELECT_SHIFT)
+#  define CCM_ANALOG_PLL_ENET_ENET1_DIV_SELECT_125MHZ   ((uint32_t)(3) << CCM_ANALOG_PLL_ENET_ENET1_DIV_SELECT_SHIFT)
 
 /*                                                                 Bits 2-11:
  *                                                                   Reserved
  */
-#define CCM_ANALOG_PLL_ENET_POWERDOWN                   (1 << 12) /* Bit 12:     Powers down the PLL */
-#define CCM_ANALOG_PLL_ENET_ENET1_125M_EN               (1 << 13) /* Bit 13:     Enable the PLL providing the ENET1 125 MHz reference clock */
-#define CCM_ANALOG_PLL_ENET_BYPASS_CLK_SRC_SHIFT       (14)       /* Bits 14-15: Determines the bypass source */
+#define CCM_ANALOG_PLL_ENET_POWERDOWN                  (1 << 12) /* Bit 12:     Powers down the PLL */
+#define CCM_ANALOG_PLL_ENET_ENABLE                     (1 << 13) /* Bit 13:     Enable the PLL providing the ENET1 125 MHz reference clock */
+#define CCM_ANALOG_PLL_ENET_BYPASS_CLK_SRC_SHIFT       (14)      /* Bits 14-15: Determines the bypass source */
 #define CCM_ANALOG_PLL_ENET_BYPASS_CLK_SRC_MASK        (0x3 << CCM_ANALOG_PLL_ENET_BYPASS_CLK_SRC_SHIFT)
 #  define CCM_ANALOG_PLL_ENET_BYPASS_CLK_SRC_REF_24M   ((uint32_t)(0) << CCM_ANALOG_PLL_ENET_BYPASS_CLK_SRC_SHIFT) /* Select 24Mhz Osc as source */
 
@@ -998,4 +1000,4 @@
 #define CCM_ANALOG_MISC2_VIDEO_DIV_MASK                (0x3 << CCM_ANALOG_MISC2_VIDEO_DIV_SHIFT)
 #  define CCM_ANALOG_MISC2_VIDEO_DIV(n)                ((uint32_t)(n) << CCM_ANALOG_MISC2_VIDEO_DIV_SHIFT)
 
-#endif /* __ARCH_ARM_SRC_IMXRT_HARDWARE_IMXRT102X_CCM_H */
+#endif /* __ARCH_ARM_SRC_IMXRT_HARDWARE_RT102X_IMXRT102X_CCM_H */

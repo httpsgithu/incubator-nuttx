@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/stm32l4/stm32l4_exti_gpio.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -33,7 +35,7 @@
 
 #include <arch/irq.h>
 
-#include "arm_arch.h"
+#include "arm_internal.h"
 #include "chip.h"
 #include "stm32l4_gpio.h"
 #include "stm32l4_exti.h"
@@ -64,7 +66,7 @@ static struct gpio_callback_s g_gpio_handlers[16];
  * Interrupt Service Routines - Dispatchers
  ****************************************************************************/
 
-static int stm32l4_exti0_isr(int irq, void *context, FAR void *arg)
+static int stm32l4_exti0_isr(int irq, void *context, void *arg)
 {
   int ret = OK;
 
@@ -85,7 +87,7 @@ static int stm32l4_exti0_isr(int irq, void *context, FAR void *arg)
   return ret;
 }
 
-static int stm32l4_exti1_isr(int irq, void *context, FAR void *arg)
+static int stm32l4_exti1_isr(int irq, void *context, void *arg)
 {
   int ret = OK;
 
@@ -106,7 +108,7 @@ static int stm32l4_exti1_isr(int irq, void *context, FAR void *arg)
   return ret;
 }
 
-static int stm32l4_exti2_isr(int irq, void *context, FAR void *arg)
+static int stm32l4_exti2_isr(int irq, void *context, void *arg)
 {
   int ret = OK;
 
@@ -127,7 +129,7 @@ static int stm32l4_exti2_isr(int irq, void *context, FAR void *arg)
   return ret;
 }
 
-static int stm32l4_exti3_isr(int irq, void *context, FAR void *arg)
+static int stm32l4_exti3_isr(int irq, void *context, void *arg)
 {
   int ret = OK;
 
@@ -148,7 +150,7 @@ static int stm32l4_exti3_isr(int irq, void *context, FAR void *arg)
   return ret;
 }
 
-static int stm32l4_exti4_isr(int irq, void *context, FAR void *arg)
+static int stm32l4_exti4_isr(int irq, void *context, void *arg)
 {
   int ret = OK;
 
@@ -218,7 +220,7 @@ static int stm32l4_exti95_isr(int irq, void *context, void *arg)
   return stm32l4_exti_multiisr(irq, context, arg, 5, 9);
 }
 
-static int stm32l4_exti1510_isr(int irq, void *context, FAR void *arg)
+static int stm32l4_exti1510_isr(int irq, void *context, void *arg)
 {
   return stm32l4_exti_multiisr(irq, context, arg, 10, 15);
 }

@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/s32k1xx/s32k146evb/src/s32k1xx_bringup.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -103,7 +105,7 @@ int s32k1xx_bringup(void)
 #endif
 
 #ifdef CONFIG_S32K1XX_PROGMEM
-  FAR struct mtd_dev_s *mtd;
+  struct mtd_dev_s *mtd;
 
   mtd = progmem_initialize();
   if (mtd == NULL)

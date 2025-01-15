@@ -1,15 +1,8 @@
 /****************************************************************************
  * include/nuttx/wireless/bluetooth/bt_uart.h
- * UART based Bluetooth driver
  *
- *   Copyright (C) 2018 Gregory Nutt. All rights reserved.
- *   Author: Gregory Nutt <gnutt@nuttx.org>
- *
- * Ported from the Intel/Zephyr arduino101_firmware_source-v1.tar package
- * where the code was released with a compatible 3-clause BSD license:
- *
- *   Copyright (c) 2016, Intel Corporation
- *   All rights reserved.
+ * SPDX-License-Identifier: BSD-3-Clause
+ * SPDX-FileCopyrightText: 2016, Intel Corporation. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -144,6 +137,11 @@ struct btuart_lowerhalf_s
   /* Flush/drain all buffered RX data */
 
   CODE ssize_t (*rxdrain)(FAR const struct btuart_lowerhalf_s *lower);
+
+  /* Lower-half logic may support platform-specific ioctl commands */
+
+  CODE int (*ioctl)(FAR const struct btuart_lowerhalf_s *lower,
+                    int cmd, unsigned long arg);
 };
 
 /****************************************************************************
@@ -151,11 +149,27 @@ struct btuart_lowerhalf_s
  ****************************************************************************/
 
 /****************************************************************************
+ * Name: btuart_create
+ *
+ *   Create the UART-based Bluetooth device.
+ *
+ * Input Parameters:
+ *   lower - an instance of the lower half driver interface
+ *
+ * Returned Value:
+ *   Zero is returned on success; a negated errno value is returned on any
+ *   failure.
+ *
+ ****************************************************************************/
+
+int btuart_create(FAR const struct btuart_lowerhalf_s *lower,
+                  FAR struct bt_driver_s **driver);
+
+/****************************************************************************
  * Name: btuart_register
  *
  * Description:
- *   Create the generic UART-based Bluetooth device and register it with the
- *   Bluetooth stack.
+ *   Register the generic UART-based bluetooth driver.
  *
  * Input Parameters:
  *   lower - an instance of the lower half driver interface

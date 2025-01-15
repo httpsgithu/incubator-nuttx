@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/stm32h7/stm32_dma.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -73,7 +75,7 @@ typedef struct stm32_dma_config_s stm32_dmacfg_t;
  * DMA stream.
  */
 
-typedef FAR void *DMA_HANDLE;
+typedef void *DMA_HANDLE;
 
 /* Description:
  *   This is the type of the callback that is used to inform the user of the

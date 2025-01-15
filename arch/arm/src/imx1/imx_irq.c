@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/imx1/imx_irq.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -28,32 +30,7 @@
 #include <arch/irq.h>
 
 #include "chip.h"
-#include "arm_arch.h"
 #include "arm_internal.h"
-
-/****************************************************************************
- * Pre-processor Definitions
- ****************************************************************************/
-
-/****************************************************************************
- * Public Data
- ****************************************************************************/
-
-/* g_current_regs[] holds a references to the current interrupt level
- * register storage structure.  If is non-NULL only during interrupt
- * processing.  Access to g_current_regs[] must be through the macro
- * CURRENT_REGS for portability.
- */
-
-volatile uint32_t *g_current_regs[1];
-
-/****************************************************************************
- * Private Data
- ****************************************************************************/
-
-/****************************************************************************
- * Private Functions
- ****************************************************************************/
 
 /****************************************************************************
  * Public Functions
@@ -69,10 +46,6 @@ void up_irqinitialize(void)
 
   putreg32(0, IMX_AITC_INTENABLEH);
   putreg32(0, IMX_AITC_INTENABLEL);
-
-  /* currents_regs is non-NULL only while processing an interrupt */
-
-  CURRENT_REGS = NULL;
 
   /* Set masking of normal interrupts by priority.  Writing all ones
    * (or -1) to the NIMASK register sets the normal interrupt mask to
@@ -90,7 +63,7 @@ void up_irqinitialize(void)
 
   /* And finally, enable interrupts */
 
-  up_irq_restore(PSR_MODE_SVC | PSR_F_BIT);
+  up_irq_restore(PSR_MODE_SYS | PSR_F_BIT);
 #endif
 }
 

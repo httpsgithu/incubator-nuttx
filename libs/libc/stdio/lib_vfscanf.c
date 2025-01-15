@@ -1,6 +1,8 @@
 /****************************************************************************
  * libs/libc/stdio/lib_vfscanf.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -22,13 +24,7 @@
  * Included Files
  ****************************************************************************/
 
-#include <nuttx/config.h>
-
-#include <stdio.h>
-
 #include <nuttx/streams.h>
-
-#include "libc.h"
 
 /****************************************************************************
  * Public Functions
@@ -55,9 +51,9 @@ int vfscanf(FAR FILE *stream, FAR const IPTR char *fmt, va_list ap)
        * by the next thread.
        */
 
-      lib_take_semaphore(stream);
+      flockfile(stream);
 
-      n = lib_vscanf(&stdinstream.public, &lastc, fmt, ap);
+      n = lib_vscanf(&stdinstream.common, &lastc, fmt, ap);
 
       /* The lib_vscanf function reads always one character more, this
        * character needs to be written back.
@@ -68,7 +64,7 @@ int vfscanf(FAR FILE *stream, FAR const IPTR char *fmt, va_list ap)
           ungetc(lastc, stream);
         }
 
-      lib_give_semaphore(stream);
+      funlockfile(stream);
     }
 
   return n;

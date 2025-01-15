@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/armv6-m/arm_hardfault.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -31,7 +33,6 @@
 
 #include <arch/irq.h>
 
-#include "arm_arch.h"
 #include "nvic.h"
 #include "arm_internal.h"
 
@@ -40,15 +41,15 @@
  ****************************************************************************/
 
 #ifdef CONFIG_DEBUG_HARDFAULT_ALERT
-# define hfalert(format, ...)  _alert(format, ##__VA_ARGS__)
+#  define hfalert(format, ...) _alert(format, ##__VA_ARGS__)
 #else
-# define hfalert(x...)
+#  define hfalert(x...)
 #endif
 
 #ifdef CONFIG_DEBUG_HARDFAULT_INFO
-# define hfinfo(format, ...)   _info(format, ##__VA_ARGS__)
+#  define hfinfo(format, ...)  _info(format, ##__VA_ARGS__)
 #else
-# define hfinfo(x...)
+#  define hfinfo(x...)
 #endif
 
 #define INSN_SVC0        0xdf00 /* insn: svc 0 */
@@ -66,7 +67,7 @@
  *
  ****************************************************************************/
 
-int arm_hardfault(int irq, FAR void *context, FAR void *arg)
+int arm_hardfault(int irq, void *context, void *arg)
 {
   uint32_t *regs = (uint32_t *)context;
 
@@ -83,15 +84,15 @@ int arm_hardfault(int irq, FAR void *context, FAR void *arg)
    * FLASH region or in the user FLASH region.
    */
 
-  if (((uintptr_t)pc >= (uintptr_t)&_stext &&
-       (uintptr_t)pc <  (uintptr_t)&_etext) ||
+  if (((uintptr_t)pc >= (uintptr_t)_stext &&
+       (uintptr_t)pc <  (uintptr_t)_etext) ||
       ((uintptr_t)pc >= (uintptr_t)USERSPACE->us_textstart &&
        (uintptr_t)pc <  (uintptr_t)USERSPACE->us_textend))
 #else
   /* SVCalls are expected only from the base, kernel FLASH region */
 
-  if ((uintptr_t)pc >= (uintptr_t)&_stext &&
-      (uintptr_t)pc <  (uintptr_t)&_etext)
+  if ((uintptr_t)pc >= (uintptr_t)_stext &&
+      (uintptr_t)pc <  (uintptr_t)_etext)
 #endif
     {
       /* Fetch the instruction that caused the Hard fault */
@@ -121,6 +122,6 @@ int arm_hardfault(int irq, FAR void *context, FAR void *arg)
 
   up_irq_save();
   hfalert("PANIC!!! Hard fault\n");
-  PANIC();
+  PANIC_WITH_REGS("panic", context);
   return OK; /* Won't get here */
 }

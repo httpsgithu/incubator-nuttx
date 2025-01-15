@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/imx6/imx_lowputc.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -78,7 +80,7 @@ void imx_lowsetup(void);
 
 #ifdef IMX_HAVE_UART
 int imx_uart_configure(uint32_t base,
-                       FAR const struct uart_config_s *config);
+                       const struct uart_config_s *config);
 #endif
 
 /****************************************************************************
@@ -91,10 +93,8 @@ int imx_uart_configure(uint32_t base,
  *
  ****************************************************************************/
 
-#if defined(IMX_HAVE_UART) && defined(CONFIG_DEBUG_FEATURES)
+#ifdef IMX_HAVE_UART
 void imx_lowputc(int ch);
-#else
-#  define imx_lowputc(ch)
 #endif
 
 #endif /* __ARCH_ARM_SRC_IMX6_IMX_LOWPUTC_H */

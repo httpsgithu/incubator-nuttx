@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/sama5/sam_serialinit.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -83,7 +85,7 @@ void arm_serialinit(void)
   uart_serialinit();
 #endif
 
-#ifdef SAMA5_HAVE_FLEXCOM_USART
+#ifdef CONFIG_SAMA5_FLEXCOM_USART
   /* Register Flexcom USART drivers */
 
   flexus_serialinit();

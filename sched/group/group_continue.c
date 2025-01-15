@@ -1,6 +1,8 @@
 /****************************************************************************
  * sched/group/group_continue.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -57,6 +59,7 @@
 
 static int group_continue_handler(pid_t pid, FAR void *arg)
 {
+  FAR struct tcb_s *tcb = this_task();
   FAR struct tcb_s *rtcb;
 
   /* Resume all threads */
@@ -64,7 +67,18 @@ static int group_continue_handler(pid_t pid, FAR void *arg)
   rtcb = nxsched_get_tcb(pid);
   if (rtcb != NULL)
     {
-      nxsched_continue(rtcb);
+      /* Remove the task from waitting list */
+
+      nxsched_remove_blocked(rtcb);
+
+      /* Add the task to ready-to-run task list and
+       * perform the context switch if one is needed
+       */
+
+      if (nxsched_add_readytorun(rtcb))
+        {
+          up_switch_context(rtcb, tcb);
+        }
     }
 
   /* Always return zero.  We need to visit each member of the group */
@@ -82,6 +96,7 @@ static int group_continue_handler(pid_t pid, FAR void *arg)
  * Description:
  *   Resume all members of the task group.  This is SIGCONT default signal
  *   action logic.
+ *   Note: this function should used within critical_section
  *
  * Input Parameters:
  *   tcb - TCB of the task to be retained.
@@ -93,15 +108,12 @@ static int group_continue_handler(pid_t pid, FAR void *arg)
 
 int group_continue(FAR struct tcb_s *tcb)
 {
+  irqstate_t flags;
   int ret;
 
-  /* Lock the scheduler so that there this thread will not lose priority
-   * until all of its children are suspended.
-   */
-
-  sched_lock();
+  flags = enter_critical_section();
   ret = group_foreachchild(tcb->group, group_continue_handler, NULL);
-  sched_unlock();
+  leave_critical_section(flags);
   return ret;
 }
 

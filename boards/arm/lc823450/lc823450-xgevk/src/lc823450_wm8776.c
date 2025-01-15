@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/lc823450/lc823450-xgevk/src/lc823450_wm8776.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -36,7 +38,7 @@
 
 #include <arch/board/board.h>
 
-#include "arm_arch.h"
+#include "arm_internal.h"
 #include "lc823450_i2c.h"
 #include "lc823450_i2s.h"
 #include "lc823450-xgevk.h"
@@ -68,14 +70,14 @@ static struct wm8776_lower_s g_wm8776info =
 
 int lc823450_wm8776initialize(int minor)
 {
-  FAR struct audio_lowerhalf_s *wm8776;
-  FAR struct audio_lowerhalf_s *pcm;
-  FAR struct i2c_master_s *i2c;
-  FAR struct i2s_dev_s *i2s;
+  struct audio_lowerhalf_s *wm8776;
+  struct audio_lowerhalf_s *pcm;
+  struct i2c_master_s *i2c;
+  struct i2s_dev_s *i2s;
   char devname[12];
   int ret;
 
-  ainfo("Initializing WM8776 \n");
+  ainfo("Initializing WM8776\n");
 
   /* Initialize I2C */
 
@@ -108,7 +110,7 @@ int lc823450_wm8776initialize(int minor)
       return  -ENODEV;
     }
 
-  snprintf(devname, 12, "pcm%d",  minor);
+  snprintf(devname, sizeof(devname), "pcm%d",  minor);
 
   ret = audio_register(devname, pcm);
 

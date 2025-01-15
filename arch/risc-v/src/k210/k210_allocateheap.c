@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/risc-v/src/k210/k210_allocateheap.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -63,8 +65,8 @@
 void up_allocate_heap(void **heap_start, size_t *heap_size)
 {
   board_autoled_on(LED_HEAPALLOCATE);
-  *heap_start = (void *)K210_HEAP_START;
-  *heap_size = CONFIG_RAM_END - K210_HEAP_START;
+  *heap_start = (void *)g_idle_topstack;
+  *heap_size = CONFIG_RAM_END - g_idle_topstack;
 }
 
 /****************************************************************************

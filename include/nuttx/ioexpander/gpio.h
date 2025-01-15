@@ -1,6 +1,8 @@
 /****************************************************************************
  * include/nuttx/ioexpander/gpio.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -42,11 +44,11 @@
 
 /* Command:     GPIOC_WRITE
  * Description: Set the value of an output GPIO
- * Argument:    T0=output a low value; 1=output a high value
+ * Argument:    0=output a low value; 1=output a high value
  *
  * Command:     GPIOC_READ
  * Description: Read the value of an input or output GPIO
- * Argument:    A pointer to an bool value to receive the result:
+ * Argument:    A pointer to a bool value to receive the result:
  *              false=low value; true=high value.
  *
  * Command:     GPIOC_PINTYPE
@@ -54,8 +56,8 @@
  * Argument:    A pointer to an instance of type enum gpio_pintype_e
  *
  * Command:     GPIOC_REGISTER
- * Description: Register to receive a signal whenever there an interrupt
- *              is received on an input gpio pin.  This feature, of course,
+ * Description: Register to receive a signal whenever there is an interrupt
+ *              received on an input gpio pin.  This feature, of course,
  *              depends upon interrupt GPIO support from the platform.
  * Argument:    The number of signal to be generated when the interrupt
  *              occurs.
@@ -81,7 +83,11 @@
  * Public Types
  ****************************************************************************/
 
-/* Identifies the type of the GPIO pin */
+/* Identifies the type of the GPIO pin
+ *
+ * Note: If this enum is modified, g_gplh_inttype array in
+ *       drivers/ioexpander/gpio_lower_half.c must be updated accordingly.
+ */
 
 enum gpio_pintype_e
 {
@@ -96,6 +102,12 @@ enum gpio_pintype_e
   GPIO_INTERRUPT_RISING_PIN,
   GPIO_INTERRUPT_FALLING_PIN,
   GPIO_INTERRUPT_BOTH_PIN,
+  GPIO_INTERRUPT_PIN_WAKEUP,
+  GPIO_INTERRUPT_HIGH_PIN_WAKEUP,
+  GPIO_INTERRUPT_LOW_PIN_WAKEUP,
+  GPIO_INTERRUPT_RISING_PIN_WAKEUP,
+  GPIO_INTERRUPT_FALLING_PIN_WAKEUP,
+  GPIO_INTERRUPT_BOTH_PIN_WAKEUP,
   GPIO_NPINTYPES
 };
 
@@ -107,12 +119,12 @@ typedef CODE int (*pin_interrupt_t)(FAR struct gpio_dev_s *dev, uint8_t pin);
 /* Pin interface vtable definition.  Instances of this vtable are read-only
  * and may reside in FLASH.
  *
- *   - go_read.  Required for all all pin types.
+ *   - go_read.  Required for all pin types.
  *   - go_write.  Required only for the GPIO_OUTPUT_PIN pin type.  Unused
- *     for other pin types may be NULL.
- *   - go_attach and gp_eanble.  Required only the GPIO_INTERRUPT_PIN pin
- *     type.  Unused for other pin types may be NULL.
- *   - go_setpinytype.  Required for all all pin types.
+ *     for other pin types, may be NULL.
+ *   - go_attach and go_enable.  Required only for the GPIO_INTERRUPT_PIN pin
+ *     type.  Unused for other pin types, may be NULL.
+ *   - go_setpintype.  Required for all pin types.
  */
 
 struct gpio_dev_s;
@@ -146,17 +158,31 @@ struct gpio_dev_s
    * driver when gpio_pin_register() is called.
    */
 
-  uint8_t gp_pintype;  /* See enum gpio_pintype_e */;
+  uint8_t gp_pintype;  /* See enum gpio_pintype_e */
+
+  /* Number of times the device has been registered by ioctl */
+
+  uint8_t register_count;
+
+  /* Number of times interrupt occured */
+
+  uintptr_t int_count;
 
   /* Writable storage used by the upper half driver */
 
+#if CONFIG_DEV_GPIO_NSIGNALS > 0
   struct gpio_signal_s gp_signals[CONFIG_DEV_GPIO_NSIGNALS];
+#endif
 
   /* Read-only pointer to GPIO device operations (also provided by the
    * lower half driver).
    */
 
   FAR const struct gpio_operations_s *gp_ops;
+
+#if CONFIG_DEV_GPIO_NPOLLWAITERS > 0
+  FAR struct pollfd *fds[CONFIG_DEV_GPIO_NPOLLWAITERS];
+#endif
 
   /* Device specific, lower-half information may follow. */
 };
@@ -177,35 +203,121 @@ extern "C"
  * Name: gpio_pin_register
  *
  * Description:
- *   Register GPIO pin device driver.
+ *   Register GPIO pin device driver at /dev/gpioN, where N is the provided
+ *   minor number.
  *
- *   - Input pin types will be registered at /dev/gpinN
- *   - Output pin types will be registered at /dev/gpoutN
- *   - Interrupt pin types will be registered at /dev/gpintN
+ * Input Parameters:
+ *   dev    - A pointer to a gpio_dev_s
+ *   minor  - An integer value to be concatenated with '/dev/gpio'
+ *            to form the device name.
  *
- *   Where N is the provided minor number in the range of 0-99.
+ * Returned Value:
+ *   Zero on success; A negated errno value is returned on a failure
+ *   all error values returned by inode_reserve:
  *
+ *   EINVAL - 'path' is invalid for this operation
+ *   EEXIST - An inode already exists at 'path'
+ *   ENOMEM - Failed to allocate in-memory resources for the operation
  *
  ****************************************************************************/
 
 int gpio_pin_register(FAR struct gpio_dev_s *dev, int minor);
 
 /****************************************************************************
- * Name: gpio_pin_unregister
+ * Name: gpio_pin_register_byname
  *
  * Description:
- *   Unregister GPIO pin device driver.
+ *   Register GPIO pin device driver with it's pin name.
  *
- *   - Input pin types will be registered at /dev/gpinN
- *   - Output pin types will be registered at /dev/gpoutN
- *   - Interrupt pin types will be registered at /dev/gpintN
+ * Input Parameters:
+ *   dev      - A pointer to a gpio_dev_s
+ *   pinname  - A pointer to the name to be concatenated with '/dev/'
+ *              to form the device name.
  *
- *   Where N is the provided minor number in the range of 0-99.
+ * Returned Value:
+ *   Zero on success; A negated errno value is returned on a failure
+ *   all error values returned by inode_reserve:
  *
+ *   EINVAL - 'path' is invalid for this operation
+ *   EEXIST - An inode already exists at 'path'
+ *   ENOMEM - Failed to allocate in-memory resources for the operation
  *
  ****************************************************************************/
 
-void gpio_pin_unregister(FAR struct gpio_dev_s *dev, int minor);
+int gpio_pin_register_byname(FAR struct gpio_dev_s *dev,
+                             FAR const char *pinname);
+
+/****************************************************************************
+ * Name: gpio_pin_unregister
+ *
+ * Description:
+ *   Unregister GPIO pin device driver at /dev/gpioN, where N is the provided
+ *   minor number.
+ *
+ * Input Parameters:
+ *   dev    - A pointer to a gpio_dev_s
+ *   minor  - An integer value to be concatenated with '/dev/gpio'
+ *            to form the device name.
+ *
+ * Returned Value:
+ *   Zero on success; A negated value is returned on a failure
+ *   (all error values returned by inode_remove):
+ *
+ *   ENOENT - path does not exist.
+ *   EBUSY  - Ref count is not 0;
+ *
+ ****************************************************************************/
+
+int gpio_pin_unregister(FAR struct gpio_dev_s *dev, int minor);
+
+/****************************************************************************
+ * Name: gpio_pin_unregister_byname
+ *
+ * Description:
+ *   Unregister GPIO pin device driver at /dev/pinname.
+ *
+ * Input Parameters:
+ *   dev      - A pointer to a gpio_dev_s
+ *   pinname  - A pointer to the name to be concatenated with '/dev/'
+ *              to form the device name.
+ *
+ *
+ * Returned Value:
+ *   Zero on success; A negated value is returned on a failure
+ *   (all error values returned by inode_remove):
+ *
+ *   ENOENT - path does not exist.
+ *   EBUSY  - Ref count is not 0;
+ ****************************************************************************/
+
+int gpio_pin_unregister_byname(FAR struct gpio_dev_s *dev,
+                               FAR const char *pinname);
+
+/****************************************************************************
+ * Name: gpio_lower_half_byname
+ *
+ * Description:
+ *   Create a GPIO pin device driver instance for an I/O expander pin.
+ *   The I/O expander pin must have already been configured by the caller
+ *   for the particular pintype.
+ *
+ * Input Parameters:
+ *   ioe     - An instance of the I/O expander interface
+ *   pin     - The I/O expander pin number for the driver
+ *   pintype - See enum gpio_pintype_e
+ *   name    - gpio device name
+ *
+ * Returned Value:
+ *   Zero (OK) on success; a negated errno value on failure.
+ *
+ ****************************************************************************/
+
+#ifdef CONFIG_GPIO_LOWER_HALF
+struct ioexpander_dev_s;
+int gpio_lower_half_byname(FAR struct ioexpander_dev_s *ioe,
+                           unsigned int pin, enum gpio_pintype_e pintype,
+                           FAR char *name);
+#endif
 
 /****************************************************************************
  * Name: gpio_lower_half

@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/efm32/efm32_spi.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -18,8 +20,8 @@
  *
  ****************************************************************************/
 
-#ifndef __ARCH_ARM_EFM32_EFM32_SPI_H
-#define __ARCH_ARM_EFM32_EFM32_SPI_H
+#ifndef __ARCH_ARM_SRC_EFM32_EFM32_SPI_H
+#define __ARCH_ARM_SRC_EFM32_EFM32_SPI_H
 
 /****************************************************************************
  * Included Files
@@ -108,4 +110,4 @@ int efm32_spi2_cmddata(struct spi_dev_s *dev, uint32_t devid,
                        bool cmd);
 #endif
 
-#endif /* __ARCH_ARM_EFM32_EFM32_SPI_H */
+#endif /* __ARCH_ARM_SRC_EFM32_EFM32_SPI_H */

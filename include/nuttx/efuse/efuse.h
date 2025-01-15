@@ -1,6 +1,8 @@
 /****************************************************************************
  * include/nuttx/efuse/efuse.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -57,6 +59,15 @@
 
 #define EFUSEIOC_WRITE_FIELD     _EFUSEIOC(0x0002)
 
+/* Command:     EFUSEIOC_MASK
+ * Description: Masks fuse registers to prevent them from being read.
+ *              Used by ATSAMA5D2 and ATSAMA5D4.
+ * Arguments:   None
+ * Return:      Zero (OK) for success.
+ */
+
+#define EFUSEIOC_MASK            _EFUSEIOC(0x0003)
+
 /****************************************************************************
  * Public Types
  ****************************************************************************/
@@ -95,10 +106,10 @@ typedef struct efuse_desc_s efuse_desc_t;
  *              on.
  */
 
-struct efuse_param
+struct efuse_param_s
 {
   FAR const efuse_desc_t **field;
-  size_t  size;
+  size_t size;
   FAR uint8_t *data;
 };
 

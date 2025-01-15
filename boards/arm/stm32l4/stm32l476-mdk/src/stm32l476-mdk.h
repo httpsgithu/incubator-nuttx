@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/stm32l4/stm32l476-mdk/src/stm32l476-mdk.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -18,8 +20,8 @@
  *
  ****************************************************************************/
 
-#ifndef __BOARDS_ARM_STM32L476_MDK_SRC_STM32L476_MDK_H
-#define __BOARDS_ARM_STM32L476_MDK_SRC_STM32L476_MDK_H
+#ifndef __BOARDS_ARM_STM32L4_STM32L476_MDK_SRC_STM32L476_MDK_H
+#define __BOARDS_ARM_STM32L4_STM32L476_MDK_SRC_STM32L476_MDK_H
 
 /****************************************************************************
  * Included Files
@@ -155,4 +157,4 @@ int stm32_bringup(void);
 
 void stm32_spiinitialize(void);
 
-#endif /* __BOARDS_ARM_STM32L476_MDK_SRC_STM32L476_MDK_H */
+#endif /* __BOARDS_ARM_STM32L4_STM32L476_MDK_SRC_STM32L476_MDK_H */

@@ -1,6 +1,8 @@
 /****************************************************************************
  * libs/libc/pthread/pthread_attr_getschedpolicy.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -54,7 +56,7 @@ int pthread_attr_getschedpolicy(FAR const pthread_attr_t *attr,
 {
   int ret;
 
-  linfo("attr=0x%p policy=0x%p\n", attr, policy);
+  linfo("attr=%p policy=%p\n", attr, policy);
 
   if (!attr || !policy)
     {

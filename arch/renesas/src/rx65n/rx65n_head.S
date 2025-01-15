@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/renesas/src/rx65n/rx65n_head.S
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -26,8 +28,7 @@
 #include <arch/board/board.h>          /* Board-specific settings */
 #include <arch/irq.h>                  /* IRQ definitions */
 #include "chip.h"                      /* Chip-specific settings */
-#include "up_internal.h"
-#include "up_arch.h"
+#include "renesas_internal.h"
 
 /*****************************************************************************
  * Pre-processor Definitions
@@ -41,13 +42,13 @@
 
   .globl  _up_lowsetup     /* Early initialization of UART */
 #ifdef USE_EARLYSERIALINIT
-    .globl  _up_earlyconsoleinit /* Early initialization of console driver */
+    .globl  _renesas_earlyconsoleinit /* Early initialization of console driver */
 #endif
 #ifdef CONFIG_ARCH_LEDS
     .globl  _board_autoled_initialize       /* Boot LED setup */
 #endif
 #ifdef CONFIG_DEBUG_FEATURES
-    .globl  _up_lowputc  /* Low-level debug output */
+    .globl  _renesas_lowputc  /* Low-level debug output */
 #endif
     .globl  _nx_start   /* NuttX entry point */
 
@@ -80,7 +81,7 @@
 
     .macro  showprogress, code
 #ifdef CONFIG_DEBUG_FEATURES
-    mov.l   #_up_lowputc, r13    /* Address of up_earlyconsoleinit */
+    mov.l   #_renesas_lowputc, r13    /* Address of renesas_earlyconsoleinit */
     mov             #\code, r1
     jsr             r13          /* Call it */
 #endif
@@ -139,8 +140,8 @@ __start:
   jsr   r15                 /* Call up_lowsetup */
   nop
 #ifdef USE_EARLYSERIALINIT
-  mov.l  #_up_earlyconsoleinit, r14
-  jsr    r14              /* Call up_earlyconsoleinit */
+  mov.l  #_renesas_earlyconsoleinit, r14
+  jsr    r14              /* Call renesas_earlyconsoleinit */
   nop
 #endif
   bsr.a  _nx_start

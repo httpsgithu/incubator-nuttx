@@ -1,6 +1,8 @@
 /****************************************************************************
  * include/nuttx/sensors/mb7040.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -18,8 +20,8 @@
  *
  ****************************************************************************/
 
-#ifndef __INCLUDE_NUTTX_SENSORS_MB7040
-#define __INCLUDE_NUTTX_SENSORS_MB7040
+#ifndef __INCLUDE_NUTTX_SENSORS_MB7040_H
+#define __INCLUDE_NUTTX_SENSORS_MB7040_H
 
 /****************************************************************************
  * Included Files
@@ -98,4 +100,4 @@ int mb7040_register(FAR const char *devpath, FAR struct i2c_master_s *i2c,
 #endif
 
 #endif /* CONFIG_I2C && CONFIG_SENSORS_MB7040 */
-#endif /* __INCLUDE_NUTTX_SENSORS_MB7040 */
+#endif /* __INCLUDE_NUTTX_SENSORS_MB7040_H */

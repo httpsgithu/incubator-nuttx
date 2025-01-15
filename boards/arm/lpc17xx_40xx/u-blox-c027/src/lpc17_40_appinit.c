@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/lpc17xx_40xx/u-blox-c027/src/lpc17_40_appinit.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -150,7 +152,7 @@ int board_app_initialize(uintptr_t arg)
 #endif
 
 #ifdef NSH_HAVEMMCSD
-  FAR struct spi_dev_s *ssp;
+  struct spi_dev_s *ssp;
 
   /* Get the SSP port */
 

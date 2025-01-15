@@ -1,6 +1,8 @@
 ############################################################################
 # boards/xtensa/esp32/esp32-devkitc/src/Make.defs
 #
+# SPDX-License-Identifier: Apache-2.0
+#
 # Licensed to the Apache Software Foundation (ASF) under one or more
 # contributor license agreements.  See the NOTICE file distributed with
 # this work for additional information regarding copyright ownership.  The
@@ -17,10 +19,6 @@
 # under the License.
 #
 ############################################################################
-
-include $(TOPDIR)/Make.defs
-
-CONFIGFILE = $(TOPDIR)$(DELIM)include$(DELIM)nuttx$(DELIM)config.h
 
 CSRCS = esp32_boot.c esp32_bringup.c
 
@@ -39,27 +37,31 @@ ifeq ($(CONFIG_DEV_GPIO),y)
 CSRCS += esp32_gpio.c
 endif
 
+ifeq ($(CONFIG_PWM),y)
+CSRCS += esp32_ledc.c
+endif
+
 ifeq ($(CONFIG_USERLED),y)
 CSRCS += esp32_userleds.c
+endif
+
+ifeq ($(CONFIG_WS2812),y)
+CSRCS += esp32_ws2812.c
 endif
 
 ifeq ($(CONFIG_ARCH_BUTTONS),y)
 CSRCS += esp32_buttons.c
 endif
 
-SCRIPTOUT = $(BOARD_DIR)$(DELIM)scripts$(DELIM)esp32_out.ld
+ifeq ($(CONFIG_ESP32_TWAI),y)
+CSRCS += esp32_twai.c
+endif
 
-.PHONY = context distclean
-
-$(SCRIPTOUT): $(LDSCRIPT_TEMPLATE) $(CONFIGFILE)
-	$(Q) $(CC) -isystem $(TOPDIR)/include -I $(BOARD_COMMON_DIR)$(DELIM)scripts -C -P -x c -E $(LDSCRIPT_TEMPLATE) -o $@
-
-context:: $(SCRIPTOUT)
-
-distclean::
-	$(call DELFILE, $(SCRIPTOUT))
+ifeq ($(CONFIG_NET_W5500),y)
+CSRCS += esp32_w5500.c
+endif
 
 DEPPATH += --dep-path board
 VPATH += :board
-CFLAGS += $(shell $(INCDIR) "$(CC)" $(TOPDIR)$(DELIM)arch$(DELIM)$(CONFIG_ARCH)$(DELIM)src$(DELIM)board$(DELIM)board)
+CFLAGS += ${INCDIR_PREFIX}$(TOPDIR)$(DELIM)arch$(DELIM)$(CONFIG_ARCH)$(DELIM)src$(DELIM)board$(DELIM)board
 

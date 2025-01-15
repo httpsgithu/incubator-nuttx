@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/renesas/m16c/skp16c26/src/skp16c26.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -18,8 +20,8 @@
  *
  ****************************************************************************/
 
-#ifndef __BOARDS_RENESAS_M32262F8_SKP16C26_SRC_SKP16C26_H
-#define __BOARDS_RENESAS_M32262F8_SKP16C26_SRC_SKP16C26_H
+#ifndef __BOARDS_RENESAS_MC16_SKP16C26_SRC_SKP16C26_H
+#define __BOARDS_RENESAS_MC16_SKP16C26_SRC_SKP16C26_H
 
 /****************************************************************************
  * Included Files
@@ -45,4 +47,4 @@
 
 #endif
 
-#endif /* __BOARDS_RENESAS_M32262F8_SKP16C26_SRC_SKP16C26_H */
+#endif /* __BOARDS_RENESAS_MC16_SKP16C26_SRC_SKP16C26_H */

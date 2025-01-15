@@ -1,6 +1,8 @@
 /****************************************************************************
  * graphics/nxbe/nxbe_filltrapezoid.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -26,22 +28,11 @@
 
 #include <assert.h>
 #include <fixedmath.h>
+#include <sys/param.h>
 
 #include <nuttx/nx/nxglib.h>
 
 #include "nxbe.h"
-
-/****************************************************************************
- * Pre-processor Definitions
- ****************************************************************************/
-
-#ifndef MIN
-#  define MIN(a,b) (((a) < (b)) ? (a) : (b))
-#endif
-
-#ifndef MAX
-#  define MAX(a,b) (((a) > (b)) ? (a) : (b))
-#endif
 
 /****************************************************************************
  * Private Types

@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/x86/src/qemu/qemu_head.S
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -235,13 +237,13 @@ irq_common:
 	/* A context switch will be performed. EAX holds the address of the new
 	 * register save structure.
 	 *
-	 * Jump to up_fullcontextrestore().  We perform a call here, but that function
+	 * Jump to x86_fullcontextrestore().  We perform a call here, but that function
 	 * never returns.  The address of the new register save block is the argument
-	 * to the up_fullcontextrestore().
+	 * to the x86_fullcontextrestore().
 	 */
 
 	push	%eax
-	call	up_fullcontextrestore
+	call	x86_fullcontextrestore
 
 .Lnoswitch:
 	pop		%ebx				/* Reload the original data segment descriptor */

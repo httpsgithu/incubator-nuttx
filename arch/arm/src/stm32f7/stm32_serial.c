@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/stm32f7/stm32_serial.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -37,15 +39,14 @@
 #include <nuttx/arch.h>
 #include <nuttx/fs/ioctl.h>
 #include <nuttx/serial/serial.h>
+#include <nuttx/spinlock.h>
 #include <nuttx/power/pm.h>
 
 #ifdef CONFIG_SERIAL_TERMIOS
 #  include <termios.h>
 #endif
 
-#include "arm_arch.h"
 #include "arm_internal.h"
-
 #include "chip.h"
 #include "stm32_gpio.h"
 #include "hardware/stm32_pinmap.h"
@@ -333,9 +334,6 @@
 #if defined(CONFIG_PM) && !defined(CONFIG_STM32F7_PM_SERIAL_ACTIVITY)
 #  define CONFIG_STM32F7_PM_SERIAL_ACTIVITY 10
 #endif
-#if defined(CONFIG_PM)
-#  define PM_IDLE_DOMAIN             0 /* Revisit */
-#endif
 
 /* Since RX DMA or TX DMA or both may be enabled for a given U[S]ART.
  * We need runtime detection in up_dma_setup and up_dma_shutdown
@@ -386,7 +384,7 @@
  * blocked.
  */
 
-# if defined(CONFIG_USART1_RXDMA) && defined(CONFIG_USART1_IFLOWCONTROL)
+#  if defined(CONFIG_USART1_RXDMA) && defined(CONFIG_USART1_IFLOWCONTROL)
 #    warning "RXDMA and IFLOWCONTROL both enabled for USART1. \
               This combination can lead to data loss."
 #  endif
@@ -509,6 +507,7 @@ struct up_dev_s
   const bool        rs485_dir_polarity; /* U[S]ART RS-485 DIR pin state for
                                          * TX enabled */
 #endif
+  spinlock_t        lock;
 };
 
 #ifdef CONFIG_PM
@@ -530,7 +529,7 @@ static int  up_setup(struct uart_dev_s *dev);
 static void up_shutdown(struct uart_dev_s *dev);
 static int  up_attach(struct uart_dev_s *dev);
 static void up_detach(struct uart_dev_s *dev);
-static int  up_interrupt(int irq, void *context, FAR void *arg);
+static int  up_interrupt(int irq, void *context, void *arg);
 static int  up_ioctl(struct file *filep, int cmd, unsigned long arg);
 #if !defined(SERIAL_HAVE_ONLY_DMA)
 static int  up_receive(struct uart_dev_s *dev, unsigned int *status);
@@ -834,6 +833,7 @@ static struct up_dev_s g_usart1priv =
   .rs485_dir_polarity = true,
 #  endif
 #endif
+  .lock               = SP_UNLOCKED,
 };
 #endif
 
@@ -902,6 +902,7 @@ static struct up_dev_s g_usart2priv =
   .rs485_dir_polarity = true,
 #  endif
 #endif
+  .lock               = SP_UNLOCKED,
 };
 #endif
 
@@ -970,6 +971,7 @@ static struct up_dev_s g_usart3priv =
   .rs485_dir_polarity = true,
 #  endif
 #endif
+  .lock               = SP_UNLOCKED,
 };
 #endif
 
@@ -1038,6 +1040,7 @@ static struct up_dev_s g_uart4priv =
   .rs485_dir_polarity = true,
 #  endif
 #endif
+  .lock               = SP_UNLOCKED,
 };
 #endif
 
@@ -1106,6 +1109,7 @@ static struct up_dev_s g_uart5priv =
   .rs485_dir_polarity = true,
 #  endif
 #endif
+  .lock               = SP_UNLOCKED,
 };
 #endif
 
@@ -1174,6 +1178,7 @@ static struct up_dev_s g_usart6priv =
   .rs485_dir_polarity = true,
 #  endif
 #endif
+  .lock               = SP_UNLOCKED,
 };
 #endif
 
@@ -1242,6 +1247,7 @@ static struct up_dev_s g_uart7priv =
   .rs485_dir_polarity = true,
 #  endif
 #endif
+  .lock               = SP_UNLOCKED,
 };
 #endif
 
@@ -1310,6 +1316,7 @@ static struct up_dev_s g_uart8priv =
   .rs485_dir_polarity = true,
 #  endif
 #endif
+  .lock               = SP_UNLOCKED,
 };
 #endif
 
@@ -1410,11 +1417,11 @@ static void up_restoreusartint(struct up_dev_s *priv, uint16_t ie)
 {
   irqstate_t flags;
 
-  flags = enter_critical_section();
+  flags = spin_lock_irqsave(&priv->lock);
 
   up_setusartint(priv, ie);
 
-  leave_critical_section(flags);
+  spin_unlock_irqrestore(&priv->lock, flags);
 }
 
 /****************************************************************************
@@ -1425,7 +1432,7 @@ static void up_disableusartint(struct up_dev_s *priv, uint16_t *ie)
 {
   irqstate_t flags;
 
-  flags = enter_critical_section();
+  flags = spin_lock_irqsave(&priv->lock);
 
   if (ie)
     {
@@ -1469,7 +1476,7 @@ static void up_disableusartint(struct up_dev_s *priv, uint16_t *ie)
 
   up_setusartint(priv, 0);
 
-  leave_critical_section(flags);
+  spin_unlock_irqrestore(&priv->lock, flags);
 }
 
 /****************************************************************************
@@ -1702,7 +1709,7 @@ static void up_setsuspend(struct uart_dev_s *dev, bool suspend)
         }
 
 #ifdef SERIAL_HAVE_RXDMA
-      if (priv->dev.ops == &g_uart_dma_ops && !priv->rxdmasusp)
+      if (priv->dev.ops == &g_uart_rxdma_ops && !priv->rxdmasusp)
         {
           /* Suspend Rx DMA. */
 
@@ -1714,7 +1721,7 @@ static void up_setsuspend(struct uart_dev_s *dev, bool suspend)
   else
     {
 #ifdef SERIAL_HAVE_RXDMA
-      if (priv->dev.ops == &g_uart_dma_ops && priv->rxdmasusp)
+      if (priv->dev.ops == &g_uart_rxdma_ops && priv->rxdmasusp)
         {
           /* Re-enable DMA. */
 
@@ -2253,14 +2260,14 @@ static void up_detach(struct uart_dev_s *dev)
  *
  * Description:
  *   This is the USART interrupt handler.  It will be invoked when an
- *   interrupt received on the 'irq'  It should call uart_transmitchars or
- *   uart_receivechar to perform the appropriate data transfers.  The
- *   interrupt handling logic must be able to map the 'irq' number into the
+ *   interrupt is received on the 'irq'.  It should call uart_xmitchars or
+ *   uart_recvchars to perform the appropriate data transfers.  The
+ *   interrupt handling logic must be able to map the 'arg' to the
  *   appropriate uart_dev_s structure in order to call these functions.
  *
  ****************************************************************************/
 
-static int up_interrupt(int irq, void *context, FAR void *arg)
+static int up_interrupt(int irq, void *context, void *arg)
 {
   struct up_dev_s *priv = (struct up_dev_s *)arg;
   int  passes;
@@ -2391,7 +2398,7 @@ static int up_ioctl(struct file *filep, int cmd, unsigned long arg)
 #if defined(CONFIG_SERIAL_TERMIOS) || defined(CONFIG_STM32F7_SERIALBRK_BSDCOMPAT)
   struct up_dev_s   *priv  = (struct up_dev_s *)dev->priv;
 #endif
-  int                ret    = OK;
+  int                ret   = OK;
 
   switch (cmd)
     {
@@ -2591,7 +2598,7 @@ static int up_ioctl(struct file *filep, int cmd, unsigned long arg)
 
         cfsetispeed(termiosp, priv->baud);
 
-        /* TODO: CCTS_IFLOW, CCTS_OFLOW */
+        /* TODO: CRTS_IFLOW, CCTS_OFLOW */
       }
       break;
 
@@ -3330,6 +3337,7 @@ static void up_txint(struct uart_dev_s *dev, bool enable)
 #  ifdef CONFIG_STM32_SERIALBRK_BSDCOMPAT
       if (priv->ie & USART_CR1_IE_BREAK_INPROGRESS)
         {
+          leave_critical_section(flags);
           return;
         }
 #  endif
@@ -3643,10 +3651,10 @@ void arm_serialinit(void)
 
 #if !defined(SERIAL_HAVE_ONLY_DMA)
 #  if defined(SERIAL_HAVE_RXDMA)
-  UNUSED(&g_uart_rxdma_ops);
+  UNUSED(g_uart_rxdma_ops);
 #  endif
 #  if defined(SERIAL_HAVE_TXDMA)
-  UNUSED(&g_uart_txdma_ops);
+  UNUSED(g_uart_txdma_ops);
 #  endif
 #endif
 
@@ -3681,7 +3689,7 @@ void arm_serialinit(void)
 
   /* Register all remaining USARTs */
 
-  strcpy(devname, "/dev/ttySx");
+  strlcpy(devname, "/dev/ttySx", sizeof(devname));
 
   for (i = 0; i < STM32_NSERIAL; i++)
     {
@@ -3795,27 +3803,16 @@ void stm32_serial_dma_poll(void)
  *
  ****************************************************************************/
 
-int up_putc(int ch)
+void up_putc(int ch)
 {
 #if CONSOLE_UART > 0
   struct up_dev_s *priv = g_uart_devs[CONSOLE_UART - 1];
   uint16_t ie;
 
   up_disableusartint(priv, &ie);
-
-  /* Check for LF */
-
-  if (ch == '\n')
-    {
-      /* Add CR */
-
-      arm_lowputc('\r');
-    }
-
   arm_lowputc(ch);
   up_restoreusartint(priv, ie);
 #endif
-  return ch;
 }
 
 #else /* USE_SERIALDRIVER */
@@ -3828,21 +3825,11 @@ int up_putc(int ch)
  *
  ****************************************************************************/
 
-int up_putc(int ch)
+void up_putc(int ch)
 {
 #if CONSOLE_UART > 0
-  /* Check for LF */
-
-  if (ch == '\n')
-    {
-      /* Add CR */
-
-      arm_lowputc('\r');
-    }
-
   arm_lowputc(ch);
 #endif
-  return ch;
 }
 
 #endif /* USE_SERIALDRIVER */

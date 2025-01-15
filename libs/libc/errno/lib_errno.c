@@ -1,6 +1,8 @@
 /****************************************************************************
  * libs/libc/errno/lib_errno.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -24,10 +26,7 @@
 
 #include <nuttx/config.h>
 
-#include <sched.h>
-#include <errno.h>
-
-#include <arch/tls.h>
+#include <nuttx/tls.h>
 
 /****************************************************************************
  * Private Data
@@ -59,9 +58,9 @@ FAR int *__errno(void)
 {
   /* Get the TLS tls_info_s structure instance for this thread */
 
-  FAR struct tls_info_s *tlsinfo = up_tls_info();
+  FAR struct tls_info_s *tlsinfo = tls_get_info();
 
-  /* And return the return refernce to the error number */
+  /* And return the return reference to the error number */
 
   return tlsinfo ? &tlsinfo->tl_errno : &g_errno;
 }

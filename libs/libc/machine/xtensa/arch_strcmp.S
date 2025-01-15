@@ -1,6 +1,8 @@
 /****************************************************************************
  * libs/libc/machine/xtensa/arch_strcmp.S
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -27,6 +29,10 @@
 #include <arch/chip/core-isa.h>
 #include <arch/xtensa/xtensa_abi.h>
 
+#include "libc.h"
+
+#ifdef LIBC_BUILD_STRCMP
+
 /****************************************************************************
  * Pre-processor Macros
  ****************************************************************************/
@@ -42,15 +48,14 @@
   .align  4
   .literal_position
 
-  .global strcmp
-  .type strcmp,@function
+  .global ARCH_LIBCFUN(strcmp)
+  .type ARCH_LIBCFUN(strcmp),@function
   .align  4
 
-strcmp:
+ARCH_LIBCFUN(strcmp):
 
 #if XCHAL_HAVE_LOOPS && XCHAL_HAVE_DENSITY && !XCHAL_HAVE_BE && XCHAL_HAVE_FLIX3
 /*  Fast version for FLIX3 Little Endian */
-
 
   ENTRY(16)
   /* a2 = s1, a3 = s2 */
@@ -170,7 +175,6 @@ strcmp:
   sub a2, a8, a9
   RET(16)
 
-
 .Lprobeq2:
   /* Adjust pointers to account for the loop unrolling.  */
         mov a8, a11
@@ -259,7 +263,6 @@ strcmp:
 #else
 #if XCHAL_HAVE_LOOPS && XCHAL_HAVE_DENSITY && !XCHAL_HAVE_BE && XCHAL_HAVE_PDX4
 /*  Fast version for FLIX3 Little Endian */
-
 
   ENTRY(16)
   /* a2 = s1, a3 = s2 */
@@ -383,7 +386,6 @@ strcmp:
   sub a2, a8, a9
   RET(16)
 
-
 .Lprobeq2:
   /* Adjust pointers to account for the loop unrolling.  */
         mov a8, a11
@@ -468,7 +470,6 @@ strcmp:
   extui a11, a9, 16, 8
   sub a2, a10, a11
   RET(16)
-
 
 #else /* Not FLIX3 */
   ENTRY(16)
@@ -763,5 +764,6 @@ strcmp:
 #endif /* FLIX3 */
 
   .end  schedule
-  .size strcmp, . - strcmp
+  .size ARCH_LIBCFUN(strcmp), . - ARCH_LIBCFUN(strcmp)
 
+#endif

@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/lpc17xx_40xx/lpc178x_40xx_gpio.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -18,8 +20,8 @@
  *
  ****************************************************************************/
 
-#ifndef __ARCH_ARM_SRC_LPC17XX_40XX_LPC178X_GPIO_H
-#define __ARCH_ARM_SRC_LPC17XX_40XX_LPC178X_GPIO_H
+#ifndef __ARCH_ARM_SRC_LPC17XX_40XX_LPC178X_40XX_GPIO_H
+#define __ARCH_ARM_SRC_LPC17XX_40XX_LPC178X_40XX_GPIO_H
 
 /****************************************************************************
  * Included Files
@@ -208,4 +210,4 @@ extern "C"
 #endif
 #endif /* __ASSEMBLY__ */
 
-#endif /* __ARCH_ARM_SRC_LPC17XX_40XX_LPC178X_GPIO_H */
+#endif /* __ARCH_ARM_SRC_LPC17XX_40XX_LPC178X_40XX_GPIO_H */

@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/stm32l4/stm32l4_usbdev.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -24,6 +26,7 @@
 
 #include <nuttx/config.h>
 
+#include <sys/param.h>
 #include <sys/types.h>
 #include <stdint.h>
 #include <stdbool.h>
@@ -41,7 +44,7 @@
 
 #include <nuttx/irq.h>
 
-#include "arm_arch.h"
+#include "arm_internal.h"
 #include "stm32l4.h"
 #include "stm32l4_gpio.h"
 #include "stm32l4_usbdev.h"
@@ -217,16 +220,6 @@
 #define STM32L4_TRACEINTID_EP0SETUPOUT        0x001f
 #define STM32L4_TRACEINTID_EP0SETUPOUTDATA    0x0020
 
-/* Ever-present MIN and MAX macros */
-
-#ifndef MIN
-#  define MIN(a,b) (a < b ? a : b)
-#endif
-
-#ifndef MAX
-#  define MAX(a,b) (a > b ? a : b)
-#endif
-
 /* Byte ordering in host-based values */
 
 #ifdef CONFIG_ENDIAN_BIG
@@ -364,10 +357,10 @@ static void stm32l4_putreg(uint16_t val, uint32_t addr);
 static void stm32l4_checksetup(void);
 static void stm32l4_dumpep(int epno);
 #else
-# define stm32l4_getreg(addr)      getreg16(addr)
-# define stm32l4_putreg(val,addr)  putreg16(val,addr)
-# define stm32l4_checksetup()
-# define stm32l4_dumpep(epno)
+#  define stm32l4_getreg(addr)     getreg16(addr)
+#  define stm32l4_putreg(val,addr) putreg16(val,addr)
+#  define stm32l4_checksetup()
+#  define stm32l4_dumpep(epno)
 #endif
 
 /* Low-Level Helpers ********************************************************/
@@ -460,7 +453,7 @@ static void   stm32l4_ep0in(struct stm32l4_usbdev_s *priv);
 static inline void
               stm32l4_ep0done(struct stm32l4_usbdev_s *priv, uint16_t istr);
 static void   stm32l4_lptransfer(struct stm32l4_usbdev_s *priv);
-static int    stm32l4_usbinterrupt(int irq, void *context, FAR void *arg);
+static int    stm32l4_usbinterrupt(int irq, void *context, void *arg);
 
 /* Endpoint helpers *********************************************************/
 
@@ -1344,7 +1337,7 @@ static int stm32l4_wrrequest(struct stm32l4_usbdev_s *priv,
     }
 
   epno = USB_EPNO(privep->ep.eplog);
-  uinfo("epno=%d req=%p: len=%d xfrd=%d nullpkt=%d\n",
+  uinfo("epno=%d req=%p: len=%zu xfrd=%zu nullpkt=%d\n",
         epno, privreq, privreq->req.len, privreq->req.xfrd,
         privep->txnullpkt);
   UNUSED(epno);
@@ -1492,7 +1485,8 @@ static int stm32l4_rdrequest(struct stm32l4_usbdev_s *priv,
       return -ENOENT;
     }
 
-  uinfo("EP%d: len=%d xfrd=%d\n", epno, privreq->req.len, privreq->req.xfrd);
+  uinfo("EP%d: len=%zu xfrd=%zu\n",
+        epno, privreq->req.len, privreq->req.xfrd);
 
   /* Ignore any attempt to receive a zero length packet */
 
@@ -2427,7 +2421,7 @@ static void stm32l4_lptransfer(struct stm32l4_usbdev_s *priv)
  * Name: stm32l4_usbinterrupt
  ****************************************************************************/
 
-static int stm32l4_usbinterrupt(int irq, void *context, FAR void *arg)
+static int stm32l4_usbinterrupt(int irq, void *context, void *arg)
 {
   /* For now there is only one USB controller, but we will always refer to
    * it using a pointer to make any future ports to multiple USB controllers
@@ -2827,7 +2821,7 @@ static int stm32l4_epconfigure(struct usbdev_ep_s *ep,
   if (!ep || !desc)
     {
       usbtrace(TRACE_DEVERROR(STM32L4_TRACEERR_INVALIDPARMS), 0);
-      uerr("ERROR: ep=%p desc=%p\n");
+      uerr("ERROR: ep=%p desc=%p\n", ep, desc);
       return -EINVAL;
     }
 #endif
@@ -2965,7 +2959,7 @@ static struct usbdev_req_s *stm32l4_epallocreq(struct usbdev_ep_s *ep)
 
   usbtrace(TRACE_EPALLOCREQ, USB_EPNO(ep->eplog));
 
-  privreq = (struct stm32l4_req_s *)kmm_malloc(sizeof(struct stm32l4_req_s));
+  privreq = kmm_malloc(sizeof(struct stm32l4_req_s));
   if (!privreq)
     {
       usbtrace(TRACE_DEVERROR(STM32L4_TRACEERR_ALLOCFAIL), 0);
@@ -3192,6 +3186,7 @@ static int stm32l4_epstall(struct usbdev_ep_s *ep, bool resume)
           priv->ep0state = EP0STATE_STALLED;
         }
 
+      leave_critical_section(flags);
       return -ENODEV;
     }
 

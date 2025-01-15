@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/mips/pic32mx/pic32mx7mmb/src/pic32_leds.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -149,7 +151,7 @@ static const uint16_t g_ledpincfg[PIC32MX_PIC32MX7MMB_NLEDS] =
  ****************************************************************************/
 
 #ifdef CONFIG_ARCH_LEDS
-static void pic32mx_setleds(FAR const struct led_setting_s *setting)
+static void pic32mx_setleds(const struct led_setting_s *setting)
 {
   /* LEDs are pulled up so writing a low value (false) illuminates them */
 

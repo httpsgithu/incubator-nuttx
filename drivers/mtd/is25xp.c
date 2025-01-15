@@ -1,6 +1,8 @@
 /****************************************************************************
  * drivers/mtd/is25xp.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -31,6 +33,7 @@
 #include <unistd.h>
 #include <errno.h>
 #include <debug.h>
+#include <inttypes.h>
 
 #include <nuttx/kmalloc.h>
 #include <nuttx/signal.h>
@@ -77,6 +80,7 @@
 #define IS25_IS25LP064_NSECTORS       2048
 #define IS25_IS25LP064_PAGE_SHIFT     8     /* Page size 1 << 8 = 256 */
 #define IS25_IS25LP064_NPAGES         32768
+#define IS25_IS25LP064_ADDRLEN        3
 
 /*  IS25LP128 capacity is 16,777,216 bytes:
  *  (4,096 sectors) * (4,096 bytes per sector)
@@ -88,30 +92,60 @@
 #define IS25_IS25LP128_NSECTORS       4096
 #define IS25_IS25LP128_PAGE_SHIFT     8     /* Page size 1 << 8 = 256 */
 #define IS25_IS25LP128_NPAGES         65536
+#define IS25_IS25LP128_ADDRLEN        3
+
+/*  IS25LP256 capacity is 33,554,432 bytes:
+ *  (8,192 sectors) * (4,096 bytes per sector)
+ *  (131,072 pages) * (256 bytes per page)
+ */
+
+#define IS25_IS25LP256_CAPACITY       0x19
+#define IS25_IS25LP256_SECTOR_SHIFT   12    /* Sector size 1 << 12 = 4,096 */
+#define IS25_IS25LP256_NSECTORS       8192
+#define IS25_IS25LP256_PAGE_SHIFT     8     /* Page size 1 << 8 = 256 */
+#define IS25_IS25LP256_NPAGES         131072
+#define IS25_IS25LP256_ADDRLEN        4 /* This chip requires long addresses */
+
+/*  IS25LP512 capacity is 67,108,864 bytes:
+ *  (16,364 sectors) * (4,096 bytes per sector)
+ *  (262,144 pages) * (256 bytes per page)
+ */
+
+#define IS25_IS25LP512_CAPACITY       0x1A
+#define IS25_IS25LP512_SECTOR_SHIFT   12    /* Sector size 1 << 12 = 4,096 */
+#define IS25_IS25LP512_NSECTORS       16384
+#define IS25_IS25LP512_PAGE_SHIFT     8     /* Page size 1 << 8 = 256 */
+#define IS25_IS25LP512_NPAGES         262144
+#define IS25_IS25LP512_ADDRLEN        4 /* This chip requires long addresses */
 
 /* Instructions */
 
 /*   Command          Value    N Description            Addr Dummy  Data */
 
-#define IS25_WREN      0x06  /* 1 Write Enable           0   0     0     */
-#define IS25_WRDI      0x04  /* 1 Write Disable          0   0     0     */
-#define IS25_RDID      0x9f  /* 1 Read Identification    0   0     1-3   */
-#define IS25_RDSR      0x05  /* 1 Read Status Register   0   0     >=1   */
+#define IS25_WREN      0x06  /* 1 Write Enable               0   0     0     */
+#define IS25_WRDI      0x04  /* 1 Write Disable              0   0     0     */
+#define IS25_RDID      0x9f  /* 1 Read Identification        0   0     1-3   */
+#define IS25_RDSR      0x05  /* 1 Read Status Register       0   0     >=1   */
 
-/* #define IS25_EWSR    0x50    1 Write enable status    0   0     0     */
-#define IS25_WRSR      0x01  /* 1 Write Status Register  0   0     1     */
-#define IS25_READ      0x03  /* 1 Read Data Bytes        3   0     >=1   */
-#define IS25_FAST_READ 0x0b  /* 1 Higher speed read      3   1     >=1   */
-#define IS25_PP        0x02  /* 1 Page Program           3   0     1-256 */
-#define IS25_SE        0x20  /* 1 Sector Erase           3   0     0     */
-#define IS25_BE32      0x52  /* 2 32K Block Erase        3   0     0     */
-#define IS25_BE64      0xD8  /* 2 64K Block Erase        3   0     0     */
-#define IS25_CER       0xC7  /* 1 Chip Erase             0   0     0     */
+#define IS25_EWSR      0x50  /* 1 Write enable status        0   0     0     */
+#define IS25_WRSR      0x01  /* 1 Write Status Register      0   0     1     */
+#define IS25_READ      0x03  /* 1 Read Data Bytes            3   0     >=1   */
+#define IS25_FAST_READ 0x0b  /* 1 Higher speed read          3   1     >=1   */
+#define IS25_PP        0x02  /* 1 Page Program               3   0     1-256 */
+#define IS25_SE        0x20  /* 1 Sector Erase               3   0     0     */
+#define IS25_BE32      0x52  /* 2 32K Block Erase            3   0     0     */
+#define IS25_BE64      0xD8  /* 2 64K Block Erase            3   0     0     */
+#define IS25_CER       0xC7  /* 1 Chip Erase                 0   0     0     */
+#define IS25_EN4B      0xB7  /* 1 Enter 4-byte Address Mode  0   0     0     */
 
 /* NOTE 1: All parts.
  * NOTE 2: In IS25XP terminology, 0x52 and 0xd8 are block erase and 0x20
  *         is a sector erase.  Block erase provides a faster way to erase
  *         multiple 4K sectors at once.
+ * NOTE 3: The larger chips (256/512Mbit) requires more than 24 address bits.
+ *         To enable this, the EN4B command changes the address length of all
+ *         commands that take a 3-byte address to 4 bytes. For information,
+ *         other commands with a fixed 4-byte address are available.
  */
 
 /* Status register bit definitions */
@@ -147,11 +181,13 @@ struct is25xp_dev_s
 {
   struct mtd_dev_s mtd;      /* MTD interface */
   FAR struct spi_dev_s *dev; /* Saved SPI interface instance */
+  uint16_t spi_devid;        /* SPIDEV_FLASH index */
   uint8_t  sectorshift;      /* 12 */
   uint8_t  pageshift;        /* 8 */
-  uint16_t nsectors;         /* 2,048 or 4,096 */
-  uint32_t npages;           /* 32,768 or 65,536 */
+  uint16_t nsectors;         /* 2,048 or 4,096 or 8,192 or 16,384 */
+  uint32_t npages;           /* 32,768 or 65,536 or 131,072 or 262,144 */
   uint8_t  lastwaswrite;     /* Indicates if last operation was write */
+  uint8_t  addrlen;          /* Address length, 3 or 4 bytes */
 };
 
 /****************************************************************************
@@ -163,6 +199,7 @@ struct is25xp_dev_s
 static void is25xp_lock(FAR struct spi_dev_s *dev);
 static inline void is25xp_unlock(FAR struct spi_dev_s *dev);
 static inline int is25xp_readid(struct is25xp_dev_s *priv);
+static void is25xp_enable4byteaddr(struct is25xp_dev_s *priv);
 static void is25xp_waitwritecomplete(struct is25xp_dev_s *priv);
 static void is25xp_writeenable(struct is25xp_dev_s *priv);
 static inline void is25xp_sectorerase(struct is25xp_dev_s *priv,
@@ -252,7 +289,7 @@ static inline int is25xp_readid(struct is25xp_dev_s *priv)
   /* Lock the SPI bus, configure the bus, and select this FLASH part. */
 
   is25xp_lock(priv->dev);
-  SPI_SELECT(priv->dev, SPIDEV_FLASH(0), true);
+  SPI_SELECT(priv->dev, SPIDEV_FLASH(priv->spi_devid), true);
 
   /* Send the "Read ID (RDID)" command and read the first three ID bytes */
 
@@ -263,7 +300,7 @@ static inline int is25xp_readid(struct is25xp_dev_s *priv)
 
   /* Deselect the FLASH and unlock the bus */
 
-  SPI_SELECT(priv->dev, SPIDEV_FLASH(0), false);
+  SPI_SELECT(priv->dev, SPIDEV_FLASH(priv->spi_devid), false);
   is25xp_unlock(priv->dev);
 
   finfo("manufacturer: %02x memory: %02x capacity: %02x\n",
@@ -283,6 +320,7 @@ static inline int is25xp_readid(struct is25xp_dev_s *priv)
            priv->nsectors    = IS25_IS25LP064_NSECTORS;
            priv->pageshift   = IS25_IS25LP064_PAGE_SHIFT;
            priv->npages      = IS25_IS25LP064_NPAGES;
+           priv->addrlen     = IS25_IS25LP064_ADDRLEN;
            return OK;
         }
       else if (capacity == IS25_IS25LP128_CAPACITY)
@@ -293,11 +331,55 @@ static inline int is25xp_readid(struct is25xp_dev_s *priv)
            priv->nsectors    = IS25_IS25LP128_NSECTORS;
            priv->pageshift   = IS25_IS25LP128_PAGE_SHIFT;
            priv->npages      = IS25_IS25LP128_NPAGES;
+           priv->addrlen     = IS25_IS25LP128_ADDRLEN;
+           return OK;
+        }
+      else if (capacity == IS25_IS25LP256_CAPACITY)
+        {
+           /* Save the FLASH geometry */
+
+           priv->sectorshift = IS25_IS25LP256_SECTOR_SHIFT;
+           priv->nsectors    = IS25_IS25LP256_NSECTORS;
+           priv->pageshift   = IS25_IS25LP256_PAGE_SHIFT;
+           priv->npages      = IS25_IS25LP256_NPAGES;
+           priv->addrlen     = IS25_IS25LP256_ADDRLEN;
+           return OK;
+        }
+      else if (capacity == IS25_IS25LP512_CAPACITY)
+        {
+           /* Save the FLASH geometry */
+
+           priv->sectorshift = IS25_IS25LP512_SECTOR_SHIFT;
+           priv->nsectors    = IS25_IS25LP512_NSECTORS;
+           priv->pageshift   = IS25_IS25LP512_PAGE_SHIFT;
+           priv->npages      = IS25_IS25LP512_NPAGES;
+           priv->addrlen     = IS25_IS25LP512_ADDRLEN;
            return OK;
         }
     }
 
   return -ENODEV;
+}
+
+/****************************************************************************
+ * Name: is25xp_enable4byteaddr
+ ****************************************************************************/
+
+static void is25xp_enable4byteaddr(struct is25xp_dev_s *priv)
+{
+  /* Lock the SPI bus, configure the bus, and select this FLASH part. */
+
+  is25xp_lock(priv->dev);
+  SPI_SELECT(priv->dev, SPIDEV_FLASH(priv->spi_devid), true);
+
+  /* Send the "Enter 4-byte Address Mode (EN4B)" command */
+
+  SPI_SEND(priv->dev, IS25_EN4B);
+
+  /* Deselect the FLASH and unlock the bus */
+
+  SPI_SELECT(priv->dev, SPIDEV_FLASH(priv->spi_devid), false);
+  is25xp_unlock(priv->dev);
 }
 
 /****************************************************************************
@@ -323,7 +405,7 @@ static void is25xp_waitwritecomplete(struct is25xp_dev_s *priv)
 
   /* Select this FLASH part */
 
-  SPI_SELECT(priv->dev, SPIDEV_FLASH(0), true);
+  SPI_SELECT(priv->dev, SPIDEV_FLASH(priv->spi_devid), true);
 
   /* Send "Read Status Register (RDSR)" command */
 
@@ -343,7 +425,7 @@ static void is25xp_waitwritecomplete(struct is25xp_dev_s *priv)
 
   /* Deselect the FLASH */
 
-  SPI_SELECT(priv->dev, SPIDEV_FLASH(0), false);
+  SPI_SELECT(priv->dev, SPIDEV_FLASH(priv->spi_devid), false);
 
 #else
 
@@ -353,7 +435,7 @@ static void is25xp_waitwritecomplete(struct is25xp_dev_s *priv)
     {
       /* Select this FLASH part */
 
-      SPI_SELECT(priv->dev, SPIDEV_FLASH(0), true);
+      SPI_SELECT(priv->dev, SPIDEV_FLASH(priv->spi_devid), true);
 
       /* Send "Read Status Register (RDSR)" command */
 
@@ -367,7 +449,7 @@ static void is25xp_waitwritecomplete(struct is25xp_dev_s *priv)
 
       /* Deselect the FLASH */
 
-      SPI_SELECT(priv->dev, SPIDEV_FLASH(0), false);
+      SPI_SELECT(priv->dev, SPIDEV_FLASH(priv->spi_devid), false);
 
       /* Given that writing could take up to few tens of milliseconds,
        * and erasing could take more.  The following short delay in the
@@ -397,7 +479,7 @@ static void is25xp_writeenable(struct is25xp_dev_s *priv)
 {
   /* Select this FLASH part */
 
-  SPI_SELECT(priv->dev, SPIDEV_FLASH(0), true);
+  SPI_SELECT(priv->dev, SPIDEV_FLASH(priv->spi_devid), true);
 
   /* Send "Write Enable (WREN)" command */
 
@@ -405,7 +487,7 @@ static void is25xp_writeenable(struct is25xp_dev_s *priv)
 
   /* Deselect the FLASH */
 
-  SPI_SELECT(priv->dev, SPIDEV_FLASH(0), false);
+  SPI_SELECT(priv->dev, SPIDEV_FLASH(priv->spi_devid), false);
   finfo("Enabled\n");
 }
 
@@ -421,14 +503,14 @@ static void is25xp_unprotect(struct is25xp_dev_s *priv)
 
   /* Send "Write status (WRSR)" */
 
-  SPI_SELECT(priv->dev, SPIDEV_FLASH(0), true);
+  SPI_SELECT(priv->dev, SPIDEV_FLASH(priv->spi_devid), true);
   SPI_SEND(priv->dev, IS25_WRSR);
 
   /* Followed by the new status value */
 
   SPI_SEND(priv->dev, 0);
 
-  SPI_SELECT(priv->dev, SPIDEV_FLASH(0), false);
+  SPI_SELECT(priv->dev, SPIDEV_FLASH(priv->spi_devid), false);
 }
 
 /****************************************************************************
@@ -459,7 +541,7 @@ static void is25xp_sectorerase(struct is25xp_dev_s *priv,
 
   /* Select this FLASH part */
 
-  SPI_SELECT(priv->dev, SPIDEV_FLASH(0), true);
+  SPI_SELECT(priv->dev, SPIDEV_FLASH(priv->spi_devid), true);
 
   /* Send the "Sector Erase (SE)" or Sub-Sector Erase (SSE) instruction
    * that was passed in as the erase type.
@@ -472,6 +554,11 @@ static void is25xp_sectorerase(struct is25xp_dev_s *priv,
    * and the values used in the following two bytes don't really matter.
    */
 
+  if (priv->addrlen == 4)
+    {
+      SPI_SEND(priv->dev, (offset >> 24) & 0xff);
+    }
+
   SPI_SEND(priv->dev, (offset >> 16) & 0xff);
   SPI_SEND(priv->dev, (offset >> 8) & 0xff);
   SPI_SEND(priv->dev, offset & 0xff);
@@ -479,7 +566,7 @@ static void is25xp_sectorerase(struct is25xp_dev_s *priv,
 
   /* Deselect the FLASH */
 
-  SPI_SELECT(priv->dev, SPIDEV_FLASH(0), false);
+  SPI_SELECT(priv->dev, SPIDEV_FLASH(priv->spi_devid), false);
   finfo("Erased\n");
 }
 
@@ -505,7 +592,7 @@ static inline int is25xp_bulkerase(struct is25xp_dev_s *priv)
 
   /* Select this FLASH part */
 
-  SPI_SELECT(priv->dev, SPIDEV_FLASH(0), true);
+  SPI_SELECT(priv->dev, SPIDEV_FLASH(priv->spi_devid), true);
 
   /* Send the "Chip Erase (CER)" instruction */
 
@@ -513,7 +600,7 @@ static inline int is25xp_bulkerase(struct is25xp_dev_s *priv)
 
   /* Deselect the FLASH */
 
-  SPI_SELECT(priv->dev, SPIDEV_FLASH(0), false);
+  SPI_SELECT(priv->dev, SPIDEV_FLASH(priv->spi_devid), false);
   is25xp_waitwritecomplete(priv);
 
   finfo("Return: OK\n");
@@ -546,13 +633,18 @@ static inline void is25xp_pagewrite(struct is25xp_dev_s *priv,
 
   /* Select this FLASH part */
 
-  SPI_SELECT(priv->dev, SPIDEV_FLASH(0), true);
+  SPI_SELECT(priv->dev, SPIDEV_FLASH(priv->spi_devid), true);
 
   /* Send "Page Program (PP)" command */
 
   SPI_SEND(priv->dev, IS25_PP);
 
   /* Send the page offset high byte first. */
+
+  if (priv->addrlen == 4)
+    {
+      SPI_SEND(priv->dev, (offset >> 24) & 0xff);
+    }
 
   SPI_SEND(priv->dev, (offset >> 16) & 0xff);
   SPI_SEND(priv->dev, (offset >> 8) & 0xff);
@@ -565,7 +657,7 @@ static inline void is25xp_pagewrite(struct is25xp_dev_s *priv,
 
   /* Deselect the FLASH: Chip Select high */
 
-  SPI_SELECT(priv->dev, SPIDEV_FLASH(0), false);
+  SPI_SELECT(priv->dev, SPIDEV_FLASH(priv->spi_devid), false);
   finfo("Written\n");
 }
 
@@ -594,13 +686,18 @@ static inline void is25xp_bytewrite(struct is25xp_dev_s *priv,
 
   /* Select this FLASH part */
 
-  SPI_SELECT(priv->dev, SPIDEV_FLASH(0), true);
+  SPI_SELECT(priv->dev, SPIDEV_FLASH(priv->spi_devid), true);
 
   /* Send "Page Program (PP)" command */
 
   SPI_SEND(priv->dev, IS25_PP);
 
   /* Send the page offset high byte first. */
+
+  if (priv->addrlen == 4)
+    {
+      SPI_SEND(priv->dev, (offset >> 24) & 0xff);
+    }
 
   SPI_SEND(priv->dev, (offset >> 16) & 0xff);
   SPI_SEND(priv->dev, (offset >> 8) & 0xff);
@@ -613,7 +710,7 @@ static inline void is25xp_bytewrite(struct is25xp_dev_s *priv,
 
   /* Deselect the FLASH: Chip Select high */
 
-  SPI_SELECT(priv->dev, SPIDEV_FLASH(0), false);
+  SPI_SELECT(priv->dev, SPIDEV_FLASH(priv->spi_devid), false);
   finfo("Written\n");
 }
 #endif
@@ -787,13 +884,18 @@ static ssize_t is25xp_read(FAR struct mtd_dev_s *dev,
 
   /* Select this FLASH part */
 
-  SPI_SELECT(priv->dev, SPIDEV_FLASH(0), true);
+  SPI_SELECT(priv->dev, SPIDEV_FLASH(priv->spi_devid), true);
 
   /* Send "Read from Memory " instruction */
 
   SPI_SEND(priv->dev, IS25_READ);
 
   /* Send the page offset high byte first. */
+
+  if (priv->addrlen == 4)
+    {
+      SPI_SEND(priv->dev, (offset >> 24) & 0xff);
+    }
 
   SPI_SEND(priv->dev, (offset >> 16) & 0xff);
   SPI_SEND(priv->dev, (offset >> 8) & 0xff);
@@ -805,7 +907,7 @@ static ssize_t is25xp_read(FAR struct mtd_dev_s *dev,
 
   /* Deselect the FLASH and unlock the SPI bus */
 
-  SPI_SELECT(priv->dev, SPIDEV_FLASH(0), false);
+  SPI_SELECT(priv->dev, SPIDEV_FLASH(priv->spi_devid), false);
   is25xp_unlock(priv->dev);
 
   finfo("return nbytes: %d\n", (int)nbytes);
@@ -901,7 +1003,7 @@ static int is25xp_ioctl(FAR struct mtd_dev_s *dev,
   FAR struct is25xp_dev_s *priv = (FAR struct is25xp_dev_s *)dev;
   int ret = -EINVAL; /* Assume good command with bad parameters */
 
-  finfo("cmd: %d \n", cmd);
+  finfo("cmd: %d\n", cmd);
 
   switch (cmd)
     {
@@ -911,6 +1013,8 @@ static int is25xp_ioctl(FAR struct mtd_dev_s *dev,
                               (FAR struct mtd_geometry_s *)((uintptr_t)arg);
           if (geo)
             {
+              memset(geo, 0, sizeof(*geo));
+
               /* Populate the geometry structure with information need to
                * know the capacity and how to access the device.
                *
@@ -927,8 +1031,9 @@ static int is25xp_ioctl(FAR struct mtd_dev_s *dev,
 
               ret = OK;
 
-              finfo("blocksize: %d erasesize: %d neraseblocks: %d\n",
-                    geo->blocksize, geo->erasesize, geo->neraseblocks);
+              finfo("blocksize: %"PRIu32" erasesize: %"PRIu32
+                    " neraseblocks: %"PRIu32"\n", geo->blocksize,
+                    geo->erasesize, geo->neraseblocks);
             }
         }
         break;
@@ -982,7 +1087,8 @@ static int is25xp_ioctl(FAR struct mtd_dev_s *dev,
  *
  ****************************************************************************/
 
-FAR struct mtd_dev_s *is25xp_initialize(FAR struct spi_dev_s *dev)
+FAR struct mtd_dev_s *is25xp_initialize(FAR struct spi_dev_s *dev,
+                                        uint16_t spi_devid)
 {
   FAR struct is25xp_dev_s *priv;
   int ret;
@@ -991,12 +1097,10 @@ FAR struct mtd_dev_s *is25xp_initialize(FAR struct spi_dev_s *dev)
 
   /* Allocate a state structure (we allocate the structure instead of using
    * a fixed, static allocation so that we can handle multiple FLASH devices.
-   * The current implementation would handle only one FLASH part per SPI
-   * device (only because of the SPIDEV_FLASH(0) definition) and so would
-   * have to be extended to handle multiple FLASH parts on the same SPI bus.
+   * The current implementation handles several FLASH part per SPI bus.
    */
 
-  priv = (FAR struct is25xp_dev_s *)kmm_zalloc(sizeof(struct is25xp_dev_s));
+  priv = kmm_zalloc(sizeof(struct is25xp_dev_s));
   if (priv)
     {
       /* Initialize the allocated structure. (unsupported methods were
@@ -1013,11 +1117,12 @@ FAR struct mtd_dev_s *is25xp_initialize(FAR struct spi_dev_s *dev)
       priv->mtd.ioctl  = is25xp_ioctl;
       priv->mtd.name   = "is25xp";
       priv->dev        = dev;
+      priv->spi_devid   = spi_devid;
       priv->lastwaswrite = false;
 
       /* Deselect the FLASH */
 
-      SPI_SELECT(dev, SPIDEV_FLASH(0), false);
+      SPI_SELECT(dev, SPIDEV_FLASH(priv->spi_devid), false);
 
       /* Identify the FLASH chip and get its capacity */
 
@@ -1034,6 +1139,13 @@ FAR struct mtd_dev_s *is25xp_initialize(FAR struct spi_dev_s *dev)
         }
       else
         {
+          /* For the large capacity chip, enable 4-byte address mode. */
+
+          if (priv->addrlen == 4)
+            {
+              is25xp_enable4byteaddr(priv);
+            }
+
           /* Make sure that the FLASH is unprotected so that we can
            * write into it
            */

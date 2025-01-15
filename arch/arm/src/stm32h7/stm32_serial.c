@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/stm32h7/stm32_serial.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -37,6 +39,7 @@
 #include <nuttx/arch.h>
 #include <nuttx/fs/ioctl.h>
 #include <nuttx/serial/serial.h>
+#include <nuttx/spinlock.h>
 #include <nuttx/semaphore.h>
 #include <nuttx/power/pm.h>
 
@@ -44,9 +47,7 @@
 #  include <termios.h>
 #endif
 
-#include "arm_arch.h"
 #include "arm_internal.h"
-
 #include "chip.h"
 #include "stm32_gpio.h"
 #include "hardware/stm32_pinmap.h"
@@ -479,7 +480,6 @@
 #endif
 #if defined(CONFIG_PM)
 #  warning stm32h7 serial power managemnt was taken from stm32f7 and is untested!
-#  define PM_IDLE_DOMAIN             0 /* Revisit */
 #endif
 
 /* Since RX DMA or TX DMA or both may be enabled for a given U[S]ART.
@@ -531,7 +531,7 @@
  * blocked.
  */
 
-# if defined(CONFIG_USART1_RXDMA) && defined(CONFIG_USART1_IFLOWCONTROL)
+#  if defined(CONFIG_USART1_RXDMA) && defined(CONFIG_USART1_IFLOWCONTROL)
 #    warning "RXDMA and IFLOWCONTROL both enabled for USART1. \
               This combination can lead to data loss."
 #  endif
@@ -631,7 +631,6 @@ struct up_dev_s
 #ifdef SERIAL_HAVE_TXDMA
   const unsigned int txdma_channel; /* DMA channel assigned */
   DMA_HANDLE        txdma;          /* currently-open trasnmit DMA stream */
-  sem_t             txdmasem;       /* Indicate TX DMA completion */
 #endif
 
   /* RX DMA state */
@@ -655,6 +654,7 @@ struct up_dev_s
   const uint32_t    rs485_dir_gpio;     /* U[S]ART RS-485 DIR GPIO pin configuration */
   const bool        rs485_dir_polarity; /* U[S]ART RS-485 DIR pin state for TX enabled */
 #endif
+  spinlock_t        lock;
 };
 
 #ifdef CONFIG_PM
@@ -674,7 +674,7 @@ static int  up_setup(struct uart_dev_s *dev);
 static void up_shutdown(struct uart_dev_s *dev);
 static int  up_attach(struct uart_dev_s *dev);
 static void up_detach(struct uart_dev_s *dev);
-static int  up_interrupt(int irq, void *context, FAR void *arg);
+static int  up_interrupt(int irq, void *context, void *arg);
 static int  up_ioctl(struct file *filep, int cmd, unsigned long arg);
 #if defined(SERIAL_HAVE_TXDMA_OPS) || defined(SERIAL_HAVE_NODMA_OPS)
 static int  up_receive(struct uart_dev_s *dev, unsigned int *status);
@@ -686,7 +686,9 @@ static bool up_rxflowcontrol(struct uart_dev_s *dev, unsigned int nbuffered,
                              bool upper);
 #endif
 static void up_send(struct uart_dev_s *dev, int ch);
+#ifndef SERIAL_HAVE_ONLY_TXDMA
 static void up_txint(struct uart_dev_s *dev, bool enable);
+#endif
 static bool up_txready(struct uart_dev_s *dev);
 
 #ifdef SERIAL_HAVE_TXDMA
@@ -920,31 +922,31 @@ static char g_uart8txbuffer[UART8_TXBUFSIZE_ADJUSTED] \
 static struct up_dev_s g_usart1priv =
 {
   .dev =
-    {
+  {
 #if CONSOLE_UART == 1
-      .isconsole = true,
+    .isconsole   = true,
 #endif
-      .recv      =
-      {
-        .size    = sizeof(g_usart1rxbuffer),
-        .buffer  = g_usart1rxbuffer,
-      },
-      .xmit      =
-      {
-        .size    = sizeof(g_usart1txbuffer),
-        .buffer  = g_usart1txbuffer,
-      },
-#if defined(CONFIG_USART1_RXDMA) && defined(CONFIG_USART1_TXDMA)
-      .ops       = &g_uart_rxtxdma_ops,
-#elif defined(CONFIG_USART1_RXDMA) && !defined(CONFIG_USART1_TXDMA)
-      .ops       = &g_uart_rxdma_ops,
-#elif !defined(CONFIG_USART1_RXDMA) && defined(CONFIG_USART1_TXDMA)
-      .ops       = &g_uart_txdma_ops,
-#else
-      .ops       = &g_uart_ops,
-#endif
-      .priv      = &g_usart1priv,
+    .recv        =
+    {
+      .size      = sizeof(g_usart1rxbuffer),
+      .buffer    = g_usart1rxbuffer,
     },
+    .xmit        =
+    {
+      .size      = sizeof(g_usart1txbuffer),
+      .buffer    = g_usart1txbuffer,
+    },
+#if defined(CONFIG_USART1_RXDMA) && defined(CONFIG_USART1_TXDMA)
+    .ops         = &g_uart_rxtxdma_ops,
+#elif defined(CONFIG_USART1_RXDMA) && !defined(CONFIG_USART1_TXDMA)
+    .ops         = &g_uart_rxdma_ops,
+#elif !defined(CONFIG_USART1_RXDMA) && defined(CONFIG_USART1_TXDMA)
+    .ops         = &g_uart_txdma_ops,
+#else
+    .ops         = &g_uart_ops,
+#endif
+    .priv        = &g_usart1priv,
+  },
 
   .irq           = STM32_IRQ_USART1,
   .rxftcfg       = CONFIG_USART1_RXFIFO_THRES,
@@ -980,6 +982,7 @@ static struct up_dev_s g_usart1priv =
   .rs485_dir_polarity = true,
 #  endif
 #endif
+  .lock               = SP_UNLOCKED,
 };
 #endif
 
@@ -989,31 +992,31 @@ static struct up_dev_s g_usart1priv =
 static struct up_dev_s g_usart2priv =
 {
   .dev =
-    {
+  {
 #if CONSOLE_UART == 2
-      .isconsole = true,
+    .isconsole = true,
 #endif
-      .recv      =
-      {
-        .size    = sizeof(g_usart2rxbuffer),
-        .buffer  = g_usart2rxbuffer,
-      },
-      .xmit      =
-      {
-        .size    = sizeof(g_usart2txbuffer),
-        .buffer  = g_usart2txbuffer,
-      },
-#if defined(CONFIG_USART2_RXDMA) && defined(CONFIG_USART2_TXDMA)
-      .ops       = &g_uart_rxtxdma_ops,
-#elif defined(CONFIG_USART2_RXDMA) && !defined(CONFIG_USART2_TXDMA)
-      .ops       = &g_uart_rxdma_ops,
-#elif !defined(CONFIG_USART2_RXDMA) && defined(CONFIG_USART2_TXDMA)
-      .ops       = &g_uart_txdma_ops,
-#else
-      .ops       = &g_uart_ops,
-#endif
-      .priv      = &g_usart2priv,
+    .recv        =
+    {
+      .size      = sizeof(g_usart2rxbuffer),
+      .buffer    = g_usart2rxbuffer,
     },
+    .xmit        =
+    {
+      .size      = sizeof(g_usart2txbuffer),
+      .buffer    = g_usart2txbuffer,
+    },
+#if defined(CONFIG_USART2_RXDMA) && defined(CONFIG_USART2_TXDMA)
+    .ops         = &g_uart_rxtxdma_ops,
+#elif defined(CONFIG_USART2_RXDMA) && !defined(CONFIG_USART2_TXDMA)
+    .ops         = &g_uart_rxdma_ops,
+#elif !defined(CONFIG_USART2_RXDMA) && defined(CONFIG_USART2_TXDMA)
+    .ops         = &g_uart_txdma_ops,
+#else
+    .ops         = &g_uart_ops,
+#endif
+    .priv        = &g_usart2priv,
+  },
 
   .irq           = STM32_IRQ_USART2,
   .rxftcfg       = CONFIG_USART2_RXFIFO_THRES,
@@ -1049,6 +1052,7 @@ static struct up_dev_s g_usart2priv =
   .rs485_dir_polarity = true,
 #  endif
 #endif
+  .lock               = SP_UNLOCKED,
 };
 #endif
 
@@ -1058,31 +1062,31 @@ static struct up_dev_s g_usart2priv =
 static struct up_dev_s g_usart3priv =
 {
   .dev =
-    {
+  {
 #if CONSOLE_UART == 3
-      .isconsole = true,
+    .isconsole = true,
 #endif
-      .recv      =
-      {
-        .size    = sizeof(g_usart3rxbuffer),
-        .buffer  = g_usart3rxbuffer,
-      },
-      .xmit      =
-      {
-        .size    = sizeof(g_usart3txbuffer),
-        .buffer  = g_usart3txbuffer,
-      },
-#if defined(CONFIG_USART3_RXDMA) && defined(CONFIG_USART3_TXDMA)
-      .ops       = &g_uart_rxtxdma_ops,
-#elif defined(CONFIG_USART3_RXDMA) && !defined(CONFIG_USART3_TXDMA)
-      .ops       = &g_uart_rxdma_ops,
-#elif !defined(CONFIG_USART3_RXDMA) && defined(CONFIG_USART3_TXDMA)
-      .ops       = &g_uart_txdma_ops,
-#else
-      .ops       = &g_uart_ops,
-#endif
-      .priv      = &g_usart3priv,
+    .recv        =
+    {
+      .size      = sizeof(g_usart3rxbuffer),
+      .buffer    = g_usart3rxbuffer,
     },
+    .xmit        =
+    {
+      .size      = sizeof(g_usart3txbuffer),
+      .buffer    = g_usart3txbuffer,
+    },
+#if defined(CONFIG_USART3_RXDMA) && defined(CONFIG_USART3_TXDMA)
+    .ops         = &g_uart_rxtxdma_ops,
+#elif defined(CONFIG_USART3_RXDMA) && !defined(CONFIG_USART3_TXDMA)
+    .ops         = &g_uart_rxdma_ops,
+#elif !defined(CONFIG_USART3_RXDMA) && defined(CONFIG_USART3_TXDMA)
+    .ops         = &g_uart_txdma_ops,
+#else
+    .ops         = &g_uart_ops,
+#endif
+    .priv        = &g_usart3priv,
+  },
 
   .irq           = STM32_IRQ_USART3,
   .rxftcfg       = CONFIG_USART3_RXFIFO_THRES,
@@ -1118,6 +1122,7 @@ static struct up_dev_s g_usart3priv =
   .rs485_dir_polarity = true,
 #  endif
 #endif
+  .lock               = SP_UNLOCKED,
 };
 #endif
 
@@ -1127,31 +1132,31 @@ static struct up_dev_s g_usart3priv =
 static struct up_dev_s g_uart4priv =
 {
   .dev =
-    {
+  {
 #if CONSOLE_UART == 4
-      .isconsole = true,
+    .isconsole   = true,
 #endif
-      .recv      =
-      {
-        .size    = sizeof(g_uart4rxbuffer),
-        .buffer  = g_uart4rxbuffer,
-      },
-      .xmit      =
-      {
-        .size    = sizeof(g_uart4txbuffer),
-        .buffer  = g_uart4txbuffer,
-      },
-#if defined(CONFIG_UART4_RXDMA) && defined(CONFIG_UART4_TXDMA)
-      .ops       = &g_uart_rxtxdma_ops,
-#elif defined(CONFIG_UART4_RXDMA) && !defined(CONFIG_UART4_TXDMA)
-      .ops       = &g_uart_rxdma_ops,
-#elif !defined(CONFIG_UART4_RXDMA) && defined(CONFIG_UART4_TXDMA)
-      .ops       = &g_uart_txdma_ops,
-#else
-      .ops       = &g_uart_ops,
-#endif
-      .priv      = &g_uart4priv,
+    .recv        =
+    {
+      .size      = sizeof(g_uart4rxbuffer),
+      .buffer    = g_uart4rxbuffer,
     },
+    .xmit        =
+    {
+      .size      = sizeof(g_uart4txbuffer),
+      .buffer    = g_uart4txbuffer,
+    },
+#if defined(CONFIG_UART4_RXDMA) && defined(CONFIG_UART4_TXDMA)
+    .ops         = &g_uart_rxtxdma_ops,
+#elif defined(CONFIG_UART4_RXDMA) && !defined(CONFIG_UART4_TXDMA)
+    .ops         = &g_uart_rxdma_ops,
+#elif !defined(CONFIG_UART4_RXDMA) && defined(CONFIG_UART4_TXDMA)
+    .ops         = &g_uart_txdma_ops,
+#else
+    .ops         = &g_uart_ops,
+#endif
+    .priv        = &g_uart4priv,
+  },
 
   .irq           = STM32_IRQ_UART4,
   .rxftcfg       = CONFIG_UART4_RXFIFO_THRES,
@@ -1187,6 +1192,7 @@ static struct up_dev_s g_uart4priv =
   .rs485_dir_polarity = true,
 #  endif
 #endif
+  .lock               = SP_UNLOCKED,
 };
 #endif
 
@@ -1196,31 +1202,31 @@ static struct up_dev_s g_uart4priv =
 static struct up_dev_s g_uart5priv =
 {
   .dev =
-    {
+  {
 #if CONSOLE_UART == 5
-      .isconsole = true,
+    .isconsole   = true,
 #endif
-      .recv      =
-      {
-        .size    = sizeof(g_uart5rxbuffer),
-        .buffer  = g_uart5rxbuffer,
-      },
-      .xmit      =
-      {
-        .size    = sizeof(g_uart5txbuffer),
-        .buffer  = g_uart5txbuffer,
-      },
-#if defined(CONFIG_UART5_RXDMA) && defined(CONFIG_UART5_TXDMA)
-      .ops       = &g_uart_rxtxdma_ops,
-#elif defined(CONFIG_UART5_RXDMA) && !defined(CONFIG_UART5_TXDMA)
-      .ops       = &g_uart_rxdma_ops,
-#elif !defined(CONFIG_UART5_RXDMA) && defined(CONFIG_UART5_TXDMA)
-      .ops       = &g_uart_txdma_ops,
-#else
-      .ops       = &g_uart_ops,
-#endif
-      .priv      = &g_uart5priv,
+    .recv        =
+    {
+      .size      = sizeof(g_uart5rxbuffer),
+      .buffer    = g_uart5rxbuffer,
     },
+    .xmit        =
+    {
+      .size      = sizeof(g_uart5txbuffer),
+      .buffer    = g_uart5txbuffer,
+    },
+#if defined(CONFIG_UART5_RXDMA) && defined(CONFIG_UART5_TXDMA)
+    .ops         = &g_uart_rxtxdma_ops,
+#elif defined(CONFIG_UART5_RXDMA) && !defined(CONFIG_UART5_TXDMA)
+    .ops         = &g_uart_rxdma_ops,
+#elif !defined(CONFIG_UART5_RXDMA) && defined(CONFIG_UART5_TXDMA)
+    .ops         = &g_uart_txdma_ops,
+#else
+    .ops         = &g_uart_ops,
+#endif
+    .priv        = &g_uart5priv,
+  },
 
   .irq           = STM32_IRQ_UART5,
   .rxftcfg       = CONFIG_UART5_RXFIFO_THRES,
@@ -1256,6 +1262,7 @@ static struct up_dev_s g_uart5priv =
   .rs485_dir_polarity = true,
 #  endif
 #endif
+  .lock               = SP_UNLOCKED,
 };
 #endif
 
@@ -1265,31 +1272,31 @@ static struct up_dev_s g_uart5priv =
 static struct up_dev_s g_usart6priv =
 {
   .dev =
-    {
+  {
 #if CONSOLE_UART == 6
-      .isconsole = true,
+    .isconsole   = true,
 #endif
-      .recv      =
-      {
-        .size    = sizeof(g_usart6rxbuffer),
-        .buffer  = g_usart6rxbuffer,
-      },
-      .xmit      =
-      {
-        .size    = sizeof(g_usart6txbuffer),
-        .buffer  = g_usart6txbuffer,
-      },
-#if defined(CONFIG_USART6_RXDMA) && defined(CONFIG_USART6_TXDMA)
-      .ops       = &g_uart_rxtxdma_ops,
-#elif defined(CONFIG_USART6_RXDMA) && !defined(CONFIG_USART6_TXDMA)
-      .ops       = &g_uart_rxdma_ops,
-#elif !defined(CONFIG_USART6_RXDMA) && defined(CONFIG_USART6_TXDMA)
-      .ops       = &g_uart_txdma_ops,
-#else
-      .ops       = &g_uart_ops,
-#endif
-      .priv      = &g_usart6priv,
+    .recv        =
+    {
+      .size      = sizeof(g_usart6rxbuffer),
+      .buffer    = g_usart6rxbuffer,
     },
+    .xmit        =
+    {
+      .size      = sizeof(g_usart6txbuffer),
+      .buffer    = g_usart6txbuffer,
+    },
+#if defined(CONFIG_USART6_RXDMA) && defined(CONFIG_USART6_TXDMA)
+    .ops         = &g_uart_rxtxdma_ops,
+#elif defined(CONFIG_USART6_RXDMA) && !defined(CONFIG_USART6_TXDMA)
+    .ops         = &g_uart_rxdma_ops,
+#elif !defined(CONFIG_USART6_RXDMA) && defined(CONFIG_USART6_TXDMA)
+    .ops         = &g_uart_txdma_ops,
+#else
+    .ops         = &g_uart_ops,
+#endif
+    .priv        = &g_usart6priv,
+  },
 
   .irq           = STM32_IRQ_USART6,
   .rxftcfg       = CONFIG_USART6_RXFIFO_THRES,
@@ -1325,6 +1332,7 @@ static struct up_dev_s g_usart6priv =
   .rs485_dir_polarity = true,
 #  endif
 #endif
+  .lock               = SP_UNLOCKED,
 };
 #endif
 
@@ -1334,31 +1342,31 @@ static struct up_dev_s g_usart6priv =
 static struct up_dev_s g_uart7priv =
 {
   .dev =
-    {
+  {
 #if CONSOLE_UART == 7
-      .isconsole = true,
+    .isconsole   = true,
 #endif
-      .recv      =
-      {
-        .size    = sizeof(g_uart7rxbuffer),
-        .buffer  = g_uart7rxbuffer,
-      },
-      .xmit      =
-      {
-        .size    = sizeof(g_uart7txbuffer),
-        .buffer  = g_uart7txbuffer,
-      },
-#if defined(CONFIG_UART7_RXDMA) && defined(CONFIG_UART7_TXDMA)
-      .ops       = &g_uart_rxtxdma_ops,
-#elif defined(CONFIG_UART7_RXDMA) && !defined(CONFIG_UART7_TXDMA)
-      .ops       = &g_uart_rxdma_ops,
-#elif !defined(CONFIG_UART7_RXDMA) && defined(CONFIG_UART7_TXDMA)
-      .ops       = &g_uart_txdma_ops,
-#else
-      .ops       = &g_uart_ops,
-#endif
-      .priv      = &g_uart7priv,
+    .recv        =
+    {
+      .size      = sizeof(g_uart7rxbuffer),
+      .buffer    = g_uart7rxbuffer,
     },
+    .xmit        =
+    {
+      .size      = sizeof(g_uart7txbuffer),
+      .buffer    = g_uart7txbuffer,
+    },
+#if defined(CONFIG_UART7_RXDMA) && defined(CONFIG_UART7_TXDMA)
+    .ops         = &g_uart_rxtxdma_ops,
+#elif defined(CONFIG_UART7_RXDMA) && !defined(CONFIG_UART7_TXDMA)
+    .ops         = &g_uart_rxdma_ops,
+#elif !defined(CONFIG_UART7_RXDMA) && defined(CONFIG_UART7_TXDMA)
+    .ops         = &g_uart_txdma_ops,
+#else
+    .ops         = &g_uart_ops,
+#endif
+    .priv        = &g_uart7priv,
+  },
 
   .irq           = STM32_IRQ_UART7,
   .rxftcfg       = CONFIG_UART7_RXFIFO_THRES,
@@ -1394,6 +1402,7 @@ static struct up_dev_s g_uart7priv =
   .rs485_dir_polarity = true,
 #  endif
 #endif
+  .lock               = SP_UNLOCKED,
 };
 #endif
 
@@ -1403,31 +1412,31 @@ static struct up_dev_s g_uart7priv =
 static struct up_dev_s g_uart8priv =
 {
   .dev =
-    {
+  {
 #if CONSOLE_UART == 8
-      .isconsole = true,
+    .isconsole   = true,
 #endif
-      .recv      =
-      {
-        .size    = sizeof(g_uart8rxbuffer),
-        .buffer  = g_uart8rxbuffer,
-      },
-      .xmit      =
-      {
-        .size    = sizeof(g_uart8txbuffer),
-        .buffer  = g_uart8txbuffer,
-      },
-#if defined(CONFIG_UART8_RXDMA) && defined(CONFIG_UART8_TXDMA)
-      .ops       = &g_uart_rxtxdma_ops,
-#elif defined(CONFIG_UART8_RXDMA) && !defined(CONFIG_UART8_TXDMA)
-      .ops       = &g_uart_rxdma_ops,
-#elif !defined(CONFIG_UART8_RXDMA) && defined(CONFIG_UART8_TXDMA)
-      .ops       = &g_uart_txdma_ops,
-#else
-      .ops       = &g_uart_ops,
-#endif
-      .priv      = &g_uart8priv,
+    .recv        =
+    {
+      .size      = sizeof(g_uart8rxbuffer),
+      .buffer    = g_uart8rxbuffer,
     },
+    .xmit        =
+    {
+      .size      = sizeof(g_uart8txbuffer),
+      .buffer    = g_uart8txbuffer,
+    },
+#if defined(CONFIG_UART8_RXDMA) && defined(CONFIG_UART8_TXDMA)
+    .ops         = &g_uart_rxtxdma_ops,
+#elif defined(CONFIG_UART8_RXDMA) && !defined(CONFIG_UART8_TXDMA)
+    .ops         = &g_uart_rxdma_ops,
+#elif !defined(CONFIG_UART8_RXDMA) && defined(CONFIG_UART8_TXDMA)
+    .ops         = &g_uart_txdma_ops,
+#else
+    .ops         = &g_uart_ops,
+#endif
+    .priv        = &g_uart8priv,
+  },
 
   .irq           = STM32_IRQ_UART8,
   .rxftcfg       = CONFIG_UART8_RXFIFO_THRES,
@@ -1463,6 +1472,7 @@ static struct up_dev_s g_uart8priv =
   .rs485_dir_polarity = true,
 #  endif
 #endif
+  .lock               = SP_UNLOCKED,
 };
 #endif
 
@@ -1529,18 +1539,6 @@ static inline void up_serialout(struct up_dev_s *priv, int offset,
 }
 
 /****************************************************************************
- * Name: up_serialmod
- ****************************************************************************/
-
-static inline void up_serialmod(struct up_dev_s *priv, int offset,
-                                uint32_t clrbits, uint32_t setbits)
-{
-  uint32_t addr = priv->usartbase + offset;
-  uint32_t regval = (getreg32(addr) & ~clrbits) | setbits;
-  putreg32(regval, addr);
-}
-
-/****************************************************************************
  * Name: up_setusartint
  ****************************************************************************/
 
@@ -1574,16 +1572,19 @@ static inline void up_setusartint(struct up_dev_s *priv, uint16_t ie)
  * Name: up_restoreusartint
  ****************************************************************************/
 
+#if !defined(SERIAL_HAVE_ONLY_DMA) || defined(CONFIG_PM) || \
+    defined(HAVE_RS485)
 static void up_restoreusartint(struct up_dev_s *priv, uint16_t ie)
 {
   irqstate_t flags;
 
-  flags = enter_critical_section();
+  flags = spin_lock_irqsave(&priv->lock);
 
   up_setusartint(priv, ie);
 
-  leave_critical_section(flags);
+  spin_unlock_irqrestore(&priv->lock, flags);
 }
+#endif
 
 /****************************************************************************
  * Name: up_disableusartint
@@ -1593,7 +1594,7 @@ static void up_disableusartint(struct up_dev_s *priv, uint16_t *ie)
 {
   irqstate_t flags;
 
-  flags = enter_critical_section();
+  flags = spin_lock_irqsave(&priv->lock);
 
   if (ie)
     {
@@ -1637,7 +1638,7 @@ static void up_disableusartint(struct up_dev_s *priv, uint16_t *ie)
 
   up_setusartint(priv, 0);
 
-  leave_critical_section(flags);
+  spin_unlock_irqrestore(&priv->lock, flags);
 }
 
 /****************************************************************************
@@ -2222,9 +2223,6 @@ static int up_dma_setup(struct uart_dev_s *dev)
     {
       priv->txdma = stm32_dmachannel(priv->txdma_channel);
 
-      nxsem_init(&priv->txdmasem, 0, 1);
-      nxsem_set_protocol(&priv->txdmasem, SEM_PRIO_NONE);
-
       /* Enable receive Tx DMA for the UART */
 
       modifyreg32(priv->usartbase + STM32_USART_CR3_OFFSET,
@@ -2267,7 +2265,7 @@ static int up_dma_setup(struct uart_dev_s *dev)
        * worth of time to claim bytes before they are overwritten.
        */
 
-      stm32_dmastart(priv->rxdma, up_dma_rxcallback, (void *)priv, true);
+      stm32_dmastart(priv->rxdma, up_dma_rxcallback, priv, true);
     }
 #endif
 
@@ -2447,14 +2445,14 @@ static void up_detach(struct uart_dev_s *dev)
  *
  * Description:
  *   This is the USART interrupt handler.  It will be invoked when an
- *   interrupt received on the 'irq'  It should call uart_transmitchars or
- *   uart_receivechar to perform the appropriate data transfers.  The
- *   interrupt handling logic must be able to map the 'irq' number into the
+ *   interrupt is received on the 'irq'.  It should call uart_xmitchars or
+ *   uart_recvchars to perform the appropriate data transfers.  The
+ *   interrupt handling logic must be able to map the 'arg' to the
  *   appropriate uart_dev_s structure in order to call these functions.
  *
  ****************************************************************************/
 
-static int up_interrupt(int irq, void *context, FAR void *arg)
+static int up_interrupt(int irq, void *context, void *arg)
 {
   struct up_dev_s *priv = (struct up_dev_s *)arg;
 
@@ -2587,7 +2585,7 @@ static int up_ioctl(struct file *filep, int cmd, unsigned long arg)
     || defined(CONFIG_STM32H7_SERIALBRK_BSDCOMPAT)
   struct up_dev_s   *priv  = (struct up_dev_s *)dev->priv;
 #endif
-  int                ret    = OK;
+  int                ret   = OK;
 
   switch (cmd)
     {
@@ -2787,7 +2785,7 @@ static int up_ioctl(struct file *filep, int cmd, unsigned long arg)
 
         cfsetispeed(termiosp, priv->baud);
 
-        /* TODO: CCTS_IFLOW, CCTS_OFLOW */
+        /* TODO: CRTS_IFLOW, CCTS_OFLOW */
       }
       break;
 
@@ -3246,7 +3244,7 @@ static void up_dma_reenable(struct up_dev_s *priv)
    * worth of time to claim bytes before they are overwritten.
    */
 
-  stm32_dmastart(priv->rxdma, up_dma_rxcallback, (void *)priv, true);
+  stm32_dmastart(priv->rxdma, up_dma_rxcallback, priv, true);
 
   /* Clear DMA suspended flag. */
 
@@ -3304,8 +3302,9 @@ static bool up_dma_rxavailable(struct uart_dev_s *dev)
  * Name: up_dma_txcallback
  *
  * Description:
- *   This function clears dma buffer at complete of DMA transfer and wakes up
- *   threads waiting for space in buffer.
+ *   This function clears dma buffer at completion of DMA transfer. It wakes
+ *   up threads waiting for space in buffer and restarts the DMA if there is
+ *   more data to send.
  *
  ****************************************************************************/
 
@@ -3319,11 +3318,7 @@ static void up_dma_txcallback(DMA_HANDLE handle, uint8_t status, void *arg)
    * This is important to free TX buffer space by 'uart_xmitchars_done'.
    */
 
-  if (status & DMA_SCR_HTIE)
-    {
-      priv->dev.dmatx.nbytes += priv->dev.dmatx.length / 2;
-    }
-  else if (status & DMA_SCR_TCIE)
+  if (status & DMA_SCR_TCIE)
     {
       priv->dev.dmatx.nbytes += priv->dev.dmatx.length;
       if (priv->dev.dmatx.nlength)
@@ -3345,17 +3340,19 @@ static void up_dma_txcallback(DMA_HANDLE handle, uint8_t status, void *arg)
           /* Start transmission with the callback on DMA completion */
 
           stm32_dmastart(priv->txdma, up_dma_txcallback,
-                        (void *)priv, false);
+                         priv, false);
 
           return;
         }
     }
 
-  nxsem_post(&priv->txdmasem);
-
   /* Adjust the pointers */
 
   uart_xmitchars_done(&priv->dev);
+
+  /* Send more if availaible */
+
+  up_dma_txavailable(&priv->dev);
 }
 #endif
 
@@ -3371,12 +3368,18 @@ static void up_dma_txcallback(DMA_HANDLE handle, uint8_t status, void *arg)
 static void up_dma_txavailable(struct uart_dev_s *dev)
 {
   struct up_dev_s *priv = (struct up_dev_s *)dev->priv;
+  irqstate_t flags =  enter_critical_section();
 
   /* Only send when the DMA is idle */
 
-  nxsem_wait(&priv->txdmasem);
+  if (priv->dev.dmatx.length == 0 &&
+      priv->dev.dmatx.nlength == 0 &&
+      stm32_dmaresidual(priv->txdma) == 0)
+    {
+      uart_xmitchars_dma(dev);
+    }
 
-  uart_xmitchars_dma(dev);
+  leave_critical_section(flags);
 }
 #endif
 
@@ -3431,7 +3434,7 @@ static void up_dma_send(struct uart_dev_s *dev)
 
   /* Start transmission with the callback on DMA completion */
 
-  stm32_dmastart(priv->txdma, up_dma_txcallback, (void *)priv, false);
+  stm32_dmastart(priv->txdma, up_dma_txcallback, priv, false);
 }
 #endif
 
@@ -3474,7 +3477,7 @@ static void up_dma_txint(struct uart_dev_s *dev, bool enable)
    * Instead, we use DMA interrupts that are activated once during boot
    * sequence. Furthermore we can use up_dma_txcallback() to handle staff at
    * half DMA transfer or after transfer completion (depending configuration,
-   * see stm32_dmastart(...) ).
+   * see stm32_dmastart(...)).
    */
 }
 #endif
@@ -3487,6 +3490,7 @@ static void up_dma_txint(struct uart_dev_s *dev, bool enable)
  *
  ****************************************************************************/
 
+#if defined(SERIAL_HAVE_RXDMA_OPS) || defined(SERIAL_HAVE_NODMA_OPS)
 static void up_txint(struct uart_dev_s *dev, bool enable)
 {
   struct up_dev_s *priv = (struct up_dev_s *)dev->priv;
@@ -3525,6 +3529,7 @@ static void up_txint(struct uart_dev_s *dev, bool enable)
 #  ifdef CONFIG_STM32_SERIALBRK_BSDCOMPAT
       if (priv->ie & USART_CR1_IE_BREAK_INPROGRESS)
         {
+          leave_critical_section(flags);
           return;
         }
 #  endif
@@ -3548,6 +3553,7 @@ static void up_txint(struct uart_dev_s *dev, bool enable)
 
   leave_critical_section(flags);
 }
+#endif
 
 /****************************************************************************
  * Name: up_txready
@@ -3790,7 +3796,7 @@ static int up_pm_prepare(struct pm_callback_s *cb, int domain,
  *
  ****************************************************************************/
 
-FAR uart_dev_t *stm32_serial_get_uart(int uart_num)
+uart_dev_t *stm32_serial_get_uart(int uart_num)
 {
   int uart_idx = uart_num - 1;
 
@@ -3892,7 +3898,7 @@ void arm_serialinit(void)
 
   /* Register all remaining USARTs */
 
-  strcpy(devname, "/dev/ttySx");
+  strlcpy(devname, "/dev/ttySx", sizeof(devname));
 
   for (i = 0; i < STM32_NSERIAL; i++)
     {
@@ -4006,28 +4012,17 @@ void stm32_serial_dma_poll(void)
  *
  ****************************************************************************/
 
-int up_putc(int ch)
+void up_putc(int ch)
 {
 #if CONSOLE_UART > 0
   struct up_dev_s *priv = g_uart_devs[CONSOLE_UART - 1];
   uint16_t ie;
 
   up_disableusartint(priv, &ie);
-
-  /* Check for LF */
-
-  if (ch == '\n')
-    {
-      /* Add CR */
-
-      arm_lowputc('\r');
-    }
-
   arm_lowputc(ch);
   up_restoreusartint(priv, ie);
 
 #endif
-  return ch;
 }
 
 #else /* USE_SERIALDRIVER */
@@ -4040,21 +4035,11 @@ int up_putc(int ch)
  *
  ****************************************************************************/
 
-int up_putc(int ch)
+void up_putc(int ch)
 {
 #if CONSOLE_UART > 0
-  /* Check for LF */
-
-  if (ch == '\n')
-    {
-      /* Add CR */
-
-      arm_lowputc('\r');
-    }
-
   arm_lowputc(ch);
 #endif
-  return ch;
 }
 
 #endif /* USE_SERIALDRIVER */

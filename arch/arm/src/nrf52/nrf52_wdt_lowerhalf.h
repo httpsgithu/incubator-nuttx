@@ -1,9 +1,10 @@
 /****************************************************************************
  * arch/arm/src/nrf52/nrf52_wdt_lowerhalf.h
  *
- *   Copyright (C) 2018 Zglue Inc. All rights reserved.
- *   Author: Levin Li <zhiqiang@zglue.com>
- *   Author: Alan Carvalho de Assis <acassis@gmail.com>
+ * SPDX-License-Identifier: BSD-3-Clause
+ * SPDX-FileCopyrightText: 2018 Zglue Inc. All rights reserved.
+ * SPDX-FileContributor: Levin Li <zhiqiang@zglue.com>
+ * SPDX-FileContributor: Alan Carvalho de Assis <acassis@gmail.com>
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -34,8 +35,8 @@
  *
  ****************************************************************************/
 
-#ifndef __ARCH_ARM_NRF52_WDT_LOWERHALF_H
-#define __ARCH_ARM_NRF52_WDT_LOWERHALF_H
+#ifndef __ARCH_ARM_SRC_NRF52_NRF52_WDT_LOWERHALF_H
+#define __ARCH_ARM_SRC_NRF52_NRF52_WDT_LOWERHALF_H
 
 /****************************************************************************
  * Included Files
@@ -98,7 +99,7 @@ extern "C"
  *
  ****************************************************************************/
 
-int nrf52_wdt_initialize(FAR const char *devpath, int16_t mode_sleep,
+int nrf52_wdt_initialize(const char *devpath, int16_t mode_sleep,
                          int16_t mode_halt);
 
-#endif /* __ARCH_ARM_NRF52_WDT_LOWERHALF_H */
+#endif /* __ARCH_ARM_SRC_NRF52_NRF52_WDT_LOWERHALF_H */

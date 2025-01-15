@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/stm32/nucleo-f429zi/src/stm32_dma_alloc.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -97,7 +99,7 @@ void *fat_dma_alloc(size_t size)
   return gran_alloc(dma_allocator, size);
 }
 
-void fat_dma_free(FAR void *memory, size_t size)
+void fat_dma_free(void *memory, size_t size)
 {
   gran_free(dma_allocator, memory, size);
 }

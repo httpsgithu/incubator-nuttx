@@ -1,6 +1,8 @@
 /****************************************************************************
  * libs/libnx/nxglib/nxglib_rectadd.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -34,7 +36,7 @@
  * Name: nxgl_rectadd
  *
  * Description:
- *   Return the rectangle that contains exactly two other rectanges.
+ *   Return the rectangle that contains exactly two other rectangles.
  *
  ****************************************************************************/
 

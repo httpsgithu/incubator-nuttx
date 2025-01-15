@@ -1,6 +1,8 @@
 /****************************************************************************
  * libs/libc/unistd/lib_getpriority.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -28,6 +30,8 @@
 #include <sched.h>
 #include <unistd.h>
 #include <errno.h>
+
+#include <nuttx/sched.h>
 
 /****************************************************************************
  * Public Functions
@@ -73,7 +77,7 @@ int getpriority(int which, id_t who)
 
   if (who == 0)
     {
-      who = getpid();
+      who = _SCHED_GETTID();
     }
 
   ret = sched_getparam(who, &param);

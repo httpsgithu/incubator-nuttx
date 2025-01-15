@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/rp2040/rp2040_cpustart.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -36,11 +38,9 @@
 #include <nuttx/sched_note.h>
 
 #include "nvic.h"
-#include "arm_arch.h"
 #include "sched/sched.h"
 #include "init/init.h"
 #include "arm_internal.h"
-
 #include "hardware/rp2040_memorymap.h"
 #include "hardware/rp2040_sio.h"
 #include "hardware/rp2040_psm.h"
@@ -69,7 +69,7 @@
 
 volatile static spinlock_t g_core1_boot;
 
-extern int arm_pause_handler(int irq, void *c, FAR void *arg);
+extern int rp2040_smp_call_handler(int irq, void *c, void *arg);
 
 /****************************************************************************
  * Private Functions
@@ -139,6 +139,12 @@ static int fifo_comm(uint32_t msg)
 
 static void core1_boot(void)
 {
+#if CONFIG_ARCH_INTERRUPTSTACK > 3
+  /* Initializes the stack pointer */
+
+  arm_initialize_stack();
+#endif
+
   fifo_drain();
 
   /* Setup NVIC */
@@ -147,8 +153,8 @@ static void core1_boot(void)
 
   /* Enable inter-processor FIFO interrupt */
 
-  irq_attach(RP2040_SIO_IRQ_PROC1, arm_pause_handler, NULL);
-  up_enable_irq(RP2040_SIO_IRQ_PROC1);
+  irq_attach(RP2040_SMP_CALL_PROC1, rp2040_smp_call_handler, NULL);
+  up_enable_irq(RP2040_SMP_CALL_PROC1);
 
   spin_unlock(&g_core1_boot);
 
@@ -243,8 +249,8 @@ int up_cpu_start(int cpu)
 
   /* Enable inter-processor FIFO interrupt */
 
-  irq_attach(RP2040_SIO_IRQ_PROC0, arm_pause_handler, NULL);
-  up_enable_irq(RP2040_SIO_IRQ_PROC0);
+  irq_attach(RP2040_SMP_CALL_PROC0, rp2040_smp_call_handler, NULL);
+  up_enable_irq(RP2040_SMP_CALL_PROC0);
 
   spin_lock(&g_core1_boot);
 

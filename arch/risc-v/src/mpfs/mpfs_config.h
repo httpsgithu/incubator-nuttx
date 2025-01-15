@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/risc-v/src/mpfs/mpfs_config.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -58,6 +60,18 @@
 #  undef CONFIG_UART1_SERIAL_CONSOLE
 #  undef CONFIG_UART3_SERIAL_CONSOLE
 #  undef CONFIG_UART4_SERIAL_CONSOLE
+#  define HAVE_SERIAL_CONSOLE 1
+#elif defined(CONFIG_UART3_SERIAL_CONSOLE) && defined(CONFIG_MPFS_UART3)
+#  undef CONFIG_UART0_SERIAL_CONSOLE
+#  undef CONFIG_UART1_SERIAL_CONSOLE
+#  undef CONFIG_UART2_SERIAL_CONSOLE
+#  undef CONFIG_UART4_SERIAL_CONSOLE
+#  define HAVE_SERIAL_CONSOLE 1
+#elif defined(CONFIG_UART4_SERIAL_CONSOLE) && defined(CONFIG_MPFS_UART4)
+#  undef CONFIG_UART0_SERIAL_CONSOLE
+#  undef CONFIG_UART1_SERIAL_CONSOLE
+#  undef CONFIG_UART2_SERIAL_CONSOLE
+#  undef CONFIG_UART3_SERIAL_CONSOLE
 #  define HAVE_SERIAL_CONSOLE 1
 #else
 #  undef CONFIG_UART0_SERIAL_CONSOLE

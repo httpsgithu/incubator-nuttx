@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/nrf52/nrf52832_errdata.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -35,13 +37,12 @@
 #include <nuttx/fs/ioctl.h>
 #include <nuttx/drivers/drivers.h>
 
-#include "arm_arch.h"
+#include "arm_internal.h"
 #include "chip.h"
 #include "hardware/nrf52_utils.h"
 #include "hardware/nrf52_rng.h"
 #include "hardware/nrf52_ficr.h"
 #include "hardware/nrf52_temp.h"
-#include "arm_internal.h"
 
 /****************************************************************************
  * Private Functions

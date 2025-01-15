@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/cxd56xx/cxd56_pinconfig.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -28,6 +30,7 @@
 #include <nuttx/config.h>
 
 #include <sys/types.h>
+#include <sys/param.h>
 #include <stdint.h>
 #include <stdbool.h>
 
@@ -119,7 +122,7 @@
 
 #define CXD56_PIN_CONFIGS(pin) do { \
   uint32_t p[] = pin; \
-  cxd56_pin_configs((p), sizeof(p) / sizeof((p)[0])); \
+  cxd56_pin_configs((p), nitems(p)); \
 } while (0)
 
 /****************************************************************************

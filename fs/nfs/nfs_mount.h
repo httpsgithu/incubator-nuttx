@@ -1,10 +1,11 @@
 /****************************************************************************
  * fs/nfs/nfs_mount.h
  *
- *   Copyright (C) 2012 Gregory Nutt. All rights reserved.
- *   Copyright (C) 2012 Jose Pablo Rojas Vargas. All rights reserved.
- *   Author: Jose Pablo Rojas Vargas <jrojas@nx-engineering.com>
- *           Gregory Nutt <gnutt@nuttx.org>
+ * SPDX-License-Identifier: BSD-3-Clause
+ * SPDX-FileCopyrightText: 2012 Gregory Nutt. All rights reserved.
+ * SPDX-FileCopyrightText: 2012 Jose Pablo Rojas Vargas. All rights reserved.
+ * SPDX-FileContributor: Jose Pablo Rojas Vargas <jrojas@nx-engineering.com>
+ * SPDX-FileContributor: Gregory Nutt <gnutt@nuttx.org>
  *
  * Leveraged from OpenBSD:
  *
@@ -49,7 +50,7 @@
  ****************************************************************************/
 
 #include <sys/socket.h>
-#include <nuttx/semaphore.h>
+#include <nuttx/mutex.h>
 
 #include "rpc.h"
 
@@ -68,8 +69,8 @@
 struct nfsmount
 {
   FAR struct nfsnode       *nm_head;          /* A list of all files opened on this mountpoint */
-  sem_t                     nm_sem;           /* Used to assure thread-safe access */
-  nfsfh_t                  *nm_fh;            /* File handle of root dir */
+  mutex_t                   nm_lock;          /* Used to assure thread-safe access */
+  FAR nfsfh_t              *nm_fh;            /* File handle of root dir */
   char                      nm_path[90];      /* server's path of the directory being mounted */
   struct nfs_fattr          nm_fattr;         /* nfs file attribute cache */
   FAR struct rpcclnt       *nm_rpcclnt;       /* RPC state */

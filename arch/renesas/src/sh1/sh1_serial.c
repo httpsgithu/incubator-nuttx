@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/renesas/src/sh1/sh1_serial.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -38,8 +40,7 @@
 #include <nuttx/serial/serial.h>
 
 #include "chip.h"
-#include "up_arch.h"
-#include "up_internal.h"
+#include "renesas_internal.h"
 
 /****************************************************************************
  * Pre-processor Definitions
@@ -142,7 +143,7 @@ static int  up_setup(struct uart_dev_s *dev);
 static void up_shutdown(struct uart_dev_s *dev);
 static int  up_attach(struct uart_dev_s *dev);
 static void up_detach(struct uart_dev_s *dev);
-static int  up_interrupt(int irq, void *context, FAR void *arg);
+static int  up_interrupt(int irq, void *context, void *arg);
 static int  up_receive(struct uart_dev_s *dev, unsigned int *status);
 static void up_rxint(struct uart_dev_s *dev, bool enable);
 static bool up_rxavailable(struct uart_dev_s *dev);
@@ -548,16 +549,15 @@ static void up_detach(struct uart_dev_s *dev)
  * Name: up_interrupt
  *
  * Description:
- *   This is the SCI interrupt handler.  It will be invoked
- *   when an interrupt received on the 'irq'  It should call
- *   uart_transmitchars or uart_receivechar to perform the
- *   appropriate data transfers.  The interrupt handling logic\
- *   must be able to map the 'irq' number into the appropriate
- *   up_dev_s structure in order to call these functions.
+ *   This is the SCI interrupt handler.  It will be invoked when an
+ *   interrupt is received on the 'irq'.  It should call uart_xmitchars or
+ *   uart_recvchars to perform the appropriate data transfers.  The
+ *   interrupt handling logic must be able to map the 'arg' to the
+ *   appropriate uart_dev_s structure in order to call these functions.
  *
  ****************************************************************************/
 
-static int up_interrupt(int irq, void *context, FAR void *arg)
+static int up_interrupt(int irq, void *context, void *arg)
 {
   struct uart_dev_s *dev = (struct uart_dev_s *)arg;
   struct up_dev_s *priv;
@@ -815,16 +815,16 @@ static bool up_txready(struct uart_dev_s *dev)
  ****************************************************************************/
 
 /****************************************************************************
- * Name: up_earlyconsoleinit
+ * Name: renesas_earlyconsoleinit
  *
  * Description:
  *   Performs the low level SCI initialization early in
  *   debug so that the serial console will be available
- *   during bootup.  This must be called before up_consoleinit.
+ *   during bootup.  This must be called before renesas_consoleinit.
  *
  ****************************************************************************/
 
-void up_earlyconsoleinit(void)
+void renesas_earlyconsoleinit(void)
 {
   /* NOTE:  All GPIO configuration for the SCIs was performed in
    * up_lowsetup
@@ -848,15 +848,15 @@ void up_earlyconsoleinit(void)
 }
 
 /****************************************************************************
- * Name: up_consoleinit
+ * Name: renesas_consoleinit
  *
  * Description:
  *   Register serial console and serial ports.  This assumes
- *   that up_earlyconsoleinit was called previously.
+ *   that renesas_earlyconsoleinit was called previously.
  *
  ****************************************************************************/
 
-void up_consoleinit(void)
+void renesas_consoleinit(void)
 {
   /* Register the console */
 
@@ -882,31 +882,19 @@ void up_consoleinit(void)
  *
  ****************************************************************************/
 
-int up_putc(int ch)
+void up_putc(int ch)
 {
 #ifdef HAVE_CONSOLE
   struct up_dev_s *priv = (struct up_dev_s *)CONSOLE_DEV.priv;
   uint8_t  scr;
 
   up_disablesciint(priv, &scr);
-
-  /* Check for LF */
-
-  if (ch == '\n')
-    {
-      /* Add CR */
-
-      up_waittxready(priv);
-      up_serialout(priv, SH1_SCI_TDR_OFFSET, '\r');
-    }
-
   up_waittxready(priv);
   up_serialout(priv, SH1_SCI_TDR_OFFSET, (uint8_t)ch);
 
   up_waittxready(priv);
   up_restoresciint(priv, scr);
 #endif
-  return ch;
 }
 
 #else /* USE_SERIALDRIVER */
@@ -919,21 +907,11 @@ int up_putc(int ch)
  *
  ****************************************************************************/
 
-int up_putc(int ch)
+void up_putc(int ch)
 {
 #ifdef HAVE_CONSOLE
-  /* Check for LF */
-
-  if (ch == '\n')
-    {
-      /* Add CR */
-
-      up_lowputc('\r');
-    }
-
-  up_lowputc(ch);
+  renesas_lowputc(ch);
 #endif
-  return ch;
 }
 
 #endif /* USE_SERIALDRIVER */

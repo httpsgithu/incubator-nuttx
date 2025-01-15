@@ -1,6 +1,8 @@
 /****************************************************************************
  * sched/environ/env_getenvironptr.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -54,29 +56,9 @@
 
 FAR char **get_environ_ptr(void)
 {
-#if 1
+  FAR struct tcb_s *tcb = this_task();
 
-  /* Type of internal representation of environment is incompatible with
-   * char ** return value.
-   */
-
-  return NULL;
-
-#else
-
-  /* Return a reference to the thread-private environ in the TCB. */
-
-  FAR struct tcb_s *ptcb = this_task();
-  if (ptcb->envp)
-    {
-      return &ptcb->envp->ev_env;
-    }
-  else
-    {
-      return NULL;
-    }
-
-#endif
+  return tcb->group->tg_envp;
 }
 
 #endif /* CONFIG_DISABLE_ENVIRON */

@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/lpc17xx_40xx/pnev5180b/src/lpc17_40_symtab.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -23,7 +25,7 @@
  ****************************************************************************/
 
 #include <nuttx/compiler.h>
-#include <nuttx/binfmt/symtab.h>
+#include <nuttx/symtab.h>
 
 /****************************************************************************
  * Public Data
@@ -45,7 +47,7 @@ extern void *pthread_mutex_init;
 extern void *pthread_mutex_lock;
 extern void *pthread_mutex_unlock;
 extern void *puts;
-extern void *nxsched_get_streams;
+extern void *lib_get_streams;
 extern void *sem_destroy;
 extern void *sem_init;
 extern void *sem_post;
@@ -76,7 +78,7 @@ const struct symtab_s lpc17_40_exports[] =
   {"pthread_mutex_lock", &pthread_mutex_lock},
   {"pthread_mutex_unlock", &pthread_mutex_unlock},
   {"puts", &puts},
-  {"nxsched_get_streams", &nxsched_get_streams},
+  {"lib_get_streams", &lib_get_streams},
   {"sem_destroy", &sem_destroy},
   {"sem_init", &sem_init},
   {"sem_post", &sem_post},

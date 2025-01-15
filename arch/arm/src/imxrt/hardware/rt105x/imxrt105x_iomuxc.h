@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/imxrt/hardware/rt105x/imxrt105x_iomuxc.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -18,8 +20,8 @@
  *
  ****************************************************************************/
 
-#ifndef __ARCH_ARM_SRC_IMXRT_HARDWARE_IMXRT105X_IOMUXC_H
-#define __ARCH_ARM_SRC_IMXRT_HARDWARE_IMXRT105X_IOMUXC_H
+#ifndef __ARCH_ARM_SRC_IMXRT_HARDWARE_RT105X_IMXRT105X_IOMUXC_H
+#define __ARCH_ARM_SRC_IMXRT_HARDWARE_RT105X_IMXRT105X_IOMUXC_H
 
 /****************************************************************************
  * Included Files
@@ -1270,7 +1272,7 @@
 #define GPR_GPR1_GINT                                           (1 << 12)
 #define GPR_GPR1_ENET1_CLK_SEL                                  (1 << 13)
 #define GPR_GPR1_USB_EXP_MODE_EN                                (1 << 15)
-#define GPR_GPR1_ENET1_TX_CLK_OUT_EN                            (1 << 17)
+#define GPR_GPR1_ENET1_TX_DIR_OUT                               (1 << 17)
 #define GPR_GPR1_SAI1_MCLK_DIR_IN                               (0 << 19)
 #define GPR_GPR1_SAI1_MCLK_DIR_OUT                              (1 << 19)
 #define GPR_GPR1_SAI2_MCLK_DIR_IN                               (0 << 20)
@@ -1288,7 +1290,7 @@
 #define GPR_GPR2_L2_MEM_FORCE_DEEPSLEEP                         (1 << 14)
 #define GPR_GPR2_MQS_CLK_DIV_SHIFT                              (16)
 #define GPR_GPR2_MQS_CLK_DIV_MASK                               (255 << GPR_GPR2_MQS_CLK_DIV_SHIFT)
-# define GPR_GPR2_MQS_CLK_DIV(n)                                ((n - 1) << GPR_GPR2_MQS_CLK_DIV_SHIFT)
+#  define GPR_GPR2_MQS_CLK_DIV(n)                               ((n - 1) << GPR_GPR2_MQS_CLK_DIV_SHIFT)
 #define GPR_GPR2_MQS_SW_RST_EN                                  (1 << 24)
 #define GPR_GPR2_MQS_EN                                         (1 << 25)
 #define GPR_GPR2_MQS_OVERSAMPLE32                               (0 << 26)
@@ -1813,7 +1815,7 @@
 
 #define GPR_GPR16_INIT_ITCM_EN                                  (1 << 0)
 #define GPR_GPR16_INIT_DTCM_EN                                  (1 << 1)
-#define GPR_GPR16_FLEXRAM_BANK_CFG_SELF                         (1 << 2)
+#define GPR_GPR16_FLEXRAM_BANK_CFG_SEL                          (1 << 2)
 #define GPR_GPR16_CM7_INIT_VTOR_SHIFT                           (7)
 #define GPR_GPR16_CM7_INIT_VTOR_MASK                            (0xffffff1 << GPR_GPR16_CM7_INIT_VTOR_SHIFT)
 #define GPR_GPR16_CM7_INIT_VTOR(n)                              (((uint32_t)(n) & 0x1ffffff)) << GPR_GPR16_CM7_INIT_VTOR_SHIFT)
@@ -1976,4 +1978,4 @@
 #define GPR_GPR25_M7_APC_AC_R3_TOP_MASK                         (0x1fffffff << GPR_GPR25_M7_APC_AC_R3_TOP_SHIFT)
 #define GPR_GPR25_M7_APC_AC_R3_TOP(n)                           ((uint32_t)(n)) << GPR_GPR25_M7_APC_AC_R3_TOP_SHIFT)
 
-#endif /* __ARCH_ARM_SRC_IMXRT_HARDWARE_IMXRT105X_IOMUXC_H */
+#endif /* __ARCH_ARM_SRC_IMXRT_HARDWARE_RT105X_IMXRT105X_IOMUXC_H */

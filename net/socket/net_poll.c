@@ -1,6 +1,8 @@
 /****************************************************************************
  * net/socket/net_poll.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -59,6 +61,11 @@ int psock_poll(FAR struct socket *psock, FAR struct pollfd *fds, bool setup)
 
   /* Let the address family's poll() method handle the operation */
 
-  DEBUGASSERT(psock->s_sockif != NULL && psock->s_sockif->si_poll != NULL);
+  DEBUGASSERT(psock->s_sockif != NULL);
+  if (psock->s_sockif->si_poll == NULL)
+    {
+      return -EOPNOTSUPP;
+    }
+
   return psock->s_sockif->si_poll(psock, fds, setup);
 }

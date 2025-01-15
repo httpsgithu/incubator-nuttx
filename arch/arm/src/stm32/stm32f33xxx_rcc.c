@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/stm32/stm32f33xxx_rcc.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -50,6 +52,14 @@
 #  define FLASH_ACR_LATENCY_SETTING  FLASH_ACR_LATENCY_2
 #else
 #  error "STM32_SYSCLK_FREQUENCY is out of range!"
+#endif
+
+/* Max ADC clock frequency is 72MHz */
+
+#if defined(CONFIG_STM32_ADC1) || defined(CONFIG_STM32_ADC2)
+#  if STM32_PLL_FREQUENCY > 72000000
+#    error ADCxxPRES is hardcoded to 1 - PLL frequency is too high
+#  endif
 #endif
 
 /****************************************************************************
@@ -485,6 +495,15 @@ static void stm32_stdclockconfig(void)
   regval  = getreg32(STM32_RCC_CFGR3);
   regval |= RCC_CFGR3_HRTIM1SW;
   putreg32(regval, STM32_RCC_CFGR3);
+#endif
+
+#if defined(CONFIG_STM32_ADC1) || defined(CONFIG_STM32_ADC2)
+  /* Configure ADC12 clock */
+
+  regval  = getreg32(STM32_RCC_CFGR2);
+  regval &= ~RCC_CFGR2_ADC12PRES_MASK;
+  regval |= RCC_CFGR2_ADC12PRESd1;
+  putreg32(regval, STM32_RCC_CFGR2);
 #endif
 }
 #endif

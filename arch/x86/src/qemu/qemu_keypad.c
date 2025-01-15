@@ -1,8 +1,9 @@
 /****************************************************************************
  * arch/x86/src/qemu/qemu_keypad.c
  *
- *   Copyright (C) 2013 Li Zhuoyi. All rights reserved.
- *   Author: Li Zhuoyi <lzyy.cn@gmail.com>
+ * SPDX-License-Identifier: BSD-3-Clause
+ * SPDX-FileCopyrightText: 2013 Li Zhuoyi. All rights reserved.
+ * SPDX-FileContributor: Li Zhuoyi <lzyy.cn@gmail.com>
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -203,9 +204,7 @@ typedef enum
  * Private Function Prototypes
  ****************************************************************************/
 
-static int keypad_open(struct file *filep);
-static int keypad_close(struct file *filep);
-static ssize_t keypad_read(struct file *filep, FAR char *buf, size_t buflen);
+static ssize_t keypad_read(struct file *filep, char *buf, size_t buflen);
 
 /****************************************************************************
  * Private Data
@@ -253,29 +252,16 @@ static const unsigned char g_kdbus[128] =
 
 static const struct file_operations g_keypadops =
 {
-  keypad_open,                  /* open */
-  keypad_close,                 /* close */
-  keypad_read,                  /* read */
-  0,                            /* write */
-  0,                            /* seek */
-  0,                            /* ioctl */
+  NULL,         /* open */
+  NULL,         /* close */
+  keypad_read,  /* read */
 };
 
 /****************************************************************************
  * Private Functions
  ****************************************************************************/
 
-static int keypad_open(struct file *filep)
-{
-  return OK;
-}
-
-static int keypad_close(struct file *filep)
-{
-  return OK;
-}
-
-static ssize_t keypad_read(struct file *filep, FAR char *buf, size_t buflen)
+static ssize_t keypad_read(struct file *filep, char *buf, size_t buflen)
 {
   uint_fast8_t keycode = 0;
   uint_fast8_t scancode = 0;

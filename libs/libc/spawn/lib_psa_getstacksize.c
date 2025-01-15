@@ -1,6 +1,8 @@
 /****************************************************************************
  * libs/libc/spawn/lib_psa_getstacksize.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -28,17 +30,15 @@
 #include <spawn.h>
 #include <assert.h>
 
-#ifndef CONFIG_BUILD_KERNEL
-
 /****************************************************************************
  * Public Functions
  ****************************************************************************/
 
 /****************************************************************************
- * Name: task_spawnattr_getstacksize
+ * Name: posix_spawnattr_getstacksize
  *
  * Description:
- *   The task_spawnattr_getstacksize() function will obtain the value of
+ *   The posix_spawnattr_getstacksize() function will obtain the value of
  *   the spawn-stacksize attribute from the attributes object referenced
  *   by attr.
  *
@@ -52,12 +52,10 @@
  *
  ****************************************************************************/
 
-int task_spawnattr_getstacksize(FAR const posix_spawnattr_t *attr,
-                                FAR size_t *stacksize)
+int posix_spawnattr_getstacksize(FAR const posix_spawnattr_t *attr,
+                                 FAR size_t *stacksize)
 {
   DEBUGASSERT(attr && stacksize);
   *stacksize = attr->stacksize;
   return OK;
 }
-
-#endif /* !CONFIG_BUILD_KERNEL */

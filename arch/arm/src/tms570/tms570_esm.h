@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/tms570/tms570_esm.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -64,7 +66,7 @@ int tms570_esm_initialize(void);
  *
  ****************************************************************************/
 
-int tms570_esm_interrupt(int irq, void *context, FAR void *arg);
+int tms570_esm_interrupt(int irq, void *context, void *arg);
 
 #undef EXTERN
 #if defined(__cplusplus)

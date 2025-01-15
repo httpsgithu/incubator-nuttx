@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/stm32f0l0g0/stm32_gpio.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -32,9 +34,9 @@
 
 #include <arch/irq.h>
 #include <arch/stm32f0l0g0/chip.h>
+#include <nuttx/spinlock.h>
 
-#include "arm_arch.h"
-
+#include "arm_internal.h"
 #include "chip.h"
 #include "stm32_gpio.h"
 
@@ -43,6 +45,16 @@
 #elif defined(CONFIG_STM32F0L0G0_HAVE_IP_EXTI_V2)
 #  include "hardware/stm32_exti.h"
 #endif
+
+#if defined(CONFIG_STM32F0G0L0_USE_LEGACY_PINMAP)
+#  pragma message "CONFIG_STM32F0G0L0_USE_LEGACY_PINMAP will be deprecated migrate board.h see tools/stm32_pinmap_tool.py"
+#endif
+
+/****************************************************************************
+ * Private Data
+ ****************************************************************************/
+
+static spinlock_t g_configgpio_lock = SP_UNLOCKED;
 
 /****************************************************************************
  * Public Data
@@ -173,7 +185,7 @@ int stm32_configgpio(uint32_t cfgset)
    * exclusive access to all of the GPIO configuration registers.
    */
 
-  flags = enter_critical_section();
+  flags = spin_lock_irqsave(&g_configgpio_lock);
 
   /* Now apply the configuration to the mode register */
 
@@ -304,7 +316,7 @@ int stm32_configgpio(uint32_t cfgset)
    * Should it configured as an EXTI interrupt?
    */
 
-  if ((cfgset & GPIO_EXTI) != 0)
+  if ((pinmode != GPIO_MODER_OUTPUT) && ((cfgset & GPIO_EXTI) != 0))
     {
       uint32_t regaddr;
       int shift;
@@ -334,7 +346,7 @@ int stm32_configgpio(uint32_t cfgset)
 #endif
     }
 
-  leave_critical_section(flags);
+  spin_unlock_irqrestore(&g_configgpio_lock, flags);
   return OK;
 }
 

@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/x86/qemu/qemu-i486/src/qemu_boot.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -29,9 +31,7 @@
 #include <nuttx/board.h>
 #include <arch/board/board.h>
 
-#include "up_arch.h"
-#include "up_internal.h"
-
+#include "x86_internal.h"
 #include "qemu.h"
 #include "qemu_i486.h"
 

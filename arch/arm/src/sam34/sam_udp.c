@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/sam34/sam_udp.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -24,6 +26,7 @@
 
 #include <nuttx/config.h>
 
+#include <sys/param.h>
 #include <sys/types.h>
 #include <stdint.h>
 #include <stdbool.h>
@@ -43,9 +46,7 @@
 
 #include <arch/irq.h>
 
-#include "arm_arch.h"
 #include "arm_internal.h"
-
 #include "sam_periphclks.h"
 #include "hardware/sam_udp.h"
 #include "sam_udp.h"
@@ -176,16 +177,6 @@
 #define SAM_TRACEINTID_TXCOMP             0x001e
 #define SAM_TRACEINTID_UPSTRRES           0x001f
 #define SAM_TRACEINTID_WAKEUP             0x0020
-
-/* Ever-present MIN and MAX macros */
-
-#ifndef MIN
-#  define MIN(a,b) (a < b ? a : b)
-#endif
-
-#ifndef MAX
-#  define MAX(a,b) (a > b ? a : b)
-#endif
 
 /* Byte ordering in host-based values */
 
@@ -340,7 +331,7 @@ static void   sam_dumpep(struct sam_usbdev_s *priv, uint8_t epno);
 #else
 static inline uint32_t sam_getreg(uintptr_t regaddr);
 static inline void sam_putreg(uint32_t regval, uintptr_t regaddr);
-# define sam_dumpep(priv,epno)
+#  define sam_dumpep(priv,epno)
 #endif
 
 static void   sam_csr_setbits(uint8_t epno, uint32_t setbits);
@@ -377,7 +368,7 @@ static void   sam_ep0_setup(struct sam_usbdev_s *priv);
 static void   sam_ep_bankinterrupt(struct sam_usbdev_s *priv,
                 struct sam_ep_s *privep, uint32_t csr, int bank);
 static void   sam_ep_interrupt(struct sam_usbdev_s *priv, int epno);
-static int    sam_udp_interrupt(int irq, void *context, FAR void *arg);
+static int    sam_udp_interrupt(int irq, void *context, void *arg);
 
 /* Endpoint helpers *********************************************************/
 
@@ -390,8 +381,6 @@ static inline struct sam_ep_s *
 static inline void
               sam_ep_unreserve(struct sam_usbdev_s *priv,
                 struct sam_ep_s *privep);
-static inline bool
-              sam_ep_reserved(struct sam_usbdev_s *priv, int epno);
 static int    sam_ep_configure_internal(struct sam_ep_s *privep,
                 const struct usb_epdesc_s *desc);
 
@@ -423,7 +412,7 @@ static void   sam_freeep(struct usbdev_s *dev, struct usbdev_ep_s *ep);
 static int    sam_getframe(struct usbdev_s *dev);
 static int    sam_wakeup(struct usbdev_s *dev);
 static int    sam_selfpowered(struct usbdev_s *dev, bool selfpowered);
-static int    sam_pullup(FAR struct usbdev_s *dev,  bool enable);
+static int    sam_pullup(struct usbdev_s *dev,  bool enable);
 
 /* Initialization/Reset *****************************************************/
 
@@ -954,7 +943,7 @@ static int sam_req_write(struct sam_usbdev_s *priv, struct sam_ep_s *privep)
           return -ENOENT;
         }
 
-      uinfo("epno=%d req=%p: len=%d xfrd=%d inflight=%d zlpneeded=%d\n",
+      uinfo("epno=%d req=%p: len=%zu xfrd=%zu inflight=%d zlpneeded=%d\n",
             epno, privreq, privreq->req.len, privreq->req.xfrd,
             privreq->inflight, privep->zlpneeded);
 
@@ -1126,7 +1115,7 @@ static int sam_req_read(struct sam_usbdev_s *priv, struct sam_ep_s *privep,
           return -ENOENT;
         }
 
-      uinfo("EP%d: len=%d xfrd=%d\n",
+      uinfo("EP%d: len=%zu xfrd=%zu\n",
             epno, privreq->req.len, privreq->req.xfrd);
 
       /* Ignore any attempt to receive a zero length packet */
@@ -2236,7 +2225,7 @@ static void sam_ep_interrupt(struct sam_usbdev_s *priv, int epno)
  *
  ****************************************************************************/
 
-static int sam_udp_interrupt(int irq, void *context, FAR void *arg)
+static int sam_udp_interrupt(int irq, void *context, void *arg)
 {
   /* For now there is only one USB controller, but we will always refer to
    * it using a pointer to make any future ports to multiple UDP controllers
@@ -2796,20 +2785,6 @@ sam_ep_unreserve(struct sam_usbdev_s *priv, struct sam_ep_s *privep)
 }
 
 /****************************************************************************
- * Name: sam_ep_reserved
- *
- * Description:
- *   Check if the endpoint has already been allocated.
- *
- ****************************************************************************/
-
-static inline bool
-sam_ep_reserved(struct sam_usbdev_s *priv, int epno)
-{
-  return ((priv->epavail & SAM_EP_BIT(epno)) == 0);
-}
-
-/****************************************************************************
  * Name: sam_ep_configure_internal
  *
  * Description:
@@ -3074,7 +3049,7 @@ static struct usbdev_req_s *sam_ep_allocreq(struct usbdev_ep_s *ep)
 
   usbtrace(TRACE_EPALLOCREQ, USB_EPNO(ep->eplog));
 
-  privreq = (struct sam_req_s *)kmm_malloc(sizeof(struct sam_req_s));
+  privreq = kmm_malloc(sizeof(struct sam_req_s));
   if (!privreq)
     {
       usbtrace(TRACE_DEVERROR(SAM_TRACEERR_ALLOCFAIL), 0);
@@ -3594,7 +3569,7 @@ static int sam_selfpowered(struct usbdev_s *dev, bool selfpowered)
  *
  ****************************************************************************/
 
-static int sam_pullup(FAR struct usbdev_s *dev, bool enable)
+static int sam_pullup(struct usbdev_s *dev, bool enable)
 {
   struct sam_usbdev_s *priv = (struct sam_usbdev_s *)dev;
   uint32_t regval;

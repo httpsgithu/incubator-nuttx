@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/lpc17xx_40xx/lpc176x_clockconfig.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -30,7 +32,6 @@
 #include <nuttx/arch.h>
 #include <arch/board/board.h>
 
-#include "arm_arch.h"
 #include "arm_internal.h"
 #include "lpc17_40_clockconfig.h"
 #include "hardware/lpc17_40_syscon.h"
@@ -224,7 +225,7 @@ void lpc17_40_clockconfig(void)
           regval |= BOARD_FLASHCFG_VALUE;
         }
 
-      putreg32(BOARD_FLASHCFG_VALUE, LPC17_40_SYSCON_FLASHCFG);
+      putreg32(regval, LPC17_40_SYSCON_FLASHCFG);
     }
 #endif
 }

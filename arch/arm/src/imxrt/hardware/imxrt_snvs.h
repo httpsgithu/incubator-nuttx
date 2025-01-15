@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/imxrt/hardware/imxrt_snvs.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -47,6 +49,8 @@
 #define IMXRT_SNVS_LPLR_OFFSET        0x0034  /* SNVS_LP Lock Register */
 #define IMXRT_SNVS_LPCR_OFFSET        0x0038  /* SNVS_LP Control Register */
 #define IMXRT_SNVS_LPSR_OFFSET        0x004c  /* SNVS_LP Status Register */
+#define IMXRT_SNVS_LPSRTCMR_OFFSET    0x0050  /* SNVS_LP Secure Real Time Counter MSB Register */
+#define IMXRT_SNVS_LPSRTCLR_OFFSET    0x0054  /* SNVS_LP Secure Real Time Counter LSB Register */
 #define IMXRT_SNVS_LPSMCMR_OFFSET     0x005c  /* SNVS_LP Secure Monotonic Counter MSB Register */
 #define IMXRT_SNVS_LPSMCLR_OFFSET     0x0060  /* SNVS_LP Secure Monotonic Counter LSB Register */
 
@@ -80,6 +84,8 @@
 #define IMXRT_SNVS_LPLR               (IMXRT_SNVSHP_BASE + IMXRT_SNVS_LPLR_OFFSET)
 #define IMXRT_SNVS_LPCR               (IMXRT_SNVSHP_BASE + IMXRT_SNVS_LPCR_OFFSET)
 #define IMXRT_SNVS_LPSR               (IMXRT_SNVSHP_BASE + IMXRT_SNVS_LPSR_OFFSET)
+#define IMXRT_SNVS_LPSRTCMR           (IMXRT_SNVSHP_BASE + IMXRT_SNVS_LPSRTCMR_OFFSET)
+#define IMXRT_SNVS_LPSRTCLR           (IMXRT_SNVSHP_BASE + IMXRT_SNVS_LPSRTCLR_OFFSET)
 #define IMXRT_SNVS_LPSMCMR            (IMXRT_SNVSHP_BASE + IMXRT_SNVS_LPSMCMR_OFFSET)
 #define IMXRT_SNVS_LPSMCLR            (IMXRT_SNVSHP_BASE + IMXRT_SNVS_LPSMCLR_OFFSET)
 

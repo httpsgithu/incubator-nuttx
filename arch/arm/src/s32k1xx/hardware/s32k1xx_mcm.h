@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/s32k1xx/hardware/s32k1xx_mcm.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -18,8 +20,8 @@
  *
  ****************************************************************************/
 
-#ifndef __ARCH_ARM_SRC_S32K1XX_HARDWARE_S32K1XX_CMU_H
-#define __ARCH_ARM_SRC_S32K1XX_HARDWARE_S32K1XX_CMU_H
+#ifndef __ARCH_ARM_SRC_S32K1XX_HARDWARE_S32K1XX_MCM_H
+#define __ARCH_ARM_SRC_S32K1XX_HARDWARE_S32K1XX_MCM_H
 
 /****************************************************************************
  * Included Files
@@ -268,4 +270,4 @@
 /* LMEM Fault Data Low Register (32-bit address data) */
 
 #endif /* CONFIG_ARCH_CHIP_S32K14X */
-#endif /* __ARCH_ARM_SRC_S32K1XX_HARDWARE_S32K1XX_CMU_H */
+#endif /* __ARCH_ARM_SRC_S32K1XX_HARDWARE_S32K1XX_MCM_H */

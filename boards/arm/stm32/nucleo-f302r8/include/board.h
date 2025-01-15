@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/stm32/nucleo-f302r8/include/board.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -18,8 +20,8 @@
  *
  ****************************************************************************/
 
-#ifndef __BOARDS_ARM_STM32_NUCLEOF302R8_INCLUDE_BOARD_H
-#define __BOARDS_ARM_STM32_NUCLEOF302R8_INCLUDE_BOARD_H
+#ifndef __BOARDS_ARM_STM32_NUCLEO_F302R8_INCLUDE_BOARD_H
+#define __BOARDS_ARM_STM32_NUCLEO_F302R8_INCLUDE_BOARD_H
 
 /****************************************************************************
  * Included Files
@@ -30,10 +32,6 @@
 #ifndef __ASSEMBLY__
 #  include <stdint.h>
 #  include <stdbool.h>
-#endif
-
-#ifdef __KERNEL__
-#  include "stm32.h"
 #endif
 
 /****************************************************************************
@@ -134,7 +132,7 @@
  *
  * And one can be controlled by software:
  *
- * User LD2: green LED is a user LED connected to the I/O PA5 of the
+ * User LD2: green LED is a user LED connected to the I/O PB13 of the
  *           STM32F302R8T6.
  *
  * If CONFIG_ARCH_LEDS is not defined, then the user can control the LED in
@@ -212,6 +210,11 @@
 
 #define GPIO_USART1_RX GPIO_USART1_RX_2 /* PB7 */
 #define GPIO_USART1_TX GPIO_USART1_TX_2 /* PB6 */
+
+/* CAN */
+
+#define GPIO_CAN1_RX     GPIO_CAN_RX_3 /* PB8 */
+#define GPIO_CAN1_TX     GPIO_CAN_TX_3 /* PB9 */
 
 /* PWM configuration ********************************************************/
 

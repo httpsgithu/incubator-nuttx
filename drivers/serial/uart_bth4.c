@@ -1,6 +1,8 @@
 /****************************************************************************
  * drivers/serial/uart_bth4.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -22,10 +24,12 @@
  * Included Files
  ****************************************************************************/
 
+#include <nuttx/irq.h>
 #include <nuttx/fs/fs.h>
 #include <nuttx/kmalloc.h>
+#include <nuttx/mutex.h>
 #include <nuttx/semaphore.h>
-#include <nuttx/mm/circbuf.h>
+#include <nuttx/circbuf.h>
 
 #include <fcntl.h>
 #include <string.h>
@@ -49,7 +53,7 @@ union bt_hdr_u
 
 struct uart_bth4_s
 {
-  FAR struct bt_driver_s  *drv;
+  FAR struct bt_driver_s *drv;
 
   FAR struct circbuf_s    circbuf;
 
@@ -57,25 +61,27 @@ struct uart_bth4_s
 
   uint8_t                 sendbuf[CONFIG_UART_BTH4_TXBUFSIZE];
   size_t                  sendlen;
-  sem_t                   sendlock;
+  mutex_t                 sendlock;
+  mutex_t                 openlock;
+  uint8_t                 refcnt;
 
-  FAR struct pollfd       *fds[CONFIG_UART_BTH4_NPOLLWAITERS];
+  FAR struct pollfd      *fds[CONFIG_UART_BTH4_NPOLLWAITERS];
 };
 
 /****************************************************************************
  * Private Function Prototypes
  ****************************************************************************/
 
-static int     uart_bth4_open (FAR struct file *filep);
+static int     uart_bth4_open(FAR struct file *filep);
 static int     uart_bth4_close(FAR struct file *filep);
-static ssize_t uart_bth4_read (FAR struct file *filep,
-                               FAR char *buffer, size_t buflen);
+static ssize_t uart_bth4_read(FAR struct file *filep,
+                              FAR char *buffer, size_t buflen);
 static ssize_t uart_bth4_write(FAR struct file *filep,
                                FAR const char *buffer, size_t buflen);
 static int     uart_bth4_ioctl(FAR struct file *filep,
                                int cmd, unsigned long arg);
-static int     uart_bth4_poll (FAR struct file *filep,
-                               FAR struct pollfd *fds, bool setup);
+static int     uart_bth4_poll(FAR struct file *filep,
+                              FAR struct pollfd *fds, bool setup);
 
 /****************************************************************************
  * Private Data
@@ -83,12 +89,15 @@ static int     uart_bth4_poll (FAR struct file *filep,
 
 static const struct file_operations g_uart_bth4_ops =
 {
-  .open  = uart_bth4_open,
-  .close = uart_bth4_close,
-  .read  = uart_bth4_read,
-  .write = uart_bth4_write,
-  .ioctl = uart_bth4_ioctl,
-  .poll  = uart_bth4_poll
+  uart_bth4_open,   /* open */
+  uart_bth4_close,  /* close */
+  uart_bth4_read,   /* read */
+  uart_bth4_write,  /* write */
+  NULL,             /* seek */
+  uart_bth4_ioctl,  /* ioctl */
+  NULL,             /* mmap */
+  NULL,             /* truncate */
+  uart_bth4_poll    /* poll */
 };
 
 /****************************************************************************
@@ -109,22 +118,7 @@ static inline void uart_bth4_post(FAR sem_t *sem)
 static void uart_bth4_pollnotify(FAR struct uart_bth4_s *dev,
                                  pollevent_t eventset)
 {
-  int i;
-
-  for (i = 0; i < CONFIG_UART_BTH4_NPOLLWAITERS; i++)
-    {
-      FAR struct pollfd *fds = dev->fds[i];
-
-      if (fds)
-        {
-          fds->revents |= (fds->events & eventset);
-
-          if (fds->revents != 0)
-            {
-              uart_bth4_post(fds->sem);
-            }
-        }
-    }
+  poll_notify(dev->fds, CONFIG_UART_BTH4_NPOLLWAITERS, eventset);
 
   if ((eventset & POLLIN) != 0)
     {
@@ -170,6 +164,10 @@ static int uart_bth4_receive(FAR struct bt_driver_s *drv,
           uart_bth4_pollnotify(dev, POLLIN);
         }
     }
+  else
+    {
+      ret = -ENOMEM;
+    }
 
   leave_critical_section(flags);
   return ret;
@@ -180,14 +178,35 @@ static int uart_bth4_open(FAR struct file *filep)
   FAR struct inode *inode = filep->f_inode;
   FAR struct uart_bth4_s *dev = inode->i_private;
   int ret;
+  uint8_t tmp;
 
-  ret = dev->drv->open(dev->drv);
+  ret = nxmutex_lock(&dev->openlock);
   if (ret < 0)
     {
       return ret;
     }
 
-  dev->sendlen = 0;
+  tmp = dev->refcnt + 1;
+  if (tmp == 0)
+    {
+      nxmutex_unlock(&dev->openlock);
+      return -EMFILE;
+    }
+
+  if (tmp == 1)
+    {
+      ret = dev->drv->open(dev->drv);
+      if (ret < 0)
+        {
+          nxmutex_unlock(&dev->openlock);
+          return ret;
+        }
+
+      dev->sendlen = 0;
+    }
+
+  dev->refcnt = tmp;
+  nxmutex_unlock(&dev->openlock);
 
   return OK;
 }
@@ -197,9 +216,19 @@ static int uart_bth4_close(FAR struct file *filep)
   FAR struct inode *inode = filep->f_inode;
   FAR struct uart_bth4_s *dev = inode->i_private;
 
-  dev->drv->close(dev->drv);
+  nxmutex_lock(&dev->openlock);
+  if (dev->refcnt > 1)
+    {
+      dev->refcnt--;
+      nxmutex_unlock(&dev->openlock);
+      return OK;
+    }
 
+  dev->refcnt = 0;
+  dev->drv->close(dev->drv);
   uart_bth4_pollnotify(dev, POLLIN | POLLOUT);
+  nxmutex_unlock(&dev->openlock);
+
   return OK;
 }
 
@@ -246,7 +275,7 @@ static ssize_t uart_bth4_write(FAR struct file *filep,
   size_t hdrlen;
   int ret;
 
-  ret = nxsem_wait_uninterruptible(&dev->sendlock);
+  ret = nxmutex_lock(&dev->sendlock);
   if (ret < 0)
     {
       return ret;
@@ -336,18 +365,26 @@ static ssize_t uart_bth4_write(FAR struct file *filep,
 err:
   dev->sendlen = 0;
 out:
-  nxsem_post(&dev->sendlock);
+  nxmutex_unlock(&dev->sendlock);
   return ret < 0 ? ret : buflen;
 }
 
-static int uart_bth4_ioctl(FAR struct file *filep,
-                           int cmd, unsigned long arg)
+static int uart_bth4_ioctl(FAR struct file *filep, int cmd,
+                           unsigned long arg)
 {
-  return OK;
+  FAR struct inode *inode = filep->f_inode;
+  FAR struct uart_bth4_s *dev = inode->i_private;
+
+  if (!dev->drv->ioctl)
+    {
+      return -ENOTTY;
+    }
+
+  return dev->drv->ioctl(dev->drv, cmd, arg);
 }
 
-static int uart_bth4_poll(FAR struct file *filep,
-                          FAR struct pollfd *fds, bool setup)
+static int uart_bth4_poll(FAR struct file *filep, FAR struct pollfd *fds,
+                          bool setup)
 {
   FAR struct inode *inode = filep->f_inode;
   FAR struct uart_bth4_s *dev = inode->i_private;
@@ -368,8 +405,8 @@ static int uart_bth4_poll(FAR struct file *filep,
             {
               /* Bind the poll structure and this slot */
 
-              dev->fds[i]  = fds;
-              fds->priv    = &dev->fds[i];
+              dev->fds[i] = fds;
+              fds->priv   = &dev->fds[i];
               break;
             }
         }
@@ -382,15 +419,12 @@ static int uart_bth4_poll(FAR struct file *filep,
 
       if (!circbuf_is_empty(&dev->circbuf))
         {
-          eventset |= (fds->events & POLLIN);
+          eventset |= POLLIN;
         }
 
-      eventset |= (fds->events & POLLOUT);
+      eventset |= POLLOUT;
 
-      if (eventset)
-        {
-          uart_bth4_pollnotify(dev, eventset);
-        }
+      poll_notify(&fds, 1, eventset);
     }
   else if (fds->priv != NULL)
     {
@@ -437,15 +471,15 @@ int uart_bth4_register(FAR const char *path, FAR struct bt_driver_s *drv)
   drv->receive = uart_bth4_receive;
   drv->priv    = dev;
 
-  nxsem_init(&dev->sendlock, 0, 1);
-  nxsem_init(&dev->recvsem,  0, 0);
-
-  nxsem_set_protocol(&dev->recvsem, SEM_PRIO_NONE);
+  nxmutex_init(&dev->sendlock);
+  nxmutex_init(&dev->openlock);
+  nxsem_init(&dev->recvsem, 0, 0);
 
   ret = register_driver(path, &g_uart_bth4_ops, 0666, dev);
   if (ret < 0)
     {
-      nxsem_destroy(&dev->sendlock);
+      nxmutex_destroy(&dev->sendlock);
+      nxmutex_destroy(&dev->openlock);
       nxsem_destroy(&dev->recvsem);
       circbuf_uninit(&dev->circbuf);
       kmm_free(dev);

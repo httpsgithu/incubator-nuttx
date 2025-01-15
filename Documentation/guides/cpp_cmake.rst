@@ -1,6 +1,7 @@
 .. include:: /substitutions.rst
 .. _cpp_cmake:
 
+=======================
 C++ Example using CMake
 =======================
 
@@ -24,7 +25,7 @@ applications using C++ language and also the cmake build tool.
 This document will show how to reimplement the hellocpp project using this cmake.
 
 Preparation
------------
+===========
 
 #. Base NuttX compilation changes
 
@@ -46,7 +47,7 @@ Preparation
        $ make export
 
 Creating the project
---------------------
+====================
 
 #. Create your project file structure
 
@@ -88,7 +89,7 @@ Creating the project
 
     include(cmake/stm32f4discovery.cmake)
 
-    set(AC_COMMON_FLAGS "${AC_COMMON_FLAGS} -fno-builtin -Wall -Wshadow -Wundef -fno-strict-aliasing -fno-strength-reduce -fomit-frame-pointer -Os")
+    set(AC_COMMON_FLAGS "${AC_COMMON_FLAGS} -Wall -Wshadow -Wundef -fno-strict-aliasing -Os")
     set(AC_COMMON_FLAGS "${AC_COMMON_FLAGS} -D_DEBUG -D_LIBCPP_BUILD_STATIC -D_LIBCPP_NO_EXCEPTIONS ")
     set(AC_COMMON_FLAGS "${AC_COMMON_FLAGS} -fno-exceptions -fcheck-new -fno-rtti -pedantic ")
     set(AC_COMMON_FLAGS "${AC_COMMON_FLAGS} -nostdinc++")
@@ -103,17 +104,15 @@ Creating the project
     )
 
     set(EXE_NAME hellocpp)
-
+    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${AC_HW_FLAGS} ${AC_DEFINES}")
     set(CMAKE_CXX_FLAGS     "${AC_HW_FLAGS} ${AC_DEFINES} ${AC_COMMON_FLAGS} ${AC_CXX_EXTRA_FLAGS}")
     if (PARAM_DEBUG)
         set(CMAKE_CXX_FLAGS     "${CMAKE_CXX_FLAGS} -g")
     endif()
-
+    
     set(CMAKE_SKIP_RPATH ON)
     set(CMAKE_CXX_LINK_EXECUTABLE "${CMAKE_LINKER} ${AC_LINKER_FLAGS} -o ${EXE_NAME}.elf <OBJECTS> <LINK_LIBRARIES>")
-
     set(BUILD_SHARED_LIBS OFF)
-
     add_subdirectory(src)
 
 * hellocpp/cmake/stm32f4discovery.cmake
@@ -147,9 +146,9 @@ Creating the project
 
     set(AC_HW_FLAGS         "-mcpu=cortex-m4 -mthumb -mfloat-abi=soft ")
     set(AC_HW_FLAGS         "${AC_HW_FLAGS} -isystem ${NUTTX_PATH}/include")
-    set(AC_HW_FLAGS         "${AC_HW_FLAGS} -pipe -D__NuttX__")
+    set(AC_HW_FLAGS         "${AC_HW_FLAGS} -pipe")
 
-    set(AC_LINKER_FLAGS     "--entry=__start -nostartfiles -nodefaultlibs -T${MCU_LINKER_SCRIPT}")
+    set(AC_LINKER_FLAGS     "--entry=__start -nostdlib -T${MCU_LINKER_SCRIPT}")
 
 * hellocpp/src/CMakeLists.txt
 
@@ -270,7 +269,7 @@ Creating the project
     }
 
 Building
---------
+========
 
 To launch build, you use the cmake procedure:
 

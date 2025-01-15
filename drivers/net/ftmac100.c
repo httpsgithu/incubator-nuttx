@@ -1,6 +1,8 @@
 /****************************************************************************
  * drivers/net/ftmac100.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -33,16 +35,16 @@
 #include <errno.h>
 #include <assert.h>
 #include <debug.h>
-#include <crc32.h>
 
 #include <arpa/inet.h>
 
+#include <nuttx/crc32.h>
 #include <nuttx/arch.h>
 #include <nuttx/irq.h>
 #include <nuttx/kmalloc.h>
 #include <nuttx/wdog.h>
 #include <nuttx/wqueue.h>
-#include <nuttx/net/arp.h>
+#include <nuttx/net/ip.h>
 #include <nuttx/net/netdev.h>
 #include <nuttx/net/ftmac100.h>
 
@@ -78,24 +80,22 @@
  */
 
 #ifndef CONFIG_FTMAC100_NINTERFACES
-# define CONFIG_FTMAC100_NINTERFACES 1
+#  define CONFIG_FTMAC100_NINTERFACES 1
 #endif
-
-/* TX poll delay = 1 seconds. CLK_TCK is the number of clock ticks per
- * second.
- */
-
-#define FTMAC100_WDDELAY   (1*CLK_TCK)
 
 /* TX timeout = 1 minute */
 
 #define FTMAC100_TXTIMEOUT (60*CLK_TCK)
 
+/* Packet buffer size */
+
+#define PKTBUF_SIZE (MAX_NETDEV_PKTSIZE + CONFIG_NET_GUARDSIZE)
+
 /* This is a helper pointer for accessing the contents of the Ethernet
  * header.
  */
 
-#define BUF ((struct eth_hdr_s *)priv->ft_dev.d_buf)
+#define BUF ((FAR struct eth_hdr_s *)priv->ft_dev.d_buf)
 
 /* RX/TX buffer alignment */
 
@@ -105,24 +105,24 @@
 #define ETH_ZLEN 60
 
 #if defined(CONFIG_NET_MCASTGROUP) || defined(CONFIG_NET_ICMPv6)
-# define MACCR_ENABLE_ALL (FTMAC100_MACCR_XMT_EN  | \
-                           FTMAC100_MACCR_RCV_EN  | \
-                           FTMAC100_MACCR_XDMA_EN | \
-                           FTMAC100_MACCR_RDMA_EN | \
-                           FTMAC100_MACCR_CRC_APD | \
-                           FTMAC100_MACCR_FULLDUP | \
-                           FTMAC100_MACCR_RX_RUNT | \
-                           FTMAC100_MACCR_HT_MULTI_EN | \
-                           FTMAC100_MACCR_RX_BROADPKT)
+#  define MACCR_ENABLE_ALL (FTMAC100_MACCR_XMT_EN  | \
+                            FTMAC100_MACCR_RCV_EN  | \
+                            FTMAC100_MACCR_XDMA_EN | \
+                            FTMAC100_MACCR_RDMA_EN | \
+                            FTMAC100_MACCR_CRC_APD | \
+                            FTMAC100_MACCR_FULLDUP | \
+                            FTMAC100_MACCR_RX_RUNT | \
+                            FTMAC100_MACCR_HT_MULTI_EN | \
+                            FTMAC100_MACCR_RX_BROADPKT)
 #else
-# define MACCR_ENABLE_ALL (FTMAC100_MACCR_XMT_EN  | \
-                           FTMAC100_MACCR_RCV_EN  | \
-                           FTMAC100_MACCR_XDMA_EN | \
-                           FTMAC100_MACCR_RDMA_EN | \
-                           FTMAC100_MACCR_CRC_APD | \
-                           FTMAC100_MACCR_FULLDUP | \
-                           FTMAC100_MACCR_RX_RUNT | \
-                           FTMAC100_MACCR_RX_BROADPKT)
+#  define MACCR_ENABLE_ALL (FTMAC100_MACCR_XMT_EN  | \
+                            FTMAC100_MACCR_RCV_EN  | \
+                            FTMAC100_MACCR_XDMA_EN | \
+                            FTMAC100_MACCR_RDMA_EN | \
+                            FTMAC100_MACCR_CRC_APD | \
+                            FTMAC100_MACCR_FULLDUP | \
+                            FTMAC100_MACCR_RX_RUNT | \
+                            FTMAC100_MACCR_RX_BROADPKT)
 #endif
 
 #define MACCR_DISABLE_ALL 0
@@ -137,8 +137,8 @@
 
 #define INT_MASK_ALL_DISABLED 0
 
-#define putreg32(v, x) (*(volatile uint32_t*)(x) = (v))
-#define getreg32(x) (*(uint32_t *)(x))
+#define putreg32(v, x) (*(FAR volatile uint32_t*)(x) = (v))
+#define getreg32(x) (*(FAR volatile uint32_t *)(x))
 
 /****************************************************************************
  * Private Types
@@ -161,7 +161,6 @@ struct ftmac100_driver_s
   /* NuttX net data */
 
   bool ft_bifup;               /* true:ifup false:ifdown */
-  struct wdog_s ft_txpoll;     /* TX poll timer */
   struct wdog_s ft_txtimeout;  /* TX timeout timer */
   unsigned int status;         /* Last ISR status */
   struct work_s ft_irqwork;    /* For deferring work to the work queue */
@@ -178,7 +177,8 @@ struct ftmac100_driver_s
 
 /* A single packet buffer is used */
 
-static uint8_t g_pktbuf[MAX_NETDEV_PKTSIZE + CONFIG_NET_GUARDSIZE];
+static uint16_t g_pktbuf[CONFIG_FTMAC100_NINTERFACES]
+                        [(PKTBUF_SIZE + 1) / 2];
 
 /* Driver state structure. */
 
@@ -192,7 +192,7 @@ static struct ftmac100_driver_s g_ftmac100[CONFIG_FTMAC100_NINTERFACES]
 /* Common TX logic */
 
 static int  ftmac100_transmit(FAR struct ftmac100_driver_s *priv);
-static int  ftmac100_txpoll(struct net_driver_s *dev);
+static int  ftmac100_txpoll(FAR struct net_driver_s *dev);
 
 /* Interrupt handling */
 
@@ -208,9 +208,6 @@ static int  ftmac100_interrupt(int irq, FAR void *context, FAR void *arg);
 static void ftmac100_txtimeout_work(FAR void *arg);
 static void ftmac100_txtimeout_expiry(wdparm_t arg);
 
-static void ftmac100_poll_work(FAR void *arg);
-static void ftmac100_poll_expiry(wdparm_t arg);
-
 /* NuttX callback functions */
 
 static int ftmac100_ifup(FAR struct net_driver_s *dev);
@@ -225,9 +222,6 @@ static int ftmac100_addmac(FAR struct net_driver_s *dev,
 #ifdef CONFIG_NET_MCASTGROUP
 static int ftmac100_rmmac(FAR struct net_driver_s *dev,
                           FAR const uint8_t *mac);
-#endif
-#ifdef CONFIG_NET_ICMPv6
-static void ftmac100_ipv6multicast(FAR struct ftmac100_driver_s *priv);
 #endif
 #endif
 
@@ -345,50 +339,14 @@ static int ftmac100_transmit(FAR struct ftmac100_driver_s *priv)
  *
  ****************************************************************************/
 
-static int ftmac100_txpoll(struct net_driver_s *dev)
+static int ftmac100_txpoll(FAR struct net_driver_s *dev)
 {
   FAR struct ftmac100_driver_s *priv =
     (FAR struct ftmac100_driver_s *)dev->d_private;
 
-  /* If the polling resulted in data that should be sent out on the network,
-   * the field d_len is set to a value > 0.
-   */
+  /* Send the packet */
 
-  if (priv->ft_dev.d_len > 0)
-    {
-      /* Look up the destination MAC address and add it to the Ethernet
-       * header.
-       */
-
-#ifdef CONFIG_NET_IPv4
-#ifdef CONFIG_NET_IPv6
-      if (IFF_IS_IPv4(priv->ft_dev.d_flags))
-#endif
-        {
-          arp_out(&priv->ft_dev);
-        }
-#endif /* CONFIG_NET_IPv4 */
-
-#ifdef CONFIG_NET_IPv6
-#ifdef CONFIG_NET_IPv4
-      else
-#endif
-        {
-          neighbor_out(&priv->ft_dev);
-        }
-#endif /* CONFIG_NET_IPv6 */
-
-      if (!devif_loopback(&priv->ft_dev))
-        {
-          /* Send the packet */
-
-          ftmac100_transmit(priv);
-
-          /* Check if there is room in the device to hold another packet.  If
-           * not, return a non-zero value to terminate the poll.
-           */
-        }
-    }
+  ftmac100_transmit(priv);
 
   /* If zero is returned, the polling will continue until all connections
    * have been examined.
@@ -664,7 +622,7 @@ static void ftmac100_receive(FAR struct ftmac100_driver_s *priv)
         }
 
       len = FTMAC100_RXDES0_RFL(rxdes->rxdes0);
-      data = (uint8_t *)rxdes->rxdes2;
+      data = (FAR uint8_t *)rxdes->rxdes2;
 
       ninfo ("RX buffer %d (%08x), %x received (%d)\n",
              priv->rx_pointer, data, len,
@@ -692,11 +650,8 @@ static void ftmac100_receive(FAR struct ftmac100_driver_s *priv)
         {
           ninfo("IPv4 frame\n");
 
-          /* Handle ARP on input then give the IPv4 packet to the network
-           * layer
-           */
+          /* Receive an IPv4 packet from the network device */
 
-          arp_ipin(&priv->ft_dev);
           ipv4_input(&priv->ft_dev);
 
           /* If the above function invocation resulted in data that should be
@@ -706,21 +661,6 @@ static void ftmac100_receive(FAR struct ftmac100_driver_s *priv)
 
           if (priv->ft_dev.d_len > 0)
             {
-              /* Update the Ethernet header with the correct MAC address */
-
-#ifdef CONFIG_NET_IPv6
-              if (IFF_IS_IPv4(priv->ft_dev.d_flags))
-#endif
-                {
-                  arp_out(&priv->ft_dev);
-                }
-#ifdef CONFIG_NET_IPv6
-              else
-                {
-                  neighbor_out(&priv->ft_dev);
-                }
-#endif
-
               /* And send the packet */
 
               ftmac100_transmit(priv);
@@ -744,21 +684,6 @@ static void ftmac100_receive(FAR struct ftmac100_driver_s *priv)
 
           if (priv->ft_dev.d_len > 0)
             {
-              /* Update the Ethernet header with the correct MAC address */
-
-#ifdef CONFIG_NET_IPv4
-              if (IFF_IS_IPv4(priv->ft_dev.d_flags))
-                {
-                  arp_out(&priv->ft_dev);
-                }
-              else
-#endif
-#ifdef CONFIG_NET_IPv6
-                {
-                  neighbor_out(&priv->ft_dev);
-                }
-#endif
-
               /* And send the packet */
 
               ftmac100_transmit(priv);
@@ -767,9 +692,9 @@ static void ftmac100_receive(FAR struct ftmac100_driver_s *priv)
       else
 #endif
 #ifdef CONFIG_NET_ARP
-      if (BUF->type == htons(ETHTYPE_ARP))
+      if (BUF->type == HTONS(ETHTYPE_ARP))
         {
-          arp_arpin(&priv->ft_dev);
+          arp_input(&priv->ft_dev);
 
           /* If the above function invocation resulted in data that should be
            * sent out on the network, the field  d_len will set to a value
@@ -1090,75 +1015,6 @@ static void ftmac100_txtimeout_expiry(wdparm_t arg)
 }
 
 /****************************************************************************
- * Name: ftmac100_poll_work
- *
- * Description:
- *   Perform periodic polling from the worker thread
- *
- * Input Parameters:
- *   arg - The argument passed when work_queue() as called.
- *
- * Returned Value:
- *   OK on success
- *
- * Assumptions:
- *   Ethernet interrupts are disabled
- *
- ****************************************************************************/
-
-static void ftmac100_poll_work(FAR void *arg)
-{
-  FAR struct ftmac100_driver_s *priv = (FAR struct ftmac100_driver_s *)arg;
-
-  /* Perform the poll */
-
-  net_lock();
-
-  /* Check if there is room in the send another TX packet.  We cannot perform
-   * the TX poll if he are unable to accept another packet for transmission.
-   */
-
-  /* If so, update TCP timing states and poll the network for new XMIT data.
-   * Hmmm.. might be bug here.  Does this mean if there is a transmit in
-   * progress, we will missing TCP time state updates?
-   */
-
-  devif_timer(&priv->ft_dev, FTMAC100_WDDELAY, ftmac100_txpoll);
-
-  /* Setup the watchdog poll timer again */
-
-  wd_start(&priv->ft_txpoll, FTMAC100_WDDELAY,
-           ftmac100_poll_expiry, (wdparm_t)priv);
-  net_unlock();
-}
-
-/****************************************************************************
- * Name: ftmac100_poll_expiry
- *
- * Description:
- *   Periodic timer handler.  Called from the timer interrupt handler.
- *
- * Input Parameters:
- *   arg  - The argument
- *
- * Returned Value:
- *   None
- *
- * Assumptions:
- *   Global interrupts are disabled by the watchdog logic.
- *
- ****************************************************************************/
-
-static void ftmac100_poll_expiry(wdparm_t arg)
-{
-  FAR struct ftmac100_driver_s *priv = (FAR struct ftmac100_driver_s *)arg;
-
-  /* Schedule to perform the interrupt processing on the worker thread. */
-
-  work_queue(FTMAWORK, &priv->ft_pollwork, ftmac100_poll_work, priv, 0);
-}
-
-/****************************************************************************
  * Name: ftmac100_ifup
  *
  * Description:
@@ -1181,9 +1037,9 @@ static int ftmac100_ifup(struct net_driver_s *dev)
     (FAR struct ftmac100_driver_s *)dev->d_private;
 
 #ifdef CONFIG_NET_IPv4
-  ninfo("Bringing up: %d.%d.%d.%d\n",
-        dev->d_ipaddr & 0xff, (dev->d_ipaddr >> 8) & 0xff,
-        (dev->d_ipaddr >> 16) & 0xff, dev->d_ipaddr >> 24);
+  ninfo("Bringing up: %u.%u.%u.%u\n",
+        ip4_addr1(dev->d_ipaddr), ip4_addr2(dev->d_ipaddr),
+        ip4_addr3(dev->d_ipaddr), ip4_addr4(dev->d_ipaddr));
 #endif
 #ifdef CONFIG_NET_IPv6
   ninfo("Bringing up: %04x:%04x:%04x:%04x:%04x:%04x:%04x:%04x\n",
@@ -1203,17 +1059,6 @@ static int ftmac100_ifup(struct net_driver_s *dev)
    */
 
   ftmac100_set_mac(priv, priv->ft_dev.d_mac.ether.ether_addr_octet);
-
-#ifdef CONFIG_NET_ICMPv6
-  /* Set up IPv6 multicast address filtering */
-
-  ftmac100_ipv6multicast(priv);
-#endif
-
-  /* Set and activate a timer process */
-
-  wd_start(&priv->ft_txpoll, FTMAC100_WDDELAY,
-           ftmac100_poll_expiry, (wdparm_t)priv);
 
   /* Enable the Ethernet interrupt */
 
@@ -1251,9 +1096,8 @@ static int ftmac100_ifdown(struct net_driver_s *dev)
   flags = enter_critical_section();
   up_disable_irq(CONFIG_FTMAC100_IRQ);
 
-  /* Cancel the TX poll timer and TX timeout timers */
+  /* Cancel the TX timeout timers */
 
-  wd_cancel(&priv->ft_txpoll);
   wd_cancel(&priv->ft_txtimeout);
 
   /* Put the EMAC in its reset, non-operational state.  This should be
@@ -1305,7 +1149,7 @@ static void ftmac100_txavail_work(FAR void *arg)
 
       /* If so, then poll the network for new XMIT data */
 
-      devif_timer(&priv->ft_dev, 0, ftmac100_txpoll);
+      devif_poll(&priv->ft_dev, ftmac100_txpoll);
     }
 
   net_unlock();
@@ -1459,79 +1303,6 @@ static int ftmac100_rmmac(struct net_driver_s *dev, FAR const uint8_t *mac)
 #endif
 
 /****************************************************************************
- * Name: ftmac100_ipv6multicast
- *
- * Description:
- *   Configure the IPv6 multicast MAC address.
- *
- * Input Parameters:
- *   priv - A reference to the private driver state structure
- *
- * Returned Value:
- *   OK on success; Negated errno on failure.
- *
- * Assumptions:
- *
- ****************************************************************************/
-
-#ifdef CONFIG_NET_ICMPv6
-static void ftmac100_ipv6multicast(FAR struct ftmac100_driver_s *priv)
-{
-  FAR struct net_driver_s *dev;
-  uint16_t tmp16;
-  uint8_t mac[6];
-
-  /* For ICMPv6, we need to add the IPv6 multicast address
-   *
-   * For IPv6 multicast addresses, the Ethernet MAC is derived by
-   * the four low-order octets OR'ed with the MAC 33:33:00:00:00:00,
-   * so for example the IPv6 address FF02:DEAD:BEEF::1:3 would map
-   * to the Ethernet MAC address 33:33:00:01:00:03.
-   *
-   * NOTES:  This appears correct for the ICMPv6 Router Solicitation
-   * Message, but the ICMPv6 Neighbor Solicitation message seems to
-   * use 33:33:ff:01:00:03.
-   */
-
-  mac[0] = 0x33;
-  mac[1] = 0x33;
-
-  dev    = &priv->ft_dev;
-  tmp16  = dev->d_ipv6addr[6];
-  mac[2] = 0xff;
-  mac[3] = tmp16 >> 8;
-
-  tmp16  = dev->d_ipv6addr[7];
-  mac[4] = tmp16 & 0xff;
-  mac[5] = tmp16 >> 8;
-
-  ninfo("IPv6 Multicast: %02x:%02x:%02x:%02x:%02x:%02x\n",
-        mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
-
-  ftmac100_addmac(dev, mac);
-
-#ifdef CONFIG_NET_ICMPv6_AUTOCONF
-  /* Add the IPv6 all link-local nodes Ethernet address.  This is the
-   * address that we expect to receive ICMPv6 Router Advertisement
-   * packets.
-   */
-
-  ftmac100_addmac(dev, g_ipv6_ethallnodes.ether_addr_octet);
-
-#endif /* CONFIG_NET_ICMPv6_AUTOCONF */
-#ifdef CONFIG_NET_ICMPv6_ROUTER
-  /* Add the IPv6 all link-local routers Ethernet address.  This is the
-   * address that we expect to receive ICMPv6 Router Solicitation
-   * packets.
-   */
-
-  ftmac100_addmac(dev, g_ipv6_ethallrouters.ether_addr_octet);
-
-#endif /* CONFIG_NET_ICMPv6_ROUTER */
-}
-#endif /* CONFIG_NET_ICMPv6 */
-
-/****************************************************************************
  * Public Functions
  ****************************************************************************/
 
@@ -1573,15 +1344,15 @@ int ftmac100_initialize(int intf)
   /* Initialize the driver structure */
 
   memset(priv, 0, sizeof(struct ftmac100_driver_s));
-  priv->ft_dev.d_buf     = g_pktbuf;          /* Single packet buffer */
-  priv->ft_dev.d_ifup    = ftmac100_ifup;     /* I/F up (new IP address) callback */
-  priv->ft_dev.d_ifdown  = ftmac100_ifdown;   /* I/F down callback */
-  priv->ft_dev.d_txavail = ftmac100_txavail;  /* New TX data callback */
+  priv->ft_dev.d_buf     = (FAR uint8_t *)g_pktbuf[intf]; /* Single packet buffer */
+  priv->ft_dev.d_ifup    = ftmac100_ifup;                 /* I/F up (new IP address) callback */
+  priv->ft_dev.d_ifdown  = ftmac100_ifdown;               /* I/F down callback */
+  priv->ft_dev.d_txavail = ftmac100_txavail;              /* New TX data callback */
 #ifdef CONFIG_NET_MCASTGROUP
-  priv->ft_dev.d_addmac  = ftmac100_addmac;   /* Add multicast MAC address */
-  priv->ft_dev.d_rmmac   = ftmac100_rmmac;    /* Remove multicast MAC address */
+  priv->ft_dev.d_addmac  = ftmac100_addmac;               /* Add multicast MAC address */
+  priv->ft_dev.d_rmmac   = ftmac100_rmmac;                /* Remove multicast MAC address */
 #endif
-  priv->ft_dev.d_private = g_ftmac100;        /* Used to recover private state from dev */
+  priv->ft_dev.d_private = g_ftmac100;                    /* Used to recover private state from dev */
   priv->iobase           = CONFIG_FTMAC100_BASE;
 
   /* Put the interface in the down state.  This usually amounts to resetting

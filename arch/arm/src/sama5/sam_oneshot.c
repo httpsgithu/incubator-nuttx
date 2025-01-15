@@ -1,13 +1,10 @@
 /****************************************************************************
  * arch/arm/src/sama5/sam_oneshot.c
  *
- *   Copyright (C) 2014 Gregory Nutt. All rights reserved.
- *   Author: Gregory Nutt <gnutt@nuttx.org>
- *
- * The Atmel sample code has a BSD compatible license that requires this
- * copyright notice:
- *
- *   Copyright (c) 2011, Atmel Corporation
+ * SPDX-License-Identifier: BSD-3-Clause
+ * SPDX-FileCopyrightText: 2014 Gregory Nutt. All rights reserved.
+ * SPDX-FileCopyrightText: 2011 Atmel Corporation
+ * SPDX-FileContributor: Gregory Nutt <gnutt@nuttx.orgr>
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -100,7 +97,7 @@ static void sam_oneshot_handler(TC_HANDLE tch, void *arg, uint32_t sr)
    * Disable the TC now and disable any further interrupts.
    */
 
-  sam_tc_attach(oneshot->tch, NULL, NULL, 0);
+  sam_tc_detach(oneshot->tch);
   sam_tc_stop(oneshot->tch);
 
   /* The timer is no longer running */
@@ -451,7 +448,7 @@ int sam_oneshot_cancel(struct sam_oneshot_s *oneshot,
 
   /* Now we can disable the interrupt and stop the timer. */
 
-  sam_tc_attach(oneshot->tch, NULL, NULL, 0);
+  sam_tc_detach(oneshot->tch);
   sam_tc_stop(oneshot->tch);
 
   oneshot->running = false;

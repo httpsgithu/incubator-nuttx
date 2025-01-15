@@ -1,6 +1,8 @@
 /****************************************************************************
  * drivers/sensors/ina219.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -92,9 +94,9 @@ struct ina219_dev_s
 static int     ina219_write16(FAR struct ina219_dev_s *priv, uint8_t regaddr,
                               FAR uint16_t regvalue);
 static int     ina219_read16(FAR struct ina219_dev_s *priv, uint8_t regaddr,
-                              FAR uint16_t *regvalue);
+                             FAR uint16_t *regvalue);
 static int     ina219_readpower(FAR struct ina219_dev_s *priv,
-                                 FAR struct ina219_s *buffer);
+                                FAR struct ina219_s *buffer);
 
 /* Character driver methods */
 
@@ -104,8 +106,6 @@ static ssize_t ina219_read(FAR struct file *filep, FAR char *buffer,
                            size_t buflen);
 static ssize_t ina219_write(FAR struct file *filep, FAR const char *buffer,
                             size_t buflen);
-static int     ina219_ioctl(FAR struct file *filep, int cmd,
-                            unsigned long arg);
 
 /****************************************************************************
  * Private Data
@@ -113,16 +113,10 @@ static int     ina219_ioctl(FAR struct file *filep, int cmd,
 
 static const struct file_operations g_ina219fops =
 {
-  ina219_open,
-  ina219_close,
-  ina219_read,
-  ina219_write,
-  NULL,
-  ina219_ioctl,
-  NULL
-#ifndef CONFIG_DISABLE_PSEUDOFS_OPERATIONS
-  , NULL
-#endif
+  ina219_open,     /* open */
+  ina219_close,    /* close */
+  ina219_read,     /* read */
+  ina219_write,    /* write */
 };
 
 /****************************************************************************
@@ -340,15 +334,6 @@ static ssize_t ina219_write(FAR struct file *filep, FAR const char *buffer,
 }
 
 /****************************************************************************
- * Name: ina219_ioctl
- ****************************************************************************/
-
-static int ina219_ioctl(FAR struct file *filep, int cmd, unsigned long arg)
-{
-  return -ENOTTY;
-}
-
-/****************************************************************************
  * Public Functions
  ****************************************************************************/
 
@@ -381,7 +366,7 @@ int ina219_register(FAR const char *devpath, FAR struct i2c_master_s *i2c,
 
   /* Initialize the ina219 device structure */
 
-  priv = (FAR struct ina219_dev_s *)kmm_malloc(sizeof(struct ina219_dev_s));
+  priv = kmm_malloc(sizeof(struct ina219_dev_s));
   if (priv == NULL)
     {
       snerr("ERROR: Failed to allocate instance\n");

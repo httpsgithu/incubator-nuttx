@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/armv7-a/arm_pghead.S
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -25,14 +27,15 @@
 #include <nuttx/config.h>
 #include <nuttx/page.h>
 
+#include <arch/irq.h>
+
 #include "arm.h"
-#include "cp15.h"
 #include "sctlr.h"
 #include "mmu.h"
 #include "chip.h"
 #include "arm_internal.h"
 
-#ifdef CONFIG_PAGING
+#ifdef CONFIG_LEGACY_PAGING
 
 	.file	"arm_pghead.S"
 
@@ -50,7 +53,7 @@
 /* The page table cannot be in ROM if we are going to do pagin! */
 
 #ifndef CONFIG_ARCH_ROMPGTABLE
-#  error CONFIG_PAGING and CONFIG_ARCH_ROMPGTABLE are incompatible options
+#  error CONFIG_LEGACY_PAGING and CONFIG_ARCH_ROMPGTABLE are incompatible options
 #endif
 
 /* There are three operational memory configurations:
@@ -197,14 +200,15 @@
  */
 
 	.text
+	.syntax	unified
+	.arm
 	.global	__start
 	.type	__start, #function
 
 __start:
-	/* Make sure that we are in SVC mode with IRQs and FIQs disabled */
+	/* Make sure that we are in SYS mode with IRQs and FIQs disabled */
 
-	mov		r0, #(PSR_MODE_SVC | PSR_I_BIT | PSR_F_BIT)
-	msr		cpsr_c, r0
+	cpsid		if, #PSR_MODE_SYS
 
 	/* Clear the 16K level 1 page table */
 
@@ -321,6 +325,7 @@ __start:
 	mcr		CP15_TLBIALL(r0,c5)
 	mcr		CP15_BPIALL(r0)		/* Invalidate entire branch prediction array */
 	mcr		CP15_ICIALLU(r0)	/* Invalidate I-cache */
+	isb
 
 	/* Load the page table address.
 	 *
@@ -435,7 +440,7 @@ __start:
 	orr		r0, r0, #(SCTLR_C)
 #endif
 
-#ifndef CPU_ICACHE_DISABLE
+#if !defined(CPU_ICACHE_DISABLE) && !defined(CONFIG_SMP)
 	/* Icache enable
 	 *
 	 *   SCTLR_I    Bit 12: ICache enable
@@ -453,6 +458,15 @@ __start:
 	orr		r0, r0, #(SCTLR_A)
 #endif
 
+#ifdef CONFIG_ENDIAN_BIG
+	/* Big endian mode
+	 *
+	 *   SCTLR_EE   Bit 25: 1=Big endian.
+	 */
+
+	orr		r0, r0, #(SCTLR_EE)
+#endif
+
 #ifdef CPU_AFE_ENABLE
 	/* AP[0:2] Permissions model
 	 *
@@ -468,6 +482,7 @@ __start:
 	/* Then write the configured control register */
 
 	mcr		CP15_SCTLR(r0)			/* Write control reg */
+	isb
 	.rept		12				/* Cortex A8 wants lots of NOPs here */
 	nop
 	.endr

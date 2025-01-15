@@ -1,6 +1,8 @@
 /****************************************************************************
  * drivers/wireless/nrf24l01.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -46,6 +48,7 @@
 #include <fcntl.h>
 
 #include <nuttx/kmalloc.h>
+#include <nuttx/mutex.h>
 #include <nuttx/semaphore.h>
 #include <nuttx/signal.h>
 
@@ -150,14 +153,14 @@ struct nrf24l01_dev_s
   uint16_t fifo_len;        /* Number of bytes stored in fifo */
   uint16_t nxt_read;        /* Next read index */
   uint16_t nxt_write;       /* Next write index */
-  sem_t sem_fifo;           /* Protect access to rx fifo */
+  mutex_t lock_fifo;        /* Protect access to rx fifo */
   sem_t sem_rx;             /* Wait for availability of received data */
 
   struct work_s irq_work;   /* Interrupt handling "bottom half" */
 #endif
 
   uint8_t nopens;           /* Number of times the device has been opened */
-  sem_t devsem;             /* Ensures exclusive access to this structure */
+  mutex_t devlock;          /* Ensures exclusive access to this structure */
   FAR struct pollfd *pfd;   /* Polled file descr  (or NULL if any) */
 };
 
@@ -172,45 +175,45 @@ static void nrf24l01_lock(FAR struct spi_dev_s *spi);
 static void nrf24l01_unlock(FAR struct spi_dev_s *spi);
 
 static uint8_t nrf24l01_access(FAR struct nrf24l01_dev_s *dev,
-             nrf24l01_access_mode_t mode, uint8_t cmd, FAR uint8_t *buf,
-             int length);
+                               nrf24l01_access_mode_t mode, uint8_t cmd,
+                               FAR uint8_t *buf, int length);
 static uint8_t nrf24l01_flush_rx(FAR struct nrf24l01_dev_s *dev);
 static uint8_t nrf24l01_flush_tx(FAR struct nrf24l01_dev_s *dev);
 
 /* Read register from nrf24 */
 
 static uint8_t nrf24l01_readreg(FAR struct nrf24l01_dev_s *dev, uint8_t reg,
-             FAR uint8_t *value, int len);
+                                FAR uint8_t *value, int len);
 
 /* Read single byte value from a register of nrf24 */
 
 static uint8_t nrf24l01_readregbyte(FAR struct nrf24l01_dev_s *dev,
-             uint8_t reg);
+                                    uint8_t reg);
 static void nrf24l01_writeregbyte(FAR struct nrf24l01_dev_s *dev,
-             uint8_t reg, uint8_t value);
+                                  uint8_t reg, uint8_t value);
 static uint8_t nrf24l01_setregbit(FAR struct nrf24l01_dev_s *dev,
-             uint8_t reg, uint8_t value, bool set);
+                                  uint8_t reg, uint8_t value, bool set);
 static void nrf24l01_tostate(FAR struct nrf24l01_dev_s *dev,
-             nrf24l01_state_t state);
+                             nrf24l01_state_t state);
 static int nrf24l01_irqhandler(FAR int irq, FAR void *context,
-             FAR void *arg);
+                               FAR void *arg);
 static inline int nrf24l01_attachirq(FAR struct nrf24l01_dev_s *dev,
-             xcpt_t isr, FAR void *arg);
+                                     xcpt_t isr, FAR void *arg);
 static int dosend(FAR struct nrf24l01_dev_s *dev, FAR const uint8_t *data,
-             size_t datalen);
+                  size_t datalen);
 static int nrf24l01_unregister(FAR struct nrf24l01_dev_s *dev);
 
 #ifdef CONFIG_WL_NRF24L01_RXSUPPORT
 static void fifoput(FAR struct nrf24l01_dev_s *dev, uint8_t pipeno,
-             FAR uint8_t *buffer, uint8_t buflen);
+                    FAR uint8_t *buffer, uint8_t buflen);
 static uint8_t fifoget(FAR struct nrf24l01_dev_s *dev, FAR uint8_t *buffer,
-             uint8_t buflen, FAR uint8_t *pipeno);
+                       uint8_t buflen, FAR uint8_t *pipeno);
 static void nrf24l01_worker(FAR void *arg);
 #endif
 
 #ifdef CONFIG_DEBUG_WIRELESS
-static void binarycvt(FAR char *deststr, FAR const uint8_t *srcbin,
-                      size_t srclen);
+static void binarycvt(FAR char *deststr, size_t destlen,
+                      FAR const uint8_t *srcbin, size_t srclen);
 #endif
 
 /* POSIX API */
@@ -218,19 +221,19 @@ static void binarycvt(FAR char *deststr, FAR const uint8_t *srcbin,
 static int nrf24l01_open(FAR struct file *filep);
 static int nrf24l01_close(FAR struct file *filep);
 static ssize_t nrf24l01_read(FAR struct file *filep, FAR char *buffer,
-             size_t buflen);
+                             size_t buflen);
 static ssize_t nrf24l01_write(FAR struct file *filep,
-             FAR const char *buffer, size_t buflen);
+                              FAR const char *buffer, size_t buflen);
 static int nrf24l01_ioctl(FAR struct file *filep, int cmd,
-             unsigned long arg);
+                          unsigned long arg);
 static int nrf24l01_poll(FAR struct file *filep, FAR struct pollfd *fds,
-             bool setup);
+                         bool setup);
 
 /****************************************************************************
  * Private Data
  ****************************************************************************/
 
-static const struct file_operations nrf24l01_fops =
+static const struct file_operations g_nrf24l01_fops =
 {
   nrf24l01_open,    /* open */
   nrf24l01_close,   /* close */
@@ -238,10 +241,9 @@ static const struct file_operations nrf24l01_fops =
   nrf24l01_write,   /* write */
   NULL,             /* seek */
   nrf24l01_ioctl,   /* ioctl */
+  NULL,             /* mmap */
+  NULL,             /* truncate */
   nrf24l01_poll     /* poll */
-#ifndef CONFIG_DISABLE_PSEUDOFS_OPERATIONS
-  , NULL            /* unlink */
-#endif
 };
 
 /****************************************************************************
@@ -329,7 +331,7 @@ static inline void nrf24l01_configspi(FAR struct spi_dev_s *spi)
  * Name: nrf24l01_select
  ****************************************************************************/
 
-static inline void nrf24l01_select(struct nrf24l01_dev_s * dev)
+static inline void nrf24l01_select(FAR struct nrf24l01_dev_s *dev)
 {
   SPI_SELECT(dev->spi, SPIDEV_WIRELESS(0), true);
 }
@@ -338,7 +340,7 @@ static inline void nrf24l01_select(struct nrf24l01_dev_s * dev)
  * Name: nrf24l01_deselect
  ****************************************************************************/
 
-static inline void nrf24l01_deselect(struct nrf24l01_dev_s * dev)
+static inline void nrf24l01_deselect(FAR struct nrf24l01_dev_s *dev)
 {
   SPI_SELECT(dev->spi, SPIDEV_WIRELESS(0), false);
 }
@@ -494,7 +496,7 @@ static uint8_t nrf24l01_setregbit(FAR struct nrf24l01_dev_s *dev,
 static void fifoput(FAR struct nrf24l01_dev_s *dev, uint8_t pipeno,
                     FAR uint8_t *buffer, uint8_t buflen)
 {
-  nxsem_wait(&dev->sem_fifo);
+  nxmutex_lock(&dev->lock_fifo);
   while (dev->fifo_len + buflen + 1 > CONFIG_WL_NRF24L01_RXFIFO_LEN)
     {
       /* TODO: Set fifo overrun flag ! */
@@ -518,7 +520,7 @@ static void fifoput(FAR struct nrf24l01_dev_s *dev, uint8_t pipeno,
       dev->nxt_write = (dev->nxt_write + 1) % CONFIG_WL_NRF24L01_RXFIFO_LEN;
     }
 
-  nxsem_post(&dev->sem_fifo);
+  nxmutex_unlock(&dev->lock_fifo);
 }
 
 /****************************************************************************
@@ -531,7 +533,7 @@ static uint8_t fifoget(FAR struct nrf24l01_dev_s *dev, FAR uint8_t *buffer,
   uint8_t pktlen;
   uint8_t i;
 
-  nxsem_wait(&dev->sem_fifo);
+  nxmutex_lock(&dev->lock_fifo);
 
   /* sem_rx contains count of inserted packets in FIFO, but FIFO can
    * overflow - fail smart.
@@ -568,8 +570,8 @@ static uint8_t fifoget(FAR struct nrf24l01_dev_s *dev, FAR uint8_t *buffer,
 
   dev->fifo_len -= (pktlen + 1);
 
-  no_data:
-  nxsem_post(&dev->sem_fifo);
+no_data:
+  nxmutex_unlock(&dev->lock_fifo);
   return pktlen;
 }
 #endif
@@ -637,7 +639,7 @@ static inline bool nrf24l01_chipenable(FAR struct nrf24l01_dev_s *dev,
 #ifdef CONFIG_WL_NRF24L01_RXSUPPORT
 static void nrf24l01_worker(FAR void *arg)
 {
-  FAR struct nrf24l01_dev_s *dev = (FAR struct nrf24l01_dev_s *) arg;
+  FAR struct nrf24l01_dev_s *dev = (FAR struct nrf24l01_dev_s *)arg;
   uint8_t status;
   uint8_t fifo_status;
 
@@ -714,10 +716,7 @@ static void nrf24l01_worker(FAR void *arg)
 
       if (dev->pfd && has_data)
         {
-          dev->pfd->revents |= POLLIN;  /* Data available for input */
-
-          wlinfo("Wake up polled fd\n");
-          nxsem_post(dev->pfd->sem);
+          poll_notify(&dev->pfd, 1, POLLIN);
         }
 
       /* Clear interrupt sources */
@@ -847,8 +846,7 @@ static int dosend(FAR struct nrf24l01_dev_s *dev, FAR const uint8_t *data,
 
   /* Wait for IRQ (TX_DS or MAX_RT) - but don't hang on lost IRQ */
 
-  ret = nxsem_tickwait(&dev->sem_tx, clock_systime_ticks(),
-                       MSEC2TICK(NRF24L01_MAX_TX_IRQ_WAIT));
+  ret = nxsem_tickwait(&dev->sem_tx, MSEC2TICK(NRF24L01_MAX_TX_IRQ_WAIT));
 
   /* Re-acquire the SPI bus */
 
@@ -916,13 +914,13 @@ out:
  ****************************************************************************/
 
 #ifdef CONFIG_DEBUG_WIRELESS
-static void binarycvt(FAR char *deststr, FAR const uint8_t *srcbin,
-                      size_t srclen)
+static void binarycvt(FAR char *deststr, size_t destlen,
+                      FAR const uint8_t *srcbin, size_t srclen)
 {
   int i = 0;
-  while (i < srclen)
+  while (i < srclen && 2 * (i + 1) < destlen)
     {
-      sprintf(deststr + i * 2, "%02x", srcbin[i]);
+      snprintf(deststr + i * 2, destlen - i * 2, "%02x", srcbin[i]);
       ++i;
     }
 
@@ -946,15 +944,14 @@ static int nrf24l01_open(FAR struct file *filep)
 
   wlinfo("Opening nRF24L01 dev\n");
 
-  DEBUGASSERT(filep);
   inode = filep->f_inode;
 
-  DEBUGASSERT(inode && inode->i_private);
-  dev = (FAR struct nrf24l01_dev_s *)inode->i_private;
+  DEBUGASSERT(inode->i_private);
+  dev = inode->i_private;
 
   /* Get exclusive access to the driver data structure */
 
-  ret = nxsem_wait(&dev->devsem);
+  ret = nxmutex_lock(&dev->devlock);
   if (ret < 0)
     {
       return ret;
@@ -975,7 +972,7 @@ static int nrf24l01_open(FAR struct file *filep)
     }
 
 errout:
-  nxsem_post(&dev->devsem);
+  nxmutex_unlock(&dev->devlock);
   return ret;
 }
 
@@ -990,15 +987,14 @@ static int nrf24l01_close(FAR struct file *filep)
   int ret;
 
   wlinfo("Closing nRF24L01 dev\n");
-  DEBUGASSERT(filep);
   inode = filep->f_inode;
 
-  DEBUGASSERT(inode && inode->i_private);
-  dev  = (FAR struct nrf24l01_dev_s *)inode->i_private;
+  DEBUGASSERT(inode->i_private);
+  dev  = inode->i_private;
 
   /* Get exclusive access to the driver data structure */
 
-  ret = nxsem_wait(&dev->devsem);
+  ret = nxmutex_lock(&dev->devlock);
   if (ret < 0)
     {
       return ret;
@@ -1007,7 +1003,7 @@ static int nrf24l01_close(FAR struct file *filep)
   nrf24l01_changestate(dev, ST_POWER_DOWN);
   dev->nopens--;
 
-  nxsem_post(&dev->devsem);
+  nxmutex_unlock(&dev->devlock);
   return OK;
 }
 
@@ -1025,13 +1021,12 @@ static ssize_t nrf24l01_read(FAR struct file *filep, FAR char *buffer,
   FAR struct inode *inode;
   int ret;
 
-  DEBUGASSERT(filep);
   inode = filep->f_inode;
 
-  DEBUGASSERT(inode && inode->i_private);
-  dev = (FAR struct nrf24l01_dev_s *)inode->i_private;
+  DEBUGASSERT(inode->i_private);
+  dev = inode->i_private;
 
-  ret = nxsem_wait(&dev->devsem);
+  ret = nxmutex_lock(&dev->devlock);
   if (ret < 0)
     {
       return ret;
@@ -1056,10 +1051,11 @@ static ssize_t nrf24l01_read(FAR struct file *filep, FAR char *buffer,
         }
     }
 
-  ret = nrf24l01_recv(dev, (uint8_t *)buffer, buflen, &dev->last_recvpipeno);
+  ret = nrf24l01_recv(dev, (FAR uint8_t *)buffer, buflen,
+                      &dev->last_recvpipeno);
 
 errout:
-  nxsem_post(&dev->devsem);
+  nxmutex_unlock(&dev->devlock);
   return ret;
 #endif
 }
@@ -1075,21 +1071,20 @@ static ssize_t nrf24l01_write(FAR struct file *filep, FAR const char *buffer,
   FAR struct inode *inode;
   int ret;
 
-  DEBUGASSERT(filep);
   inode = filep->f_inode;
 
-  DEBUGASSERT(inode && inode->i_private);
-  dev = (FAR struct nrf24l01_dev_s *)inode->i_private;
+  DEBUGASSERT(inode->i_private);
+  dev = inode->i_private;
 
-  ret = nxsem_wait(&dev->devsem);
+  ret = nxmutex_lock(&dev->devlock);
   if (ret < 0)
     {
       return ret;
     }
 
-  ret = nrf24l01_send(dev, (const uint8_t *)buffer, buflen);
+  ret = nrf24l01_send(dev, (FAR const uint8_t *)buffer, buflen);
 
-  nxsem_post(&dev->devsem);
+  nxmutex_unlock(&dev->devlock);
   return ret;
 }
 
@@ -1104,15 +1099,14 @@ static int nrf24l01_ioctl(FAR struct file *filep, int cmd, unsigned long arg)
   int ret;
 
   wlinfo("cmd: %d arg: %ld\n", cmd, arg);
-  DEBUGASSERT(filep);
   inode = filep->f_inode;
 
-  DEBUGASSERT(inode && inode->i_private);
-  dev  = (FAR struct nrf24l01_dev_s *)inode->i_private;
+  DEBUGASSERT(inode->i_private);
+  dev  = inode->i_private;
 
   /* Get exclusive access to the driver data structure */
 
-  ret = nxsem_wait(&dev->devsem);
+  ret = nxmutex_lock(&dev->devlock);
   if (ret < 0)
     {
       return ret;
@@ -1343,7 +1337,7 @@ static int nrf24l01_ioctl(FAR struct file *filep, int cmd, unsigned long arg)
         break;
     }
 
-  nxsem_post(&dev->devsem);
+  nxmutex_unlock(&dev->devlock);
   return ret;
 }
 
@@ -1365,15 +1359,15 @@ static int nrf24l01_poll(FAR struct file *filep, FAR struct pollfd *fds,
   int ret;
 
   wlinfo("setup: %d\n", (int)setup);
-  DEBUGASSERT(filep && fds);
+  DEBUGASSERT(fds);
   inode = filep->f_inode;
 
-  DEBUGASSERT(inode && inode->i_private);
-  dev  = (FAR struct nrf24l01_dev_s *)inode->i_private;
+  DEBUGASSERT(inode->i_private);
+  dev  = inode->i_private;
 
   /* Exclusive access */
 
-  ret = nxsem_wait(&dev->devsem);
+  ret = nxmutex_lock(&dev->devlock);
   if (ret < 0)
     {
       return ret;
@@ -1408,14 +1402,13 @@ static int nrf24l01_poll(FAR struct file *filep, FAR struct pollfd *fds,
        * don't wait for RX.
        */
 
-      nxsem_wait(&dev->sem_fifo);
+      nxmutex_lock(&dev->lock_fifo);
       if (dev->fifo_len > 0)
         {
-          dev->pfd->revents |= POLLIN;  /* Data available for input */
-          nxsem_post(dev->pfd->sem);
+          poll_notify(&fds, 1, POLLIN);
         }
 
-      nxsem_post(&dev->sem_fifo);
+      nxmutex_unlock(&dev->lock_fifo);
     }
   else /* Tear it down */
     {
@@ -1423,7 +1416,7 @@ static int nrf24l01_poll(FAR struct file *filep, FAR struct pollfd *fds,
     }
 
 errout:
-  nxsem_post(&dev->devsem);
+  nxmutex_unlock(&dev->devlock);
   return ret;
 #endif
 }
@@ -1443,10 +1436,14 @@ static int nrf24l01_unregister(FAR struct nrf24l01_dev_s *dev)
   /* Free memory */
 
 #ifdef CONFIG_WL_NRF24L01_RXSUPPORT
+  nxmutex_destroy(&dev->lock_fifo);
+  nxsem_destroy(&dev->sem_rx);
   kmm_free(dev->rx_fifo);
 #endif
-  kmm_free(dev);
 
+  nxmutex_destroy(&dev->devlock);
+  nxsem_destroy(&dev->sem_tx);
+  kmm_free(dev);
   return OK;
 }
 
@@ -1481,22 +1478,22 @@ int nrf24l01_register(FAR struct spi_dev_s *spi,
   dev->state      = ST_UNKNOWN;
   dev->ce_enabled = false;
 
-  nxsem_init(&(dev->devsem), 0, 1);
+  nxmutex_init(&dev->devlock);
   nxsem_init(&dev->sem_tx, 0, 0);
-  nxsem_set_protocol(&dev->sem_tx, SEM_PRIO_NONE);
 
 #ifdef CONFIG_WL_NRF24L01_RXSUPPORT
   if ((rx_fifo = kmm_malloc(CONFIG_WL_NRF24L01_RXFIFO_LEN)) == NULL)
     {
+      nxmutex_destroy(&dev->devlock);
+      nxsem_destroy(&dev->sem_tx);
       kmm_free(dev);
       return -ENOMEM;
     }
 
-  dev->rx_fifo         = rx_fifo;
+  dev->rx_fifo = rx_fifo;
 
-  nxsem_init(&(dev->sem_fifo), 0, 1);
-  nxsem_init(&(dev->sem_rx), 0, 0);
-  nxsem_set_protocol(&dev->sem_rx, SEM_PRIO_NONE);
+  nxmutex_init(&dev->lock_fifo);
+  nxsem_init(&dev->sem_rx, 0, 0);
 #endif
 
   /* Configure IRQ pin  (falling edge) */
@@ -1507,7 +1504,7 @@ int nrf24l01_register(FAR struct spi_dev_s *spi,
 
   wlinfo("Registering " DEV_NAME "\n");
 
-  ret = register_driver(DEV_NAME, &nrf24l01_fops, 0666, dev);
+  ret = register_driver(DEV_NAME, &g_nrf24l01_fops, 0666, dev);
   if (ret < 0)
     {
       wlerr("ERROR: register_driver() failed: %d\n", ret);
@@ -1810,10 +1807,10 @@ int nrf24l01_settxpower(FAR struct nrf24l01_dev_s *dev, int outpower)
 
   /* RF_PWR value  <->  Output power in dBm
    *
-   * '00' – -18dBm
-   * '01' – -12dBm
-   * '10' – -6dBm
-   * '11' – 0dBm
+   * '00' - -18dBm
+   * '01' - -12dBm
+   * '10' - -6dBm
+   * '11' - 0dBm
    */
 
   switch (outpower)
@@ -2084,7 +2081,7 @@ void nrf24l01_dumpregs(FAR struct nrf24l01_dev_s *dev)
          nrf24l01_readregbyte(dev, NRF24L01_OBSERVE_TX));
 
   nrf24l01_readreg(dev, NRF24L01_TX_ADDR, addr, dev->addrlen);
-  binarycvt(addrstr, addr, dev->addrlen);
+  binarycvt(addrstr, sizeof(addrstr), addr, dev->addrlen);
   syslog(LOG_INFO, "TX_ADDR:   %s\n", addrstr);
 
   syslog(LOG_INFO, "CD:        %02x\n",
@@ -2120,6 +2117,6 @@ void nrf24l01_dumprxfifo(FAR struct nrf24l01_dev_s *dev)
 {
   syslog(LOG_INFO, "bytes count: %d\n", dev->fifo_len);
   syslog(LOG_INFO, "next read:   %d,  next write: %d\n",
-         dev->nxt_read, dev-> nxt_write);
+         dev->nxt_read, dev->nxt_write);
 }
 #endif /* CONFIG_DEBUG_WIRELESS && CONFIG_WL_NRF24L01_RXSUPPORT */

@@ -1,6 +1,8 @@
 /****************************************************************************
  * mm/iob/iob_add_queue.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -28,19 +30,13 @@
 #include <errno.h>
 #include <debug.h>
 
+#include <nuttx/irq.h>
+#include <nuttx/arch.h>
 #include <nuttx/mm/iob.h>
 
 #include "iob.h"
 
 #if CONFIG_IOB_NCHAINS > 0
-
-/****************************************************************************
- * Pre-processor Definitions
- ****************************************************************************/
-
-#ifndef NULL
-#  define NULL ((FAR void *)0)
-#endif
 
 /****************************************************************************
  * Private Functions
@@ -66,6 +62,7 @@ static int iob_add_queue_internal(FAR struct iob_s *iob,
   /* Add the container to the end of the queue */
 
   qentry->qe_flink = NULL;
+
   if (!iobq->qh_head)
     {
       iobq->qh_head = qentry;

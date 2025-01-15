@@ -1,6 +1,8 @@
 ############################################################################
 # tools/KernelLibs.mk
 #
+# SPDX-License-Identifier: Apache-2.0
+#
 # Licensed to the Apache Software Foundation (ASF) under one or more
 # contributor license agreements.  See the NOTICE file distributed with
 # this work for additional information regarding copyright ownership.  The
@@ -49,6 +51,20 @@ NUTTXLIBS += staging$(DELIM)libstubs$(LIBEXT) staging$(DELIM)libkc$(LIBEXT)
 NUTTXLIBS += staging$(DELIM)libkmm$(LIBEXT) staging$(DELIM)libkarch$(LIBEXT)
 USERLIBS  += staging$(DELIM)libproxies$(LIBEXT) staging$(DELIM)libc$(LIBEXT)
 USERLIBS  += staging$(DELIM)libmm$(LIBEXT) staging$(DELIM)libarch$(LIBEXT)
+
+# Add toolchain library support
+
+ifeq ($(CONFIG_LIB_BUILTIN),y)
+NUTTXLIBS += staging$(DELIM)libkbuiltin$(LIBEXT)
+USERLIBS += staging$(DELIM)libbuiltin$(LIBEXT)
+endif
+
+# Add libraries for math support.
+
+ifeq ($(CONFIG_LIBM_TOOLCHAIN)$(CONFIG_LIBM_NONE),)
+NUTTXLIBS += staging$(DELIM)libkm$(LIBEXT)
+USERLIBS  += staging$(DELIM)libm$(LIBEXT)
+endif
 
 # Add library for system call instrumentation if needed
 
@@ -116,6 +132,12 @@ endif
 
 ifeq ($(CONFIG_OPENAMP),y)
 NUTTXLIBS += staging$(DELIM)libopenamp$(LIBEXT)
+endif
+
+# Add libraries for board common support
+
+ifeq ($(CONFIG_ARCH_BOARD_COMMON),y)
+NUTTXLIBS += staging$(DELIM)libboard$(LIBEXT)
 endif
 
 # Export only the user libraries

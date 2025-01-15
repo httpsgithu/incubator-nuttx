@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/lc823450/lc823450_clockconfig.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -31,7 +33,7 @@
 #include <nuttx/arch.h>
 #include <arch/board/board.h>
 
-#include "arm_arch.h"
+#include "arm_internal.h"
 #include "lc823450_clockconfig.h"
 #include "lc823450_syscontrol.h"
 
@@ -152,7 +154,7 @@ void lc823450_clockconfig()
     }
   else
     {
-      DEBUGASSERT(false);
+      DEBUGPANIC();
     }
 #endif
 

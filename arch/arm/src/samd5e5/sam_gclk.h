@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/samd5e5/sam_gclk.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -30,7 +32,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 
-#include "arm_arch.h"
+#include "arm_internal.h"
 #include "sam_config.h"
 #include "hardware/sam_gclk.h"
 
@@ -103,7 +105,7 @@ extern "C"
  ****************************************************************************/
 
 void sam_gclk_configure(int gclk,
-                        FAR const struct sam_gclk_config_s *config);
+                        const struct sam_gclk_config_s *config);
 
 /****************************************************************************
  * Name: sam_gclk_chan_enable

@@ -1,6 +1,8 @@
 /****************************************************************************
  * libs/libc/unistd/lib_getopt_common.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -153,7 +155,6 @@ static int getopt_long_option(FAR struct getopt_s *go,
 
                   default:
                     goto errout;
-                    break;
                 }
             }
           else
@@ -213,7 +214,6 @@ static int getopt_long_option(FAR struct getopt_s *go,
 
                   default:
                     goto errout;
-                    break;
                 }
             }
 
@@ -393,7 +393,7 @@ int getopt_common(int argc, FAR char * const argv[],
 
           /* Check for the end of the argument list */
 
-          go->go_optptr = argv[go->go_optind];
+          go->go_optptr = go->go_optind < argc ? argv[go->go_optind] : NULL;
           if (!go->go_optptr)
             {
               /* There are no more arguments, we are finished */

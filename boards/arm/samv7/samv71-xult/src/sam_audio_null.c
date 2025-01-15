@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/samv7/samv71-xult/src/sam_audio_null.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -79,8 +81,8 @@
 
 int sam_audio_null_initialize(int minor)
 {
-  FAR struct audio_lowerhalf_s *nullaudio;
-  FAR struct audio_lowerhalf_s *pcm;
+  struct audio_lowerhalf_s *nullaudio;
+  struct audio_lowerhalf_s *pcm;
   static bool initialized = false;
   char devname[12];
   int ret;
@@ -123,7 +125,7 @@ int sam_audio_null_initialize(int minor)
 
       /* Create a device name */
 
-      snprintf(devname, 12, "pcm%d",  minor);
+      snprintf(devname, sizeof(devname), "pcm%d",  minor);
 
       /* Finally, we can register the PCM/NULL audio device. */
 

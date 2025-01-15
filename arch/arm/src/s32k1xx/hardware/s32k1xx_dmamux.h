@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/s32k1xx/hardware/s32k1xx_dmamux.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -28,6 +30,12 @@
 #include <nuttx/config.h>
 #include <hardware/s32k1xx_memorymap.h>
 
+#if defined(CONFIG_ARCH_CHIP_S32K11X)
+#  include <hardware/s32k11x_dmamux.h>
+#elif defined(CONFIG_ARCH_CHIP_S32K14X)
+#  include <hardware/s32k14x_dmamux.h>
+#endif
+
 /****************************************************************************
  * Pre-processor Definitions
  ****************************************************************************/
@@ -36,7 +44,7 @@
 
 #if defined(CONFIG_ARCH_CHIP_S32K11X)
 #  define S32K1XX_NDMACH  4
-#elif defined(CONFIG_ARCH_CHIP_S32K14X
+#elif defined(CONFIG_ARCH_CHIP_S32K14X)
 #  define S32K1XX_NDMACH  16
 #endif
 
@@ -46,7 +54,7 @@
 
 /* DMAMUX Register Addresses ************************************************/
 
-#define S32K1XX_DMAMUX_CHCFG(n)         (S32K1XX_DMAMUX_BASE + S32K1XX_DMAMUX_CHCFG_OFFSET(n)) n=1..15 */
+#define S32K1XX_DMAMUX_CHCFG(n)         (S32K1XX_DMAMUX_BASE + S32K1XX_DMAMUX_CHCFG_OFFSET(n)) /* n=1..15 */
 
 /* DMAMUX Register Bitfield Definitions *************************************/
 

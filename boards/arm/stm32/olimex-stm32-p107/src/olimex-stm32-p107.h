@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/stm32/olimex-stm32-p107/src/olimex-stm32-p107.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -18,8 +20,8 @@
  *
  ****************************************************************************/
 
-#ifndef __BOARDS_ARM_STM32_OLIMEX_STM32_P107_SRC_H
-#define __BOARDS_ARM_STM32_OLIMEX_STM32_P107_SRC_H
+#ifndef __BOARDS_ARM_STM32_OLIMEX_STM32_P107_SRC_OLIMEX_STM32_P107_H
+#define __BOARDS_ARM_STM32_OLIMEX_STM32_P107_SRC_OLIMEX_STM32_P107_H
 
 /****************************************************************************
  * Included Files
@@ -77,9 +79,9 @@ void weak_function stm32_spidev_initialize(void);
  *
  ****************************************************************************/
 
-#ifdef CONFIG_CAN
+#ifdef CONFIG_STM32_CAN_CHARDRIVER
 int stm32_can_setup(void);
 #endif
 
 #endif /* __ASSEMBLY__ */
-#endif /* __BOARDS_ARM_STM32_OLIMEX_STM32_P107_SRC_H */
+#endif /* __BOARDS_ARM_STM32_OLIMEX_STM32_P107_SRC_OLIMEX_STM32_P107_H */

@@ -1,6 +1,7 @@
 /****************************************************************************
  * wireless/bluetooth/bt_ioctl.c
- * Bluetooth network IOCTL handler
+ *
+ * SPDX-License-Identifier: Apache-2.0
  *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -30,6 +31,7 @@
 #include <debug.h>
 
 #include <nuttx/wqueue.h>
+#include <nuttx/mutex.h>
 #include <nuttx/semaphore.h>
 #include <nuttx/net/netdev.h>
 #include <nuttx/net/bluetooth.h>
@@ -53,10 +55,11 @@
 
 struct btnet_scanstate_s
 {
-  sem_t bs_exclsem;                 /* Manages exclusive access */
+  mutex_t bs_lock;                  /* Manages exclusive access */
   volatile bool bs_scanning;        /* True:  Scanning in progress */
   volatile uint8_t bs_head;         /* Head of circular list (for removal) */
   uint8_t bs_tail;                  /* Tail of circular list (for addition) */
+  uint32_t msgcount;                /* Number of warnings printed */
 
   struct bt_scanresponse_s bs_rsp[CONFIG_BLUETOOTH_MAXSCANRESULT];
 };
@@ -69,7 +72,7 @@ struct btnet_discoverstate_s
 {
   struct bt_gatt_discover_params_s bd_params;
   struct bt_uuid_s bd_uuid;         /* Discovery UUID */
-  sem_t bd_donesem;                 /* Manages exclusive access */
+  sem_t bd_donesem;                 /* Done notification */
 };
 
 /* GATT read state variables. */
@@ -78,7 +81,7 @@ struct btnet_rdstate_s
 {
   struct btreq_s *rd_btreq;
   uint8_t rd_result;                /* The result of the read */
-  sem_t rd_donesem;                 /* Manages exclusive access */
+  sem_t rd_donesem;                 /* Done notification */
 };
 
 /* GATT write state variables. */
@@ -87,7 +90,7 @@ struct btnet_wrstate_s
 {
   struct btreq_s *wr_btreq;
   uint8_t wr_result;                /* The result of the read */
-  sem_t wr_donesem;                 /* Manages exclusive access */
+  sem_t wr_donesem;                 /* Done notification */
 };
 
 /****************************************************************************
@@ -113,7 +116,10 @@ struct btnet_wrstate_s
  * the unharvested results.
  */
 
-static struct btnet_scanstate_s     g_scanstate;
+static struct btnet_scanstate_s g_scanstate =
+{
+  NXMUTEX_INITIALIZER,
+};
 
 /****************************************************************************
  * Private Functions
@@ -159,7 +165,7 @@ static void btnet_scan_callback(FAR const bt_addr_le_t *addr,
 
   /* Get exclusive access to the scan data */
 
-  ret = nxsem_wait_uninterruptible(&g_scanstate.bs_exclsem);
+  ret = nxmutex_lock(&g_scanstate.bs_lock);
   if (ret < 0)
     {
       wlerr("nxsem_wait_uninterruptible() failed: %d\n", ret);
@@ -181,7 +187,12 @@ static void btnet_scan_callback(FAR const bt_addr_le_t *addr,
   head = g_scanstate.bs_head;
   if (nexttail == head)
     {
-      wlerr("ERROR: Too many scan results\n");
+      /* Print only one error message for each SIOCBTSCANSTART call */
+
+      if (g_scanstate.msgcount++ == 0)
+        {
+          wlerr("ERROR: Too many scan results\n");
+        }
 
       if (++head >= CONFIG_BLUETOOTH_MAXSCANRESULT)
         {
@@ -201,7 +212,7 @@ static void btnet_scan_callback(FAR const bt_addr_le_t *addr,
   memcpy(&rsp->sr_data, adv_data, len);
 
   g_scanstate.bs_tail = nexttail;
-  nxsem_post(&g_scanstate.bs_exclsem);
+  nxmutex_unlock(&g_scanstate.bs_lock);
 }
 
 /****************************************************************************
@@ -241,7 +252,7 @@ static int btnet_scan_result(FAR struct bt_scanresponse_s *result,
     {
       /* Get exclusive access to the scan data */
 
-      ret = nxsem_wait(&g_scanstate.bs_exclsem);
+      ret = nxmutex_lock(&g_scanstate.bs_lock);
       if (ret < 0)
         {
           return ret;
@@ -276,7 +287,7 @@ static int btnet_scan_result(FAR struct bt_scanresponse_s *result,
 
   if (scanning)
     {
-      nxsem_post(&g_scanstate.bs_exclsem);
+      nxmutex_unlock(&g_scanstate.bs_lock);
     }
 
   return nrsp;
@@ -617,10 +628,10 @@ int btnet_ioctl(FAR struct net_driver_s *netdev, int cmd, unsigned long arg)
             {
               /* Initialize scan state */
 
-              nxsem_init(&g_scanstate.bs_exclsem, 0, 1);
               g_scanstate.bs_scanning = true;
               g_scanstate.bs_head     = 0;
               g_scanstate.bs_tail     = 0;
+              g_scanstate.msgcount    = 0;
 
               ret = bt_start_scanning(btreq->btr_dupenable,
                                       btnet_scan_callback);
@@ -628,7 +639,6 @@ int btnet_ioctl(FAR struct net_driver_s *netdev, int cmd, unsigned long arg)
 
               if (ret < 0)
                 {
-                  nxsem_destroy(&g_scanstate.bs_exclsem);
                   g_scanstate.bs_scanning = false;
                 }
             }
@@ -663,7 +673,6 @@ int btnet_ioctl(FAR struct net_driver_s *netdev, int cmd, unsigned long arg)
           ret = bt_stop_scanning();
           wlinfo("Stop scanning: %d\n", ret);
 
-          nxsem_destroy(&g_scanstate.bs_exclsem);
           g_scanstate.bs_scanning = false;
         }
         break;
@@ -769,7 +778,7 @@ int btnet_ioctl(FAR struct net_driver_s *netdev, int cmd, unsigned long arg)
               params->destroy                = btnet_discover_destroy;
               params->start_handle           = btreq->btr_dstart;
               params->end_handle             = btreq->btr_dend;
-              params->p_data                 = (void *)arg;
+              params->p_data                 = (FAR void *)arg;
               btreq->btr_indx                = 0;
 
               if (btreq->btr_duuid16 == 0)

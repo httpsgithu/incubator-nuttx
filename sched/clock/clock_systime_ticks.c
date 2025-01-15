@@ -1,6 +1,8 @@
 /****************************************************************************
  * sched/clock/clock_systime_ticks.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -75,37 +77,22 @@
 
 clock_t clock_systime_ticks(void)
 {
-#ifdef CONFIG_SCHED_TICKLESS
-# ifdef CONFIG_SYSTEM_TIME64
-
-  struct timespec ts;
-
-  /* Get the time from the platform specific hardware */
-
-  clock_systime_timespec(&ts);
-
-  /* Convert to a 64-bit value in microseconds, then in clock tick units */
-
-  return USEC2TICK(1000000 * (uint64_t)ts.tv_sec + ts.tv_nsec / 1000);
-
-# else /* CONFIG_SYSTEM_TIME64 */
-
-  struct timespec ts;
-  uint64_t tmp;
-
-  /* Get the time from the platform specific hardware */
+#ifdef CONFIG_RTC_HIRES
+  struct timespec ts =
+    {
+      0
+    };
 
   clock_systime_timespec(&ts);
+  return clock_time2ticks(&ts);
+#elif defined(CONFIG_ALARM_ARCH) || \
+      defined(CONFIG_TIMER_ARCH) || \
+      defined(CONFIG_SCHED_TICKLESS)
+  clock_t ticks = 0;
 
-  /* Convert to a 64- then a 32-bit value */
-
-  tmp = USEC2TICK(1000000 * (uint64_t)ts.tv_sec + ts.tv_nsec / 1000);
-  return (clock_t)(tmp & TIMER_MASK32);
-
-# endif /* CONFIG_SYSTEM_TIME64 */
-#else /* CONFIG_SCHED_TICKLESS */
-# ifdef CONFIG_SYSTEM_TIME64
-
+  up_timer_gettick(&ticks);
+  return ticks;
+#elif defined(CONFIG_SYSTEM_TIME64)
   clock_t sample;
   clock_t verify;
 
@@ -116,26 +103,20 @@ clock_t clock_systime_ticks(void)
    * If there is no 32-bit rollover, then:
    *
    *  - The MS 32-bits of each sample will be the same, and
-   *  - The LS 32-bits of the second sample will be greater than or equal to
-   *    the LS 32-bits for the first sample.
+   *  - The LS 32-bits of the second sample will be greater than or equal
+   *    to the LS 32-bits for the first sample.
    */
 
   do
     {
-      verify = g_system_timer;
-      sample = g_system_timer;
+      verify = g_system_ticks;
+      sample = g_system_ticks;
     }
   while ((sample &  TIMER_MASK32)  < (verify &  TIMER_MASK32) ||
          (sample & ~TIMER_MASK32) != (verify & ~TIMER_MASK32));
 
   return sample;
-
-# else /* CONFIG_SYSTEM_TIME64 */
-
-  /* Return the current system time */
-
-  return g_system_timer;
-
-# endif /* CONFIG_SYSTEM_TIME64 */
-#endif /* CONFIG_SCHED_TICKLESS */
+#else
+  return g_system_ticks;
+#endif
 }

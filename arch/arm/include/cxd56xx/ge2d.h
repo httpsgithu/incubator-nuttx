@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/include/cxd56xx/ge2d.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -40,8 +42,8 @@ extern "C"
  * Public Function Prototypes
  ****************************************************************************/
 
-int cxd56_ge2dinitialize(FAR const char *devname);
-void cxd56_ge2duninitialize(FAR const char *devname);
+int cxd56_ge2dinitialize(const char *devname);
+void cxd56_ge2duninitialize(const char *devname);
 
 #undef EXTERN
 #if defined(__cplusplus)

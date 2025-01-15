@@ -1,6 +1,8 @@
 /****************************************************************************
  * drivers/wireless/ieee80211/bcm43xxx/bcmf_utils.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -18,50 +20,32 @@
  *
  ****************************************************************************/
 
-#ifndef __DRIVERS_WIRELESS_IEEE80211_BCMF_UTILS_H
-#define __DRIVERS_WIRELESS_IEEE80211_BCMF_UTILS_H
+#ifndef __DRIVERS_WIRELESS_IEEE80211_BCM43XXX_BCMF_UTILS_H
+#define __DRIVERS_WIRELESS_IEEE80211_BCM43XXX_BCMF_UTILS_H
 
 /****************************************************************************
  * Included Files
  ****************************************************************************/
 
 #include <stdint.h>
-#include <queue.h>
-
-#include <nuttx/semaphore.h>
-
-#define container_of(ptr, type, member) \
-        (type *)((uint8_t *)(ptr) - offsetof(type, member))
-
-#ifndef min
-#define min(a,b) ((a) < (b) ? (a) : (b))
-#endif
-
-#ifndef max
-#define max(a,b) ((a) > (b) ? (a) : (b))
-#endif
+#include <sys/param.h>
 
 /****************************************************************************
  * Public Function Prototypes
  ****************************************************************************/
 
-void bcmf_hexdump(uint8_t *data, unsigned int len, unsigned long offset);
+void bcmf_hexdump(FAR uint8_t *dat, unsigned int len, unsigned long offset);
 
-int bcmf_sem_wait(sem_t *sem, unsigned int timeout_ms);
-
-dq_entry_t *bcmf_dqueue_pop_tail(dq_queue_t *queue);
-void bcmf_dqueue_push(dq_queue_t *queue, dq_entry_t *entry);
-
-static inline uint16_t bcmf_getle16(void *val)
+static inline uint16_t bcmf_getle16(FAR void *val)
 {
-  uint8_t *valb = (uint8_t *)val;
+  FAR uint8_t *valb = (FAR uint8_t *)val;
   return (uint16_t)valb[0] << 8 | (uint16_t)valb[1];
 }
 
-static inline uint32_t bcmf_getle32(void *val)
+static inline uint32_t bcmf_getle32(FAR void *val)
 {
-  uint16_t *valw = (uint16_t *)val;
+  FAR uint16_t *valw = (FAR uint16_t *)val;
   return (uint32_t)bcmf_getle16(valw) << 16 | bcmf_getle16(valw + 1);
 }
 
-#endif /* __DRIVERS_WIRELESS_IEEE80211_BCMF_UTILS_H */
+#endif /* __DRIVERS_WIRELESS_IEEE80211_BCM43XXX_BCMF_UTILS_H */

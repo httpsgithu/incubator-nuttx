@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/lpc31xx/lpc31_serial.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -37,9 +39,7 @@
 #include <nuttx/fs/ioctl.h>
 #include <nuttx/serial/serial.h>
 
-#include "arm_arch.h"
 #include "arm_internal.h"
-
 #include "lpc31_cgudrvr.h"
 #include "lpc31_uart.h"
 
@@ -72,7 +72,7 @@ static int  up_setup(struct uart_dev_s *dev);
 static void up_shutdown(struct uart_dev_s *dev);
 static int  up_attach(struct uart_dev_s *dev);
 static void up_detach(struct uart_dev_s *dev);
-static int  up_interrupt(int irq, void *context, FAR void *arg);
+static int  up_interrupt(int irq, void *context, void *arg);
 static int  up_ioctl(struct file *filep, int cmd, unsigned long arg);
 static int  up_receive(struct uart_dev_s *dev, unsigned int *status);
 static void up_rxint(struct uart_dev_s *dev, bool enable);
@@ -464,12 +464,14 @@ static void up_detach(struct uart_dev_s *dev)
  *
  * Description:
  *   This is the UART interrupt handler.  It will be invoked when an
- *   interrupt received on the UART irq.  It should call  uart_transmitchars
- *   or uart_receivechar to perform the appropriate data transfers.
+ *   interrupt is received on the 'irq'.  It should call uart_xmitchars or
+ *   uart_recvchars to perform the appropriate data transfers.  The
+ *   interrupt handling logic must be able to map the 'arg' to the
+ *   appropriate uart_dev_s structure in order to call these functions.
  *
  ****************************************************************************/
 
-static int up_interrupt(int irq, void *context, FAR void *arg)
+static int up_interrupt(int irq, void *context, void *arg)
 {
   struct uart_dev_s *dev = (struct uart_dev_s *)arg;
   uint8_t status;
@@ -797,7 +799,7 @@ void arm_serialinit(void)
  *
  ****************************************************************************/
 
-int up_putc(int ch)
+void up_putc(int ch)
 {
   struct up_dev_s *priv = &g_uartpriv;
   uint8_t ier;
@@ -808,20 +810,10 @@ int up_putc(int ch)
 
   up_disableuartint(priv, &ier);
 
-  /* Check for LF */
-
-  if (ch == '\n')
-    {
-      /* Add CR */
-
-      arm_lowputc('\r');
-    }
-
   /* Output the character */
 
   arm_lowputc(ch);
   up_restoreuartint(priv, ier);
-  return ch;
 }
 
 #else /* USE_SERIALDRIVER */
@@ -834,21 +826,11 @@ int up_putc(int ch)
  *
  ****************************************************************************/
 
-int up_putc(int ch)
+void up_putc(int ch)
 {
-  /* Check for LF */
-
-  if (ch == '\n')
-    {
-      /* Add CR */
-
-      arm_lowputc('\r');
-    }
-
   /* Output the character */
 
   arm_lowputc(ch);
-  return ch;
 }
 
 #endif /* USE_SERIALDRIVER */

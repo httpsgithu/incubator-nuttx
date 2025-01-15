@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/stm32/stm32f20xxf40xx_flash.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -32,7 +34,7 @@
 
 #include <nuttx/config.h>
 #include <nuttx/arch.h>
-#include <nuttx/semaphore.h>
+#include <nuttx/mutex.h>
 
 #include <stdbool.h>
 #include <assert.h>
@@ -41,8 +43,7 @@
 #include "stm32_flash.h"
 #include "stm32_rcc.h"
 #include "stm32_waste.h"
-
-#include "arm_arch.h"
+#include "arm_internal.h"
 
 /* Only for the STM32F[2|4]0xx family. */
 
@@ -66,21 +67,11 @@
  * Private Data
  ****************************************************************************/
 
-static sem_t g_sem = SEM_INITIALIZER(1);
+static mutex_t g_lock = NXMUTEX_INITIALIZER;
 
 /****************************************************************************
  * Private Functions
  ****************************************************************************/
-
-static int sem_lock(void)
-{
-  return nxsem_wait_uninterruptible(&g_sem);
-}
-
-static inline void sem_unlock(void)
-{
-  nxsem_post(&g_sem);
-}
 
 static void flash_unlock(void)
 {
@@ -129,14 +120,14 @@ int stm32_flash_unlock(void)
 {
   int ret;
 
-  ret = sem_lock();
+  ret = nxmutex_lock(&g_lock);
   if (ret < 0)
     {
       return ret;
     }
 
   flash_unlock();
-  sem_unlock();
+  nxmutex_unlock(&g_lock);
 
   return ret;
 }
@@ -145,14 +136,14 @@ int stm32_flash_lock(void)
 {
   int ret;
 
-  ret = sem_lock();
+  ret = nxmutex_lock(&g_lock);
   if (ret < 0)
     {
       return ret;
     }
 
   flash_lock();
-  sem_unlock();
+  nxmutex_unlock(&g_lock);
 
   return ret;
 }
@@ -249,6 +240,11 @@ size_t up_progmem_pagesize(size_t page)
     }
 }
 
+size_t up_progmem_erasesize(size_t block)
+{
+  return up_progmem_pagesize(block);
+}
+
 ssize_t up_progmem_getpage(size_t addr)
 {
   size_t page_end = 0;
@@ -340,7 +336,7 @@ ssize_t up_progmem_eraseblock(size_t block)
       return -EFAULT;
     }
 
-  sem_lock();
+  nxmutex_lock(&g_lock);
 
   /* Get flash ready and begin erasing single block */
 
@@ -356,7 +352,7 @@ ssize_t up_progmem_eraseblock(size_t block)
     }
 
   modifyreg32(STM32_FLASH_CR, FLASH_CR_SER, 0);
-  sem_unlock();
+  nxmutex_unlock(&g_lock);
 
   /* Verify */
 
@@ -394,7 +390,7 @@ ssize_t up_progmem_write(size_t addr, const void *buf, size_t count)
       return -EFAULT;
     }
 
-  sem_lock();
+  nxmutex_lock(&g_lock);
 
   /* Get flash ready and begin flashing */
 
@@ -426,14 +422,14 @@ ssize_t up_progmem_write(size_t addr, const void *buf, size_t count)
       if (getreg32(STM32_FLASH_SR) & FLASH_CR_SER)
         {
           modifyreg32(STM32_FLASH_CR, FLASH_CR_PG, 0);
-          sem_unlock();
+          nxmutex_unlock(&g_lock);
           return -EROFS;
         }
 
       if (getreg16(addr) != *hword)
         {
           modifyreg32(STM32_FLASH_CR, FLASH_CR_PG, 0);
-          sem_unlock();
+          nxmutex_unlock(&g_lock);
           return -EIO;
         }
     }
@@ -444,8 +440,13 @@ ssize_t up_progmem_write(size_t addr, const void *buf, size_t count)
   data_cache_enable();
 #endif
 
-  sem_unlock();
+  nxmutex_unlock(&g_lock);
   return written;
+}
+
+uint8_t up_progmem_erasestate(void)
+{
+  return FLASH_ERASEDVALUE;
 }
 
 #endif /* defined(CONFIG_STM32_STM32F20XX) || defined(CONFIG_STM32_STM32F4XXX) */

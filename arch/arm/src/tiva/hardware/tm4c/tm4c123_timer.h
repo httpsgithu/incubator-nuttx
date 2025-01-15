@@ -1,21 +1,13 @@
 /****************************************************************************
  * arch/arm/src/tiva/hardware/tm4c/tm4c123_timer.h
  *
- * Originally:
- *
- *   Copyright (C) 2012, 2014 Max Nekludov. All rights reserved.
- *   Author: Max Nekludov <macscomp@gmail.com>
- *
- * Ongoing support and major revision to support the TM4C129 family
- * (essentially a full file replacement):
- *
- *   Copyright (C) 2015, 2018 Gregory Nutt. All rights reserved.
- *   Author: Gregory Nutt <gnutt@nuttx.org>
- *
- * Some bitfield definitions taken from a header file provided by:
- *
- *   Copyright (C) 2014 TRD2 Inc. All rights reserved.
- *   Author: Calvin Maguranis <calvin.maguranis@trd2inc.com>
+ * SPDX-License-Identifier: BSD-3-Clause
+ * SPDX-FileCopyrightText: 2015, 2018 Gregory Nutt. All rights reserved.
+ * SPDX-FileCopyrightText: 2014 TRD2 Inc. All rights reserved.
+ * SPDX-FileCopyrightText: 2012, 2014 Max Nekludov. All rights reserved.
+ * SPDX-FileContributor: Gregory Nutt <gnutt@nuttx.org>
+ * SPDX-FileContributor: Max Nekludov <macscomp@gmail.com>
+ * SPDX-FileContributor: Calvin Maguranis <calvin.maguranis@trd2inc.com>
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -46,8 +38,8 @@
  *
  ****************************************************************************/
 
-#ifndef __ARCH_ARM_SRC_TIVA_HARDWARE_LM_TM4C123_TIMER_H
-#define __ARCH_ARM_SRC_TIVA_HARDWARE_LM_TM4C123_TIMER_H
+#ifndef __ARCH_ARM_SRC_TIVA_HARDWARE_TM4C_TM4C123_TIMER_H
+#define __ARCH_ARM_SRC_TIVA_HARDWARE_TM4C_TM4C123_TIMER_H
 
 /****************************************************************************
  * Included Files
@@ -590,4 +582,4 @@
 #  define TIMER_PP_SIZE_16             (0 << TIMER_PP_SIZE_SHIFT) /* Timer A/B 16 bits with 8-bit prescale */
 #  define TIMER_PP_SIZE_32             (1 << TIMER_PP_SIZE_SHIFT) /* Timer A/B 32 bits with 16-bit prescale */
 
-#endif /* __ARCH_ARM_SRC_TIVA_HARDWARE_LM_TM4C123_TIMER_H */
+#endif /* __ARCH_ARM_SRC_TIVA_HARDWARE_TM4C_TM4C123_TIMER_H */

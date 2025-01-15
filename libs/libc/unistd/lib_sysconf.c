@@ -1,6 +1,8 @@
 /****************************************************************************
  * libs/libc/unistd/lib_sysconf.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -24,9 +26,17 @@
 
 #include <nuttx/config.h>
 
+#include <nuttx/atexit.h>
+
 #include <unistd.h>
 #include <sched.h>
 #include <errno.h>
+
+#ifdef CONFIG_MM_PGSIZE
+#  define DEFAULT_MM_PGSIZE CONFIG_MM_PGSIZE
+#else
+#  define DEFAULT_MM_PGSIZE CONFIG_PTHREAD_STACK_MIN
+#endif
 
 /****************************************************************************
  * Public Functions
@@ -207,40 +217,50 @@ long sysconf(int name)
 
   switch (name)
     {
+#ifdef CONFIG_FS_AIO
+      case _SC_ASYNCHRONOUS_IO:
+        return _POSIX_ASYNCHRONOUS_IO;
+#endif
+      case _SC_PRIORITIZED_IO:
+        return _POSIX_PRIORITIZED_IO;
+      case _SC_AIO_MAX:
+        return _POSIX_AIO_MAX;
+#ifdef CONFIG_LIBC_PASSWD_LINESIZE
+      case _SC_GETPW_R_SIZE_MAX:
+        return _POSIX_GETPW_R_SIZE_MAX;
+#endif
+      case _SC_CPUTIME:
+        return _POSIX_CPUTIME;
+      case _SC_THREAD_CPUTIME:
+        return _POSIX_THREAD_CPUTIME;
+      case _SC_REALTIME_SIGNALS:
+        return _POSIX_REALTIME_SIGNALS;
       case _SC_CLK_TCK:
         return CLOCKS_PER_SEC;
 
       case _SC_OPEN_MAX:
-        return _POSIX_OPEN_MAX;
+        return OPEN_MAX;
 
       case _SC_ATEXIT_MAX:
-#ifdef CONFIG_SCHED_EXIT_MAX
-        return CONFIG_SCHED_EXIT_MAX;
-#else
-        return 0;
-#endif
+        return ATEXIT_MAX;
 
       case _SC_NPROCESSORS_CONF:
       case _SC_NPROCESSORS_ONLN:
-#ifdef CONFIG_SMP_NCPUS
         return CONFIG_SMP_NCPUS;
-#else
-        return 1;
-#endif
 
       case _SC_MONOTONIC_CLOCK:
-#ifdef CONFIG_CLOCK_MONOTONIC
         return 1;
-#else
-        return 0;
-#endif
 
       case _SC_PAGESIZE:
-#ifdef CONFIG_MM_PGSIZE
-        return CONFIG_MM_PGSIZE;
-#else
-        return 1;
-#endif
+        return DEFAULT_MM_PGSIZE;
+
+      case _SC_THREAD_STACK_MIN:
+        return CONFIG_PTHREAD_STACK_MIN;
+
+      /* threads limit to tcb_s->group->tg_nmembers(unint_8) */
+
+      case _SC_THREAD_THREADS_MAX:
+        return UINT8_MAX;
 
       default:
 #if 0 /* Assume valid but not implemented for the time being */

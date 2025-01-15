@@ -1,6 +1,8 @@
 /****************************************************************************
  * net/tcp/tcp_accept.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -45,7 +47,6 @@
 
 struct accept_s
 {
-  FAR struct socket     *acpt_sock;       /* The accepting socket */
   sem_t                  acpt_sem;        /* Wait for driver event */
   FAR struct sockaddr   *acpt_addr;       /* Return connection address */
   FAR socklen_t         *acpt_addrlen;    /* Return length of address */
@@ -64,9 +65,9 @@ struct accept_s
  *   Get the sender's address from the UDP packet
  *
  * Input Parameters:
- *   psock  - The state structure of the accepting socket
- *   conn   - The newly accepted TCP connection
- *   pstate - the recvfrom state structure
+ *   listener - The connection structure of the listener
+ *   conn     - The newly accepted TCP connection
+ *   pstate   - the recvfrom state structure
  *
  * Returned Value:
  *   None
@@ -76,8 +77,7 @@ struct accept_s
  *
  ****************************************************************************/
 
-#ifdef CONFIG_NET_TCP
-static inline void accept_tcpsender(FAR struct socket *psock,
+static inline void accept_tcpsender(FAR struct tcp_conn_s *listener,
                                     FAR struct tcp_conn_s *conn,
                                     FAR struct sockaddr *addr,
                                     socklen_t *addrlen)
@@ -94,7 +94,7 @@ static inline void accept_tcpsender(FAR struct socket *psock,
        * select which one to use when obtaining the sender's IP address.
        */
 
-      if (psock->s_domain == PF_INET)
+      if (listener->domain == PF_INET)
 #endif /* CONFIG_NET_IPv6 */
         {
           FAR struct sockaddr_in *inaddr = (FAR struct sockaddr_in *)addr;
@@ -117,7 +117,9 @@ static inline void accept_tcpsender(FAR struct socket *psock,
         {
           FAR struct sockaddr_in6 *inaddr = (FAR struct sockaddr_in6 *)addr;
 
-          DEBUGASSERT(psock->s_domain == PF_INET6);
+#if defined(CONFIG_NET_IPv4) && defined(CONFIG_NET_IPv6)
+          DEBUGASSERT(listener->domain == PF_INET6);
+#endif
           inaddr->sin6_family = AF_INET6;
           inaddr->sin6_port   = conn->rport;
           net_ipv6addr_copy(inaddr->sin6_addr.s6_addr, conn->u.ipv6.raddr);
@@ -127,7 +129,6 @@ static inline void accept_tcpsender(FAR struct socket *psock,
 #endif /* CONFIG_NET_IPv6 */
     }
 }
-#endif /* CONFIG_NET_TCP */
 
 /****************************************************************************
  * Name: accept_eventhandler
@@ -157,7 +158,7 @@ static int accept_eventhandler(FAR struct tcp_conn_s *listener,
     {
       /* Get the connection address */
 
-      accept_tcpsender(pstate->acpt_sock, conn, pstate->acpt_addr,
+      accept_tcpsender(listener, conn, pstate->acpt_addr,
                        pstate->acpt_addrlen);
 
       /* Save the connection structure */
@@ -218,13 +219,11 @@ int psock_tcp_accept(FAR struct socket *psock, FAR struct sockaddr *addr,
   struct accept_s state;
   int ret;
 
-  DEBUGASSERT(psock && newconn);
-
   /* Check the backlog to see if there is a connection already pending for
    * this listener.
    */
 
-  conn = (FAR struct tcp_conn_s *)psock->s_conn;
+  conn = psock->s_conn;
 
 #ifdef CONFIG_NET_TCPBACKLOG
   state.acpt_newconn = tcp_backlogremove(conn);
@@ -233,7 +232,7 @@ int psock_tcp_accept(FAR struct socket *psock, FAR struct sockaddr *addr,
       /* Yes... get the address of the connected client */
 
       ninfo("Pending conn=%p\n", state.acpt_newconn);
-      accept_tcpsender(psock, state.acpt_newconn, addr, addrlen);
+      accept_tcpsender(conn, state.acpt_newconn, addr, addrlen);
     }
 
   /* In general, this implementation will not support non-blocking socket
@@ -242,7 +241,7 @@ int psock_tcp_accept(FAR struct socket *psock, FAR struct sockaddr *addr,
    * return EAGAIN if there is no pending connection in the backlog.
    */
 
-  else if (_SS_ISNONBLOCK(psock->s_flags))
+  else if (_SS_ISNONBLOCK(conn->sconn.s_flags))
     {
       return -EAGAIN;
     }
@@ -256,18 +255,12 @@ int psock_tcp_accept(FAR struct socket *psock, FAR struct sockaddr *addr,
        * ready.
        */
 
-      state.acpt_sock       = psock;
       state.acpt_addr       = addr;
       state.acpt_addrlen    = addrlen;
       state.acpt_newconn    = NULL;
       state.acpt_result     = OK;
 
-      /* This semaphore is used for signaling and, hence, should not have
-       * priority inheritance enabled.
-       */
-
       nxsem_init(&state.acpt_sem, 0, 0);
-      nxsem_set_protocol(&state.acpt_sem, SEM_PRIO_NONE);
 
       /* Set up the callback in the connection */
 
@@ -275,10 +268,10 @@ int psock_tcp_accept(FAR struct socket *psock, FAR struct sockaddr *addr,
       conn->accept          = accept_eventhandler;
 
       /* Wait for the send to complete or an error to occur:  NOTES:
-       * net_lockedwait will also terminate if a signal is received.
+       * net_sem_wait will also terminate if a signal is received.
        */
 
-      ret = net_lockedwait(&state.acpt_sem);
+      ret = net_sem_wait(&state.acpt_sem);
 
       /* Make sure that no further events are processed */
 
@@ -297,8 +290,8 @@ int psock_tcp_accept(FAR struct socket *psock, FAR struct sockaddr *addr,
           return -state.acpt_result;
         }
 
-      /* If net_lockedwait failed, then we were probably reawakened by a
-       * signal.  In this case, net_lockedwait will have returned negated
+      /* If net_sem_wait failed, then we were probably reawakened by a
+       * signal.  In this case, net_sem_wait will have returned negated
        * errno appropriately.
        */
 

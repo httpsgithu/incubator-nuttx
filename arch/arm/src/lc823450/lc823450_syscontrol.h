@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/lc823450/lc823450_syscontrol.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -277,8 +279,8 @@ void lc823450_clock_dump(void);
 void mod_stby_regs(uint32_t clearbits, uint32_t setbits);
 void lc823450_mod_stby_regs(uint32_t clearbits, uint32_t setbits);
 #else
-# define mod_stby_regs(...)
-# define lc823450_mod_stby_regs(...)
+#  define mod_stby_regs(...)
+#  define lc823450_mod_stby_regs(...)
 #endif
 
 #if defined(__cplusplus)

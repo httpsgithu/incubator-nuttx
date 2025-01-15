@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/misoc/include/minerva/csrdefs.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -18,8 +20,8 @@
  *
  ****************************************************************************/
 
-#ifndef __RISCV_CSR_DEFS__
-#define __RISCV_CSR_DEFS__
+#ifndef __ARCH_MISOC_INCLUDE_MINERVA_CSRDEFS_H
+#define __ARCH_MISOC_INCLUDE_MINERVA_CSRDEFS_H
 
 /****************************************************************************
  * Pre-processor Definitions
@@ -62,4 +64,4 @@
 #define CSR_MSTATUS_TSR      (1 << 22)
 #define CSR_MSTATUS_SD       (1 << 31)
 
-#endif
+#endif /* __ARCH_MISOC_INCLUDE_MINERVA_CSRDEFS_H */

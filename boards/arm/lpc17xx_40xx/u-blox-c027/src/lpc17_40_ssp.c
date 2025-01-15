@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/lpc17xx_40xx/u-blox-c027/src/lpc17_40_ssp.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -31,7 +33,7 @@
 #include <nuttx/spi/spi.h>
 #include <arch/board/board.h>
 
-#include "arm_arch.h"
+#include "arm_internal.h"
 #include "chip.h"
 #include "lpc17_40_gpio.h"
 #include "lpc17_40_ssp.h"
@@ -107,7 +109,7 @@ void weak_function c027_sspdev_initialize(void)
  ****************************************************************************/
 
 #ifdef CONFIG_LPC17_40_SSP0
-void  lpc17_40_ssp0select(FAR struct spi_dev_s *dev, uint32_t devid,
+void  lpc17_40_ssp0select(struct spi_dev_s *dev, uint32_t devid,
                           bool selected)
 {
   spiinfo("devid: %d CS: %s\n", (int)devid,
@@ -119,7 +121,7 @@ void  lpc17_40_ssp0select(FAR struct spi_dev_s *dev, uint32_t devid,
   ssp_dumpgpio("lpc17_40_ssp0select() Exit");
 }
 
-uint8_t lpc17_40_ssp0status(FAR struct spi_dev_s *dev, uint32_t devid)
+uint8_t lpc17_40_ssp0status(struct spi_dev_s *dev, uint32_t devid)
 {
   spiinfo("Returning SPI_STATUS_PRESENT\n");
   return SPI_STATUS_PRESENT;
@@ -127,7 +129,7 @@ uint8_t lpc17_40_ssp0status(FAR struct spi_dev_s *dev, uint32_t devid)
 #endif
 
 #ifdef CONFIG_LPC17_40_SSP1
-void  lpc17_40_ssp1select(FAR struct spi_dev_s *dev, uint32_t devid,
+void  lpc17_40_ssp1select(struct spi_dev_s *dev, uint32_t devid,
                           bool selected)
 {
   spiinfo("devid: %d CS: %s\n", (int)devid,
@@ -152,7 +154,7 @@ void  lpc17_40_ssp1select(FAR struct spi_dev_s *dev, uint32_t devid,
   ssp_dumpgpio("lpc17_40_ssp1select() Exit");
 }
 
-uint8_t lpc17_40_ssp1status(FAR struct spi_dev_s *dev, uint32_t devid)
+uint8_t lpc17_40_ssp1status(struct spi_dev_s *dev, uint32_t devid)
 {
   if (devid == SPIDEV_MMCSD(0))
     {

@@ -1,6 +1,8 @@
 /****************************************************************************
  * libs/libnx/nxfonts/nxfonts_sans17x23b.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -18,8 +20,8 @@
  *
  ****************************************************************************/
 
-#ifndef __LIBNX_NXFONTS_NXFONTS_SANS17X23B_H
-#define __LIBNX_NXFONTS_NXFONTS_SANS17X23B_H
+#ifndef __LIBS_LIBNX_NXFONTS_NXFONTS_SANS17X23B_H
+#define __LIBS_LIBNX_NXFONTS_NXFONTS_SANS17X23B_H
 
 /****************************************************************************
  * Included Files
@@ -832,4 +834,4 @@ extern "C"
 }
 #endif
 
-#endif /* __LIBNX_NXFONTS_NXFONTS_SANS17X23B_H */
+#endif /* __LIBS_LIBNX_NXFONTS_NXFONTS_SANS17X23B_H */

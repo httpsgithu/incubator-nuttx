@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/renesas/src/rx65n/rx65n_lowputc.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -28,8 +30,7 @@
 #include <nuttx/arch.h>
 
 #include "chip.h"
-#include "up_internal.h"
-#include "up_arch.h"
+#include "renesas_internal.h"
 #include "rx65n_definitions.h"
 
 /****************************************************************************
@@ -176,14 +177,14 @@ static inline int up_txready(void)
  ****************************************************************************/
 
 /****************************************************************************
- * Name: up_lowputc
+ * Name: renesas_lowputc
  *
  * Description:
  *   Output one byte on the serial console
  *
  ****************************************************************************/
 
-void up_lowputc(char ch)
+void renesas_lowputc(char ch)
 {
 #ifdef HAVE_CONSOLE
   uint8_t ssr;

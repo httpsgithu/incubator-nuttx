@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/nrf52/nrf52840-dk/src/nrf52_timer.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -52,7 +54,7 @@
  *
  ****************************************************************************/
 
-int nrf52_timer_driver_setup(FAR const char *devpath, int timer)
+int nrf52_timer_driver_setup(const char *devpath, int timer)
 {
   return nrf52_timer_initialize(devpath, timer);
 }

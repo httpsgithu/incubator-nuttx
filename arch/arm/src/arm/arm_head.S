@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/arm/arm_head.S
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -28,7 +30,7 @@
 #include "chip.h"
 #include "arm_internal.h"
 
-#ifdef CONFIG_PAGING
+#ifdef CONFIG_LEGACY_PAGING
 #  include <nuttx/page.h>
 #  include "pg_macros.h"
 #endif
@@ -38,14 +40,6 @@
 /****************************************************************************
  * Configuration
  ****************************************************************************/
-
-/* Hard-coded options */
-
-#undef CPU_ALIGNMENT_TRAP
-#undef CPU_DCACHE_WRITETHROUGH
-#undef CPU_CACHE_ROUND_ROBIN
-#undef CPU_DCACHE_DISABLE
-#undef CPU_ICACHE_DISABLE
 
 /* There are three operational memory configurations:
  *
@@ -136,7 +130,7 @@
  *         NPAGE1=(1024 -((a) & 0x00000fff) >> 2) NPAGE1=1-1024
  */
 
-#ifdef CONFIG_PAGING
+#ifdef CONFIG_LEGACY_PAGING
 #  define PG_L2_TEXT_PBASE     (PG_L2_TEXT_PADDR & PG_L1_PADDRMASK)
 #  define PG_L2_TEXT_NPAGE1    (PTE_NPAGES - ((PG_L2_TEXT_PADDR & ~PG_L1_PADDRMASK) >> 2))
 #  define PG_L2_PGTABLE_PBASE  (PG_L2_PGTABLE_PADDR & PG_L1_PADDRMASK)
@@ -216,13 +210,15 @@
  */
 
 	.text
+	.syntax	unified
+	.arm
 	.global	__start
 	.type	__start, #function
 
 __start:
-	/* Make sure that we are in SVC mode with all IRQs disabled */
+	/* Make sure that we are in SYS mode with all IRQs disabled */
 
-	mov		r0, #(PSR_MODE_SVC | PSR_I_BIT | PSR_F_BIT)
+	mov		r0, #(PSR_MODE_SYS | PSR_I_BIT | PSR_F_BIT)
 	msr		cpsr_c, r0
 
 	/* Initialize DRAM using a macro provided by board-specific logic */
@@ -259,7 +255,7 @@ __start:
 	str		r3, [r4, r0, lsr #18]		/* identity mapping */
 #endif
 
-#ifdef CONFIG_PAGING
+#ifdef CONFIG_LEGACY_PAGING
 
 	/* Map the read-only .text region in place.  This must be done
 	 * before the MMU is enabled and the virtual addressing takes
@@ -298,7 +294,7 @@ __start:
 	ldmia		r0, {r0, r1, r2, r3}
 	pg_l2map 	r0, r1, r2, r3, r5
 
-#else /* CONFIG_PAGING */
+#else /* CONFIG_LEGACY_PAGING */
 
 #ifdef CONFIG_IDENTITY_TEXTMAP
 	mksection 	r0, r4				/* r0=phys. base section */
@@ -323,7 +319,7 @@ __start:
 	 * can only be assumed to cover the initial .text region.
 	 */
 
-#endif /* CONFIG_PAGING */
+#endif /* CONFIG_LEGACY_PAGING */
 #endif /* CONFIG_ARCH_ROMPGTABLE */
 
 	/* The following logic will set up the ARM920/ARM926 for normal operation.
@@ -338,7 +334,7 @@ __start:
 	mcr		p15, 0, r0, c8, c7		/* Invalidate I,D TLBs */
 	mcr		p15, 0, r4, c2, c0		/* Load page table pointer */
 
-#ifdef CPU_DCACHE_WRITETHROUGH
+#ifdef CONFIG_ARM_DCACHE_WRITETHROUGH
 	mov		r0, #4				/* Disable write-back on caches explicitly */
 	mcr		p15, 7, r0, c15, c0, 0
 #endif
@@ -393,22 +389,22 @@ __start:
 #endif
 	/* CR_RR - Round Robin cache replacement */
 
-#ifdef CPU_CACHE_ROUND_ROBIN
+#ifdef CONFIG_ARM_CACHE_ROUND_ROBIN
 	orr		r0, r0, #(CR_RR)
 #endif
 	/* CR_C - Dcache enable */
 
-#ifndef CPU_DCACHE_DISABLE
+#ifndef CONFIG_ARM_DCACHE_DISABLE
 	orr		r0, r0, #(CR_C)
 #endif
 	/* CR_C - Dcache enable */
 
-#ifndef CPU_ICACHE_DISABLE
+#ifndef CONFIG_ARM_ICACHE_DISABLE
 	orr		r0, r0, #(CR_I)
 #endif
 	/* CR_A - Alignment abort enable */
 
-#ifdef CPU_ALIGNMENT_TRAP
+#ifdef CONFIG_ARM_ALIGNMENT_TRAP
 	orr		r0, r0, #(CR_A)
 #endif
 	mcr		p15, 0, r0, c1, c0, 0		/* write control reg */
@@ -449,7 +445,7 @@ __start:
 	.long	PGTABLE_BASE_VADDR		/* Virtual start of page table */
 #endif
 
-#ifdef CONFIG_PAGING
+#ifdef CONFIG_LEGACY_PAGING
 
 .Ltxtspan:
 	.long	PG_L1_TEXT_PADDR		/* Physical address in the L1 table */
@@ -477,7 +473,7 @@ __start:
 	.long	PG_PGTABLE_NPAGES		/* Total mapped page table pages */
 	.long	MMU_L2_PGTABFLAGS		/* L2 MMU flags to use */
 
-#endif /* CONFIG_PAGING */
+#endif /* CONFIG_LEGACY_PAGING */
 	.size	__start, .-__start
 
 /****************************************************************************
@@ -507,7 +503,7 @@ __start:
 	str		r0, [r4, r3, lsr #18]		/* Undo identity mapping */
 #endif
 
-#if defined(CONFIG_PAGING)
+#if defined(CONFIG_LEGACY_PAGING)
 	/* Populate the L1 table for the data region */
 
 	adr		r0, .Ldataspan
@@ -563,7 +559,7 @@ __start:
 	 * will still probably be located in a separate (virtual) address region.
 	 */
 
-#endif /* CONFIG_PAGING */
+#endif /* CONFIG_LEGACY_PAGING */
 #endif /* CONFIG_ARCH_ROMPGTABLE */
 
 	/* Zero BSS and set up the stack pointer */
@@ -589,7 +585,7 @@ __start:
 	 * address region.
 	 */
 
-#if defined(CONFIG_BOOT_RUNFROMFLASH) || defined(CONFIG_PAGING)
+#if defined(CONFIG_BOOT_RUNFROMFLASH) || defined(CONFIG_LEGACY_PAGING)
 	adr		r3, .Ldatainit
 	ldmia		r3, {r0, r1, r2}
 
@@ -628,14 +624,14 @@ __start:
 	.long	_ebss
 	.long	_ebss+CONFIG_IDLETHREAD_STACKSIZE
 
-#if !defined(CONFIG_PAGING) && !defined(CONFIG_BOOT_RUNFROMFLASH)
+#if !defined(CONFIG_LEGACY_PAGING) && !defined(CONFIG_BOOT_RUNFROMFLASH)
 
 .LCnuttxpaddr:
 	.long	NUTTX_START_PADDR & 0xfff00000
 
 #endif
 
-#ifdef CONFIG_PAGING
+#ifdef CONFIG_LEGACY_PAGING
 
 .Ldataspan:
 	.long	PG_L1_DATA_VADDR		/* Virtual address in the L1 table */
@@ -650,9 +646,9 @@ __start:
 	.long	PG_DATA_NPAGES			/* Number of pages in the data region */
 	.long	MMU_L2_DATAFLAGS		/* L2 MMU flags to use */
 
-#endif /* CONFIG_PAGING */
+#endif /* CONFIG_LEGACY_PAGING */
 
-#if defined(CONFIG_BOOT_RUNFROMFLASH) || defined(CONFIG_PAGING)
+#if defined(CONFIG_BOOT_RUNFROMFLASH) || defined(CONFIG_LEGACY_PAGING)
 .Ldatainit:
 	.long	_eronly					/* Where .data defaults are stored in FLASH */
 	.long	_sdata					/* Where .data needs to reside in SDRAM */

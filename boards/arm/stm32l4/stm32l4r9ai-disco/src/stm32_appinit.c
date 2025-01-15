@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/stm32l4/stm32l4r9ai-disco/src/stm32_appinit.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -104,7 +106,7 @@ static struct i2c_master_s *g_i2c3;
 int board_app_initialize(uintptr_t arg)
 {
 #ifdef HAVE_RTC_DRIVER
-  FAR struct rtc_lowerhalf_s *rtclower;
+  struct rtc_lowerhalf_s *rtclower;
 #endif
   int ret = OK;
 
@@ -228,7 +230,7 @@ int board_ioctl(unsigned int cmd, uintptr_t arg)
 #if defined(CONFIG_BOARDCTL_UNIQUEID)
 int board_uniqueid(uint8_t *uniqueid)
 {
-  if (uniqueid == 0)
+  if (uniqueid == NULL)
     {
       return -EINVAL;
     }

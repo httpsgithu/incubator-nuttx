@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/xtensa/esp32/common/src/esp32_oneshot.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -54,7 +56,7 @@
 int esp32_oneshot_init(int timer, uint16_t resolution)
 {
   int ret = OK;
-  FAR struct oneshot_lowerhalf_s *os_lower = NULL;
+  struct oneshot_lowerhalf_s *os_lower = NULL;
 
   os_lower = oneshot_initialize(timer, resolution);
   if (os_lower != NULL)

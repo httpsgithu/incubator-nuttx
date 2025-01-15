@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/samd5e5/sam_oneshot.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -75,7 +77,7 @@ static void sam_oneshot_handler(TC_HANDLE tch, void *arg, uint32_t sr)
    * Disable the TC now and disable any further interrupts.
    */
 
-  sam_tc_attach(oneshot->tch, NULL, NULL, 0);
+  sam_tc_detach(oneshot->tch);
   sam_tc_stop(oneshot->tch);
 
   /* The timer is no longer running */
@@ -221,7 +223,7 @@ int sam_oneshot_start(struct sam_oneshot_s *oneshot,
       /* Yes.. then cancel it */
 
       tmrinfo("Already running... cancelling\n");
-      (void)sam_oneshot_cancel(oneshot, freerun, NULL);
+      sam_oneshot_cancel(oneshot, freerun, NULL);
     }
 
   /* Save the new handler and its argument */
@@ -250,8 +252,7 @@ int sam_oneshot_start(struct sam_oneshot_s *oneshot,
 
   /* Set up to receive the callback when the interrupt occurs */
 
-  (void)sam_tc_attach(oneshot->tch, sam_oneshot_handler,
-                      oneshot, TC_INTFLAG_MC0);
+  sam_tc_attach(oneshot->tch, sam_oneshot_handler, oneshot, TC_INTFLAG_MC0);
 
   /* Set CC0 so that an event will be triggered when COUNT register
    * counts up to CC0.
@@ -382,7 +383,7 @@ int sam_oneshot_cancel(struct sam_oneshot_s *oneshot,
 
   /* Now we can disable the interrupt and stop the timer. */
 
-  sam_tc_attach(oneshot->tch, NULL, NULL, 0);
+  sam_tc_attach(oneshot->tch);
   sam_tc_stop(oneshot->tch);
 
   oneshot->running = false;

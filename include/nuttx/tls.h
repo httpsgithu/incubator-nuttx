@@ -1,6 +1,8 @@
 /****************************************************************************
  * include/nuttx/tls.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -27,8 +29,21 @@
 
 #include <nuttx/config.h>
 
-#include <nuttx/sched.h>
-#include <nuttx/lib/getopt.h>
+#include <stdint.h>
+#include <stdbool.h>
+
+#include <arch/arch.h>
+#include <arch/types.h>
+
+#include <nuttx/compiler.h>
+#include <nuttx/cache.h>
+#include <nuttx/atexit.h>
+#include <nuttx/fs/fs.h>
+
+#ifdef CONFIG_PTHREAD_ATFORK
+#  include <nuttx/list.h>
+#endif
+
 #include <sys/types.h>
 
 /****************************************************************************
@@ -44,7 +59,6 @@
 #endif
 
 #ifndef CONFIG_TLS_NELEM
-#  warning CONFIG_TLS_NELEM is not defined
 #  define CONFIG_TLS_NELEM 0
 #endif
 
@@ -61,32 +75,61 @@
  * Public Types
  ****************************************************************************/
 
-/* type tls_ndxset_t & tls_dtor_t *******************************************/
+#ifdef __cplusplus
+#define EXTERN extern "C"
+extern "C"
+{
+#else
+#define EXTERN extern
+#endif
+
+/* type tls_dtor_t **********************************************************/
 
 /* Smallest addressable type that can hold the entire configured number of
  * TLS data indexes.
  */
 
-#if CONFIG_TLS_NELEM > 0
-#  if CONFIG_TLS_NELEM > 32
-#    error Too many TLS elements
-#  elif CONFIG_TLS_NELEM > 16
-     typedef uint32_t tls_ndxset_t;
-#  elif CONFIG_TLS_NELEM > 8
-     typedef uint16_t tls_ndxset_t;
-#  else
-     typedef uint8_t tls_ndxset_t;
-#  endif
-
 typedef CODE void (*tls_dtor_t)(FAR void *);
 
+/* This structure encapsulates all variables associated with getopt(). */
+
+struct getopt_s
+{
+  /* Part of the implementation of the public getopt() interface */
+
+  FAR char *go_optarg;       /* Optional argument following option */
+  int       go_opterr;       /* Print error message */
+  int       go_optind;       /* Index into argv */
+  int       go_optopt;       /* unrecognized option character */
+
+  /* Internal getopt() state */
+
+  FAR char *go_optptr;       /* Current parsing location */
+  bool      go_binitialized; /* true:  getopt() has been initialized */
+};
+
+#ifdef CONFIG_PTHREAD_ATFORK
+/* This structure defines the pthread_atfork_s, which is used to manage
+ * the funcs that operates on pthread_atfork() method
+ */
+
+struct pthread_atfork_s
+{
+  CODE void (*prepare)(void);
+  CODE void (*child)(void);
+  CODE void (*parent)(void);
+
+  struct list_node node;
+};
 #endif
 
 struct task_info_s
 {
-  sem_t           ta_sem;
-#if CONFIG_TLS_NELEM > 0
-  tls_ndxset_t    ta_tlsset;                    /* Set of TLS indexes allocated */
+  mutex_t         ta_lock;
+#if CONFIG_TLS_TASK_NELEM > 0
+  uintptr_t       ta_telem[CONFIG_TLS_TASK_NELEM]; /* Task local storage elements */
+#endif
+#if defined(CONFIG_TLS_NELEM) && CONFIG_TLS_NELEM > 0
   tls_dtor_t      ta_tlsdtor[CONFIG_TLS_NELEM]; /* List of TLS destructors      */
 #endif
 #ifndef CONFIG_BUILD_KERNEL
@@ -96,6 +139,28 @@ struct task_info_s
   char            ta_domain[NAME_MAX]; /* Current domain for gettext */
 #  endif
 #endif
+#if CONFIG_LIBC_MAX_EXITFUNS > 0
+  struct atexit_list_s ta_exit; /* Exit functions */
+#endif
+#ifdef CONFIG_FILE_STREAM
+  struct streamlist ta_streamlist; /* Holds C buffered I/O info */
+#endif
+
+#ifdef CONFIG_PTHREAD_ATFORK
+  struct list_node ta_atfork; /* Holds the pthread_atfork_s list */
+#endif
+};
+
+/* struct tls_cleanup_s *****************************************************/
+
+/* This structure describes one element of the pthread cleanup stack */
+
+typedef CODE void (*tls_cleanup_t)(FAR void *arg);
+
+struct tls_cleanup_s
+{
+  tls_cleanup_t tc_cleaner; /* Cleanup callback address */
+  FAR void *tc_arg;         /* Argument that accompanies the callback */
 };
 
 /* When TLS is enabled, up_createstack() will align allocated stacks to the
@@ -111,7 +176,7 @@ struct task_info_s
  * The stack memory is fully accessible to user mode threads.  TLS is not
  * available from interrupt handlers (nor from the IDLE thread).
  *
- * The following diagram represent the typic stack layout:
+ * The following diagram represent the typical stack layout:
  *
  *      Push Down             Push Up
  *   +-------------+      +-------------+ <- Stack memory allocation
@@ -136,19 +201,27 @@ struct tls_info_s
 {
   FAR struct task_info_s * tl_task;
 
-#if CONFIG_TLS_NELEM > 0
+#if defined(CONFIG_TLS_NELEM) && CONFIG_TLS_NELEM > 0
   uintptr_t tl_elem[CONFIG_TLS_NELEM]; /* TLS elements */
 #endif
 
-#ifdef CONFIG_PTHREAD_CLEANUP
-  /* tos   - The index to the next available entry at the top of the stack.
-   * stack - The pre-allocated clean-up stack memory.
+  /* tl_tos   - The index to the next available entry at the top of the
+   *            stack.
+   * tl_stack - The pre-allocated clean-up stack memory.
    */
 
-  uint8_t tos;
-  struct pthread_cleanup_s stack[CONFIG_PTHREAD_CLEANUP_STACKSIZE];
+#if CONFIG_TLS_NCLEANUP > 0
+  uint8_t tl_tos;
+  struct tls_cleanup_s tl_stack[CONFIG_TLS_NCLEANUP];
 #endif
 
+  uint8_t tl_cpstate;                  /* Cancellation state */
+
+#ifdef CONFIG_CANCELLATION_POINTS
+  int16_t tl_cpcount;                  /* Nested cancellation point count */
+#endif
+
+  uint16_t tl_size;                    /* Actual size with alignments */
   int tl_errno;                        /* Per-thread error number */
 };
 
@@ -156,75 +229,50 @@ struct tls_info_s
  * Public Function Prototypes
  ****************************************************************************/
 
+#if CONFIG_TLS_TASK_NELEM > 0
+
 /****************************************************************************
- * Name: tls_alloc
+ * Name: task_tls_alloc
  *
  * Description:
- *   Allocate a group-unique TLS data index
+ *   Allocate a global-unique task local storage data index
  *
  * Input Parameters:
- *   dtor     - The destructor of TLS data element
+ *   dtor     - The destructor of task local storage data element
  *
  * Returned Value:
- *   A TLS index that is unique for use within this task group.
+ *   A TLS index that is unique.
  *
  ****************************************************************************/
 
-#if CONFIG_TLS_NELEM > 0
-int tls_alloc(CODE void (*dtor)(FAR void *));
-#endif
+int task_tls_alloc(tls_dtor_t dtor);
 
 /****************************************************************************
- * Name: tls_free
+ * Name: task_tls_destruct
  *
  * Description:
- *   Release a group-unique TLS data index previous obtained by tls_alloc()
+ *   Destruct all TLS data element associated with allocated key
  *
  * Input Parameters:
- *   tlsindex - The previously allocated TLS index to be freed
+ *    None
  *
  * Returned Value:
- *   OK is returned on success; a negated errno value will be returned on
- *   failure:
- *
- *     -EINVAL - the index to be freed is out of range.
+ *    None
  *
  ****************************************************************************/
 
-#if CONFIG_TLS_NELEM > 0
-int tls_free(int tlsindex);
-#endif
+void task_tls_destruct(void);
 
 /****************************************************************************
- * Name: tls_get_value
+ * Name: task_tls_set_value
  *
  * Description:
- *   Return an the TLS data value associated with the 'tlsindx'
+ *   Set the task local storage element associated with the 'tlsindex' to
+ *   'tlsvalue'
  *
  * Input Parameters:
- *   tlsindex - Index of TLS data element to return
- *
- * Returned Value:
- *   The value of TLS element associated with 'tlsindex'. Errors are not
- *   reported.  Zero is returned in the event of an error, but zero may also
- *   be valid value and returned when there is no error.  The only possible
- *   error would be if tlsindex < 0 or tlsindex >=CONFIG_TLS_NELEM.
- *
- ****************************************************************************/
-
-#if CONFIG_TLS_NELEM > 0
-uintptr_t tls_get_value(int tlsindex);
-#endif
-
-/****************************************************************************
- * Name: tls_set_value
- *
- * Description:
- *   Set the TLS element associated with the 'tlsindex' to 'tlsvalue'
- *
- * Input Parameters:
- *   tlsindex - Index of TLS data element to set
- *   tlsvalue - The new value of the TLS data element
+ *   tlsindex - Index of task local storage data element to set
+ *   tlsvalue - The new value of the task local storage data element
  *
  * Returned Value:
  *   Zero is returned on success, a negated errno value is return on
@@ -234,8 +282,26 @@ uintptr_t tls_get_value(int tlsindex);
  *
  ****************************************************************************/
 
-#if CONFIG_TLS_NELEM > 0
-int tls_set_value(int tlsindex, uintptr_t tlsvalue);
+int task_tls_set_value(int tlsindex, uintptr_t tlsvalue);
+
+/****************************************************************************
+ * Name: task_tls_get_value
+ *
+ * Description:
+ *   Return an the task local storage data value associated with 'tlsindx'
+ *
+ * Input Parameters:
+ *   tlsindex - Index of task local storage data element to return
+ *
+ * Returned Value:
+ *   The value of TLS element associated with 'tlsindex'. Errors are not
+ *   reported.  Zero is returned in the event of an error, but zero may also
+ *   be valid value and returned when there is no error.  The only possible
+ *   error would be if tlsindex < 0 or tlsindex >=CONFIG_TLS_TASK_NELEM.
+ *
+ ****************************************************************************/
+
+uintptr_t task_tls_get_value(int tlsindex);
 #endif
 
 /****************************************************************************
@@ -255,7 +321,11 @@ int tls_set_value(int tlsindex, uintptr_t tlsvalue);
  *
  ****************************************************************************/
 
-#ifndef CONFIG_TLS_ALIGNED
+#if defined(up_tls_info)
+#  define tls_get_info() up_tls_info()
+#elif defined(CONFIG_TLS_ALIGNED) && !defined(__KERNEL__)
+#  define tls_get_info() TLS_INFO(up_getsp())
+#else
 FAR struct tls_info_s *tls_get_info(void);
 #endif
 
@@ -269,11 +339,11 @@ FAR struct tls_info_s *tls_get_info(void);
  *   None
  *
  * Returned Value:
- *   A set of allocated TLS index
+ *   None
  *
  ****************************************************************************/
 
-#if CONFIG_TLS_NELEM > 0
+#if defined(CONFIG_TLS_NELEM) && CONFIG_TLS_NELEM > 0
 void tls_destruct(void);
 #endif
 
@@ -293,5 +363,69 @@ void tls_destruct(void);
  ****************************************************************************/
 
 FAR struct task_info_s *task_get_info(void);
+
+#if CONFIG_TLS_NCLEANUP > 0
+/****************************************************************************
+ * Name: tls_cleanup_push
+ *
+ * Description:
+ *   Push a new entry onto the cleanup stack
+ *
+ * Input Parameters:
+ *   tls     - The TLS data structure
+ *   routine - The cleanup routine to be called
+ *   arg     - An argument that will be passed to the cleanup routine
+ *
+ * Returned Value:
+ *   None
+ *
+ ****************************************************************************/
+
+void tls_cleanup_push(FAR struct tls_info_s *tls,
+                      tls_cleanup_t routine, FAR void *arg);
+
+/****************************************************************************
+ * Name: tls_cleanup_pop
+ *
+ * Description:
+ *   Pop the top entry from the cleanup stack and execute the cleanup
+ *
+ * Input Parameters:
+ *   tls     - The TLS data structure
+ *   execute - Execute the cleanup routine (true) or just remove the
+ *
+ * Returned Value:
+ *   None
+ *
+ ****************************************************************************/
+
+void tls_cleanup_pop(FAR struct tls_info_s *tls, int execute);
+
+/****************************************************************************
+ * Name: tls_cleanup_popall
+ *
+ * Description:
+ *   Pop and execute all cleanup stack entries
+ *
+ * Input Parameters:
+ *   tls     - The TLS data structure
+ *
+ * Returned Value:
+ *   None
+ *
+ ****************************************************************************/
+
+void tls_cleanup_popall(FAR struct tls_info_s *tls);
+
+#else
+#  define tls_cleanup_push(tls, routine, arg) ((void)(tls), (void)(routine), (void)(arg))
+#  define tls_cleanup_pop(tls, execute) ((void)(tls), (void)(execute))
+#  define tls_cleanup_popall(tls) ((void)(tls))
+#endif
+
+#undef EXTERN
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* __INCLUDE_NUTTX_TLS_H */

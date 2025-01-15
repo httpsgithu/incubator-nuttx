@@ -1,6 +1,8 @@
 /****************************************************************************
  * drivers/usbmonitor/usbmonitor.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -144,7 +146,7 @@ static int usbmonitor_tracecallback(struct usbtrace_s *trace, void *arg)
 }
 #endif
 
-static int usbmonitor_daemon(int argc, char **argv)
+static int usbmonitor_daemon(int argc, FAR char **argv)
 {
   uinfo("Running: %d\n", g_usbmonitor.pid);
 
@@ -212,8 +214,7 @@ int usbmonitor_start(void)
 
       ret = kthread_create("USB Monitor", CONFIG_USBMONITOR_PRIORITY,
                            CONFIG_USBMONITOR_STACKSIZE,
-                           (main_t)usbmonitor_daemon,
-                           (FAR char * const *)NULL);
+                           usbmonitor_daemon, NULL);
       if (ret < 0)
         {
           uerr("ERROR: Failed to start the USB monitor: %d\n",
@@ -221,7 +222,7 @@ int usbmonitor_start(void)
         }
       else
         {
-          g_usbmonitor.pid = ret;
+          g_usbmonitor.pid = (pid_t)ret;
           uinfo("Started: %d\n", g_usbmonitor.pid);
           ret = OK;
         }

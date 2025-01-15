@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/stm32/stm3240g-eval/src/stm32_lcd.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -45,7 +47,7 @@
 
 #include <arch/board/board.h>
 
-#include "arm_arch.h"
+#include "arm_internal.h"
 #include "stm32.h"
 #include "stm3240g-eval.h"
 
@@ -283,24 +285,26 @@ static void stm3240g_writereg(uint8_t regaddr, uint16_t regval);
 static uint16_t stm3240g_readreg(uint8_t regaddr);
 static inline void stm3240g_gramselect(void);
 static inline void stm3240g_writegram(uint16_t rgbval);
-static void stm3240g_readnosetup(FAR uint16_t *accum);
-static uint16_t stm3240g_readnoshift(FAR uint16_t *accum);
+static void stm3240g_readnosetup(uint16_t *accum);
+static uint16_t stm3240g_readnoshift(uint16_t *accum);
 static void stm3240g_setcursor(uint16_t col, uint16_t row);
 
 /* LCD Data Transfer Methods */
 
-static int stm3240g_putrun(fb_coord_t row, fb_coord_t col,
-                           FAR const uint8_t *buffer, size_t npixels);
-static int stm3240g_getrun(fb_coord_t row, fb_coord_t col,
-                           FAR uint8_t *buffer, size_t npixels);
+static int stm3240g_putrun(struct lcd_dev_s *dev,
+                           fb_coord_t row, fb_coord_t col,
+                           const uint8_t *buffer, size_t npixels);
+static int stm3240g_getrun(struct lcd_dev_s *dev,
+                           fb_coord_t row, fb_coord_t col,
+                           uint8_t *buffer, size_t npixels);
 
 /* LCD Configuration */
 
-static int stm3240g_getvideoinfo(FAR struct lcd_dev_s *dev,
-             FAR struct fb_videoinfo_s *vinfo);
-static int stm3240g_getplaneinfo(FAR struct lcd_dev_s *dev,
+static int stm3240g_getvideoinfo(struct lcd_dev_s *dev,
+                                 struct fb_videoinfo_s *vinfo);
+static int stm3240g_getplaneinfo(struct lcd_dev_s *dev,
                                  unsigned int planeno,
-                                 FAR struct lcd_planeinfo_s *pinfo);
+                                 struct lcd_planeinfo_s *pinfo);
 
 /* LCD RGB Mapping */
 
@@ -463,7 +467,7 @@ static inline void stm3240g_writegram(uint16_t rgbval)
  *
  ****************************************************************************/
 
-static void stm3240g_readnosetup(FAR uint16_t *accum)
+static void stm3240g_readnosetup(uint16_t *accum)
 {
   /* Read-ahead one pixel */
 
@@ -481,7 +485,7 @@ static void stm3240g_readnosetup(FAR uint16_t *accum)
  *
  ****************************************************************************/
 
-static uint16_t stm3240g_readnoshift(FAR uint16_t *accum)
+static uint16_t stm3240g_readnoshift(uint16_t *accum)
 {
   /* Read the value (GRAM register already selected) */
 
@@ -504,44 +508,12 @@ static void stm3240g_setcursor(uint16_t col, uint16_t row)
 }
 
 /****************************************************************************
- * Name:  stm3240g_dumprun
- *
- * Description:
- *   Dump the contexts of the run buffer:
- *
- *  run     - The buffer in containing the run read to be dumped
- *  npixels - The number of pixels to dump
- *
- ****************************************************************************/
-
-#if 0 /* Sometimes useful */
-static void stm3240g_dumprun(FAR const char *msg,
-                             FAR uint16_t *run, size_t npixels)
-{
-  int i;
-  int j;
-
-  syslog(LOG_DEBUG, "\n%s:\n", msg);
-  for (i = 0; i < npixels; i += 16)
-    {
-      up_putc(' ');
-      syslog(LOG_DEBUG, " ");
-      for (j = 0; j < 16; j++)
-        {
-          syslog(LOG_DEBUG, " %04x", *run++);
-        }
-
-      up_putc('\n');
-    }
-}
-#endif
-
-/****************************************************************************
  * Name:  stm3240g_putrun
  *
  * Description:
  *   This method can be used to write a partial raster line to the LCD:
  *
+ *   dev     - The lcd device
  *   row     - Starting row to write to (range: 0 <= row < yres)
  *   col     - Starting column to write to (range: 0 <= col <= xres-npixels)
  *   buffer  - The buffer containing the run to be written to the LCD
@@ -550,11 +522,11 @@ static void stm3240g_dumprun(FAR const char *msg,
  *
  ****************************************************************************/
 
-static int stm3240g_putrun(fb_coord_t row, fb_coord_t col,
-                           FAR const uint8_t *buffer,
-                           size_t npixels)
+static int stm3240g_putrun(struct lcd_dev_s *dev,
+                           fb_coord_t row, fb_coord_t col,
+                           const uint8_t *buffer, size_t npixels)
 {
-  FAR const uint16_t *src = (FAR const uint16_t *)buffer;
+  const uint16_t *src = (const uint16_t *)buffer;
   int i;
 
   /* Buffer must be provided and aligned to a 16-bit address boundary */
@@ -665,6 +637,7 @@ static int stm3240g_putrun(fb_coord_t row, fb_coord_t col,
  * Description:
  *   This method can be used to read a partial raster line from the LCD:
  *
+ *  dev     - The lcd device
  *  row     - Starting row to read from (range: 0 <= row < yres)
  *  col     - Starting column to read read (range: 0 <= col <= xres-npixels)
  *  buffer  - The buffer in which to return the run read from the LCD
@@ -673,12 +646,13 @@ static int stm3240g_putrun(fb_coord_t row, fb_coord_t col,
  *
  ****************************************************************************/
 
-static int stm3240g_getrun(fb_coord_t row, fb_coord_t col,
-                           FAR uint8_t *buffer, size_t npixels)
+static int stm3240g_getrun(struct lcd_dev_s *dev,
+                           fb_coord_t row, fb_coord_t col,
+                           uint8_t *buffer, size_t npixels)
 {
-  FAR uint16_t *dest = (FAR uint16_t *)buffer;
-  void (*readsetup)(FAR uint16_t *accum);
-  uint16_t (*readgram)(FAR uint16_t *accum);
+  uint16_t *dest = (uint16_t *)buffer;
+  void (*readsetup)(uint16_t *accum);
+  uint16_t (*readgram)(uint16_t *accum);
   uint16_t accum;
   int i;
 
@@ -812,8 +786,8 @@ static int stm3240g_getrun(fb_coord_t row, fb_coord_t col,
  *
  ****************************************************************************/
 
-static int stm3240g_getvideoinfo(FAR struct lcd_dev_s *dev,
-                                 FAR struct fb_videoinfo_s *vinfo)
+static int stm3240g_getvideoinfo(struct lcd_dev_s *dev,
+                                 struct fb_videoinfo_s *vinfo)
 {
   DEBUGASSERT(dev && vinfo);
   lcdinfo("fmt: %d xres: %d yres: %d nplanes: %d\n",
@@ -831,13 +805,14 @@ static int stm3240g_getvideoinfo(FAR struct lcd_dev_s *dev,
  *
  ****************************************************************************/
 
-static int stm3240g_getplaneinfo(FAR struct lcd_dev_s *dev,
+static int stm3240g_getplaneinfo(struct lcd_dev_s *dev,
                                  unsigned int planeno,
-                                 FAR struct lcd_planeinfo_s *pinfo)
+                                 struct lcd_planeinfo_s *pinfo)
 {
   DEBUGASSERT(dev && pinfo && planeno == 0);
   lcdinfo("planeno: %d bpp: %d\n", planeno, g_planeinfo.bpp);
   memcpy(pinfo, &g_planeinfo, sizeof(struct lcd_planeinfo_s));
+  pinfo->dev = dev;
   return OK;
 }
 
@@ -975,13 +950,13 @@ static inline void stm3240g_lcdinitialize(void)
        */
 
 #if !defined(CONFIG_STM3240G_ILI9320_DISABLE)
-# if !defined(CONFIG_STM3240G_ILI9325_DISABLE)
+#  if !defined(CONFIG_STM3240G_ILI9325_DISABLE)
       if (id == ILI9325_ID)
         {
           g_lcddev.type = LCD_TYPE_ILI9325;
         }
       else
-# endif
+#  endif
         {
           g_lcddev.type = LCD_TYPE_ILI9320;
           stm3240g_writereg(LCD_REG_229, 0x8000); /* Set the internal vcore voltage */
@@ -1035,9 +1010,9 @@ static inline void stm3240g_lcdinitialize(void)
       /* Adjust the Gamma Curve (ILI9320/1) */
 
 #if !defined(CONFIG_STM3240G_ILI9320_DISABLE)
-# if !defined(CONFIG_STM3240G_ILI9325_DISABLE)
+#  if !defined(CONFIG_STM3240G_ILI9325_DISABLE)
       if (g_lcddev.type == LCD_TYPE_ILI9320)
-# endif
+#  endif
         {
           stm3240g_writereg(LCD_REG_48,  0x0006);
           stm3240g_writereg(LCD_REG_49,  0x0101);
@@ -1055,9 +1030,9 @@ static inline void stm3240g_lcdinitialize(void)
       /* Adjust the Gamma Curve (ILI9325) */
 
 #if !defined(CONFIG_STM3240G_ILI9325_DISABLE)
-# if !defined(CONFIG_STM3240G_ILI9320_DISABLE)
+#  if !defined(CONFIG_STM3240G_ILI9320_DISABLE)
       else
-# endif
+#  endif
         {
           stm3240g_writereg(LCD_REG_48, 0x0007);
           stm3240g_writereg(LCD_REG_49, 0x0302);
@@ -1166,7 +1141,7 @@ int board_lcd_initialize(void)
  *
  ****************************************************************************/
 
-FAR struct lcd_dev_s *board_lcd_getdev(int lcddev)
+struct lcd_dev_s *board_lcd_getdev(int lcddev)
 {
   DEBUGASSERT(lcddev == 0);
   return &g_lcddev.dev;

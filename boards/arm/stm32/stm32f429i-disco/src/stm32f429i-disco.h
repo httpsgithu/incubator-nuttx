@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/stm32/stm32f429i-disco/src/stm32f429i-disco.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -18,8 +20,8 @@
  *
  ****************************************************************************/
 
-#ifndef __BOARDS_ARM_STM32_STM32F429I_DISCO_SRC_STM32F429I_DISCO__H
-#define __BOARDS_ARM_STM32_STM32F429I_DISCO_SRC_STM32F429I_DISCO__H
+#ifndef __BOARDS_ARM_STM32_STM32F429I_DISCO_SRC_STM32F429I_DISCO_H
+#define __BOARDS_ARM_STM32_STM32F429I_DISCO_SRC_STM32F429I_DISCO_H
 
 /****************************************************************************
  * Included Files
@@ -317,7 +319,7 @@ void stm32_pmbuttons(void);
  ****************************************************************************/
 
 #ifdef CONFIG_STM32F429I_DISCO_ILI9341
-FAR struct ili9341_lcd_s *stm32_ili93414ws_initialize(void);
+struct ili9341_lcd_s *stm32_ili93414ws_initialize(void);
 #endif
 
 /****************************************************************************
@@ -343,7 +345,7 @@ FAR struct ili9341_lcd_s *stm32_ili93414ws_initialize(void);
  ****************************************************************************/
 
 #ifdef CONFIG_STM32_SPI5
-FAR struct spi_dev_s *stm32_spi5initialize(void);
+struct spi_dev_s *stm32_spi5initialize(void);
 #endif
 
 /****************************************************************************
@@ -361,7 +363,7 @@ FAR struct spi_dev_s *stm32_spi5initialize(void);
  ****************************************************************************/
 
 #if defined(CONFIG_SPI) & defined(CONFIG_SENSORS_L3GD20)
-int stm32_l3gd20initialize(FAR const char *devpath);
+int stm32_l3gd20initialize(const char *devpath);
 #endif
 
 /****************************************************************************
@@ -386,6 +388,18 @@ int stm32_pwm_setup(void);
 
 #ifdef CONFIG_ADC
 int stm32_adc_setup(void);
+#endif
+
+/****************************************************************************
+ * Name: stm32_can_setup
+ *
+ * Description:
+ *  Initialize CAN and register the CAN device
+ *
+ ****************************************************************************/
+
+#ifdef CONFIG_STM32_CAN_CHARDRIVER
+int stm32_can_setup(void);
 #endif
 
 #endif /* __ASSEMBLY__ */

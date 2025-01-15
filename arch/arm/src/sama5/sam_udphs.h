@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/sama5/sam_udphs.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -58,7 +60,7 @@ extern "C"
  *
  ****************************************************************************/
 
-void sam_usbsuspend(FAR struct usbdev_s *dev, bool resume);
+void sam_usbsuspend(struct usbdev_s *dev, bool resume);
 
 #undef EXTERN
 #if defined(__cplusplus)

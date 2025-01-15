@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/arm/arm_saveusercontext.S
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -23,78 +25,51 @@
  ****************************************************************************/
 
 #include <nuttx/config.h>
-#include <arch/irq.h>
-
-/****************************************************************************
- * Pre-processor Definitions
- ****************************************************************************/
-
-/****************************************************************************
- * Public Symbols
- ****************************************************************************/
+#include <nuttx/irq.h>
 
 	.file	"arm_saveusercontext.S"
 
-/****************************************************************************
- * Macros
- ****************************************************************************/
+	.text
+	.syntax	unified
+	.arm
 
 /****************************************************************************
  * Public Functions
  ****************************************************************************/
 
 /****************************************************************************
- * Name: arm_saveusercontext
+ * Name: up_saveusercontext
  *
  * Description:
- *   Save the current thread context.  Full prototype is:
+ *   Save the current context.  Full prototype is:
  *
- *   int  arm_saveusercontext(uint32_t *saveregs);
+ *   int up_saveusercontext(void *saveregs);
+ *
+ *   R0 = saveregs = pinter saved array
  *
  * Returned Value:
- *   0: Normal return
- *   1: Context switch return
+ *   None
  *
  ****************************************************************************/
 
-	.globl	arm_saveusercontext
-	.type	arm_saveusercontext, function
-arm_saveusercontext:
+	.globl	up_saveusercontext
+	.globl	up_saveusercontext
+	.type	up_saveusercontext, %function
 
-	/* On entry, a1 (r0) holds address of struct xcptcontext */
+up_saveusercontext:
 
-	/* Make sure that the return value will be non-zero (the value of the
-	 * other volatile registers don't matter -- r1-r3, ip).  This function
-	 * is called through the normal C calling conventions and the values of
-	 * these registers cannot be assumed at the point of setjmp return.
-	 */
+	/* Save r0~r14, store the return address as PC */
 
-	mov	ip, #1
-	str	ip, [r0, #(4*REG_R0)]
+	stmia		r0!, {r0-r14}
+	str		r14, [r0], #4
 
-	/* Save the volatile registers (plus r12 which really
-	 * doesn't need to be saved)
-	 */
+	/* Save cpsr */
 
-	add	r1, r0, #(4*REG_R4)
-	stmia	r1, {r4-r14}
+	mrs		r1, CPSR
+	str		r1, [r0]
 
-	/* Save the current cpsr */
+	mov		r0, #0
+	bx		lr
 
-	mrs	r2, cpsr		/* R2 = CPSR value */
-	add	r1, r0, #(4*REG_CPSR)
-	str	r2, [r1]
-
-	/* Save the return address as the PC so that we return to the exit from
-	 * this function.
-	 */
-
-	add	r1, r0, #(4*REG_PC)
-	str	lr, [r1]
-
-	/* Return 0 now indicating that this return is not a context switch */
-
-	mov	r0, #0		/* Return value == 0 */
-	bx	lr		/* Return */
-	.size	arm_saveusercontext, .-arm_saveusercontext
+	.size	up_saveusercontext, . - up_saveusercontext
 	.end

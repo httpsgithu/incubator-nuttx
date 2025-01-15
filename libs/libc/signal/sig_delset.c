@@ -1,6 +1,8 @@
 /****************************************************************************
  * libs/libc/signal/sig_delset.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -24,6 +26,7 @@
 
 #include <signal.h>
 #include <errno.h>
+#include <nuttx/signal.h>
 
 /****************************************************************************
  * Public Functions
@@ -63,7 +66,7 @@ int nxsig_delset(FAR sigset_t *set, int signo)
     {
       /* Remove the signal from the set */
 
-      *set &= ~SIGNO2SET(signo);
+      set->_elem[_SIGSET_NDX(signo)] &= ~_SIGNO2SET(signo);
       return OK;
     }
 }

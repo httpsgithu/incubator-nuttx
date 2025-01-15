@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/kinetis/kinetis_pinirq.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -32,9 +34,7 @@
 #include <nuttx/irq.h>
 #include <nuttx/arch.h>
 
-#include "arm_arch.h"
 #include "arm_internal.h"
-
 #include "kinetis.h"
 #include "hardware/kinetis_port.h"
 
@@ -108,7 +108,7 @@ static struct kinetis_pinirq_s g_porteisrs[32];
  ****************************************************************************/
 
 #ifdef HAVE_PORTINTS
-static int kinetis_portinterrupt(int irq, FAR void *context,
+static int kinetis_portinterrupt(int irq, void *context,
                                  uintptr_t addr,
                                  struct kinetis_pinirq_s *isrtab)
 {
@@ -169,7 +169,7 @@ static int kinetis_portinterrupt(int irq, FAR void *context,
  ****************************************************************************/
 
 #ifdef CONFIG_KINETIS_PORTAINTS
-static int kinetis_portainterrupt(int irq, FAR void *context, FAR void *arg)
+static int kinetis_portainterrupt(int irq, void *context, void *arg)
 {
   return kinetis_portinterrupt(irq, context,
                                KINETIS_PORTA_ISFR, g_portaisrs);
@@ -177,7 +177,7 @@ static int kinetis_portainterrupt(int irq, FAR void *context, FAR void *arg)
 #endif
 
 #ifdef CONFIG_KINETIS_PORTBINTS
-static int kinetis_portbinterrupt(int irq, FAR void *context, FAR void *arg)
+static int kinetis_portbinterrupt(int irq, void *context, void *arg)
 {
   return kinetis_portinterrupt(irq, context,
                                KINETIS_PORTB_ISFR, g_portbisrs);
@@ -185,7 +185,7 @@ static int kinetis_portbinterrupt(int irq, FAR void *context, FAR void *arg)
 #endif
 
 #ifdef CONFIG_KINETIS_PORTCINTS
-static int kinetis_portcinterrupt(int irq, FAR void *context, FAR void *arg)
+static int kinetis_portcinterrupt(int irq, void *context, void *arg)
 {
   return kinetis_portinterrupt(irq, context,
                                KINETIS_PORTC_ISFR, g_portcisrs);
@@ -193,7 +193,7 @@ static int kinetis_portcinterrupt(int irq, FAR void *context, FAR void *arg)
 #endif
 
 #ifdef CONFIG_KINETIS_PORTDINTS
-static int kinetis_portdinterrupt(int irq, FAR void *context, FAR void *arg)
+static int kinetis_portdinterrupt(int irq, void *context, void *arg)
 {
   return kinetis_portinterrupt(irq, context,
                                    KINETIS_PORTD_ISFR, g_portdisrs);
@@ -201,7 +201,7 @@ static int kinetis_portdinterrupt(int irq, FAR void *context, FAR void *arg)
 #endif
 
 #ifdef CONFIG_KINETIS_PORTEINTS
-static int kinetis_porteinterrupt(int irq, FAR void *context, FAR void *arg)
+static int kinetis_porteinterrupt(int irq, void *context, void *arg)
 {
   return kinetis_portinterrupt(irq, context,
                                KINETIS_PORTE_ISFR, g_porteisrs);

@@ -1,6 +1,8 @@
 /****************************************************************************
  * libs/libc/tls/tls_destruct.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -24,14 +26,11 @@
 
 #include <nuttx/config.h>
 
-#include <stdint.h>
 #include <assert.h>
 
-#include <nuttx/arch.h>
 #include <nuttx/tls.h>
-#include <arch/tls.h>
 
-#if CONFIG_TLS_NELEM > 0
+#if defined(CONFIG_TLS_NELEM) && CONFIG_TLS_NELEM > 0
 
 /****************************************************************************
  * Public Functions
@@ -54,29 +53,25 @@
 void tls_destruct(void)
 {
   FAR struct task_info_s *info = task_get_info();
-  FAR struct tls_info_s *tls = up_tls_info();
+  FAR struct tls_info_s *tls = tls_get_info();
   FAR void *tls_elem_ptr = NULL;
   tls_dtor_t destructor;
-  tls_ndxset_t tlsset;
   int candidate;
 
   DEBUGASSERT(info != NULL);
-  tlsset = info->ta_tlsset;
 
-  for (candidate = 0; candidate < CONFIG_TLS_NELEM; candidate++)
+  for (candidate = CONFIG_TLS_NELEM - 1; candidate >= 0; candidate--)
     {
       /* Is this candidate index available? */
 
-      tls_ndxset_t mask = (1 << candidate);
-      if (tlsset & mask)
+      tls_elem_ptr = (FAR void *)tls->tl_elem[candidate];
+      destructor = info->ta_tlsdtor[candidate];
+      if (tls_elem_ptr && destructor)
         {
-          tls_elem_ptr = (FAR void *)tls->tl_elem[candidate];
-          destructor = info->ta_tlsdtor[candidate];
-          if (tls_elem_ptr && destructor)
-            {
-              destructor(tls_elem_ptr);
-            }
+          destructor(tls_elem_ptr);
         }
+
+      tls->tl_elem[candidate] = 0;
     }
 }
 

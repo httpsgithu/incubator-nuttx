@@ -1,6 +1,8 @@
 /****************************************************************************
  * include/nuttx/usb/usbmsc.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -169,6 +171,7 @@ int usbmsc_exportluns(FAR void *handle);
  ****************************************************************************/
 
 #if defined(CONFIG_USBDEV_COMPOSITE) && defined(CONFIG_USBMSC_COMPOSITE)
+struct usbdev_devinfo_s;
 struct usbdevclass_driver_s;
 int usbmsc_classobject(FAR void *handle,
                        FAR struct usbdev_devinfo_s *devinfo,

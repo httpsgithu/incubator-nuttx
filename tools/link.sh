@@ -2,6 +2,8 @@
 ############################################################################
 # tools/link.sh
 #
+# SPDX-License-Identifier: Apache-2.0
+#
 # Licensed to the Apache Software Foundation (ASF) under one or more
 # contributor license agreements.  See the NOTICE file distributed with
 # this work for additional information regarding copyright ownership.  The
@@ -82,15 +84,20 @@ ln -s "${src}" "${dest}" || \
 
 # Verify that the link was created
 
-if [ ! -h ${dest} ]; then
+if [ -e ${dest} ] && [ -h ${dest} ]; then
+  # The file exists and is a symlink (i.e. the symlink isn't broken)
+
+  exit 0
+else
   # The MSYS 'ln' command actually does a directory copy
 
   if [ -d ${dest} ]; then
     # Create the .fakelnk for unlink.sh
 
     touch ${dest}/.fakelnk
+    exit 0
   else
-    echo "Error:  link at ${dest} not created."
+    echo "Error: link at ${dest} not created."
     exit 1
   fi
 fi

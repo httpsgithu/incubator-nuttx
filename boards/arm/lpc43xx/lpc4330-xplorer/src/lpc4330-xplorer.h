@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/lpc43xx/lpc4330-xplorer/src/lpc4330-xplorer.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -18,8 +20,8 @@
  *
  ****************************************************************************/
 
-#ifndef __BOARDSS_ARM_LPC43XX_LPC4330_XPLORER_SRC_XPLORER_H
-#define __BOARDSS_ARM_LPC43XX_LPC4330_XPLORER_SRC_XPLORER_H
+#ifndef __BOARDSS_ARM_LPC43XX_LPC4330_XPLORER_SRC_LPC4330_XPLORER_H
+#define __BOARDSS_ARM_LPC43XX_LPC4330_XPLORER_SRC_LPC4330_XPLORER_H
 
 /****************************************************************************
  * Included Files
@@ -108,4 +110,4 @@
 void weak_function lpc43_sspdev_initialize(void);
 
 #endif /* __ASSEMBLY__ */
-#endif /* __BOARDSS_ARM_LPC43XX_LPC4330_XPLORER_SRC_XPLORER_H */
+#endif /* __BOARDSS_ARM_LPC43XX_LPC4330_XPLORER_SRC_LPC4330_XPLORER_H */

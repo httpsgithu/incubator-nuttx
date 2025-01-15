@@ -1,6 +1,8 @@
 ############################################################################
 # Makefile
 #
+# SPDX-License-Identifier: Apache-2.0
+#
 # Licensed to the Apache Software Foundation (ASF) under one or more
 # contributor license agreements.  See the NOTICE file distributed with
 # this work for additional information regarding copyright ownership.  The
@@ -30,18 +32,11 @@ ifeq ($(wildcard .config),)
 else
 include .config
 
-# Build any necessary tools needed early in the build.
-# incdir - Is needed immediately by all Make.defs file.
-
-TOPDIR := ${shell echo $(CURDIR) | sed -e 's/ /\\ /g'}
-DUMMY  := ${shell $(MAKE) -C tools -f Makefile.host incdir \
-          INCDIR="$(TOPDIR)/tools/incdir.sh"}
-
 # Include the correct Makefile for the selected architecture.
 
 ifeq ($(CONFIG_WINDOWS_NATIVE),y)
-include tools/Makefile.win
+include tools/Win.mk
 else
-include tools/Makefile.unix
+include tools/Unix.mk
 endif
 endif

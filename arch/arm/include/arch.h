@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/include/arch.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -33,7 +35,6 @@
 #ifndef __ASSEMBLY__
 #  include <stdint.h>
 #  include <nuttx/pgalloc.h>
-#  include <nuttx/addrenv.h>
 #endif
 
 /****************************************************************************
@@ -63,7 +64,7 @@ do { \
     "\tmov %0, " PIC_REG_STRING "\n\t" \
     : "=r"(picbase) \
   ); \
-  *ppicbase = (FAR void*)picbase; \
+  *(uint32_t *)ppicbase = picbase; \
 } while (0)
 
 #define up_setpicbase(picbase) \
@@ -95,8 +96,8 @@ do { \
 #  define ARCH_DATA_NSECTS    ARCH_PG2SECT(CONFIG_ARCH_DATA_NPAGES)
 #  define ARCH_HEAP_NSECTS    ARCH_PG2SECT(CONFIG_ARCH_HEAP_NPAGES)
 
-#  ifdef CONFIG_MM_SHM
-#    define ARCH_SHM_NSECTS   ARCH_PG2SECT(ARCH_SHM_MAXPAGES)
+#  ifdef CONFIG_ARCH_VMA_MAPPING
+#    define ARCH_SHM_NSECTS   ARCH_PG2SECT((CONFIG_ARCH_SHM_NPAGES * CONFIG_ARCH_SHM_MAXREGIONS))
 #  endif
 
 #  ifdef CONFIG_ARCH_STACK_DYNAMIC
@@ -104,27 +105,16 @@ do { \
 #  endif
 #endif /* CONFIG_ARCH_ADDRENV */
 
+/* Redefine the linker symbols as armlink style */
+
+#ifdef CONFIG_ARM_TOOLCHAIN_ARMCLANG
+#  define _sinit   Image$$init_section$$Base
+#  define _einit   Image$$init_section$$Limit
+#endif
+
 /****************************************************************************
  * Inline functions
  ****************************************************************************/
-
-/****************************************************************************
- * Name: up_getsp
- ****************************************************************************/
-
-/* I don't know if the builtin to get SP is enabled */
-
-static inline uint32_t up_getsp(void)
-{
-  uint32_t sp;
-  __asm__
-  (
-    "\tmov %0, sp\n\t"
-    : "=r"(sp)
-  );
-
-  return sp;
-}
 
 /****************************************************************************
  * Public Types
@@ -133,7 +123,7 @@ static inline uint32_t up_getsp(void)
 #ifdef CONFIG_ARCH_ADDRENV
 /* The task group resources are retained in a single structure, task_group_s
  * that is defined in the header file nuttx/include/nuttx/sched.h. The type
- * group_addrenv_t must be defined by platform specific logic in
+ * arch_addrenv_t must be defined by platform specific logic in
  * nuttx/arch/<architecture>/include/arch.h.
  *
  * These tables would hold the physical address of the level 2 page tables.
@@ -141,16 +131,16 @@ static inline uint32_t up_getsp(void)
  * memory until mappings in the level 2 page table are required.
  */
 
-struct group_addrenv_s
+struct arch_addrenv_s
 {
   /* Level 1 page table entries for each group section */
 
-  FAR uintptr_t *text[ARCH_TEXT_NSECTS];
-  FAR uintptr_t *data[ARCH_DATA_NSECTS];
+  uintptr_t *text[ARCH_TEXT_NSECTS];
+  uintptr_t *data[ARCH_DATA_NSECTS];
 #ifdef CONFIG_BUILD_KERNEL
-  FAR uintptr_t *heap[ARCH_HEAP_NSECTS];
-#ifdef CONFIG_MM_SHM
-  FAR uintptr_t *shm[ARCH_SHM_NSECTS];
+  uintptr_t *heap[ARCH_HEAP_NSECTS];
+#ifdef CONFIG_ARCH_VMA_MAPPING
+  uintptr_t *shm[ARCH_SHM_NSECTS];
 #endif
 
   /* Initial heap allocation (in bytes).  This exists only provide an
@@ -163,30 +153,7 @@ struct group_addrenv_s
 #endif
 };
 
-typedef struct group_addrenv_s group_addrenv_t;
-
-/* This type is used when the OS needs to temporarily instantiate a
- * different address environment.  Used in the implementation of
- *
- *   int up_addrenv_select(group_addrenv_t addrenv, save_addrenv_t *oldenv);
- *   int up_addrenv_restore(save_addrenv_t oldenv);
- *
- * In this case, the saved valued in the L1 page table are returned
- */
-
-struct save_addrenv_s
-{
-  FAR uint32_t text[ARCH_TEXT_NSECTS];
-  FAR uint32_t data[ARCH_DATA_NSECTS];
-#ifdef CONFIG_BUILD_KERNEL
-  FAR uint32_t heap[ARCH_HEAP_NSECTS];
-#ifdef CONFIG_MM_SHM
-  FAR uint32_t shm[ARCH_SHM_NSECTS];
-#endif
-#endif
-};
-
-typedef struct save_addrenv_s save_addrenv_t;
+typedef struct arch_addrenv_s arch_addrenv_t;
 #endif
 
 /****************************************************************************

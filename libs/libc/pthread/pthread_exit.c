@@ -1,6 +1,8 @@
 /****************************************************************************
  * libs/libc/pthread/pthread_exit.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -53,11 +55,16 @@
 
 void pthread_exit(FAR void *exit_value)
 {
-#ifdef CONFIG_PTHREAD_CLEANUP
-  pthread_cleanup_popall();
-#endif
+  /* Mark the pthread as non-cancelable to avoid additional calls to
+   * pthread_exit() due to any cancellation point logic that might get
+   * kicked off by actions taken during pthread_exit processing.
+   */
 
-#if CONFIG_TLS_NELEM > 0
+  task_setcancelstate(TASK_CANCEL_DISABLE, NULL);
+
+  tls_cleanup_popall(tls_get_info());
+
+#if defined(CONFIG_TLS_NELEM) && CONFIG_TLS_NELEM > 0
   tls_destruct();
 #endif
 

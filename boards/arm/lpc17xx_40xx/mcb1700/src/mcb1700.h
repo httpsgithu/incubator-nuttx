@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/lpc17xx_40xx/mcb1700/src/mcb1700.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -19,7 +21,7 @@
  ****************************************************************************/
 
 #ifndef __BOARDSS_ARM_LPC17XX_40XX_MCB1700_SRC_MCB1700_H
-#define __BOARDSS_ARM_LPC17XX_40XX__MCB1700_SRC_MCB1700_H
+#define __BOARDSS_ARM_LPC17XX_40XX_MCB1700_SRC_MCB1700_H
 
 /****************************************************************************
  * Included Files
@@ -106,4 +108,4 @@ int mcb1700_adc_setup(void);
 #endif
 
 #endif /* __ASSEMBLY__ */
-#endif /* __BOARDSS_ARM_LPC17XX_40XX__MCB1700_SRC_MCB1700_H */
+#endif /* __BOARDSS_ARM_LPC17XX_40XX_MCB1700_SRC_MCB1700_H */

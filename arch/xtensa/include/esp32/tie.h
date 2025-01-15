@@ -1,15 +1,8 @@
 /****************************************************************************
  * arch/xtensa/include/esp32/tie.h
- * Compile-time HAL definitions dependent on CORE & TIE configuration
  *
- *  NOTE:  This header file is not meant to be included directly.
- *
- * This header file describes this specific Xtensa processor's TIE extensions
- *  that extend basic Xtensa core functionality.  It is customized to this
- *  Xtensa processor configuration.
- *
- *  Customer ID=11657; Build=0x5fe96;
- *  Copyright (c) 1999-2016 Cadence Design Systems Inc.
+ * SPDX-License-Identifier: MIT
+ * SPDX-FileCopyrightText: 1999-2016 Cadence Design Systems Inc.
  *
  *  Permission is hereby granted, free of charge, to any person obtaining
  *  a copy of this software and associated documentation files (the
@@ -32,8 +25,8 @@
  *
  ****************************************************************************/
 
-#ifndef _ARCH_XTENSA_INCLUDE_ESP32_TIE_H
-#define _ARCH_XTENSA_INCLUDE_ESP32_TIE_H
+#ifndef __ARCH_XTENSA_INCLUDE_ESP32_TIE_H
+#define __ARCH_XTENSA_INCLUDE_ESP32_TIE_H
 
 /****************************************************************************
  * Pre-processor Definitions
@@ -191,4 +184,4 @@
     3,3,3,3,3,3,3,3,2,2,2,2,2,2,3,3, 3,3,3,3,3,3,3,3,2,2,2,2,2,2,3,3,\
     3,3,3,3,3,3,3,3,2,2,2,2,2,2,3,3, 3,3,3,3,3,3,3,3,2,2,2,2,2,2,3,3
 
-#endif /* _ARCH_XTENSA_INCLUDE_ESP32_TIE_H */
+#endif /* __ARCH_XTENSA_INCLUDE_ESP32_TIE_H */

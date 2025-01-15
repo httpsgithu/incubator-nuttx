@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/stm32/olimexino-stm32/src/stm32_usbmsc.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -82,7 +84,7 @@ int board_usbmsc_initialize(int port)
    * In this case, there is nothing further to be done here.
    */
 
-  FAR struct spi_dev_s *spi;
+  struct spi_dev_s *spi;
   int ret;
 
   /* First, get an instance of the SPI interface */

@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/stm32l5/stm32l5_tim.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -50,6 +52,8 @@
 #define STM32L5_TIM_DISABLEINT(d,s)       ((d)->ops->disableint(d,s))
 #define STM32L5_TIM_ACKINT(d,s)           ((d)->ops->ackint(d,s))
 #define STM32L5_TIM_CHECKINT(d,s)         ((d)->ops->checkint(d,s))
+#define STM32_TIM_ENABLE(d)               ((d)->ops->enable(d))
+#define STM32_TIM_DISABLE(d)              ((d)->ops->disable(d))
 
 /****************************************************************************
  * Public Types
@@ -137,7 +141,7 @@ enum stm32l5_tim_channel_e
 #if 0
   STM32L5_TIM_CH_INCAPTURE      = 0x10,
   STM32L5_TIM_CH_INPWM          = 0x20
-  STM32L5_TIM_CH_DRIVE_OC   -- open collector mode
+  STM32L5_TIM_CH_DRIVE_OC       = open collector mode
 #endif
 };
 
@@ -147,30 +151,32 @@ struct stm32l5_tim_ops_s
 {
   /* Basic Timers */
 
-  int  (*setmode)(FAR struct stm32l5_tim_dev_s *dev,
+  void (*enable)(struct stm32l5_tim_dev_s *dev);
+  void (*disable)(struct stm32l5_tim_dev_s *dev);
+  int  (*setmode)(struct stm32l5_tim_dev_s *dev,
                   enum stm32l5_tim_mode_e mode);
-  int  (*setclock)(FAR struct stm32l5_tim_dev_s *dev, uint32_t freq);
-  uint32_t (*getclock)(FAR struct stm32l5_tim_dev_s *dev);
-  void (*setperiod)(FAR struct stm32l5_tim_dev_s *dev, uint32_t period);
-  uint32_t (*getperiod)(FAR struct stm32l5_tim_dev_s *dev);
-  uint32_t (*getcounter)(FAR struct stm32l5_tim_dev_s *dev);
+  int  (*setclock)(struct stm32l5_tim_dev_s *dev, uint32_t freq);
+  uint32_t (*getclock)(struct stm32l5_tim_dev_s *dev);
+  void (*setperiod)(struct stm32l5_tim_dev_s *dev, uint32_t period);
+  uint32_t (*getperiod)(struct stm32l5_tim_dev_s *dev);
+  uint32_t (*getcounter)(struct stm32l5_tim_dev_s *dev);
 
   /* General and Advanced Timers Adds */
 
-  int  (*setchannel)(FAR struct stm32l5_tim_dev_s *dev, uint8_t channel,
+  int  (*setchannel)(struct stm32l5_tim_dev_s *dev, uint8_t channel,
                      enum stm32l5_tim_channel_e mode);
-  int  (*setcompare)(FAR struct stm32l5_tim_dev_s *dev, uint8_t channel,
+  int  (*setcompare)(struct stm32l5_tim_dev_s *dev, uint8_t channel,
                      uint32_t compare);
-  int  (*getcapture)(FAR struct stm32l5_tim_dev_s *dev, uint8_t channel);
+  int  (*getcapture)(struct stm32l5_tim_dev_s *dev, uint8_t channel);
 
   /* Timer interrupts */
 
-  int  (*setisr)(FAR struct stm32l5_tim_dev_s *dev,
+  int  (*setisr)(struct stm32l5_tim_dev_s *dev,
                  xcpt_t handler, void *arg, int source);
-  void (*enableint)(FAR struct stm32l5_tim_dev_s *dev, int source);
-  void (*disableint)(FAR struct stm32l5_tim_dev_s *dev, int source);
-  void (*ackint)(FAR struct stm32l5_tim_dev_s *dev, int source);
-  int  (*checkint)(FAR struct stm32l5_tim_dev_s *dev, int source);
+  void (*enableint)(struct stm32l5_tim_dev_s *dev, int source);
+  void (*disableint)(struct stm32l5_tim_dev_s *dev, int source);
+  void (*ackint)(struct stm32l5_tim_dev_s *dev, int source);
+  int  (*checkint)(struct stm32l5_tim_dev_s *dev, int source);
 };
 
 /****************************************************************************
@@ -179,11 +185,11 @@ struct stm32l5_tim_ops_s
 
 /* Power-up timer and get its structure */
 
-FAR struct stm32l5_tim_dev_s *stm32l5_tim_init(int timer);
+struct stm32l5_tim_dev_s *stm32l5_tim_init(int timer);
 
 /* Power-down timer, mark it as unused */
 
-int stm32l5_tim_deinit(FAR struct stm32l5_tim_dev_s *dev);
+int stm32l5_tim_deinit(struct stm32l5_tim_dev_s *dev);
 
 /****************************************************************************
  * Name: stm32l5_timer_initialize
@@ -204,7 +210,7 @@ int stm32l5_tim_deinit(FAR struct stm32l5_tim_dev_s *dev);
  ****************************************************************************/
 
 #ifdef CONFIG_TIMER
-int stm32l5_timer_initialize(FAR const char *devpath, int timer);
+int stm32l5_timer_initialize(const char *devpath, int timer);
 #endif
 
 #undef EXTERN

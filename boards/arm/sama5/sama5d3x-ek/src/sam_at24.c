@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/sama5/sama5d3x-ek/src/sam_at24.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -75,8 +77,8 @@
 
 int sam_at24_automount(int minor)
 {
-  FAR struct i2c_master_s *i2c;
-  FAR struct mtd_dev_s *mtd;
+  struct i2c_master_s *i2c;
+  struct mtd_dev_s *mtd;
   static bool initialized = false;
   int ret;
 

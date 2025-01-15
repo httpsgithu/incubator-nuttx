@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/imxrt/hardware/rt105x/imxrt105x_memorymap.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -18,8 +20,8 @@
  *
  ****************************************************************************/
 
-#ifndef __ARCH_ARM_SRC_IMXRT_HARDWARE_IMXRT105X_MEMORYMAP_H
-#define __ARCH_ARM_SRC_IMXRT_HARDWARE_IMXRT105X_MEMORYMAP_H
+#ifndef __ARCH_ARM_SRC_IMXRT_HARDWARE_RT105X_IMXRT105X_MEMORYMAP_H
+#define __ARCH_ARM_SRC_IMXRT_HARDWARE_RT105X_IMXRT105X_MEMORYMAP_H
 
 /****************************************************************************
  * Included Files
@@ -128,6 +130,8 @@
 #define IMXRT_WDOG2_BASE          0x400d0000  /* 16KB WDOG2 */
 #define IMXRT_SNVSHP_BASE         0x400d4000  /* 16KB SNVS_HP */
 #define IMXRT_ANATOP_BASE         0x400d8000  /* 16KB ANATOP */
+#define IMXRT_USBPHY1_BASE        0x400d9000  /*  4KB USBPHY1 */
+#define IMXRT_USBPHY2_BASE        0x400da000  /*  4KB USBPHY2 */
 #define IMXRT_CSU_BASE            0x400dc000  /* 16KB CSU */
 
                                /* 0x400e0000     16KB Reserved */
@@ -308,4 +312,4 @@
 #define IMXRT_PROCROM_BASE        0xe00fe000  /* 4KB Processor ROM */
 #define IMXRT_PPBROM_BASE         0xe00ff000  /* 4KB PPB ROM */
 
-#endif /* __ARCH_ARM_SRC_IMXRT_HARDWARE_IMXRT105X_MEMORYMAP_H */
+#endif /* __ARCH_ARM_SRC_IMXRT_HARDWARE_RT105X_IMXRT105X_MEMORYMAP_H */

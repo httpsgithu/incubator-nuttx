@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/renesas/src/rx65n/rx65n_dtc.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -33,13 +35,9 @@
 
 #include <nuttx/irq.h>
 #include <nuttx/arch.h>
-#include <nuttx/semaphore.h>
 
-#include "up_internal.h"
-#include "up_arch.h"
-
+#include "renesas_internal.h"
 #include "chip.h"
-#include "up_arch.h"
 #include "rx65n_definitions.h"
 #include "rx65n_dtc.h"
 
@@ -391,7 +389,6 @@ struct rx65n_dtc_s
   uint8_t chan;           /* DTC channel number */
   bool initialized;       /* Initialization status */
 
-  sem_t sem;              /* Used to wait for DTC channel to become available */
   uint32_t base;          /* DTC channel register base address */
 
   uint8_t * vectortable; /* Vector table pointer */
@@ -1326,6 +1323,7 @@ dtc_err_t rx65n_dtc_setup_seq_dynamic_transferdata(DTC_HANDLE handle,
   ret = rx65n_dtc_validate_dynamic_params(p_dtransfer_cfg, p_transfer_data);
   if (DTC_SUCCESS != ret)
     {
+      leave_critical_section(flags);
       return ret;
     }
 
@@ -1345,12 +1343,13 @@ dtc_err_t rx65n_dtc_setup_seq_dynamic_transferdata(DTC_HANDLE handle,
           if (rx65n_dtc_set_dynamic_transfer_data(p_dtransfer_cfg,
                                   p_transfer_data) != DTC_SUCCESS)
             {
+              leave_critical_section(flags);
               return DTC_ERR_INVALID_ARG;
             }
 
           p_dtransfer_cfg++;
           p_transfer_data++;
-          count --;
+          count--;
         }
     }
 
@@ -1536,6 +1535,7 @@ dtc_err_t rx65n_dtc_setup_dynamic_transferdata(DTC_HANDLE handle,
   ret = rx65n_dtc_validate_dynamic_params(p_dtransfer_cfg, p_transfer_data);
   if (DTC_SUCCESS != ret)
     {
+      leave_critical_section(flags);
       return ret;
     }
 
@@ -1546,12 +1546,13 @@ dtc_err_t rx65n_dtc_setup_dynamic_transferdata(DTC_HANDLE handle,
       if (rx65n_dtc_set_dynamic_transfer_data(p_dtransfer_cfg,
                                   p_transfer_data) != DTC_SUCCESS)
         {
+          leave_critical_section(flags);
           return DTC_ERR_INVALID_ARG;
         }
 
       p_dtransfer_cfg++;
       p_transfer_data++;
-      count --;
+      count--;
     }
 
   /* Restore RRS bit */
@@ -1712,7 +1713,6 @@ void rx65n_dtc_initialize(void)
   for (chndx = 0; chndx < DTC_NCHANNELS; chndx++) /* RX65N support only one channel */
     {
       dtchandle = &g_dtchandle[chndx];
-      nxsem_init(&dtchandle->sem, 0, 1);
 
       /* Get DTC Vector table */
 

@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/hc/include/limits.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -28,9 +30,9 @@
 /* Include architecture-specific limits definitions */
 
 #if defined(CONFIG_ARCH_HC12)
-# include <arch/hc12/limits.h>
+#  include <arch/hc12/limits.h>
 #elif defined(CONFIG_ARCH_HCS12)
-# include <arch/hcs12/limits.h>
+#  include <arch/hcs12/limits.h>
 #endif
 
 /****************************************************************************

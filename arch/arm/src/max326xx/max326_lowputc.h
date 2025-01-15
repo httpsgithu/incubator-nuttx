@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/max326xx/max326_lowputc.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -86,7 +88,7 @@ void max326_lowsetup(void);
 
 #ifdef HAVE_UART_DEVICE
 void max326_uart_configure(uintptr_t base,
-                           FAR const struct uart_config_s *config);
+                           const struct uart_config_s *config);
 #endif
 
 /****************************************************************************

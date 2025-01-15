@@ -1,6 +1,8 @@
 ############################################################################
 # wireless/pktradio/Make.defs
 #
+# SPDX-License-Identifier: Apache-2.0
+#
 # Licensed to the Apache Software Foundation (ASF) under one or more
 # contributor license agreements.  See the NOTICE file distributed with
 # this work for additional information regarding copyright ownership.  The
@@ -30,6 +32,6 @@ endif
 
 DEPPATH += --dep-path pktradio
 VPATH += :pktradio
-CFLAGS += ${shell $(INCDIR) "$(CC)" $(TOPDIR)$(DELIM)wireless$(DELIM)pktradio}
+CFLAGS += ${INCDIR_PREFIX}$(TOPDIR)$(DELIM)wireless$(DELIM)pktradio
 
 endif # CONFIG_WIRELESS_PKTRADIO

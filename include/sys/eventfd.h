@@ -1,6 +1,8 @@
 /****************************************************************************
  * include/sys/eventfd.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -33,12 +35,8 @@
  ****************************************************************************/
 
 #define EFD_NONBLOCK  O_NONBLOCK
-#define EFD_SEMAPHORE O_BINARY
+#define EFD_SEMAPHORE O_SYNC
 #define EFD_CLOEXEC   O_CLOEXEC
-
-/* Get device minor number */
-
-#define EFD_FIOC_MINOR FIOC_MINOR
 
 /****************************************************************************
  * Public Type Declarations
@@ -46,7 +44,11 @@
 
 /* Type for event counter */
 
+#ifdef __INT64_DEFINED
+typedef uint64_t eventfd_t;
+#else
 typedef uint32_t eventfd_t;
+#endif
 
 /****************************************************************************
  * Public Function Prototypes
@@ -64,8 +66,6 @@ int eventfd(unsigned int count, int flags);
 
 int eventfd_read(int fd, FAR eventfd_t *value);
 int eventfd_write(int fd, eventfd_t value);
-
-int eventfd_get_minor(int fd);
 
 #undef EXTERN
 #ifdef __cplusplus

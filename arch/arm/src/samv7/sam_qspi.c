@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/samv7/sam_qspi.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -39,11 +41,12 @@
 #include <nuttx/wdog.h>
 #include <nuttx/clock.h>
 #include <nuttx/kmalloc.h>
+#include <nuttx/mutex.h>
+#include <nuttx/nuttx.h>
 #include <nuttx/semaphore.h>
 #include <nuttx/spi/qspi.h>
 
 #include "arm_internal.h"
-#include "arm_arch.h"
 #include "barriers.h"
 
 #include "sam_gpio.h"
@@ -89,7 +92,7 @@
 #endif
 
 #ifdef CONFIG_SAMV7_QSPI_DMA
-# define SAMV7_QSPI0_DMA true
+#  define SAMV7_QSPI0_DMA true
 #endif
 
 #ifndef CONFIG_SAMV7_QSPI_DMA
@@ -118,15 +121,6 @@
 /* QSPI memory synchronization */
 
 #define MEMORY_SYNC()     do { ARM_DSB(); ARM_ISB(); } while (0)
-
-/* The SAMV7x QSPI driver insists that transfers be performed in multiples
- * of 32-bits.  The alignment requirement only applies to RX DMA data.
- */
-
-#define ALIGN_SHIFT       2
-#define ALIGN_MASK        3
-#define ALIGN_UP(n)       (((n)+ALIGN_MASK) & ~ALIGN_MASK)
-#define IS_ALIGNED(n)     (((uint32_t)(n) & ALIGN_MASK) == 0)
 
 /* Debug ********************************************************************/
 
@@ -170,7 +164,7 @@ struct sam_qspidev_s
   uint8_t irq;                 /* Interrupt number */
 #endif
   bool initialized;            /* TRUE: Controller has been initialized */
-  sem_t exclsem;               /* Assures mutually exclusive access to QSPI */
+  mutex_t lock;                /* Assures mutually exclusive access to QSPI */
 
 #ifdef CONFIG_SAMV7_QSPI_DMA
   bool candma;                 /* DMA is supported */
@@ -206,7 +200,7 @@ struct sam_qspidev_s
 static bool     qspi_checkreg(struct sam_qspidev_s *priv, bool wr,
                   uint32_t value, uint32_t address);
 #else
-# define        qspi_checkreg(priv,wr,value,address) (false)
+#  define       qspi_checkreg(priv,wr,value,address) (false)
 #endif
 
 static inline uint32_t qspi_getreg(struct sam_qspidev_s *priv,
@@ -217,7 +211,7 @@ static inline void qspi_putreg(struct sam_qspidev_s *priv, uint32_t value,
 #ifdef CONFIG_DEBUG_SPI_INFO
 static void     qspi_dumpregs(struct sam_qspidev_s *priv, const char *msg);
 #else
-# define        qspi_dumpregs(priv,msg)
+#  define       qspi_dumpregs(priv,msg)
 #endif
 
 /* DMA support */
@@ -257,7 +251,7 @@ static void     qspi_memcpy(uint8_t *dest, const uint8_t *src,
 #ifdef QSPI_USE_INTERRUPTS
 static int     qspi_interrupt(struct sam_qspidev_s *priv);
 #ifdef CONFIG_SAMV7_QSPI
-static int     qspi0_interrupt(int irq, void *context, FAR void *arg);
+static int     qspi0_interrupt(int irq, void *context, void *arg);
 #endif
 #endif
 
@@ -272,8 +266,8 @@ static int      qspi_command(struct qspi_dev_s *dev,
                   struct qspi_cmdinfo_s *cmdinfo);
 static int      qspi_memory(struct qspi_dev_s *dev,
                   struct qspi_meminfo_s *meminfo);
-static FAR void *qspi_alloc(FAR struct qspi_dev_s *dev, size_t buflen);
-static void     qspi_free(FAR struct qspi_dev_s *dev, FAR void *buffer);
+static void *qspi_alloc(struct qspi_dev_s *dev, size_t buflen);
+static void     qspi_free(struct qspi_dev_s *dev, void *buffer);
 
 /* Initialization */
 
@@ -292,6 +286,9 @@ static const struct qspi_ops_s g_qspi0ops =
   .setfrequency      = qspi_setfrequency,
   .setmode           = qspi_setmode,
   .setbits           = qspi_setbits,
+#ifdef CONFIG_QSPI_HWFEATURES
+  .hwfeatures        = NULL,
+#endif
   .command           = qspi_command,
   .memory            = qspi_memory,
   .alloc             = qspi_alloc,
@@ -302,7 +299,7 @@ static const struct qspi_ops_s g_qspi0ops =
 
 static struct sam_qspidev_s g_qspi0dev =
 {
-  .qspi            =
+  .qspi              =
   {
     .ops             = &g_qspi0ops,
   },
@@ -314,10 +311,12 @@ static struct sam_qspidev_s g_qspi0dev =
 #ifdef QSPI_USE_INTERRUPTS
   .irq               = SAM_IRQ_QSPI,
 #endif
+  .lock              = NXMUTEX_INITIALIZER,
 #ifdef CONFIG_SAMV7_QSPI_DMA
   .candma            = SAMV7_QSPI0_DMA,
   .rxintf            = XDMACH_QSPI_RX,
   .txintf            = XDMACH_QSPI_TX,
+  .dmawait           = SEM_INITIALIZER(0),
 #endif
 };
 #endif /* CONFIG_SAMV7_QSPI */
@@ -854,7 +853,7 @@ static int qspi_memory_dma(struct sam_qspidev_s *priv,
   /* Start the DMA */
 
   priv->result = -EBUSY;
-  ret = sam_dmastart(priv->dmach, qspi_dma_callback, (void *)priv);
+  ret = sam_dmastart(priv->dmach, qspi_dma_callback, priv);
   if (ret < 0)
     {
       spierr("ERROR: sam_dmastart failed: %d\n", ret);
@@ -1049,11 +1048,11 @@ static int qspi_lock(struct qspi_dev_s *dev, bool lock)
   spiinfo("lock=%d\n", lock);
   if (lock)
     {
-      ret = nxsem_wait_uninterruptible(&priv->exclsem);
+      ret = nxmutex_lock(&priv->lock);
     }
   else
     {
-      ret = nxsem_post(&priv->exclsem);
+      ret = nxmutex_unlock(&priv->lock);
     }
 
   return ret;
@@ -1087,7 +1086,7 @@ static uint32_t qspi_setfrequency(struct qspi_dev_s *dev, uint32_t frequency)
 #endif
   uint32_t regval;
 
-  spiinfo("frequency=%d\n", frequency);
+  spiinfo("frequency=%"PRIu32"\n", frequency);
   DEBUGASSERT(priv);
 
   /* Check if the requested frequency is the same as the frequency
@@ -1177,14 +1176,14 @@ static uint32_t qspi_setfrequency(struct qspi_dev_s *dev, uint32_t frequency)
   /* Calculate the new actual frequency */
 
   actual = SAM_QSPI_CLOCK / scbr;
-  spiinfo("SCBR=%d actual=%d\n", scbr, actual);
+  spiinfo("SCBR=%"PRIu32" actual=%"PRIu32"\n", scbr, actual);
 
   /* Save the frequency setting */
 
   priv->frequency = frequency;
   priv->actual    = actual;
 
-  spiinfo("Frequency %d->%d\n", frequency, actual);
+  spiinfo("Frequency %"PRIu32"->%"PRIu32"\n", frequency, actual);
   return actual;
 }
 
@@ -1250,7 +1249,7 @@ static void qspi_setmode(struct qspi_dev_s *dev, enum qspi_mode_e mode)
         }
 
       qspi_putreg(priv, regval, SAM_QSPI_SCR_OFFSET);
-      spiinfo("SCR=%08x\n", regval);
+      spiinfo("SCR=%08"PRIx32"\n", regval);
 
       /* Save the mode so that subsequent re-configurations will be faster */
 
@@ -1293,7 +1292,7 @@ static void qspi_setbits(struct qspi_dev_s *dev, int nbits)
       regval |= QSPI_MR_NBBITS(nbits);
       qspi_putreg(priv, regval, SAM_QSPI_MR_OFFSET);
 
-      spiinfo("MR=%08x\n", regval);
+      spiinfo("MR=%08"PRIx32"\n", regval);
 
       /* Save the selection so that subsequent re-configurations will be
        * faster.
@@ -1396,7 +1395,6 @@ static int qspi_command(struct qspi_dev_s *dev,
   if (QSPICMD_ISDATA(cmdinfo->flags))
     {
       DEBUGASSERT(cmdinfo->buffer != NULL && cmdinfo->buflen > 0);
-      DEBUGASSERT(IS_ALIGNED(cmdinfo->buffer));
 
       /* Write Instruction Frame Register:
        *
@@ -1546,15 +1544,16 @@ static int qspi_memory(struct qspi_dev_s *dev,
          (unsigned long)meminfo->addr, meminfo->addrlen);
   spiinfo("  %s Data:\n",
           QSPIMEM_ISWRITE(meminfo->flags) ? "Write" : "Read");
-  spiinfo("    buffer/length: %p/%d\n", meminfo->buffer, meminfo->buflen);
+  spiinfo("    buffer/length: %p/%"PRIu32"\n",
+          meminfo->buffer, meminfo->buflen);
 
 #ifdef CONFIG_SAMV7_QSPI_DMA
   /* Can we perform DMA?  Should we perform DMA? */
 
   if (priv->candma &&
       meminfo->buflen > CONFIG_SAMV7_QSPI_DMATHRESHOLD &&
-      IS_ALIGNED((uintptr_t)meminfo->buffer) &&
-      IS_ALIGNED(meminfo->buflen))
+      IS_ALIGNED((uintptr_t)meminfo->buffer, 4) &&
+      IS_ALIGNED(meminfo->buflen, 4))
     {
       return qspi_memory_dma(priv, meminfo);
     }
@@ -1581,14 +1580,18 @@ static int qspi_memory(struct qspi_dev_s *dev,
  *
  ****************************************************************************/
 
-static FAR void *qspi_alloc(FAR struct qspi_dev_s *dev, size_t buflen)
+static void *qspi_alloc(struct qspi_dev_s *dev, size_t buflen)
 {
   /* Here we exploit the internal knowledge the kmm_malloc() will return
    * memory aligned to 64-bit addresses.  The buffer length must be large
    * enough to hold the rested buflen in units a 32-bits.
    */
 
-  return kmm_malloc(ALIGN_UP(buflen));
+  /* The SAMV7x QSPI driver insists that transfers be performed in multiples
+   * of 32-bits.  The alignment requirement only applies to RX DMA data.
+   */
+
+  return kmm_malloc(ALIGN_UP(buflen, 4));
 }
 
 /****************************************************************************
@@ -1606,7 +1609,7 @@ static FAR void *qspi_alloc(FAR struct qspi_dev_s *dev, size_t buflen)
  *
  ****************************************************************************/
 
-static void qspi_free(FAR struct qspi_dev_s *dev, FAR void *buffer)
+static void qspi_free(struct qspi_dev_s *dev, void *buffer)
 {
   if (buffer)
     {
@@ -1756,12 +1759,6 @@ struct qspi_dev_s *sam_qspi_initialize(int intf)
     {
       /* No perform one time initialization */
 
-      /* Initialize the QSPI semaphore that enforces mutually exclusive
-       * access to the QSPI registers.
-       */
-
-      nxsem_init(&priv->exclsem, 0, 1);
-
 #ifdef CONFIG_SAMV7_QSPI_DMA
       /* Pre-allocate DMA channels. */
 
@@ -1774,14 +1771,6 @@ struct qspi_dev_s *sam_qspi_initialize(int intf)
               priv->candma = false;
             }
         }
-
-      /* Initialize the QSPI semaphore that is used to wake up the waiting
-       * thread when the DMA transfer completes.  This semaphore is used for
-       * signaling and, hence, should not have priority inheritance enabled.
-       */
-
-      nxsem_init(&priv->dmawait, 0, 0);
-      nxsem_set_protocol(&priv->dmawait, SEM_PRIO_NONE);
 #endif
 
 #ifdef QSPI_USE_INTERRUPTS
@@ -1791,7 +1780,7 @@ struct qspi_dev_s *sam_qspi_initialize(int intf)
       if (ret < 0)
         {
           spierr("ERROR: Failed to attach irq %d\n", priv->irq);
-          goto errout_with_dmawait;
+          goto errout_with_dmach;
         }
 #endif
 
@@ -1820,10 +1809,9 @@ errout_with_irq:
 #ifdef QSPI_USE_INTERRUPTS
   irq_detach(priv->irq);
 
-errout_with_dmawait:
+errout_with_dmach:
 #endif
 #ifdef CONFIG_SAMV7_QSPI_DMA
-  nxsem_destroy(&priv->dmawait);
   if (priv->dmach)
     {
       sam_dmafree(priv->dmach);
@@ -1831,7 +1819,6 @@ errout_with_dmawait:
     }
 #endif
 
-  nxsem_destroy(&priv->exclsem);
   return NULL;
 }
 #endif /* CONFIG_SAMV7_QSPI */

@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/lc823450/lc823450_adc.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -95,7 +97,7 @@ extern "C"
  * Public Function Prototypes
  ****************************************************************************/
 
-FAR struct adc_dev_s *lc823450_adcinitialize(void);
+struct adc_dev_s *lc823450_adcinitialize(void);
 
 #if defined(__cplusplus)
 }

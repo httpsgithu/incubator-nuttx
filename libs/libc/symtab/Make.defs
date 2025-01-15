@@ -1,6 +1,8 @@
 ############################################################################
 # libs/libc/symtab/Make.defs
 #
+# SPDX-License-Identifier: Apache-2.0
+#
 # Licensed to the Apache Software Foundation (ASF) under one or more
 # contributor license agreements.  See the NOTICE file distributed with
 # this work for additional information regarding copyright ownership.  The
@@ -21,6 +23,12 @@
 # Symbol table source files
 
 CSRCS += symtab_findbyname.c symtab_findbyvalue.c symtab_sortbyname.c
+
+# Symbolic information support
+
+ifeq ($(CONFIG_ALLSYMS),y)
+CSRCS += symtab_allsyms.c
+endif
 
 # Add the symtab directory to the build
 

@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/sim/sim/sim/src/sim_foc.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -31,9 +33,7 @@
 
 #include <arch/board/board.h>
 
-#include <nuttx/motor/foc/foc_lower.h>
-
-#include "up_internal.h"
+#include <nuttx/motor/foc/foc_dummy.h>
 
 /****************************************************************************
  * Pre-processor Definitions
@@ -58,7 +58,7 @@
 
 int sim_foc_setup(void)
 {
-  FAR struct foc_dev_s *foc[CONFIG_MOTOR_FOC_INST];
+  struct foc_dev_s *foc[CONFIG_MOTOR_FOC_INST];
   static bool           initialized = false;
   int                   ret         = OK;
   int                   i           = 0;
@@ -76,7 +76,7 @@ int sim_foc_setup(void)
         {
           /* Initialize arch specific FOC lower-half */
 
-          foc[i] = sim_foc_initialize(i);
+          foc[i] = foc_dummy_initialize(i);
           if (foc[i] == NULL)
             {
               ret = -errno;
@@ -88,7 +88,7 @@ int sim_foc_setup(void)
 
           /* Get devpath for FOC */
 
-          sprintf(devpath, "/dev/foc%d", i);
+          snprintf(devpath, sizeof(devpath), "/dev/foc%d", i);
 
           /* Register FOC device */
 

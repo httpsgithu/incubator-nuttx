@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/cxd56xx/spresense/include/cxd56_gs2200m.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -58,7 +60,7 @@ extern "C"
  *
  ****************************************************************************/
 
-int board_gs2200m_initialize(FAR const char *devpath, int bus);
+int board_gs2200m_initialize(const char *devpath, int bus);
 
 #undef EXTERN
 #if defined(__cplusplus)

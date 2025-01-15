@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/renesas/rx65n/rx65n-rsk2mb/src/rx65n_sbram.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -36,9 +38,11 @@
 #include <debug.h>
 #include <syslog.h>
 
+#include <sys/param.h>
+
 #include <nuttx/fs/fs.h>
 #include <nuttx/sched.h>
-#include "up_internal.h"
+#include "renesas_internal.h"
 #include "rx65n_sbram.h"
 #include "rx65n_rsk2mb.h"
 #ifdef CONFIG_RX65N_SBRAM
@@ -101,15 +105,13 @@
   0 \
 }
 
-#define ARRAYSIZE(a) (sizeof((a))/sizeof(a[0]))
-
 /* For Assert keep this much of the file name */
 
 #define MAX_FILE_PATH_LENGTH 40
 
 #define HEADER_TIME_FMT      "%Y-%m-%d-%H:%M:%S"
 #define HEADER_TIME_FMT_NUM  (2+ 0+ 0+ 0+ 0+ 0)
-#define HEADER_TIME_FMT_LEN  (((ARRAYSIZE(HEADER_TIME_FMT)-1) + \
+#define HEADER_TIME_FMT_LEN  (((nitems(HEADER_TIME_FMT)-1) + \
                                 HEADER_TIME_FMT_NUM))
 
 /****************************************************************************
@@ -181,18 +183,16 @@ typedef enum
 
 typedef struct
 {
-  fault_flags_t flags;                  /* What is in the dump */
-  uintptr_t     current_regs;           /* Used to validate the dump */
-  int           lineno;                 /* __LINE__ to up_assert */
-  int           pid;                    /* Process ID */
-  uint32_t      regs[XCPTCONTEXT_REGS]; /* Interrupt register save area */
-  stack_t       stacks;                 /* Stack info */
-#if CONFIG_TASK_NAME_SIZE > 0
-  char          name[CONFIG_TASK_NAME_SIZE + 1]; /* Task name (with NULL
-                                                  * terminator) */
-#endif
-  char          filename[MAX_FILE_PATH_LENGTH];  /* the Last of chars in
-                                                  * __FILE__ to up_assert */
+  fault_flags_t flags;                            /* What is in the dump */
+  uintptr_t     current_regs;                     /* Used to validate the dump */
+  int           lineno;                           /* __LINE__ to up_assert */
+  pid_t         pid;                              /* Process ID */
+  uint32_t      regs[XCPTCONTEXT_REGS];           /* Interrupt register save area */
+  stack_t       stacks;                           /* Stack info */
+  char          name[CONFIG_TASK_NAME_SIZE + 1];  /* Task name (with NULL
+                                                   * terminator) */
+  char          filename[MAX_FILE_PATH_LENGTH];   /* the Last of chars in
+                                                   * __FILE__ to up_assert */
 } info_t;
 
 struct fullcontext
@@ -227,7 +227,7 @@ extern int istack;
 
 static int hardfault_get_desc(struct sbramd_s *desc)
 {
-  FAR struct file filestruct;
+  struct file filestruct;
   int ret;
 
   ret = file_open(&filestruct, HARDFAULT_PATH, O_RDONLY);
@@ -240,7 +240,7 @@ static int hardfault_get_desc(struct sbramd_s *desc)
     {
       ret = file_ioctl(&filestruct, RX65N_SBRAM_GETDESC_IOCTL,
                        (unsigned long)((uintptr_t)desc));
-      (void)file_close(&filestruct);
+      file_close(&filestruct);
 
       if (ret < 0)
         {
@@ -330,17 +330,15 @@ int rx65n_sbram_int(void)
  ****************************************************************************/
 
 #if defined(CONFIG_RX65N_SAVE_CRASHDUMP)
-void board_crashdump(uintptr_t currentsp, FAR void *tcb,
-                     FAR const char *filename, int lineno)
+void board_crashdump(uintptr_t sp, struct tcb_s *tcb,
+                     const char *filename, int lineno,
+                     const char *msg, void *regs)
 {
-  struct fullcontext *pdump ;
+  struct fullcontext *pdump;
   pdump = (struct fullcontext *)&g_sdata;
-  FAR struct tcb_s *rtcb;
   int rv;
 
-  (void)enter_critical_section();
-
-  rtcb = (FAR struct tcb_s *)tcb;
+  enter_critical_section();
 
   /* Zero out everything */
 
@@ -360,7 +358,7 @@ void board_crashdump(uintptr_t currentsp, FAR void *tcb,
           offset = len - sizeof(pdump->info.filename);
         }
 
-      strncpy((char *)pdump->info.filename, (char *)&filename[offset],
+      strlcpy((char *)pdump->info.filename, (char *)&filename[offset],
               sizeof(pdump->info.filename));
     }
 
@@ -370,27 +368,20 @@ void board_crashdump(uintptr_t currentsp, FAR void *tcb,
    * fault.
    */
 
-  pdump->info.current_regs = (uintptr_t) g_current_regs;
+  pdump->info.current_regs = (uintptr_t)up_current_regs();
 
   /* Save Context */
 
-#if CONFIG_TASK_NAME_SIZE > 0
-  strncpy(pdump->info.name, rtcb->name, CONFIG_TASK_NAME_SIZE);
-#endif
+  strlcpy(pdump->info.name, get_task_name(tcb), sizeof(pdump->info.name));
 
-  pdump->info.pid = rtcb->pid;
+  pdump->info.pid = tcb->pid;
 
-  /* If  current_regs is not NULL then we are in an interrupt context
-   * and the user context is in current_regs else we are running in
-   * the users context
-   */
-
-  if (g_current_regs)
+  if (up_interrupt_context())
     {
-      pdump->info.stacks.interrupt.sp = currentsp;
-      pdump->info.flags |= (REGS_PRESENT | USERSTACK_PRESENT | \
+      pdump->info.stacks.interrupt.sp = sp;
+      pdump->info.flags |= (REGS_PRESENT | USERSTACK_PRESENT |
                             INTSTACK_PRESENT);
-      memcpy((uint8_t *)pdump->info.regs, (void *)g_current_regs,
+      memcpy((uint8_t *)pdump->info.regs, up_current_regs(),
              sizeof(pdump->info.regs));
       pdump->info.stacks.user.sp = pdump->info.regs[REG_SP];
     }
@@ -399,12 +390,12 @@ void board_crashdump(uintptr_t currentsp, FAR void *tcb,
       /* users context */
 
       pdump->info.flags |= USERSTACK_PRESENT;
-      pdump->info.stacks.user.sp = currentsp;
+      pdump->info.stacks.user.sp = sp;
     }
 
-  pdump->info.stacks.user.top = (uint32_t)rtcb->stack_base_ptr +
-                                          rtcb->adj_stack_size;
-  pdump->info.stacks.user.size = (uint32_t)rtcb->adj_stack_size;
+  pdump->info.stacks.user.top = (uint32_t)tcb->stack_base_ptr +
+                                          tcb->adj_stack_size;
+  pdump->info.stacks.user.size = (uint32_t)tcb->adj_stack_size;
 
 #if CONFIG_ARCH_INTERRUPTSTACK > 3
   /* Get the limits on the interrupt stack memory */
@@ -420,8 +411,8 @@ void board_crashdump(uintptr_t currentsp, FAR void *tcb,
     {
       stack_word_t *ps = (stack_word_t *) pdump->info.stacks.interrupt.sp;
       copy_reverse((stack_word_t *)pdump->istack,
-                        &ps[ARRAYSIZE(pdump->istack) / 2],
-                    ARRAYSIZE(pdump->istack));
+                        &ps[nitems(pdump->istack) / 2],
+                    nitems(pdump->istack));
     }
 
   /* Is it Invalid? */
@@ -442,8 +433,8 @@ void board_crashdump(uintptr_t currentsp, FAR void *tcb,
     {
       stack_word_t *ps = (stack_word_t *) pdump->info.stacks.user.sp;
       copy_reverse((stack_word_t *)pdump->ustack,
-                        &ps[ARRAYSIZE(pdump->ustack) / 2],
-                    ARRAYSIZE(pdump->ustack));
+                        &ps[nitems(pdump->ustack) / 2],
+                    nitems(pdump->ustack));
     }
 
   /* Is it Invalid? */
@@ -466,14 +457,14 @@ void board_crashdump(uintptr_t currentsp, FAR void *tcb,
 
       while (*dead)
         {
-          up_lowputc(*dead++);
+          renesas_lowputc(*dead++);
         }
     }
   else if (rv == -ENOSPC)
     {
       /* hard fault again */
 
-      up_lowputc('!');
+      renesas_lowputc('!');
     }
 }
 #endif /* CONFIG_RX65N_SAVE_CRASHDUMP */

@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/stm32l4/hardware/stm32l4_memorymap.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -18,8 +20,8 @@
  *
  ****************************************************************************/
 
-#ifndef __ARCH_ARM_SRC_STM32L4_STM32L4_MEMORYMAP_H
-#define __ARCH_ARM_SRC_STM32L4_STM32L4_MEMORYMAP_H
+#ifndef __ARCH_ARM_SRC_STM32L4_HARDWARE_STM32L4_MEMORYMAP_H
+#define __ARCH_ARM_SRC_STM32L4_HARDWARE_STM32L4_MEMORYMAP_H
 
 /****************************************************************************
  * Pre-processor Definitions
@@ -230,4 +232,4 @@
 #define STM32L4_SCS_BASE      0xe000e000
 #define STM32L4_DEBUGMCU_BASE 0xe0042000
 
-#endif /* __ARCH_ARM_SRC_STM32L4_STM32L4_MEMORYMAP_H */
+#endif /* __ARCH_ARM_SRC_STM32L4_HARDWARE_STM32L4_MEMORYMAP_H */

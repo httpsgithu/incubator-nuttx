@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/stm32/stm32f429i-disco/src/stm32_bringup.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -37,7 +39,7 @@
 #  include <nuttx/mmcsd.h>
 #endif
 
-#ifdef CONFIG_MTD_SST25XX
+#if defined(CONFIG_MTD_SST25XX) || defined(CONFIG_MTD_PROGMEM)
 #  include <nuttx/mtd/mtd.h>
 #endif
 
@@ -66,6 +68,10 @@
 #include "stm32.h"
 #include "stm32f429i-disco.h"
 
+#ifdef CONFIG_INPUT_BUTTONS_LOWER
+#  include <nuttx/input/buttons.h>
+#endif
+
 #ifdef CONFIG_SENSORS_L3GD20
 #include "stm32_l3gd20.h"
 #endif
@@ -91,14 +97,16 @@
 int stm32_bringup(void)
 {
 #if defined(CONFIG_STM32_SPI4)
-  FAR struct spi_dev_s *spi;
+  struct spi_dev_s *spi;
 #endif
 #if defined(CONFIG_MTD)
-  FAR struct mtd_dev_s *mtd;
-  FAR struct mtd_geometry_s geo;
+  struct mtd_dev_s *mtd;
+#if defined (CONFIG_MTD_SST25XX)
+  struct mtd_geometry_s geo;
+#endif
 #endif
 #if defined(CONFIG_MTD_PARTITION_NAMES)
-  FAR const char *partname = CONFIG_STM32F429I_DISCO_FLASH_PART_NAMES;
+  const char *partname = CONFIG_STM32F429I_DISCO_FLASH_PART_NAMES;
 #endif
   int ret;
 
@@ -115,6 +123,21 @@ int stm32_bringup(void)
 #endif
 
   /* Configure SPI-based devices */
+
+#if defined(CONFIG_MTD) && defined(CONFIG_MTD_PROGMEM)
+  mtd = progmem_initialize();
+  if (mtd == NULL)
+    {
+      syslog(LOG_ERR, "ERROR: progmem_initialize\n");
+    }
+
+  ret = register_mtddriver("/dev/flash", mtd, 0, mtd);
+  if (ret < 0)
+    {
+      syslog(LOG_ERR, "ERROR: register_mtddriver() failed: %d\n", ret);
+    }
+
+#endif
 
 #ifdef CONFIG_STM32_SPI4
   /* Get the SPI port */
@@ -168,8 +191,8 @@ int stm32_bringup(void)
           int erasesize;
           const char *partstring = CONFIG_STM32F429I_DISCO_FLASH_PART_LIST;
           const char *ptr;
-          FAR struct mtd_dev_s *mtd_part;
-          char  partref[4];
+          struct mtd_dev_s *mtd_part;
+          char  partref[16];
 
           /* Now create a partition on the FLASH device */
 
@@ -226,7 +249,7 @@ int stm32_bringup(void)
                    */
 
 #if defined(CONFIG_MTD_SMART) && defined(CONFIG_FS_SMARTFS)
-                  sprintf(partref, "p%d", partno);
+                  snprintf(partref, sizeof(partref), "p%d", partno);
                   smart_initialize(CONFIG_STM32F429I_DISCO_FLASH_MINOR,
                                    mtd_part, partref);
 #endif
@@ -306,7 +329,7 @@ int stm32_bringup(void)
 
     {
       uint8_t *start =
-          (uint8_t *) kmm_malloc(CONFIG_STM32F429I_DISCO_RAMMTD_SIZE * 1024);
+          kmm_malloc(CONFIG_STM32F429I_DISCO_RAMMTD_SIZE * 1024);
       mtd = rammtd_initialize(start,
                               CONFIG_STM32F429I_DISCO_RAMMTD_SIZE * 1024);
       mtd->ioctl(mtd, MTDIOC_BULKERASE, 0);
@@ -345,6 +368,16 @@ int stm32_bringup(void)
     }
 #endif
 
+#ifdef CONFIG_INPUT_BUTTONS_LOWER
+  /* Register the BUTTON driver */
+
+  ret = btn_lower_initialize("/dev/buttons");
+  if (ret < 0)
+    {
+      syslog(LOG_ERR, "ERROR: btn_lower_initialize() failed: %d\n", ret);
+    }
+#endif /* CONFIG_INPUT_BUTTONS_LOWER */
+
 #ifdef CONFIG_INPUT_STMPE811
   /* Initialize the touchscreen */
 
@@ -381,6 +414,16 @@ int stm32_bringup(void)
   if (ret < 0)
     {
       syslog(LOG_ERR, "ERROR: stm32_adc_setup() failed: %d\n", ret);
+    }
+#endif
+
+#ifdef CONFIG_STM32_CAN_CHARDRIVER
+  /* Initialize CAN and register the CAN driver. */
+
+  ret = stm32_can_setup();
+  if (ret < 0)
+    {
+      syslog(LOG_ERR, "ERROR: stm32_can_setup failed: %d\n", ret);
     }
 #endif
 

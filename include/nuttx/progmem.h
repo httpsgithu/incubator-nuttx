@@ -1,6 +1,8 @@
 /****************************************************************************
  * include/nuttx/progmem.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -233,6 +235,16 @@ ssize_t up_progmem_write(size_t addr, FAR const void *buf, size_t count);
 #ifdef CONFIG_ARCH_HAVE_PROGMEM_READ
 ssize_t up_progmem_read(size_t addr, FAR void *buf, size_t count);
 #endif
+
+/****************************************************************************
+ * Name: up_progmem_erasestate
+ *
+ * Description:
+ *   Return value of erase state.
+ *
+ ****************************************************************************/
+
+uint8_t up_progmem_erasestate(void);
 
 #undef EXTERN
 #if defined(__cplusplus)

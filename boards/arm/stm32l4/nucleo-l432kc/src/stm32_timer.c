@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/stm32l4/nucleo-l432kc/src/stm32_timer.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -57,7 +59,7 @@
  *
  ****************************************************************************/
 
-int board_timer_driver_initialize(FAR const char *devpath, int timer)
+int board_timer_driver_initialize(const char *devpath, int timer)
 {
   return stm32l4_timer_initialize(devpath, timer);
 }

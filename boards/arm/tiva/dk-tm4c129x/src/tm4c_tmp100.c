@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/tiva/dk-tm4c129x/src/tm4c_tmp100.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -61,9 +63,9 @@
  *
  ****************************************************************************/
 
-int tiva_tmp100_initialize(FAR const char *devpath)
+int tiva_tmp100_initialize(const char *devpath)
 {
-  FAR struct i2c_master_s *i2c;
+  struct i2c_master_s *i2c;
   int ret;
 
   /* Get an instance of the I2C6 interface */

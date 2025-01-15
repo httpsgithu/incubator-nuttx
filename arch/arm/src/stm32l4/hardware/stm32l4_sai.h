@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/stm32l4/hardware/stm32l4_sai.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -127,12 +129,12 @@
                                              /* Bit 4: Reserved */
 #define SAI_CR1_DS_SHIFT           (5)       /* Bits 5-7: Data size */
 #define SAI_CR1_DS_MASK            (7 << SAI_CR1_DS_SHIFT)
-# define SAI_CR1_DS_8BITS          (2 << SAI_CR1_DS_SHIFT) /* 8 bits */
-# define SAI_CR1_DS_10BITS         (3 << SAI_CR1_DS_SHIFT) /* 10 bits */
-# define SAI_CR1_DS_16BITS         (4 << SAI_CR1_DS_SHIFT) /* 16 bits */
-# define SAI_CR1_DS_20BITS         (5 << SAI_CR1_DS_SHIFT) /* 20 bits */
-# define SAI_CR1_DS_24BITS         (6 << SAI_CR1_DS_SHIFT) /* 24 bits */
-# define SAI_CR1_DS_32BITS         (7 << SAI_CR1_DS_SHIFT) /* 32 bits */
+#  define SAI_CR1_DS_8BITS         (2 << SAI_CR1_DS_SHIFT) /* 8 bits */
+#  define SAI_CR1_DS_10BITS        (3 << SAI_CR1_DS_SHIFT) /* 10 bits */
+#  define SAI_CR1_DS_16BITS        (4 << SAI_CR1_DS_SHIFT) /* 16 bits */
+#  define SAI_CR1_DS_20BITS        (5 << SAI_CR1_DS_SHIFT) /* 20 bits */
+#  define SAI_CR1_DS_24BITS        (6 << SAI_CR1_DS_SHIFT) /* 24 bits */
+#  define SAI_CR1_DS_32BITS        (7 << SAI_CR1_DS_SHIFT) /* 32 bits */
 
 #define SAI_CR1_LSBFIRST           (1 << 8)  /* Bit 8:  Least significant bit first */
 #define SAI_CR1_CKSTR              (1 << 9)  /* Bit 9:  Clock strobing edge */

@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/stm32/stm3210e-eval/src/stm32_idle.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -105,8 +107,6 @@
 #  endif
 #endif
 
-#define PM_IDLE_DOMAIN 0 /* Revisit */
-
 /****************************************************************************
  * Private Data
  ****************************************************************************/
@@ -145,7 +145,7 @@ static void stm32_alarmcb(void)
  ****************************************************************************/
 
 #if defined(CONFIG_PM) && defined(CONFIG_RTC_ALARM)
-static int stm32_alarm_exti(int irq, FAR void *context, FAR void *arg)
+static int stm32_alarm_exti(int irq, void *context, void *arg)
 {
   stm32_alarmcb();
   return OK;
@@ -316,7 +316,7 @@ static void stm32_idlepm(void)
                  */
 
 #ifdef CONFIG_RTC
-                clock_synchronize();
+                clock_synchronize(NULL);
 #endif
               }
           }

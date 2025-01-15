@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/stm32/stm32f429i-disco/src/stm32_lcd.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -35,7 +37,7 @@
 
 #include <arch/board/board.h>
 
-#include "arm_arch.h"
+#include "arm_internal.h"
 #include "stm32f429i-disco.h"
 #include "stm32_ltdc.h"
 
@@ -44,9 +46,9 @@
  ****************************************************************************/
 
 #ifdef CONFIG_STM32F429I_DISCO_ILI9341_LCDDEVICE
-# define ILI9341_LCD_DEVICE CONFIG_STM32F429I_DISCO_ILI9341_LCDDEVICE
+#  define ILI9341_LCD_DEVICE CONFIG_STM32F429I_DISCO_ILI9341_LCDDEVICE
 #else
-# define ILI9341_LCD_DEVICE  0
+#  define ILI9341_LCD_DEVICE 0
 #endif
 
 #ifdef CONFIG_STM32F429I_DISCO_ILI9341_FBIFACE
@@ -79,10 +81,7 @@
  * ByPass_Mode: 1 (Memory)
  */
 
-#define STM32_ILI9341_IFMODE_PARAM    ((!ILI9341_INTERFACE_CONTROL_EPL) | \
-                                      ILI9341_INTERFACE_CONTROL_DPL | \
-                                      (!ILI9341_INTERFACE_CONTROL_HSPL) | \
-                                      (!ILI9341_INTERFACE_CONTROL_VSPL) | \
+#define STM32_ILI9341_IFMODE_PARAM    (ILI9341_INTERFACE_CONTROL_DPL |   \
                                       ILI9341_INTERFACE_CONTROL_RCM(2) | \
                                       ILI9341_INTERFACE_CONTROL_BPASS)
 
@@ -96,11 +95,7 @@
  * WEMODE:  1   Reset column and page if data transfer exceeds
  */
 
-#define STM32_ILI9341_IFCTL_PARAM1    (ILI9341_INTERFACE_CONTROL_WEMODE | \
-                                      !ILI9341_INTERFACE_CONTROL_BGREOR | \
-                                      !ILI9341_INTERFACE_CONTROL_MVEOR | \
-                                      !ILI9341_INTERFACE_CONTROL_MXEOR | \
-                                      !ILI9341_INTERFACE_CONTROL_MYEOR)
+#define STM32_ILI9341_IFCTL_PARAM1    (ILI9341_INTERFACE_CONTROL_WEMODE)
 
 /* Parameter 2: 0x0000
  *
@@ -119,10 +114,8 @@
  * RIM:     0   18-bit 1 transfer/pixel RGB interface mode
  *
  */
-#define STM32_ILI9341_IFCTL_PARAM3    ((!ILI9341_INTERFACE_CONTROL_RIM) | \
-                                      ILI9341_INTERFACE_CONTROL_RM | \
-                                      ILI9341_INTERFACE_CONTROL_DM(1) | \
-                                      (!ILI9341_INTERFACE_CONTROL_ENDIAN))
+#define STM32_ILI9341_IFCTL_PARAM3    (ILI9341_INTERFACE_CONTROL_RM | \
+                                      ILI9341_INTERFACE_CONTROL_DM(1))
 
 /* Memory access control (MADCTL) */
 
@@ -243,15 +236,15 @@
 /* Set the display orientation */
 
 #if defined(CONFIG_STM32F429I_DISCO_ILI9341_FBIFACE_LANDSCAPE)
-# define STM32_ILI9341_MADCTL_PARAM  ILI9341_MADCTL_LANDSCAPE_PARAM1
+#  define STM32_ILI9341_MADCTL_PARAM  ILI9341_MADCTL_LANDSCAPE_PARAM1
 # warning "ILI9341 doesn't support full landscape with RGB interface"
 #elif defined(CONFIG_STM32F429I_DISCO_ILI9341_FBIFACE_PORTRAIT)
-# define STM32_ILI9341_MADCTL_PARAM  ILI9341_MADCTL_PORTRAIT_PARAM1
+#  define STM32_ILI9341_MADCTL_PARAM  ILI9341_MADCTL_PORTRAIT_PARAM1
 #elif defined(CONFIG_STM32F429I_DISCO_ILI9341_FBIFACE_RLANDSCAPE)
-# define STM32_ILI9341_MADCTL_PARAM  ILI9341_MADCTL_RLANDSCAPE_PARAM1
+#  define STM32_ILI9341_MADCTL_PARAM  ILI9341_MADCTL_RLANDSCAPE_PARAM1
 # warning "ILI9341 doesn't support full landscape with RGB interface"
 #elif defined(CONFIG_STM32F429I_DISCO_ILI9341_FBIFACE_RPORTRAIT)
-# define STM32_ILI9341_MADCTL_PARAM  ILI9341_MADCTL_RPORTRAIT_PARAM1
+#  define STM32_ILI9341_MADCTL_PARAM  ILI9341_MADCTL_RPORTRAIT_PARAM1
 #else
 # error "display orientation not defined"
 #endif
@@ -265,11 +258,11 @@
  ****************************************************************************/
 
 #ifdef CONFIG_STM32F429I_DISCO_ILI9341_LCDIFACE
-FAR struct lcd_dev_s *g_lcd = NULL;
+struct lcd_dev_s *g_lcd = NULL;
 #endif
 
 #ifdef CONFIG_STM32F429I_DISCO_ILI9341_FBIFACE
-FAR struct ili9341_lcd_s *g_ltdc = NULL;
+struct ili9341_lcd_s *g_ltdc = NULL;
 #endif
 
 /****************************************************************************
@@ -287,7 +280,7 @@ FAR struct ili9341_lcd_s *g_ltdc = NULL;
 
 static int stm32_ili9341_initialize(void)
 {
-  FAR struct ili9341_lcd_s *lcd = g_ltdc;
+  struct ili9341_lcd_s *lcd = g_ltdc;
 
   lcd = stm32_ili93414ws_initialize();
 
@@ -433,7 +426,7 @@ void board_lcd_uninitialize(void)
  *
  ****************************************************************************/
 
-FAR struct lcd_dev_s *board_lcd_getdev(int lcddev)
+struct lcd_dev_s *board_lcd_getdev(int lcddev)
 {
   if (lcddev == ILI9341_LCD_DEVICE)
     {
@@ -467,7 +460,7 @@ int board_lcd_initialize(void)
     {
       /* Initialize the sub driver structure */
 
-      FAR struct ili9341_lcd_s *dev = stm32_ili93414ws_initialize();
+      struct ili9341_lcd_s *dev = stm32_ili93414ws_initialize();
 
       /* Initialize public lcd driver structure */
 
@@ -556,7 +549,7 @@ int up_fbinitialize(int display)
  *
  ****************************************************************************/
 
-FAR struct fb_vtable_s *up_fbgetvplane(int display, int vplane)
+struct fb_vtable_s *up_fbgetvplane(int display, int vplane)
 {
   return stm32_ltdcgetvplane(vplane);
 }

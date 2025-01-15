@@ -1,6 +1,8 @@
 /****************************************************************************
  * include/nuttx/lcd/ili9325.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -334,7 +336,7 @@
 #  define ILI9325_GAMMA_CTRL7_KN2(n)           ((uint16_t)(n) << ILI9325_GAMMA_CTRL7_KN2_SHIFT)
 #define ILI9325_GAMMA_CTRL7_KN3_SHIFT          8
 #define ILI9325_GAMMA_CTRL7_KN3_MASK           (7 << ILI9325_GAMMA_CTRL7_KN3_SHIFT)
-# define ILI9325_GAMMA_CTRL7_KN3(n)            ((uint16_t)(n) << ILI9325_GAMMA_CTRL7_KN3_SHIFT)
+#  define ILI9325_GAMMA_CTRL7_KN3(n)           ((uint16_t)(n) << ILI9325_GAMMA_CTRL7_KN3_SHIFT)
 
 /* ILI9325_GAMMA_CTRL8, Gamma Control 8, Offset: 0x39 */
 

@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/sam34/sam3u-ek/src/sam_appinit.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -116,7 +118,7 @@ int board_app_initialize(uintptr_t arg)
   int ret;
 
 #ifdef NSH_HAVE_MMCSD
-  FAR struct sdio_dev_s *sdio;
+  struct sdio_dev_s *sdio;
 
   /* Mount the SDIO-based MMC/SD block driver */
 

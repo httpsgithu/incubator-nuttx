@@ -1,6 +1,8 @@
 /****************************************************************************
  * fs/nxffs/nxffs_pack.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -28,12 +30,13 @@
 #include <string.h>
 #include <errno.h>
 #include <assert.h>
-#include <crc32.h>
 #include <debug.h>
 
+#include <nuttx/crc32.h>
 #include <nuttx/kmalloc.h>
 
 #include "nxffs.h"
+#include "fs_heap.h"
 
 /****************************************************************************
  * Private Types
@@ -251,7 +254,7 @@ static inline off_t nxffs_mediacheck(FAR struct nxffs_volume_s *volume,
 
 static inline int nxffs_startpos(FAR struct nxffs_volume_s *volume,
                                  FAR struct nxffs_pack_s *pack,
-                                 off_t *froffset)
+                                 FAR off_t *froffset)
 {
   struct nxffs_blkentry_s blkentry;
   off_t offset = *froffset;
@@ -1089,9 +1092,11 @@ nxffs_setupwriter(FAR struct nxffs_volume_s *volume,
           /* Initialize for the packing operation. */
 
           memset(&pack->dest, 0, sizeof(struct nxffs_packstream_s));
-          pack->dest.entry.name   = strdup(wrfile->ofile.entry.name);
+          pack->dest.entry.name   = fs_heap_strdup(wrfile->ofile.entry.name);
           pack->dest.entry.utc    = wrfile->ofile.entry.utc;
           pack->dest.entry.datlen = wrfile->ofile.entry.datlen;
+
+          DEBUGASSERT(pack->dest.entry.name != NULL);
 
           memset(&pack->src, 0, sizeof(struct nxffs_packstream_s));
           memcpy(&pack->src.entry, &wrfile->ofile.entry,
@@ -1391,7 +1396,6 @@ int nxffs_pack(FAR struct nxffs_volume_s *volume)
    */
 
 start_pack:
-
   pack.ioblock     = nxffs_getblock(volume, iooffset);
   pack.iooffset    = nxffs_getoffset(volume, iooffset, pack.ioblock);
   volume->froffset = iooffset;

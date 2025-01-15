@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/lpc17xx_40xx/zkit-arm-1769/src/lpc17_40_spi.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -31,7 +33,7 @@
 #include <nuttx/spi/spi.h>
 #include <arch/board/board.h>
 
-#include "arm_arch.h"
+#include "arm_internal.h"
 #include "chip.h"
 #include "lpc17_40_spi.h"
 #include "lpc17_40_gpio.h"
@@ -105,7 +107,7 @@ void weak_function zkit_spidev_initialize(void)
  *
  ****************************************************************************/
 
-void  lpc17_40_spiselect(FAR struct spi_dev_s *dev, uint32_t devid,
+void  lpc17_40_spiselect(struct spi_dev_s *dev, uint32_t devid,
                          bool selected)
 {
   spiinfo("devid: %d CS: %s\n", (int)devid,
@@ -122,7 +124,7 @@ void  lpc17_40_spiselect(FAR struct spi_dev_s *dev, uint32_t devid,
   spi_dumpgpio("lpc17_40_spiselect() Exit");
 }
 
-uint8_t lpc17_40_spistatus(FAR struct spi_dev_s *dev, uint32_t devid)
+uint8_t lpc17_40_spistatus(struct spi_dev_s *dev, uint32_t devid)
 {
   if (devid == SPIDEV_MMCSD(0))
     {
@@ -147,7 +149,7 @@ uint8_t lpc17_40_spistatus(FAR struct spi_dev_s *dev, uint32_t devid)
  *
  ****************************************************************************/
 
-int lpc17_40_spicmddata(FAR struct spi_dev_s *dev, uint32_t devid, bool cmd)
+int lpc17_40_spicmddata(struct spi_dev_s *dev, uint32_t devid, bool cmd)
 {
   return OK;
 }

@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/stm32/stm32f4discovery/src/stm32_cs43l22.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -60,7 +62,7 @@ struct stm32_mwinfo_s
   /* Extensions for the stm32f4discovery board */
 
   cs43l22_handler_t handler;
-  FAR void *arg;
+  void *arg;
 };
 
 /****************************************************************************
@@ -77,11 +79,11 @@ struct stm32_mwinfo_s
  *   enable  - Enable or disable the PIO interrupt
  */
 
-static int  cs43l22_attach(FAR const struct cs43l22_lower_s *lower,
-                           cs43l22_handler_t isr, FAR void *arg);
-static bool cs43l22_enable(FAR const struct cs43l22_lower_s *lower,
+static int  cs43l22_attach(const struct cs43l22_lower_s *lower,
+                           cs43l22_handler_t isr, void *arg);
+static bool cs43l22_enable(const struct cs43l22_lower_s *lower,
                            bool enable);
-static void cs43l22_hw_reset(FAR const struct cs43l22_lower_s *lower);
+static void cs43l22_hw_reset(const struct cs43l22_lower_s *lower);
 
 /****************************************************************************
  * Private Data
@@ -132,8 +134,8 @@ static struct stm32_mwinfo_s g_cs43l22info =
  *
  ****************************************************************************/
 
-static int cs43l22_attach(FAR const struct cs43l22_lower_s *lower,
-                         cs43l22_handler_t isr,  FAR void *arg)
+static int cs43l22_attach(const struct cs43l22_lower_s *lower,
+                         cs43l22_handler_t isr,  void *arg)
 {
   if (isr)
     {
@@ -157,7 +159,7 @@ static int cs43l22_attach(FAR const struct cs43l22_lower_s *lower,
   return OK;
 }
 
-static bool cs43l22_enable(FAR const struct cs43l22_lower_s *lower,
+static bool cs43l22_enable(const struct cs43l22_lower_s *lower,
                            bool enable)
 {
   static bool enabled;
@@ -195,7 +197,7 @@ static bool cs43l22_enable(FAR const struct cs43l22_lower_s *lower,
 }
 
 #if 0
-static int cs43l22_interrupt(int irq, FAR void *context)
+static int cs43l22_interrupt(int irq, void *context)
 {
   /* Just forward the interrupt to the CS43L22 driver */
 
@@ -215,7 +217,7 @@ static int cs43l22_interrupt(int irq, FAR void *context)
 }
 #endif
 
-static void cs43l22_hw_reset(FAR const struct cs43l22_lower_s *lower)
+static void cs43l22_hw_reset(const struct cs43l22_lower_s *lower)
 {
   int i;
 
@@ -253,10 +255,10 @@ static void cs43l22_hw_reset(FAR const struct cs43l22_lower_s *lower)
 
 int stm32_cs43l22_initialize(int minor)
 {
-  FAR struct audio_lowerhalf_s *cs43l22;
-  FAR struct audio_lowerhalf_s *pcm;
-  FAR struct i2c_master_s *i2c;
-  FAR struct i2s_dev_s *i2s;
+  struct audio_lowerhalf_s *cs43l22;
+  struct audio_lowerhalf_s *pcm;
+  struct i2c_master_s *i2c;
+  struct i2s_dev_s *i2s;
   static bool initialized = false;
   char devname[12];
   int ret;
@@ -277,7 +279,7 @@ int stm32_cs43l22_initialize(int minor)
 
       /* Configure the CS43L22 interrupt pin */
 
-      /* TODO: (void)stm32_configgpio(PIO_INT_CS43L22); */
+      /* TODO: stm32_configgpio(PIO_INT_CS43L22); */
 
       /* Get an instance of the I2C interface for the CS43L22 chip select */
 
@@ -342,7 +344,7 @@ int stm32_cs43l22_initialize(int minor)
 
       /* Create a device name */
 
-      snprintf(devname, 12, "pcm%d",  minor);
+      snprintf(devname, sizeof(devname), "pcm%d",  minor);
 
       /* Finally, we can register the PCM/CS43L22/I2C/I2S audio device.
        *
@@ -371,7 +373,6 @@ int stm32_cs43l22_initialize(int minor)
 errout_with_pcm:
 errout_with_cs43l22:
 errout_with_irq:
-
 #if 0
   irq_detach(IRQ_INT_CS43L22);
 errout_with_i2s:

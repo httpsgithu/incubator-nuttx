@@ -1,6 +1,8 @@
 /****************************************************************************
  * libs/libc/machine/xtensa/arch_memcpy.S
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -27,6 +29,10 @@
 #include <arch/chip/core-isa.h>
 #include <arch/xtensa/xtensa_abi.h>
 
+#include "libc.h"
+
+#ifdef LIBC_BUILD_MEMCPY
+
 /****************************************************************************
  * Pre-processor Macros
  ****************************************************************************/
@@ -49,9 +55,9 @@
   .local  .Lbytecopy
 
   .align  4
-  .global memcpy
-  .type memcpy, @function
-memcpy:
+  .global ARCH_LIBCFUN(memcpy)
+  .type ARCH_LIBCFUN(memcpy), @function
+ARCH_LIBCFUN(memcpy):
   ENTRY(16)
   /* a2 = dst, a3 = src, a4 = len */
 
@@ -130,7 +136,6 @@ memcpy:
 
 .Ldone:
   RET(16)
-
 
 /* Destination is aligned; source is unaligned.  */
 
@@ -217,7 +222,6 @@ memcpy:
   s8i a6, a5, 0
   RET(16)
 
-
   # .align XCHAL_INST_FETCH_WIDTH
 __memcpy_aux:
 
@@ -239,7 +243,6 @@ __memcpy_aux:
   bltu  a3, a7, 1b
 #endif
 2:  RET(16)
-
 
 /* Destination is unaligned.  */
 
@@ -278,4 +281,6 @@ __memcpy_aux:
 
   .end schedule
 
-  .size memcpy, . - memcpy
+  .size ARCH_LIBCFUN(memcpy), . - ARCH_LIBCFUN(memcpy)
+
+#endif

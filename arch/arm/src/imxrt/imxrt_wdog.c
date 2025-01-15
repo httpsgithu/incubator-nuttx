@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/imxrt/imxrt_wdog.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -34,7 +36,7 @@
 #include <nuttx/spinlock.h>
 #include <nuttx/timers/watchdog.h>
 
-#include "arm_arch.h"
+#include "arm_internal.h"
 #include "hardware/imxrt_wdog.h"
 #include "imxrt_wdog.h"
 
@@ -68,9 +70,10 @@
 
 struct imxrt_wdog_lower
 {
-  FAR const struct watchdog_ops_s  *ops;  /* Lower half operations */
+  const struct watchdog_ops_s  *ops;  /* Lower half operations */
   uint32_t     timeout;
   uint32_t     enabled;
+  spinlock_t   lock;
 };
 
 /****************************************************************************
@@ -83,13 +86,13 @@ uint32_t imxrt_wdog_ms_to_reg(uint32_t timeout);
 
 /* Lower half driver methods */
 
-static int      imxrt_wdog_start(FAR struct watchdog_lowerhalf_s *lower);
-static int      imxrt_wdog_stop(FAR struct watchdog_lowerhalf_s *lower);
-static int      imxrt_wdog_keepalive(FAR struct watchdog_lowerhalf_s *lower);
-static int      imxrt_wdog_getstatus(FAR struct watchdog_lowerhalf_s *lower,
-                  FAR struct watchdog_status_s *status);
-static int      imxrt_wdog_settimeout(FAR struct watchdog_lowerhalf_s *lower,
-                  uint32_t timeout);
+static int      imxrt_wdog_start(struct watchdog_lowerhalf_s *lower);
+static int      imxrt_wdog_stop(struct watchdog_lowerhalf_s *lower);
+static int      imxrt_wdog_keepalive(struct watchdog_lowerhalf_s *lower);
+static int      imxrt_wdog_getstatus(struct watchdog_lowerhalf_s *lower,
+                                     struct watchdog_status_s *status);
+static int      imxrt_wdog_settimeout(struct watchdog_lowerhalf_s *lower,
+                                      uint32_t timeout);
 
 /****************************************************************************
  * Private Data
@@ -165,9 +168,9 @@ uint32_t imxrt_wdog_ms_to_reg(uint32_t ms)
  *
  ****************************************************************************/
 
-static int imxrt_wdog_start(FAR struct watchdog_lowerhalf_s *lower)
+static int imxrt_wdog_start(struct watchdog_lowerhalf_s *lower)
 {
-  FAR struct imxrt_wdog_lower *priv = (FAR struct imxrt_wdog_lower *)lower;
+  struct imxrt_wdog_lower *priv = (struct imxrt_wdog_lower *)lower;
   uint16_t regval;
 
   if (priv->enabled == false)
@@ -203,9 +206,9 @@ static int imxrt_wdog_start(FAR struct watchdog_lowerhalf_s *lower)
  *
  ****************************************************************************/
 
-static int imxrt_wdog_stop(FAR struct watchdog_lowerhalf_s *lower)
+static int imxrt_wdog_stop(struct watchdog_lowerhalf_s *lower)
 {
-  FAR struct imxrt_wdog_lower *priv = (FAR struct imxrt_wdog_lower *)lower;
+  struct imxrt_wdog_lower *priv = (struct imxrt_wdog_lower *)lower;
 
   if (priv->enabled)
     {
@@ -235,14 +238,16 @@ static int imxrt_wdog_stop(FAR struct watchdog_lowerhalf_s *lower)
  *
  ****************************************************************************/
 
-static int imxrt_wdog_keepalive(FAR struct watchdog_lowerhalf_s *lower)
+static int imxrt_wdog_keepalive(struct watchdog_lowerhalf_s *lower)
 {
-  irqstate_t flags = spin_lock_irqsave(NULL);
+  struct imxrt_wdog_lower *priv = (struct imxrt_wdog_lower *)lower;
+
+  irqstate_t flags = spin_lock_irqsave(&priv->lock);
 
   putreg16(WDOG_KEEP_ALIVE_KEY1, IMXRT_WDOG1_WSR);
   putreg16(WDOG_KEEP_ALIVE_KEY2, IMXRT_WDOG1_WSR);
 
-  spin_unlock_irqrestore(NULL, flags);
+  spin_unlock_irqrestore(&priv->lock, flags);
 
   return OK;
 }
@@ -263,10 +268,10 @@ static int imxrt_wdog_keepalive(FAR struct watchdog_lowerhalf_s *lower)
  *
  ****************************************************************************/
 
-static int imxrt_wdog_getstatus(FAR struct watchdog_lowerhalf_s *lower,
-                           FAR struct watchdog_status_s *status)
+static int imxrt_wdog_getstatus(struct watchdog_lowerhalf_s *lower,
+                                struct watchdog_status_s *status)
 {
-  FAR struct imxrt_wdog_lower *priv = (FAR struct imxrt_wdog_lower *)lower;
+  struct imxrt_wdog_lower *priv = (struct imxrt_wdog_lower *)lower;
 
   status->flags = WDFLAGS_RESET;
 
@@ -297,11 +302,11 @@ static int imxrt_wdog_getstatus(FAR struct watchdog_lowerhalf_s *lower,
  *
  ****************************************************************************/
 
-static int imxrt_wdog_settimeout(FAR struct watchdog_lowerhalf_s *lower,
-                            uint32_t timeout)
+static int imxrt_wdog_settimeout(struct watchdog_lowerhalf_s *lower,
+                                 uint32_t timeout)
 {
   uint32_t regval;
-  FAR struct imxrt_wdog_lower *priv = (FAR struct imxrt_wdog_lower *)lower;
+  struct imxrt_wdog_lower *priv = (struct imxrt_wdog_lower *)lower;
 
   if (timeout < WDOG_MIN || timeout > WDOG_MAX)
     {
@@ -312,7 +317,7 @@ static int imxrt_wdog_settimeout(FAR struct watchdog_lowerhalf_s *lower,
 
   priv->timeout = timeout;
 
-  irqstate_t flags = spin_lock_irqsave(NULL);
+  irqstate_t flags = spin_lock_irqsave(&priv->lock);
 
   /* write timer value to WCR WT register */
 
@@ -326,7 +331,7 @@ static int imxrt_wdog_settimeout(FAR struct watchdog_lowerhalf_s *lower,
   putreg16(WDOG_KEEP_ALIVE_KEY1, IMXRT_WDOG1_WSR);
   putreg16(WDOG_KEEP_ALIVE_KEY2, IMXRT_WDOG1_WSR);
 
-  spin_unlock_irqrestore(NULL, flags);
+  spin_unlock_irqrestore(&priv->lock, flags);
 
   return OK;
 }
@@ -353,18 +358,18 @@ static int imxrt_wdog_settimeout(FAR struct watchdog_lowerhalf_s *lower,
 
 void imxrt_wdog_initialize(void)
 {
-  FAR struct imxrt_wdog_lower *priv = &g_wdgdev;
+  struct imxrt_wdog_lower *priv = &g_wdgdev;
 
   priv->ops = &g_wdgops;
   priv->timeout = WDOG_MIN;
 
+  spin_lock_init(&g_wdgdev.lock);
+
   /* Register the watchdog driver at the path */
 
   wdinfo("Entry: devpath=%s\n", DEVPATH);
-  watchdog_register(DEVPATH, (FAR struct watchdog_lowerhalf_s *)priv);
+  watchdog_register(DEVPATH, (struct watchdog_lowerhalf_s *)priv);
 }
-
-#endif /* CONFIG_WATCHDOG && CONFIG_IMXRT_WDOG */
 
 /****************************************************************************
  * Name: imxrt_wdog_disable
@@ -393,9 +398,11 @@ void imxrt_wdog_disable_all(void)
       putreg16(reg, IMXRT_WDOG2_WCR);
     }
 
-  flags = enter_critical_section();
+  flags = spin_lock_irqsave(&g_wdgdev.lock);
   putreg32(RTWDOG_UPDATE_KEY, IMXRT_RTWDOG_CNT);
   putreg32(0xffff, IMXRT_RTWDOG_TOVAL);
   modifyreg32(IMXRT_RTWDOG_CS, RTWDOG_CS_EN, RTWDOG_CS_UPDATE);
-  leave_critical_section(flags);
+  spin_unlock_irqrestore(&g_wdgdev.lock, flags);
 }
+
+#endif /* CONFIG_WATCHDOG && CONFIG_IMXRT_WDOG */

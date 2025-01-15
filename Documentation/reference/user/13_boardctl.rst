@@ -88,7 +88,7 @@ Power Management
    Manage power state transition and query. The supplied argument
    indicates the specific PM operation to perform, which map to
    corresponding internal ``pm_<operation>`` functions
-   (see :doc:`/components/power`).
+   (see :doc:`/components/drivers/special/power/pm/index`).
    
    With this interface you can interact with PM handling arch/board logic
    (typically done in IDLE loop) or you can directly manage state transitions
@@ -171,8 +171,7 @@ Symbol Handling
    
    :configuration: This command is always available when
      CONFIG_BUILTIN is enabled, but does nothing unless
-     CONFIG_BUILD_PROTECTED and CONFIG_FS_BINFS are also
-     selected.
+     CONFIG_BUILD_PROTECTED is also selected.
      
 USB
 ---
@@ -185,7 +184,7 @@ USB
    
    :configuration: CONFIG_BOARDCTL && CONFIG_BOARDCTL_USBDEVCTRL
    
-   :dependencies: Board logic must provide ``board_<usbdev>_initialize()`.
+   :dependencies: Board logic must provide `board_<usbdev>_initialize()`.
    
 Graphics
 --------
@@ -208,7 +207,7 @@ Graphics
    
    :configuration: CONFIG_VNCSERVER
    
-   :dependencies: VNC server provides :c:func:`vnc_default_fbinitialize`.
+   :dependencies: VNC server provides :c:func:`nx_vnc_fbinitialize`.
    
 .. c:macro:: BOARDIOC_NXTERM
 

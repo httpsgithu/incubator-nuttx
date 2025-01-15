@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/risc-v/src/fe310/fe310_memorymap.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -18,13 +20,14 @@
  *
  ****************************************************************************/
 
-#ifndef _ARCH_RISCV_SRC_FE310_FE310_MEMORYMAP_H
-#define _ARCH_RISCV_SRC_FE310_FE310_MEMORYMAP_H
+#ifndef __ARCH_RISCV_SRC_FE310_FE310_MEMORYMAP_H
+#define __ARCH_RISCV_SRC_FE310_FE310_MEMORYMAP_H
 
 /****************************************************************************
  * Included Files
  ****************************************************************************/
 
+#include "riscv_common_memorymap.h"
 #include "hardware/fe310_memorymap.h"
 #include "hardware/fe310_uart.h"
 #include "hardware/fe310_clint.h"
@@ -36,15 +39,14 @@
  * Pre-processor Definitions
  ****************************************************************************/
 
-/* Idle thread stack starts from _default_stack_limit */
+/* Idle thread stack starts from _ebss */
 
 #ifndef __ASSEMBLY__
-extern uintptr_t *_default_stack_limit;
-#define FE310_IDLESTACK_BASE  (uintptr_t)&_default_stack_limit
+#define FE310_IDLESTACK_BASE  (uintptr_t)_ebss
 #else
-#define FE310_IDLESTACK_BASE  _default_stack_limit
+#define FE310_IDLESTACK_BASE  _ebss
 #endif
 
-#define FE310_IDLESTACK_TOP  (FE310_IDLESTACK_BASE + CONFIG_IDLETHREAD_STACKSIZE)
+#define FE310_IDLESTACK_TOP  (FE310_IDLESTACK_BASE + SMP_STACK_SIZE)
 
-#endif /* _ARCH_RISCV_SRC_FE310_FE310_MEMORYMAP_H */
+#endif /* __ARCH_RISCV_SRC_FE310_FE310_MEMORYMAP_H */

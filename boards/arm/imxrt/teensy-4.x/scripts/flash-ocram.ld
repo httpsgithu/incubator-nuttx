@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/imxrt/teensy-4.x/scripts/flash-ocram.ld
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -29,7 +31,7 @@
  * 256Kib to OCRRAM, 128Kib ITCM and 128Kib DTCM.
  * This can be changed by using a dcd by minipulating
  * IOMUX GPR16 and GPR17.
- * The configuartion we will use is 384Kib to OCRRAM, 0Kib ITCM and
+ * The configuration we will use is 384Kib to OCRRAM, 0Kib ITCM and
  * 128Kib DTCM.
  *
  * This is the OCRAM inker script.
@@ -122,7 +124,8 @@ SECTIONS
 	.init_section :
 	{
 		_sinit = ABSOLUTE(.);
-		*(.init_array .init_array.*)
+		KEEP(*(SORT_BY_INIT_PRIORITY(.init_array.*) SORT_BY_INIT_PRIORITY(.ctors.*)))
+		KEEP(*(.init_array EXCLUDE_FILE(*crtbegin.o *crtbegin?.o *crtend.o *crtend?.o) .ctors))
 		_einit = ABSOLUTE(.);
 	} > flash
 

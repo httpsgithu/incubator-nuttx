@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/stm32h7/nucleo-h743zi2/src/stm32_bringup.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -37,6 +39,14 @@
 #include "stm32_usbhost.h"
 #endif
 
+#ifdef CONFIG_STM32H7_FDCAN
+#include "stm32_fdcan_sock.h"
+#endif
+
+#ifdef CONFIG_SYSTEMTICK_HOOK
+#include <semaphore.h>
+#endif
+
 #include "nucleo-h743zi2.h"
 
 /****************************************************************************
@@ -66,7 +76,7 @@ int stm32_bringup(void)
 {
   int ret;
 #ifdef CONFIG_RAMMTD
-  FAR uint8_t *ramstart;
+  uint8_t *ramstart;
 #endif
 
   UNUSED(ret);
@@ -95,7 +105,7 @@ int stm32_bringup(void)
 #ifdef CONFIG_RAMMTD
   /* Create a RAM MTD device if configured */
 
-  ramstart = (FAR uint8_t *)kmm_malloc(128 * 1024);
+  ramstart = kmm_malloc(128 * 1024);
   if (ramstart == NULL)
     {
       syslog(LOG_ERR, "ERROR: Allocation for RAM MTD failed\n");
@@ -104,7 +114,7 @@ int stm32_bringup(void)
     {
       /* Initialized the RAM MTD */
 
-      FAR struct mtd_dev_s *mtd = rammtd_initialize(ramstart, 128 * 1024);
+      struct mtd_dev_s *mtd = rammtd_initialize(ramstart, 128 * 1024);
       if (mtd == NULL)
         {
           syslog(LOG_ERR, "ERROR: rammtd_initialize failed\n");
@@ -174,5 +184,93 @@ int stm32_bringup(void)
     }
 #endif
 
+#ifdef CONFIG_ADC
+  /* Initialize ADC and register the ADC driver. */
+
+  ret = stm32_adc_setup();
+  if (ret < 0)
+    {
+      syslog(LOG_ERR, "ERROR: stm32_adc_setup failed: %d\n", ret);
+    }
+#endif /* CONFIG_ADC */
+
+#ifdef CONFIG_DEV_GPIO
+  /* Register the GPIO driver */
+
+  ret = stm32_gpio_initialize();
+  if (ret < 0)
+    {
+      syslog(LOG_ERR, "Failed to initialize GPIO Driver: %d\n", ret);
+      return ret;
+    }
+#endif
+
+#ifdef CONFIG_NETDEV_LATEINIT
+
+#  ifdef CONFIG_STM32H7_FDCAN1
+  stm32_fdcansockinitialize(0);
+#  endif
+
+#  ifdef CONFIG_STM32H7_FDCAN2
+  stm32_fdcansockinitialize(1);
+#  endif
+
+#endif
+
+#ifdef CONFIG_SENSORS_QENCODER
+#ifdef CONFIG_STM32H7_TIM1_QE
+  ret = stm32_qencoder_initialize("/dev/qe0", 1);
+  if (ret < 0)
+    {
+      syslog(LOG_ERR,
+             "ERROR: Failed to register the qencoder: %d\n",
+             ret);
+      return ret;
+    }
+#endif
+
+#ifdef CONFIG_STM32H7_TIM3_QE
+  ret = stm32_qencoder_initialize("/dev/qe2", 3);
+  if (ret < 0)
+    {
+      syslog(LOG_ERR,
+             "ERROR: Failed to register the qencoder: %d\n",
+             ret);
+      return ret;
+    }
+#endif
+
+#ifdef CONFIG_STM32H7_TIM4_QE
+  ret = stm32_qencoder_initialize("/dev/qe3", 4);
+  if (ret < 0)
+    {
+      syslog(LOG_ERR,
+             "ERROR: Failed to register the qencoder: %d\n",
+             ret);
+      return ret;
+    }
+#endif
+#endif
+
+#ifdef CONFIG_PWM
+  /* Initialize PWM and register the PWM device. */
+
+  ret = stm32_pwm_setup();
+  if (ret < 0)
+    {
+      syslog(LOG_ERR, "ERROR: stm32_pwm_setup() failed: %d\n", ret);
+    }
+#endif
+
   return OK;
 }
+
+#ifdef CONFIG_SYSTEMTICK_HOOK
+
+sem_t g_waitsem;
+
+void board_timerhook(void)
+{
+  (void)sem_post(&g_waitsem);
+}
+#endif

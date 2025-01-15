@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/xtensa/src/common/xtensa_initialize.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -22,27 +24,19 @@
  * Included Files
  ****************************************************************************/
 
-#include <nuttx/config.h>
-
-#include <debug.h>
-
 #include <nuttx/arch.h>
 #include <nuttx/board.h>
-#include <nuttx/drivers/drivers.h>
-#include <nuttx/fs/loop.h>
-#include <nuttx/net/loopback.h>
-#include <nuttx/net/tun.h>
-#include <nuttx/net/telnet.h>
-#include <nuttx/note/note_driver.h>
-#include <nuttx/syslog/syslog_console.h>
-#include <nuttx/serial/pty.h>
-#include <nuttx/crypto/crypto.h>
-#include <nuttx/power/pm.h>
-
 #include <arch/board/board.h>
 
 #include "xtensa.h"
-#include "chip.h"
+
+/****************************************************************************
+ * Public Data
+ ****************************************************************************/
+
+/* g_interrupt_context store irq status */
+
+volatile bool g_interrupt_context[CONFIG_SMP_NCPUS];
 
 /****************************************************************************
  * Private Functions
@@ -60,21 +54,11 @@
 #if defined(CONFIG_STACK_COLORATION) && CONFIG_ARCH_INTERRUPTSTACK > 15
 static inline void xtensa_color_intstack(void)
 {
-#ifdef CONFIG_SMP
-  uint32_t *ptr = (uint32_t *)xtensa_intstack_alloc();
-#else
-  uint32_t *ptr = (uint32_t *)&g_intstackalloc;
-#endif
-  ssize_t size;
+  int cpu;
 
-#ifdef CONFIG_SMP
-  for (size = INTSTACK_SIZE * CONFIG_SMP_NCPUS;
-#else
-  for (size = INTSTACK_SIZE;
-#endif
-       size > 0; size -= sizeof(uint32_t))
+  for (cpu = 0; cpu < CONFIG_SMP_NCPUS; cpu++)
     {
-      *ptr++ = INTSTACK_COLOR;
+      xtensa_stack_color((void *)up_get_intstackbase(cpu), INTSTACK_SIZE);
     }
 }
 #else
@@ -104,20 +88,11 @@ static inline void xtensa_color_intstack(void)
 
 void up_initialize(void)
 {
-  xtensa_color_intstack();
-
-#ifdef CONFIG_SMP
-  int i;
-
-  /* Initialize global variables */
-
-  for (i = 0; i < CONFIG_SMP_NCPUS; i++)
-    {
-      g_current_regs[i] = NULL;
-    }
-#else
-  CURRENT_REGS = NULL;
+#if XCHAL_CP_NUM > 0
+  xtensa_set_cpenable(CONFIG_XTENSA_CP_INITSET);
 #endif
+
+  xtensa_color_intstack();
 
   /* Add any extra memory fragments to the memory manager */
 
@@ -133,12 +108,6 @@ void up_initialize(void)
   xtensa_pminitialize();
 #endif
 
-  /* Initialize the internal heap */
-
-#ifdef CONFIG_XTENSA_IMEM_USE_SEPARATE_HEAP
-  xtensa_imm_initialize();
-#endif
-
 #ifdef CONFIG_ARCH_DMA
   /* Initialize the DMA subsystem if the weak function xtensa_dma_initialize
    * has been brought into the build
@@ -152,93 +121,19 @@ void up_initialize(void)
     }
 #endif
 
-  /* Register devices */
-
-#if defined(CONFIG_DEV_NULL)
-  devnull_register();   /* Standard /dev/null */
-#endif
-
-#if defined(CONFIG_DEV_RANDOM)
-  devrandom_register(); /* Standard /dev/random */
-#endif
-
-#if defined(CONFIG_DEV_URANDOM)
-  devurandom_register();   /* Standard /dev/urandom */
-#endif
-
-#if defined(CONFIG_DEV_ZERO)
-  devzero_register();   /* Standard /dev/zero */
-#endif
-
-#if defined(CONFIG_DEV_LOOP)
-  loop_register();      /* Standard /dev/loop */
-#endif
-
-#if defined(CONFIG_DRIVER_NOTE)
-  note_register();      /* Non-standard /dev/note */
-#endif
-
   /* Initialize the serial device driver */
 
 #ifdef USE_SERIALDRIVER
   xtensa_serialinit();
 #endif
 
-#ifdef CONFIG_RPMSG_UART
-  rpmsg_serialinit();
-#endif
-
-  /* Initialize the console device driver (if it is other than the standard
-   * serial driver).
-   */
-
-#if defined(CONFIG_CONSOLE_SYSLOG)
-  syslog_console_init();
-#endif
-
-#ifdef CONFIG_PSEUDOTERM_SUSV1
-  /* Register the master pseudo-terminal multiplexor device */
-
-  ptmx_register();
-#endif
-
-#if defined(CONFIG_CRYPTO)
-  /* Initialize the HW crypto and /dev/crypto */
-
-  up_cryptoinitialize();
-#endif
-
-#ifdef CONFIG_CRYPTO_CRYPTODEV
-  devcrypto_register();
-#endif
-
-#ifndef CONFIG_NETDEV_LATEINIT
   /* Initialize the network */
 
-  up_netinitialize();
-#endif
-
-#ifdef CONFIG_NET_LOOPBACK
-  /* Initialize the local loopback device */
-
-  localhost_initialize();
-#endif
-
-#ifdef CONFIG_NET_TUN
-  /* Initialize the TUN device */
-
-  tun_initialize();
-#endif
-
-#ifdef CONFIG_NETDEV_TELNET
-  /* Initialize the Telnet session factory */
-
-  telnet_initialize();
-#endif
+  xtensa_netinitialize();
 
   /* Initialize USB -- device and/or host */
 
-  up_usbinitialize();
+  xtensa_usbinitialize();
 
   board_autoled_on(LED_IRQSENABLED);
 }

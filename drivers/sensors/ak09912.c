@@ -1,6 +1,8 @@
 /****************************************************************************
  * drivers/sensors/ak09912.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -85,7 +87,7 @@
  * The unit is 10 millisecond.
  */
 
-#define AK09912_POLLING_TIMEOUT (1)  // 10 ms
+#define AK09912_POLLING_TIMEOUT (1)  /* 10 ms */
 
 /* The parameter for compensating. */
 
@@ -163,9 +165,9 @@ struct ak09912_dev_s
 static int ak09912_open(FAR struct file *filep);
 static int ak09912_close(FAR struct file *filep);
 static ssize_t ak09912_read(FAR struct file *filep, FAR char *buffer,
-                           size_t buflen);
-static ssize_t ak09912_write(FAR struct file *filep, FAR const char *buffer,
                             size_t buflen);
+static ssize_t ak09912_write(FAR struct file *filep, FAR const char *buffer,
+                             size_t buflen);
 static int ak09912_ioctl(FAR struct file *filep, int cmd, unsigned long arg);
 
 /****************************************************************************
@@ -178,12 +180,8 @@ static const struct file_operations g_ak09912fops =
   ak09912_close,                 /* close */
   ak09912_read,                  /* read */
   ak09912_write,                 /* write */
-  0,                             /* seek */
+  NULL,                          /* seek */
   ak09912_ioctl,                 /* ioctl */
-#ifndef CONFIG_DISABLE_POLL
-  0,                             /* poll */
-#endif
-  0                              /* unlink */
 };
 
 /****************************************************************************
@@ -194,7 +192,7 @@ static const struct file_operations g_ak09912fops =
  * Name: ak09912_getreg8
  *
  * Description:
- *   Read from an 8-bit BMP280 register
+ *   Read from an 8-bit ak09912 register
  *
  ****************************************************************************/
 
@@ -231,7 +229,7 @@ static uint8_t ak09912_getreg8(FAR struct ak09912_dev_s *priv,
  * Name: ak09912_putreg8
  *
  * Description:
- *   Write to an 8-bit BMP280 register
+ *   Write to an 8-bit ak09912 register
  *
  ****************************************************************************/
 
@@ -516,7 +514,7 @@ static int ak09912_initialize(FAR struct ak09912_dev_s *priv)
 static int ak09912_open(FAR struct file *filep)
 {
   FAR struct inode        *inode = filep->f_inode;
-  FAR struct ak09912_dev_s *priv  = inode->i_private;
+  FAR struct ak09912_dev_s *priv = inode->i_private;
   int ret = 0;
 
   ret = ak09912_set_power_mode(priv, priv->mode);
@@ -540,7 +538,7 @@ static int ak09912_open(FAR struct file *filep)
 static int ak09912_close(FAR struct file *filep)
 {
   FAR struct inode        *inode = filep->f_inode;
-  FAR struct ak09912_dev_s *priv  = inode->i_private;
+  FAR struct ak09912_dev_s *priv = inode->i_private;
   int ret = 0;
 
   ret = ak09912_set_power_mode(priv, AKM_POWER_DOWN_MODE);
@@ -558,7 +556,7 @@ static int ak09912_close(FAR struct file *filep)
  ****************************************************************************/
 
 static ssize_t ak09912_read(FAR struct file *filep, FAR char *buffer,
-                           size_t buflen)
+                            size_t buflen)
 {
   FAR struct inode *inode = filep->f_inode;
   FAR struct ak09912_dev_s *priv = inode->i_private;
@@ -604,7 +602,7 @@ static ssize_t ak09912_read(FAR struct file *filep, FAR char *buffer,
  ****************************************************************************/
 
 static ssize_t ak09912_write(FAR struct file *filep, FAR const char *buffer,
-                            size_t buflen)
+                             size_t buflen)
 {
   return -ENOSYS;
 }
@@ -616,7 +614,7 @@ static ssize_t ak09912_write(FAR struct file *filep, FAR const char *buffer,
 static int ak09912_ioctl(FAR struct file *filep, int cmd, unsigned long arg)
 {
   FAR struct inode *inode = filep->f_inode;
-  FAR struct ak09912_dev_s *priv  = inode->i_private;
+  FAR struct ak09912_dev_s *priv = inode->i_private;
   int ret = OK;
 
   switch (cmd)

@@ -1,6 +1,8 @@
 /****************************************************************************
  * drivers/loop/loop.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -38,10 +40,8 @@
  * Private Function Prototypes
  ****************************************************************************/
 
-static ssize_t loop_read(FAR struct file *filep, FAR char *buffer,
-                 size_t buflen);
-static ssize_t loop_write(FAR struct file *filep, FAR const char *buffer,
-                 size_t buflen);
+static ssize_t loop_readv(FAR struct file *filep, FAR struct uio *uio);
+static ssize_t loop_writev(FAR struct file *filep, FAR struct uio *uio);
 static int     loop_ioctl(FAR struct file *filep, int cmd,
                  unsigned long arg);
 
@@ -53,11 +53,15 @@ static const struct file_operations g_loop_fops =
 {
   NULL,          /* open */
   NULL,          /* close */
-  loop_read,     /* read */
-  loop_write,    /* write */
+  NULL,          /* read */
+  NULL,          /* write */
   NULL,          /* seek */
   loop_ioctl,    /* ioctl */
-  NULL           /* poll */
+  NULL,          /* mmap */
+  NULL,          /* truncate */
+  NULL,          /* poll */
+  loop_readv,    /* readv */
+  loop_writev    /* writev */
 };
 
 /****************************************************************************
@@ -65,23 +69,26 @@ static const struct file_operations g_loop_fops =
  ****************************************************************************/
 
 /****************************************************************************
- * Name: loop_read
+ * Name: loop_readv
  ****************************************************************************/
 
-static ssize_t loop_read(FAR struct file *filep, FAR char *buffer,
-                         size_t len)
+static ssize_t loop_readv(FAR struct file *filep, FAR struct uio *uio)
 {
   return 0; /* Return EOF */
 }
 
 /****************************************************************************
- * Name: loop_write
+ * Name: loop_writev
  ****************************************************************************/
 
-static ssize_t loop_write(FAR struct file *filep, FAR const char *buffer,
-                          size_t len)
+static ssize_t loop_writev(FAR struct file *filep, FAR struct uio *uio)
 {
-  return len; /* Say that everything was written */
+  /* Say that everything was written */
+
+  size_t ret = uio->uio_resid;
+
+  uio_advance(uio, ret);
+  return ret;
 }
 
 /****************************************************************************

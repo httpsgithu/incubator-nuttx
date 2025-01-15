@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/renesas/src/rx65n/rx65n_usbhost.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -18,8 +20,8 @@
  *
  ****************************************************************************/
 
-#ifndef __ARCH_RENESAS_SRC_RX65N_USBHOST_H
-#define __ARCH_RENESAS_SRC_RX65N_USBHOST_H
+#ifndef __ARCH_RENESAS_SRC_RX65N_RX65N_USBHOST_H
+#define __ARCH_RENESAS_SRC_RX65N_RX65N_USBHOST_H
 
 /****************************************************************************
  * Included Files
@@ -117,7 +119,7 @@
 #endif
 
 #if CONFIG_RX65N_USBHOST_NTDS < 2
-#  error "Insufficent TDs"
+#  error "Insufficient TDs"
 #endif
 
 /* Derived size of user transfer descriptor (TD) memory. */
@@ -235,7 +237,7 @@ extern "C"
 
 #ifdef CONFIG_USBHOST
 struct usbhost_connection_s;
-FAR struct usbhost_connection_s *rx65n_usbhost_initialize(int controller);
+struct usbhost_connection_s *rx65n_usbhost_initialize(int controller);
 #endif
 
 #undef EXTERN
@@ -245,4 +247,4 @@ FAR struct usbhost_connection_s *rx65n_usbhost_initialize(int controller);
 
 #endif /* __ASSEMBLY__ */
 #endif /* #if defined(CONFIG_USBHOST) && defined(RX65N_NUSBHOST) > 0 */
-#endif /* __ARCH_RENESAS_SRC_RX65N_USBHOST_H */
+#endif /* __ARCH_RENESAS_SRC_RX65N_RX65N_USBHOST_H */

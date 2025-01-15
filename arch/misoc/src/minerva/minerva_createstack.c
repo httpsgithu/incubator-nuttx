@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/misoc/src/minerva/minerva_createstack.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -37,26 +39,6 @@
 #include <arch/board/board.h>
 
 #include "minerva.h"
-
-/****************************************************************************
- * Pre-processor Macros
- ****************************************************************************/
-
-/* MINERVA requires at least a 4-byte stack alignment.  For floating point
- * use, however, the stack must be aligned to 8-byte addresses.
- */
-
-#ifdef CONFIG_LIBC_FLOATINGPOINT
-#  define STACK_ALIGNMENT   8
-#else
-#  define STACK_ALIGNMENT   4
-#endif
-
-/* Stack alignment macros */
-
-#define STACK_ALIGN_MASK    (STACK_ALIGNMENT-1)
-#define STACK_ALIGN_DOWN(a) ((a) & ~STACK_ALIGN_MASK)
-#define STACK_ALIGN_UP(a)   (((a) + STACK_ALIGN_MASK) & ~STACK_ALIGN_MASK)
 
 /****************************************************************************
  * Public Functions
@@ -99,7 +81,7 @@
  *
  ****************************************************************************/
 
-int up_create_stack(FAR struct tcb_s *tcb, size_t stack_size, uint8_t ttype)
+int up_create_stack(struct tcb_s *tcb, size_t stack_size, uint8_t ttype)
 {
 #ifdef CONFIG_TLS_ALIGNED
   /* The allocated stack size must not exceed the maximum possible for the

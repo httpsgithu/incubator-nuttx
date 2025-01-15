@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/cxd56xx/cxd56_timerisr.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -34,7 +36,6 @@
 #include "nvic.h"
 #include "clock/clock.h"
 #include "arm_internal.h"
-#include "arm_arch.h"
 #include "cxd56_powermgr.h"
 #include "cxd56_timerisr.h"
 #include "cxd56_clock.h"
@@ -66,7 +67,7 @@ static uint32_t g_systrvr;
  ****************************************************************************/
 
 static int cxd56_changeclock(uint8_t id);
-static int cxd56_timerisr(int irq, uint32_t *regs, FAR void *arg);
+static int cxd56_timerisr(int irq, uint32_t *regs, void *arg);
 
 /****************************************************************************
  * Private Functions
@@ -130,7 +131,7 @@ static int cxd56_changeclock(uint8_t id)
  *
  ****************************************************************************/
 
-static int cxd56_timerisr(int irq, uint32_t *regs, FAR void *arg)
+static int cxd56_timerisr(int irq, uint32_t *regs, void *arg)
 {
   /* Process timer interrupt */
 

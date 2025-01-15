@@ -1,6 +1,8 @@
 /****************************************************************************
  * mm/mm_gran/mm_graninit.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -126,19 +128,20 @@ GRAN_HANDLE gran_initialize(FAR void *heapstart, size_t heapsize,
    * correct size.
    */
 
-  priv = (FAR struct gran_s *)kmm_zalloc(SIZEOF_GRAN_S(ngranules));
+  priv = kmm_zalloc(SIZEOF_GRAN_S(ngranules));
   if (priv)
     {
       /* Initialize non-zero elements of the granules heap info structure */
 
       priv->log2gran  = log2gran;
+      priv->log2align = log2align;
       priv->ngranules = ngranules;
       priv->heapstart = alignedstart;
 
       /* Initialize mutual exclusion support */
 
 #ifndef CONFIG_GRAN_INTR
-      nxsem_init(&priv->exclsem, 0, 1);
+      nxmutex_init(&priv->lock);
 #endif
     }
 

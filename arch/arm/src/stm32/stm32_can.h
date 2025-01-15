@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/stm32/stm32_can.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -47,9 +49,6 @@
 #if STM32_NCAN < 1
 #  undef CONFIG_STM32_CAN1
 #endif
-
-#if defined(CONFIG_CAN) && \
-    (defined(CONFIG_STM32_CAN1) || defined(CONFIG_STM32_CAN2))
 
 /* CAN BAUD */
 
@@ -107,11 +106,13 @@ extern "C"
  * Public Function Prototypes
  ****************************************************************************/
 
+#ifdef CONFIG_STM32_CAN_CHARDRIVER
+
 /****************************************************************************
  * Name: stm32_caninitialize
  *
  * Description:
- *   Initialize the selected CAN port
+ *   Initialize the selected CAN port as character device
  *
  * Input Parameters:
  *   Port number (for hardware that has multiple CAN interfaces)
@@ -122,7 +123,27 @@ extern "C"
  ****************************************************************************/
 
 struct can_dev_s;
-FAR struct can_dev_s *stm32_caninitialize(int port);
+struct can_dev_s *stm32_caninitialize(int port);
+#endif
+
+#ifdef CONFIG_STM32_CAN_SOCKET
+
+/****************************************************************************
+ * Name: stm32_cansockinitialize
+ *
+ * Description:
+ *   Initialize the selected CAN port as SocketCAN interface
+ *
+ * Input Parameters:
+ *   Port number (for hardware that has multiple CAN interfaces)
+ *
+ * Returned Value:
+ *   OK on success; Negated errno on failure.
+ *
+ ****************************************************************************/
+
+int stm32_cansockinitialize(int port);
+#endif
 
 #undef EXTERN
 #if defined(__cplusplus)
@@ -130,5 +151,4 @@ FAR struct can_dev_s *stm32_caninitialize(int port);
 #endif
 
 #endif /* __ASSEMBLY__ */
-#endif /* CONFIG_CAN && (CONFIG_STM32_CAN1 || CONFIG_STM32_CAN2) */
 #endif /* __ARCH_ARM_SRC_STM32_STM32_CAN_H */

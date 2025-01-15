@@ -26,14 +26,24 @@
 
 #include <assert.h>
 #include <debug.h>
+#include <netinet/arp.h>
+#include <sys/param.h>
 
 #include <nuttx/kmalloc.h>
-#include <nuttx/net/arp.h>
 #include <nuttx/wireless/wireless.h>
 
 #include "esp32_wifi_adapter.h"
 #include "esp32_wifi_utils.h"
-#include "espidf_wifi.h"
+#include "esp32_wireless.h"
+
+#include "esp_log.h"
+#include "esp_mac.h"
+#include "esp_private/phy.h"
+#include "esp_private/wifi.h"
+#include "esp_random.h"
+#include "esp_timer.h"
+#include "rom/ets_sys.h"
+#include "soc/soc_caps.h"
 
 /****************************************************************************
  * Pre-processor Definitions
@@ -44,18 +54,13 @@
 #define ESP_IW_EVENT_SIZE(field) \
   (offsetof(struct iw_event, u) + sizeof(((union iwreq_data *)0)->field))
 
-#ifdef CONFIG_ESP32_WIFI_SCAN_RESULT_SIZE 
+#ifdef CONFIG_ESP32_WIFI_SCAN_RESULT_SIZE
 #  define WIFI_SCAN_RESULT_SIZE      CONFIG_ESP32_WIFI_SCAN_RESULT_SIZE
 #else
 #  define WIFI_SCAN_RESULT_SIZE      (4096)
 #endif
 
 #define SCAN_TIME_SEC                (5)
-#define SSID_LEN                     (33)
-
-#ifndef MIN
-#  define MIN(a,b) ((a) < (b) ? (a) : (b))
-#endif
 
 /* Maximum number of channels for Wi-Fi 2.4Ghz */
 
@@ -86,8 +91,11 @@ struct wifi_scan_result
  * Private Data
  ****************************************************************************/
 
-static struct wifi_scan_result g_scan_priv;
-static uint8_t g_channel_num = 0;
+static struct wifi_scan_result g_scan_priv =
+{
+  .scan_signal = SEM_INITIALIZER(0),
+};
+static uint8_t g_channel_num;
 static uint8_t g_channel_list[CHANNEL_MAX_NUM];
 
 /****************************************************************************
@@ -113,13 +121,13 @@ int esp_wifi_start_scan(struct iwreq *iwr)
 {
   struct wifi_scan_result *priv = &g_scan_priv;
   wifi_scan_config_t *config = NULL;
-  uint8_t target_ssid[SSID_LEN];
   struct iw_scan_req *req;
   int ret = 0;
   int i;
   uint8_t target_mac[MAC_LEN];
+  uint8_t target_ssid[SSID_MAX_LEN + 1];
+  memset(target_ssid, 0x0, sizeof(SSID_MAX_LEN + 1));
 
-  memset(target_ssid, 0x0, sizeof(SSID_LEN));
   if (iwr == NULL)
     {
       wlerr("ERROR: Invalid ioctl cmd.\n");
@@ -131,7 +139,7 @@ int esp_wifi_start_scan(struct iwreq *iwr)
       return OK;
     }
 
-  config = kmm_malloc(sizeof(wifi_scan_config_t));
+  config = kmm_calloc(1, sizeof(wifi_scan_config_t));
   if (config == NULL)
     {
       wlerr("ERROR: Cannot allocate result buffer\n");
@@ -140,7 +148,7 @@ int esp_wifi_start_scan(struct iwreq *iwr)
 
   g_channel_num = 0;
   memset(g_channel_list, 0x0, CHANNEL_MAX_NUM);
-  memset(config, 0x0, sizeof(wifi_scan_config_t));
+
   if (iwr->u.data.pointer &&
       iwr->u.data.length >= sizeof(struct iw_scan_req))
     {
@@ -152,6 +160,8 @@ int esp_wifi_start_scan(struct iwreq *iwr)
         {
           /* Scan specific ESSID */
 
+          config->show_hidden = true;
+          config->bssid = NULL;
           memcpy(&target_ssid[0], req->essid, req->essid_len);
           config->ssid = &target_ssid[0];
           config->ssid[req->essid_len] = '\0';
@@ -195,12 +205,11 @@ int esp_wifi_start_scan(struct iwreq *iwr)
     }
 
   esp_wifi_start();
-
-  esp_wifi_scan_stop();
   ret = esp_wifi_scan_start(config, false);
   if (ret != OK)
     {
       wlerr("ERROR: Scan error, ret: %d\n", ret);
+      ret = ERROR;
     }
   else
     {
@@ -225,10 +234,13 @@ int esp_wifi_start_scan(struct iwreq *iwr)
     {
       kmm_free(config);
       config = NULL;
-      wlinfo("INFO: start scan\n");
     }
 
-  g_scan_priv.scan_status = ESP_SCAN_RUN;
+  if (ret == OK)
+    {
+      wlinfo("INFO: start scan\n");
+      g_scan_priv.scan_status = ESP_SCAN_RUN;
+    }
 
   return ret;
 }
@@ -251,25 +263,30 @@ int esp_wifi_start_scan(struct iwreq *iwr)
 int esp_wifi_get_scan_results(struct iwreq *iwr)
 {
   int ret = OK;
-  struct timespec abstime;
   static bool scan_block = false;
   struct wifi_scan_result *priv = &g_scan_priv;
 
   if (g_scan_priv.scan_status == ESP_SCAN_RUN)
     {
-      if (scan_block == false)
+      irqstate_t irqstate = enter_critical_section();
+      if (!scan_block)
         {
           scan_block = true;
-          clock_gettime(CLOCK_REALTIME, &abstime);
-          abstime.tv_sec += SCAN_TIME_SEC;
-          nxsem_timedwait(&priv->scan_signal, &abstime);
+          leave_critical_section(irqstate);
+          nxsem_tickwait(&priv->scan_signal, SEC2TICK(SCAN_TIME_SEC));
           scan_block = false;
         }
       else
         {
+          leave_critical_section(irqstate);
           ret = -EINVAL;
           goto exit_failed;
         }
+    }
+  else if (g_scan_priv.scan_status == ESP_SCAN_DISABLED)
+    {
+      ret = -EINVAL;
+      goto exit_failed;
     }
 
   if ((iwr == NULL) || (g_scan_priv.scan_status != ESP_SCAN_DONE))
@@ -278,13 +295,20 @@ int esp_wifi_get_scan_results(struct iwreq *iwr)
       goto exit_failed;
     }
 
-  if (!priv->scan_result)
+  if (priv->scan_result == NULL)
     {
       /* Result have already been requested */
 
       ret = OK;
       iwr->u.data.length = 0;
       goto exit_failed;
+    }
+
+  if (priv->scan_result_size <= 0)
+    {
+      ret = OK;
+      iwr->u.data.length = 0;
+      goto exit_free_buffer;
     }
 
   if (iwr->u.data.pointer == NULL ||
@@ -295,14 +319,7 @@ int esp_wifi_get_scan_results(struct iwreq *iwr)
       ret = -E2BIG;
       iwr->u.data.pointer = NULL;
       iwr->u.data.length = priv->scan_result_size;
-      goto exit_failed;
-    }
-
-  if (priv->scan_result_size <= 0)
-    {
-      ret = OK;
-      iwr->u.data.length = 0;
-      goto exit_free_buffer;
+      return ret;
     }
 
   /* Copy result to user buffer */
@@ -354,23 +371,29 @@ void esp_wifi_scan_event_parse(void)
   uint8_t bss_count = 0;
   bool parse_done = false;
 
+  if (priv->scan_status != ESP_SCAN_RUN)
+    {
+      return;
+    }
+
   esp_wifi_scan_get_ap_num(&bss_total);
   if (bss_total == 0)
     {
       priv->scan_status = ESP_SCAN_DONE;
       wlinfo("INFO: None AP is scanned\n");
+      nxsem_post(&priv->scan_signal);
       return;
     }
 
-  ap_list_buffer = kmm_malloc(bss_total * sizeof(wifi_ap_record_t));
+  ap_list_buffer = kmm_calloc(bss_total, sizeof(wifi_ap_record_t));
   if (ap_list_buffer == NULL)
     {
       priv->scan_status = ESP_SCAN_DONE;
-      wlerr("ERROR: Failed to malloc buffer to print scan results");
+      wlerr("ERROR: Failed to calloc buffer to print scan results");
+      nxsem_post(&priv->scan_signal);
       return;
     }
 
-  memset(ap_list_buffer, 0x0, sizeof(ap_list_buffer));
   if (esp_wifi_scan_get_ap_records(&bss_total,
               (wifi_ap_record_t *)ap_list_buffer) == OK)
     {
@@ -380,6 +403,7 @@ void esp_wifi_scan_event_parse(void)
       size_t essid_len_aligned;
       bool is_target_channel = true;
       int i;
+
       for (bss_count = 0; bss_count < bss_total; bss_count++)
         {
           if (g_channel_num > 1)
@@ -399,7 +423,7 @@ void esp_wifi_scan_event_parse(void)
               is_target_channel = true;
             }
 
-          if (is_target_channel == true)
+          if (is_target_channel)
             {
               result_size = WIFI_SCAN_RESULT_SIZE - priv->scan_result_size;
 
@@ -424,16 +448,16 @@ void esp_wifi_scan_event_parse(void)
               /* Copy ESSID */
 
               essid_len = MIN(strlen((const char *)
-                                    ap_list_buffer[bss_count].ssid), 32);
+                              ap_list_buffer[bss_count].ssid), SSID_MAX_LEN);
               essid_len_aligned = (essid_len + 3) & -4;
-              if (result_size < ESP_IW_EVENT_SIZE(essid)+essid_len_aligned)
+              if (result_size < ESP_IW_EVENT_SIZE(essid) + essid_len_aligned)
                 {
                   goto scan_result_full;
                 }
 
               iwe = (struct iw_event *)
                     &priv->scan_result[priv->scan_result_size];
-              iwe->len = ESP_IW_EVENT_SIZE(essid)+essid_len_aligned;
+              iwe->len = ESP_IW_EVENT_SIZE(essid) + essid_len_aligned;
               iwe->cmd = SIOCGIWESSID;
               iwe->u.essid.flags = 0;
               iwe->u.essid.length = essid_len;
@@ -445,10 +469,12 @@ void esp_wifi_scan_event_parse(void)
               iwe->u.essid.pointer = (void *)sizeof(iwe->u.essid);
               memcpy(&iwe->u.essid + 1,
                     ap_list_buffer[bss_count].ssid, essid_len);
+
               wlinfo("INFO: ssid %s\n", ap_list_buffer[bss_count].ssid);
+
               priv->scan_result_size +=
-                    ESP_IW_EVENT_SIZE(essid)+essid_len_aligned;
-              result_size -= ESP_IW_EVENT_SIZE(essid)+essid_len_aligned;
+                    ESP_IW_EVENT_SIZE(essid) + essid_len_aligned;
+              result_size -= ESP_IW_EVENT_SIZE(essid) + essid_len_aligned;
 
               /* Copy link quality info */
 
@@ -462,7 +488,9 @@ void esp_wifi_scan_event_parse(void)
               iwe->len = ESP_IW_EVENT_SIZE(qual);
               iwe->cmd = IWEVQUAL;
               iwe->u.qual.qual = 0x00;
+
               wlinfo("INFO: signal %d\n", ap_list_buffer[bss_count].rssi);
+
               iwe->u.qual.level = ap_list_buffer[bss_count].rssi;
               iwe->u.qual.noise = 0x00;
               iwe->u.qual.updated = IW_QUAL_DBM | IW_QUAL_ALL_UPDATED;
@@ -529,7 +557,7 @@ scan_result_full:
 
   /* Continue instead of break to log dropped AP results */
 
-  if (parse_done == false)
+  if (!parse_done)
     {
       wlerr("ERROR: No more space in scan_result buffer\n");
     }
@@ -542,44 +570,4 @@ scan_result_full:
 
   priv->scan_status = ESP_SCAN_DONE;
   nxsem_post(&priv->scan_signal);
-}
-
-/****************************************************************************
- * Name: esp_wifi_scan_init
- *
- * Description:
- *   Initialize ESP32 Wi-Fi scan parameter.
- *
- * Input Parameters:
- *   None
- *
- * Returned Value:
- *   OK is returned on success. Otherwise, a negated errno value is returned.
- *
- ****************************************************************************/
-
-int esp_wifi_scan_init(void)
-{
-  int ret;
-  struct wifi_scan_result *scan_priv = &g_scan_priv;
-
-  /* Initialize the scan structure */
-
-  memset(scan_priv, 0, sizeof(*scan_priv));
-
-  /* Init scan signal */
-
-  if ((ret = nxsem_init(&scan_priv->scan_signal, 0, 0)) != OK)
-    {
-      wlerr("ERROR: Initialization scan signal failed: %d\n", ret);
-      return ret;
-    }
-
-  if ((ret = nxsem_set_protocol(&scan_priv->scan_signal,
-                                SEM_PRIO_NONE)) != OK)
-    {
-      wlerr("ERROR: Set semaphore protocol attribute failed: %d\n", ret);
-    }
-
-  return ret;
 }

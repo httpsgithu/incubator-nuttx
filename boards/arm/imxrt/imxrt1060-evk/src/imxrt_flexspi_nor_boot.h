@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/imxrt/imxrt1060-evk/src/imxrt_flexspi_nor_boot.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -91,7 +93,7 @@
 
 /* Located in Destination Memory */
 
-#define IMAGE_ENTRY_ADDRESS        ((uint32_t)&_vectors)
+#define IMAGE_ENTRY_ADDRESS        ((uint32_t)_vectors)
 #define IMAG_VECTOR_TABLE           LOCATE_IN_DEST(&g_image_vector_table)
 
 /****************************************************************************
@@ -156,7 +158,6 @@ struct boot_data_s
  ****************************************************************************/
 
 extern const struct boot_data_s g_boot_data;
-extern  const uint8_t g_dcd_data[];
-extern  const uint32_t  _vectors[];
+extern const uint8_t g_dcd_data[];
 
 #endif /* __BOARDS_ARM_IMXRT_IMXRT1060_EVK_SRC_IMXRT_FLEXSPI_NOR_BOOT_H */

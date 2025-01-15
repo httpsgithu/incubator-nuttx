@@ -1,21 +1,13 @@
 /****************************************************************************
  * arch/arm/src/lpc43xx/lpc43_i2c.c
  *
- *   Copyright (C) 2012, 2014-2016 Gregory Nutt. All rights reserved.
- *   Author: Gregory Nutt <gnutt@nuttx.org>
- *
- * Ported from the LPC17 version:
- *
- *   Copyright (C) 2011 Li Zhuoyi. All rights reserved.
- *   Author: Li Zhuoyi <lzyy.cn@gmail.com>
- *   History: 0.1 2011-08-20 initial version
- *
- * Derived from arch/arm/src/lpc31xx/lpc31_i2c.c
- *
- *   Author: David Hewson
- *
- *   Copyright (C) 2010-2011 Gregory Nutt. All rights reserved.
- *   Author: Gregory Nutt <gnutt@nuttx.org>
+ * SPDX-License-Identifier: BSD-3-Clause
+ * SPDX-FileCopyrightText: 2012, 2014-2016 Gregory Nutt. All rights reserved.
+ * SPDX-FileCopyrightText: 2010-2011 Gregory Nutt. All rights reserved.
+ * SPDX-FileCopyrightText: 2011 Li Zhuoyi. All rights reserved.
+ * SPDX-FileContributor: Gregory Nutt <gnutt@nuttx.org>
+ * SPDX-FileContributor: Li Zhuoyi <lzyy.cn@gmail.com>
+ * SPDX-FileContributor: David Hewson
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -63,6 +55,7 @@
 
 #include <nuttx/arch.h>
 #include <nuttx/wdog.h>
+#include <nuttx/mutex.h>
 #include <nuttx/semaphore.h>
 #include <nuttx/i2c/i2c_master.h>
 
@@ -70,9 +63,7 @@
 #include <arch/board/board.h>
 
 #include "chip.h"
-#include "arm_arch.h"
 #include "arm_internal.h"
-
 #include "lpc43_i2c.h"
 #include "lpc43_scu.h"
 #include "lpc43_ccu.h"
@@ -105,7 +96,7 @@ struct lpc43_i2cdev_s
   uint16_t         irqid;      /* IRQ for this device */
   uint32_t         base_freq;  /* branch frequency */
 
-  sem_t            mutex;      /* Only one thread can access at a time */
+  mutex_t          lock;       /* Only one thread can access at a time */
   sem_t            wait;       /* Place to wait for state machine completion */
   volatile uint8_t state;      /* State of state machine */
   struct wdog_s    timeout;    /* watchdog to timeout when bus hung */
@@ -119,10 +110,18 @@ struct lpc43_i2cdev_s
 };
 
 #ifdef CONFIG_LPC43_I2C0
-static struct lpc43_i2cdev_s g_i2c0dev;
+static struct lpc43_i2cdev_s g_i2c0dev =
+{
+  .lock = NXMUTEX_INITIALIZER,
+  .wait = SEM_INITIALIZER(0),
+};
 #endif
 #ifdef CONFIG_LPC43_I2C1
-static struct lpc43_i2cdev_s g_i2c1dev;
+static struct lpc43_i2cdev_s g_i2c1dev =
+{
+  .lock = NXMUTEX_INITIALIZER,
+  .wait = SEM_INITIALIZER(0),
+};
 #endif
 
 /****************************************************************************
@@ -131,14 +130,14 @@ static struct lpc43_i2cdev_s g_i2c1dev;
 
 static int  lpc43_i2c_start(struct lpc43_i2cdev_s *priv);
 static void lpc43_i2c_stop(struct lpc43_i2cdev_s *priv);
-static int  lpc43_i2c_interrupt(int irq, FAR void *context, FAR void *arg);
+static int  lpc43_i2c_interrupt(int irq, void *context, void *arg);
 static void lpc43_i2c_timeout(wdparm_t arg);
 static void lpc43_i2c_setfrequency(struct lpc43_i2cdev_s *priv,
               uint32_t frequency);
-static int  lpc43_i2c_transfer(FAR struct i2c_master_s *dev,
-              FAR struct i2c_msg_s *msgs, int count);
+static int  lpc43_i2c_transfer(struct i2c_master_s *dev,
+              struct i2c_msg_s *msgs, int count);
 #ifdef CONFIG_I2C_RESET
-static int lpc43_i2c_reset(FAR struct i2c_master_s * dev);
+static int lpc43_i2c_reset(struct i2c_master_s *dev);
 #endif
 
 /****************************************************************************
@@ -279,7 +278,7 @@ void lpc32_i2c_nextmsg(struct lpc43_i2cdev_s *priv)
  *
  ****************************************************************************/
 
-static int lpc43_i2c_interrupt(int irq, FAR void *context, FAR void *arg)
+static int lpc43_i2c_interrupt(int irq, void *context, void *arg)
 {
   struct lpc43_i2cdev_s *priv = (struct lpc43_i2cdev_s *)arg;
   struct i2c_msg_s *msg;
@@ -379,8 +378,8 @@ static int lpc43_i2c_interrupt(int irq, FAR void *context, FAR void *arg)
  *
  ****************************************************************************/
 
-static int lpc43_i2c_transfer(FAR struct i2c_master_s *dev,
-                              FAR struct i2c_msg_s *msgs, int count)
+static int lpc43_i2c_transfer(struct i2c_master_s *dev,
+                              struct i2c_msg_s *msgs, int count)
 {
   struct lpc43_i2cdev_s *priv = (struct lpc43_i2cdev_s *)dev;
   int ret;
@@ -389,7 +388,7 @@ static int lpc43_i2c_transfer(FAR struct i2c_master_s *dev,
 
   /* Get exclusive access to the I2C bus */
 
-  nxsem_wait(&priv->mutex);
+  nxmutex_lock(&priv->lock);
 
   /* Set up for the transfer */
 
@@ -410,7 +409,7 @@ static int lpc43_i2c_transfer(FAR struct i2c_master_s *dev,
 
   ret = lpc43_i2c_start(priv);
 
-  nxsem_post(&priv->mutex);
+  nxmutex_unlock(&priv->lock);
   return ret;
 }
 
@@ -429,7 +428,7 @@ static int lpc43_i2c_transfer(FAR struct i2c_master_s *dev,
  ****************************************************************************/
 
 #ifdef CONFIG_I2C_RESET
-static int lpc43_i2c_reset(FAR struct i2c_master_s * dev)
+static int lpc43_i2c_reset(struct i2c_master_s *dev)
 {
   return OK;
 }
@@ -521,23 +520,13 @@ struct i2c_master_s *lpc43_i2cbus_initialize(int port)
   else
 #endif
     {
+      leave_critical_section(flags);
       return NULL;
     }
 
   leave_critical_section(flags);
 
   putreg32(I2C_CONSET_I2EN, priv->base + LPC43_I2C_CONSET_OFFSET);
-
-  /* Initialize semaphores */
-
-  nxsem_init(&priv->mutex, 0, 1);
-  nxsem_init(&priv->wait, 0, 0);
-
-  /* The wait semaphore is used for signaling and, hence, should not have
-   * priority inheritance enabled.
-   */
-
-  nxsem_set_protocol(&priv->wait, SEM_PRIO_NONE);
 
   /* Attach Interrupt Handler */
 
@@ -561,9 +550,9 @@ struct i2c_master_s *lpc43_i2cbus_initialize(int port)
  *
  ****************************************************************************/
 
-int lpc43_i2cbus_uninitialize(FAR struct i2c_master_s * dev)
+int lpc43_i2cbus_uninitialize(struct i2c_master_s *dev)
 {
-  struct lpc43_i2cdev_s *priv = (struct lpc43_i2cdev_s *) dev;
+  struct lpc43_i2cdev_s *priv = (struct lpc43_i2cdev_s *)dev;
 
   putreg32(I2C_CONCLRT_I2ENC, priv->base + LPC43_I2C_CONCLR_OFFSET);
   up_disable_irq(priv->irqid);

@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/risc-v/src/rv32m1/rv32m1_linker.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -52,7 +54,7 @@
 #  define LOCATE_ITCM   locate_code(SECTION_ITCM)    /* System ITCM */
 #  define LOCATE_UITCM  locate_code(SECTION_UITCM)   /* User ITCM */
 #else
-#  define LOCATE_ITCM  
+#  define LOCATE_ITCM
 #  define LOCATE_UITCM
 #endif
 
@@ -66,11 +68,11 @@ extern "C"
 #endif
 
 #ifdef CONFIG_RV32M1_ITCM
-  EXTERN uint32_t _slitcm;        /* Start of ITCM LMA */
-  EXTERN uint32_t _svitcm;        /* Start of ITCM VMA */
-  EXTERN uint32_t _evitcm;        /* End+1 of ITCM VMA */
-  EXTERN uint32_t _suvitcm;       /* Start of User ITCM VMA */
-  EXTERN uint32_t _euvitcm;       /* End+1 of User ITCM VMA */
+  EXTERN uint8_t _slitcm[];        /* Start of ITCM LMA */
+  EXTERN uint8_t _svitcm[];        /* Start of ITCM VMA */
+  EXTERN uint8_t _evitcm[];        /* End+1 of ITCM VMA */
+  EXTERN uint8_t _suvitcm[];       /* Start of User ITCM VMA */
+  EXTERN uint8_t _euvitcm[];       /* End+1 of User ITCM VMA */
 #endif
 
 #undef EXTERN

@@ -1,6 +1,8 @@
 /****************************************************************************
  * libs/libc/stdio/lib_fclose.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -30,6 +32,10 @@
 #include <string.h>
 #include <errno.h>
 
+#ifdef CONFIG_FDSAN
+#  include <android/fdsan.h>
+#endif
+
 #include "libc.h"
 
 /****************************************************************************
@@ -55,8 +61,6 @@
 int fclose(FAR FILE *stream)
 {
   FAR struct streamlist *slist;
-  FAR FILE *prev = NULL;
-  FAR FILE *next;
   int errcode = EINVAL;
   int ret = ERROR;
   int status;
@@ -71,7 +75,7 @@ int fclose(FAR FILE *stream)
 
       if ((stream->fs_oflags & O_WROK) != 0)
         {
-          ret = lib_fflush(stream, true);
+          ret = lib_fflush(stream);
           errcode = get_errno();
         }
 
@@ -84,58 +88,46 @@ int fclose(FAR FILE *stream)
 
       /* Remove FILE structure from the stream list */
 
-      slist = nxsched_get_streams();
-      lib_stream_semtake(slist);
+      slist = lib_get_streams();
+      nxmutex_lock(&slist->sl_lock);
 
-      for (next = slist->sl_head; next; prev = next, next = next->fs_next)
+      sq_rem(&stream->fs_entry, &slist->sl_queue);
+
+      nxmutex_unlock(&slist->sl_lock);
+
+      /* Call user custom callback if it is not NULL. */
+
+      if (stream->fs_iofunc.close != NULL)
         {
-          if (next == stream)
-            {
-              if (next == slist->sl_head)
-                {
-                  slist->sl_head = next->fs_next;
-                }
-              else
-                {
-                  prev->fs_next = next->fs_next;
-                }
-
-              if (next == slist->sl_tail)
-                {
-                  slist->sl_tail = prev;
-                }
-
-              break;
-            }
+          status = stream->fs_iofunc.close(stream->fs_cookie);
+        }
+      else
+        {
+          int fd = (int)(intptr_t)stream->fs_cookie;
+#ifdef CONFIG_FDSAN
+          uint64_t tag;
+          tag = android_fdsan_create_owner_tag(ANDROID_FDSAN_OWNER_TYPE_FILE,
+                                               (uintptr_t)stream);
+          status = android_fdsan_close_with_tag(fd, tag);
+#else
+          status = close(fd);
+#endif
         }
 
-      lib_stream_semgive(slist);
-
-      /* Check that the underlying file descriptor corresponds to an an open
-       * file.
+      /* If close() returns an error but flush() did not then make sure
+       * that we return the close() error condition.
        */
 
-      if (stream->fs_fd >= 0)
+      if (ret == OK)
         {
-          /* Close the file descriptor and save the return status */
-
-          status = close(stream->fs_fd);
-
-          /* If close() returns an error but flush() did not then make sure
-           * that we return the close() error condition.
-           */
-
-          if (ret == OK)
-            {
-              ret = status;
-              errcode = get_errno();
-            }
+          ret = status;
+          errcode = get_errno();
         }
 
 #ifndef CONFIG_STDIO_DISABLE_BUFFERING
-      /* Destroy the semaphore */
+      /* Destroy the mutex */
 
-      _SEM_DESTROY(&stream->fs_sem);
+      nxrmutex_destroy(&stream->fs_lock);
 
       /* Release the buffer */
 

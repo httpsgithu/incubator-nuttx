@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/stm32/nucleo-g431rb/src/stm32_cordic.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -48,9 +50,9 @@
 
 int stm32_cordic_setup(void)
 {
-  FAR struct cordic_lowerhalf_s *cordic      = NULL;
-  static bool                    initialized = false;
-  int                            ret         = OK;
+  struct cordic_lowerhalf_s *cordic      = NULL;
+  static bool                initialized = false;
+  int                        ret         = OK;
 
   /* Have we already initialized? */
 

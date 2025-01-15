@@ -1,6 +1,8 @@
 /****************************************************************************
  * include/nuttx/timers/rpmsg_rtc.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -42,7 +44,7 @@ extern "C"
 
 #ifdef CONFIG_RTC_RPMSG
 #ifndef CONFIG_RTC_RPMSG_SERVER
-FAR struct rtc_lowerhalf_s *rpmsg_rtc_initialize(int minor);
+FAR struct rtc_lowerhalf_s *rpmsg_rtc_initialize(void);
 #else
 FAR struct rtc_lowerhalf_s *rpmsg_rtc_server_initialize(
                                          FAR struct rtc_lowerhalf_s *lower);

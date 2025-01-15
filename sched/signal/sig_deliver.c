@@ -1,6 +1,8 @@
 /****************************************************************************
  * sched/signal/sig_deliver.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -33,6 +35,7 @@
 
 #include <nuttx/irq.h>
 #include <nuttx/arch.h>
+#include <nuttx/signal.h>
 
 #include "signal/signal.h"
 
@@ -51,10 +54,19 @@
 
 void nxsig_deliver(FAR struct tcb_s *stcb)
 {
+  /* Save the errno.  This must be preserved throughout the signal handling
+   * so that the user code final gets the correct errno value (probably
+   * EINTR).
+   */
+
+  int saved_errno = get_errno();
+  int16_t saved_errcode = stcb->errcode;
+
   FAR sigq_t *sigq;
   sigset_t    savesigprocmask;
   sigset_t    newsigprocmask;
-  sigset_t    altsigprocmask;
+  sigset_t    tmpset1;
+  sigset_t    tmpset2;
   irqstate_t  flags;
 
   /* Loop while there are signals to be delivered */
@@ -106,7 +118,8 @@ void nxsig_deliver(FAR struct tcb_s *stcb)
        */
 
       savesigprocmask   = stcb->sigprocmask;
-      newsigprocmask    = savesigprocmask | sigq->mask;
+      sigorset(&newsigprocmask, &savesigprocmask, &sigq->mask);
+      nxsig_addset(&newsigprocmask, sigq->info.si_signo);
       stcb->sigprocmask = newsigprocmask;
 
 #ifndef CONFIG_BUILD_FLAT
@@ -174,9 +187,10 @@ void nxsig_deliver(FAR struct tcb_s *stcb)
        * in the current sigprocmask that were already set by newsigprocmask.
        */
 
-      altsigprocmask    = stcb->sigprocmask ^ newsigprocmask;
-      stcb->sigprocmask = (stcb->sigprocmask & altsigprocmask) |
-                          (savesigprocmask & ~altsigprocmask);
+      nxsig_xorset(&tmpset1, &stcb->sigprocmask, &newsigprocmask);
+      sigandset(&tmpset2, &stcb->sigprocmask, &tmpset1);
+      nxsig_nandset(&tmpset1, &savesigprocmask, &tmpset1);
+      sigorset(&stcb->sigprocmask, &tmpset1, &tmpset2);
 
       /* Remove the signal structure from the sigpostedq */
 
@@ -194,4 +208,9 @@ void nxsig_deliver(FAR struct tcb_s *stcb)
 
       nxsig_release_pendingsigaction(sigq);
     }
+
+  /* Restore the saved errno value */
+
+  set_errno(saved_errno);
+  stcb->errcode = saved_errcode;
 }

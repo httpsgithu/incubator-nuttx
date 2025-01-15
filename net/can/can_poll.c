@@ -1,6 +1,7 @@
 /****************************************************************************
  * net/can/can_poll.c
- * Poll for the availability of packet TX data
+ *
+ * SPDX-License-Identifier: Apache-2.0
  *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -66,9 +67,8 @@ void can_poll(FAR struct net_driver_s *dev, FAR struct can_conn_s *conn)
 
   /* Setup for the application callback */
 
-  dev->d_appdata = &dev->d_buf[NET_LL_HDRLEN(dev)];
-  dev->d_len     = 0;
-  dev->d_sndlen  = 0;
+  dev->d_len    = 0;
+  dev->d_sndlen = 0;
 
   /* Perform the application callback */
 

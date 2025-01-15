@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/s32k1xx/hardware/s32k1xx_edma.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -34,7 +36,7 @@
 
 #if defined(CONFIG_ARCH_CHIP_S32K11X)
 #  define S32K1XX_EDMA_NCHANNELS              4
-#elif defined(CONFIG_ARCH_CHIP_S32K14x)
+#elif defined(CONFIG_ARCH_CHIP_S32K14X)
 #  define S32K1XX_EDMA_NCHANNELS              16
 #else
 #  error "Unknown number of DMA channels for this S32K1xx part"
@@ -837,8 +839,8 @@
  * Public Types
  ****************************************************************************/
 
-/* In-memory representation of the 32-byte Transfer Control Descriptor
- * (TCD)
+/* Hardware representation of the 32-byte Transfer
+ * Control Descriptor (TCD)
  */
 
 struct s32k1xx_edmatcd_s

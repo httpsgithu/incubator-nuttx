@@ -1,6 +1,8 @@
 /****************************************************************************
  * libs/libc/eventfd/lib_eventfd.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -39,19 +41,4 @@ int eventfd_write(int fd, eventfd_t value)
 {
   return write(fd, &value,
       sizeof (eventfd_t)) != sizeof (eventfd_t) ? -1 : 0;
-}
-
-int eventfd_get_minor(int fd)
-{
-  int ret;
-  int minor;
-
-  ret = ioctl(fd, EFD_FIOC_MINOR, &minor);
-
-  if (ret < 0)
-    {
-      return ret;
-    }
-
-  return minor;
 }

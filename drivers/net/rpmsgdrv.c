@@ -1,6 +1,8 @@
 /****************************************************************************
  * drivers/net/rpmsgdrv.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -32,87 +34,18 @@
 #include <nuttx/kmalloc.h>
 #include <nuttx/kthread.h>
 #include <nuttx/semaphore.h>
-#include <nuttx/wdog.h>
 #include <nuttx/wqueue.h>
 
-#include <nuttx/net/arp.h>
 #include <nuttx/net/dns.h>
+#include <nuttx/net/ip.h>
 #include <nuttx/net/netdev.h>
 #include <nuttx/net/pkt.h>
 #include <nuttx/net/rpmsg.h>
-#include <nuttx/rptun/openamp.h>
+#include <nuttx/rpmsg/rpmsg.h>
 
 /****************************************************************************
  * Pre-processor Definitions
  ****************************************************************************/
-
-/* The address family that we used to create the socket really does not
- * matter. It should, however, be valid in the current configuration.
- */
-
-#if defined(CONFIG_NET_IPv4)
-#  define NET_RPMSG_DRV_FAMILY     AF_INET
-#elif defined(CONFIG_NET_IPv6)
-#  define NET_RPMSG_DRV_FAMILY     AF_INET6
-#elif defined(CONFIG_NET_IEEE802154)
-#  define NET_RPMSG_DRV_FAMILY     AF_IEEE802154
-#elif defined(CONFIG_WIRELESS_PKTRADIO)
-#  define NET_RPMSG_DRV_FAMILY     AF_PKTRADIO
-#elif defined(CONFIG_NET_USRSOCK)
-#  define NET_RPMSG_DRV_FAMILY     AF_INET
-#elif defined(CONFIG_NET_PKT)
-#  define NET_RPMSG_DRV_FAMILY     AF_PACKET
-#elif defined(CONFIG_NET_LOCAL)
-#  define NET_RPMSG_DRV_FAMILY     AF_LOCAL
-#else
-#  define NET_RPMSG_DRV_FAMILY     AF_UNSPEC
-#endif
-
-/* SOCK_DGRAM is the preferred socket type to use when we just want a
- * socket for performing driver ioctls.  However, we can't use SOCK_DRAM
- * if UDP is disabled.
- *
- * Pick a socket type (and perhaps protocol) compatible with the currently
- * selected address family.
- */
-
-#if NET_RPMSG_DRV_FAMILY == AF_INET
-#  if defined(CONFIG_NET_UDP)
-#    define NET_RPMSG_DRV_TYPE     SOCK_DGRAM
-#  elif defined(CONFIG_NET_TCP)
-#   define NET_RPMSG_DRV_TYPE      SOCK_STREAM
-#  elif defined(CONFIG_NET_ICMP_SOCKET)
-#   define NET_RPMSG_DRV_TYPE      SOCK_DGRAM
-#   define NET_RPMSG_DRV_PROTOCOL  IPPROTO_ICMP
-#  endif
-#elif NET_RPMSG_DRV_FAMILY == AF_INET6
-#  if defined(CONFIG_NET_UDP)
-#    define NET_RPMSG_DRV_TYPE     SOCK_DGRAM
-#  elif defined(CONFIG_NET_TCP)
-#   define NET_RPMSG_DRV_TYPE      SOCK_STREAM
-#  elif defined(CONFIG_NET_ICMPv6_SOCKET)
-#   define NET_RPMSG_DRV_TYPE      SOCK_DGRAM
-#   define NET_RPMSG_DRV_PROTOCOL  IPPROTO_ICMP6
-#  endif
-#elif NET_RPMSG_DRV_FAMILY == AF_IEEE802154
-#  define NET_RPMSG_DRV_TYPE       SOCK_DGRAM
-#elif NET_RPMSG_DRV_FAMILY == AF_PKTRADIO
-#  define NET_RPMSG_DRV_TYPE       SOCK_DGRAM
-#elif NET_RPMSG_DRV_FAMILY == AF_PACKET
-#  define NET_RPMSG_DRV_TYPE       SOCK_RAW
-#elif NET_RPMSG_DRV_FAMILY == AF_LOCAL
-#  if defined(CONFIG_NET_LOCAL_DGRAM)
-#    define NET_RPMSG_DRV_TYPE     SOCK_DGRAM
-#  elif defined(CONFIG_NET_LOCAL_STREAM)
-#     define NET_RPMSG_DRV_TYPE    SOCK_STREAM
-#  endif
-#endif
-
-/* Socket protocol of zero normally works */
-
-#ifndef NET_RPMSG_DRV_PROTOCOL
-#  define NET_RPMSG_DRV_PROTOCOL   0
-#endif
 
 /* Work queue support is required. */
 
@@ -125,12 +58,6 @@
 #else
 #  define net_rpmsg_drv_dumppacket(m, b, l)
 #endif
-
-/* TX poll delay = 1 seconds. CLK_TCK is the number of clock ticks per
- * second.
- */
-
-#define NET_RPMSG_DRV_WDDELAY      (1*CLK_TCK)
 
 /****************************************************************************
  * Private Types
@@ -151,7 +78,6 @@ struct net_rpmsg_drv_s
   FAR const char        *cpuname;
   FAR const char        *devname;
   struct rpmsg_endpoint ept;
-  struct wdog_s         txpoll;   /* TX poll timer */
   struct work_s         pollwork; /* For deferring poll work to the work queue */
 
   /* This holds the information visible to the NuttX network */
@@ -192,11 +118,6 @@ static int  net_rpmsg_drv_ept_cb(FAR struct rpmsg_endpoint *ept, void *data,
 static int  net_rpmsg_drv_send_recv(struct net_driver_s *dev,
                     void *header_, uint32_t command, int len);
 
-/* Watchdog timer expirations */
-
-static void net_rpmsg_drv_poll_work(FAR void *arg);
-static void net_rpmsg_drv_poll_expiry(wdparm_t arg);
-
 /* NuttX callback functions */
 
 static int  net_rpmsg_drv_ifup(FAR struct net_driver_s *dev);
@@ -211,9 +132,6 @@ static int  net_rpmsg_drv_addmac(FAR struct net_driver_s *dev,
 #ifdef CONFIG_NET_IGMP
 static int  net_rpmsg_drv_rmmac(FAR struct net_driver_s *dev,
               FAR const uint8_t *mac);
-#endif
-#ifdef CONFIG_NET_ICMPv6
-static void net_rpmsg_drv_ipv6multicast(FAR struct net_driver_s *dev);
 #endif
 #endif
 #ifdef CONFIG_NETDEV_IOCTL
@@ -242,7 +160,7 @@ static const rpmsg_ept_cb g_net_rpmsg_drv_handler[] =
 
 static void net_rpmsg_drv_wait(FAR sem_t *sem)
 {
-  net_lockedwait_uninterruptible(sem);
+  net_sem_wait_uninterruptible(sem);
 }
 
 /****************************************************************************
@@ -298,6 +216,11 @@ static int net_rpmsg_drv_transmit(FAR struct net_driver_s *dev, bool nocopy)
 
   if (ret < 0)
     {
+      if (nocopy)
+        {
+          rpmsg_release_tx_buffer(&priv->ept, msg);
+        }
+
       NETDEV_TXERRORS(dev);
       return ret;
     }
@@ -336,56 +259,22 @@ static int net_rpmsg_drv_txpoll(FAR struct net_driver_s *dev)
   FAR struct net_rpmsg_drv_s *priv = dev->d_private;
   uint32_t size;
 
-  /* If the polling resulted in data that should be sent out on the network,
-   * the field d_len is set to a value > 0.
+  /* Send the packet */
+
+  net_rpmsg_drv_transmit(dev, true);
+
+  /* Check if there is room in the device to hold another packet. If
+   * not, return a non-zero value to terminate the poll.
    */
 
-  if (dev->d_len > 0)
+  dev->d_buf = rpmsg_get_tx_payload_buffer(&priv->ept, &size, false);
+  if (dev->d_buf)
     {
-      /* Look up the destination MAC address and add it to the Ethernet
-       * header.
-       */
-
-#ifdef CONFIG_NET_IPv4
-      if (IFF_IS_IPv4(dev->d_flags))
-        {
-          arp_out(dev);
-        }
-#endif /* CONFIG_NET_IPv4 */
-
-#ifdef CONFIG_NET_IPv6
-      if (IFF_IS_IPv6(dev->d_flags))
-        {
-          neighbor_out(dev);
-        }
-#endif /* CONFIG_NET_IPv6 */
-
-      if (!devif_loopback(dev))
-        {
-          /* Send the packet */
-
-          net_rpmsg_drv_transmit(dev, true);
-
-          /* Check if there is room in the device to hold another packet. If
-           * not, return a non-zero value to terminate the poll.
-           */
-
-          dev->d_buf = rpmsg_get_tx_payload_buffer(&priv->ept, &size, false);
-          if (dev->d_buf)
-            {
-              dev->d_buf += sizeof(struct net_rpmsg_transfer_s);
-              dev->d_pktsize = size - sizeof(struct net_rpmsg_transfer_s);
-            }
-
-          return dev->d_buf == NULL;
-        }
+      dev->d_buf += sizeof(struct net_rpmsg_transfer_s);
+      dev->d_pktsize = size - sizeof(struct net_rpmsg_transfer_s);
     }
 
-  /* If zero is returned, the polling will continue until all connections
-   * have been examined.
-   */
-
-  return 0;
+  return dev->d_buf == NULL;
 }
 
 /****************************************************************************
@@ -415,22 +304,6 @@ static void net_rpmsg_drv_reply(FAR struct net_driver_s *dev)
 
   if (dev->d_len > 0)
     {
-      /* Update the Ethernet header with the correct MAC address */
-
-#ifdef CONFIG_NET_IPv4
-      if (IFF_IS_IPv4(dev->d_flags))
-        {
-          arp_out(dev);
-        }
-#endif
-
-#ifdef CONFIG_NET_IPv6
-      if (IFF_IS_IPv6(dev->d_flags))
-        {
-          neighbor_out(dev);
-        }
-#endif
-
       /* And send the packet */
 
       net_rpmsg_drv_transmit(dev, false);
@@ -458,14 +331,14 @@ static int net_rpmsg_drv_sockioctl_task(int argc, FAR char *argv[])
   FAR struct rpmsg_endpoint *ept;
   struct socket sock;
 
-  int domain   = NET_RPMSG_DRV_FAMILY;
-  int type     = NET_RPMSG_DRV_TYPE;
-  int protocol = NET_RPMSG_DRV_PROTOCOL;
+  int domain   = NET_SOCK_FAMILY;
+  int type     = NET_SOCK_TYPE;
+  int protocol = NET_SOCK_PROTOCOL;
 
   /* Restore pointers from argv */
 
-  ept = (FAR struct rpmsg_endpoint *)strtoul(argv[1], NULL, 0);
-  msg = (FAR struct net_rpmsg_ioctl_s *)strtoul(argv[2], NULL, 0);
+  ept = (FAR struct rpmsg_endpoint *)strtoul(argv[1], NULL, 16);
+  msg = (FAR struct net_rpmsg_ioctl_s *)strtoul(argv[2], NULL, 16);
 
   /* We need a temporary sock for ioctl here */
 
@@ -505,8 +378,8 @@ static int net_rpmsg_drv_sockioctl_handler(FAR struct rpmsg_endpoint *ept,
 
   /* Save pointers into argv */
 
-  sprintf(arg1, "%#p", ept);
-  sprintf(arg2, "%#p", data);
+  snprintf(arg1, sizeof(arg1), "%p", ept);
+  snprintf(arg2, sizeof(arg2), "%p", data);
 
   argv[0] = arg1;
   argv[1] = arg2;
@@ -525,8 +398,8 @@ static int net_rpmsg_drv_sockioctl_handler(FAR struct rpmsg_endpoint *ept,
 static bool net_rpmsg_drv_is_ipv4(FAR struct net_driver_s *dev)
 {
   FAR struct ipv4_hdr_s *ip =
-    (struct ipv4_hdr_s *)(dev->d_buf + dev->d_llhdrlen);
-  FAR struct eth_hdr_s *eth = (struct eth_hdr_s *)dev->d_buf;
+    (FAR struct ipv4_hdr_s *)(dev->d_buf + dev->d_llhdrlen);
+  FAR struct eth_hdr_s *eth = (FAR struct eth_hdr_s *)dev->d_buf;
 
   if (dev->d_lltype == NET_LL_ETHERNET || dev->d_lltype == NET_LL_IEEE80211)
     {
@@ -543,8 +416,8 @@ static bool net_rpmsg_drv_is_ipv4(FAR struct net_driver_s *dev)
 static bool net_rpmsg_drv_is_ipv6(FAR struct net_driver_s *dev)
 {
   FAR struct ipv6_hdr_s *ip =
-    (struct ipv6_hdr_s *)(dev->d_buf + dev->d_llhdrlen);
-  FAR struct eth_hdr_s *eth = (struct eth_hdr_s *)dev->d_buf;
+    (FAR struct ipv6_hdr_s *)(dev->d_buf + dev->d_llhdrlen);
+  FAR struct eth_hdr_s *eth = (FAR struct eth_hdr_s *)dev->d_buf;
 
   if (dev->d_lltype == NET_LL_ETHERNET || dev->d_lltype == NET_LL_IEEE80211)
     {
@@ -560,7 +433,7 @@ static bool net_rpmsg_drv_is_ipv6(FAR struct net_driver_s *dev)
 #ifdef CONFIG_NET_ARP
 static bool net_rpmsg_drv_is_arp(FAR struct net_driver_s *dev)
 {
-  FAR struct eth_hdr_s *eth = (struct eth_hdr_s *)dev->d_buf;
+  FAR struct eth_hdr_s *eth = (FAR struct eth_hdr_s *)dev->d_buf;
 
   if (dev->d_lltype == NET_LL_ETHERNET || dev->d_lltype == NET_LL_IEEE80211)
     {
@@ -635,11 +508,8 @@ static int net_rpmsg_drv_transfer_handler(FAR struct rpmsg_endpoint *ept,
       ninfo("IPv4 frame\n");
       NETDEV_RXIPV4(dev);
 
-      /* Handle ARP on input, then dispatch IPv4 packet to the network
-       * layer.
-       */
+      /* Receive an IPv4 packet from the network device */
 
-      arp_ipin(dev);
       ipv4_input(dev);
 
       /* Check for a reply to the IPv4 packet */
@@ -672,7 +542,7 @@ static int net_rpmsg_drv_transfer_handler(FAR struct rpmsg_endpoint *ept,
 
       /* Dispatch ARP packet to the network layer */
 
-      arp_arpin(dev);
+      arp_input(dev);
 
       /* Check for a reply to the ARP packet */
 
@@ -700,7 +570,8 @@ static void net_rpmsg_drv_device_created(FAR struct rpmsg_device *rdev,
   if (!strcmp(priv->cpuname, rpmsg_get_cpuname(rdev)))
     {
       priv->ept.priv = dev;
-      sprintf(eptname, NET_RPMSG_EPT_NAME, priv->devname);
+      snprintf(eptname, sizeof(eptname),
+               NET_RPMSG_EPT_NAME, priv->devname);
 
       rpmsg_create_ept(&priv->ept, rdev, eptname,
                        RPMSG_ADDR_ANY, RPMSG_ADDR_ANY,
@@ -746,7 +617,6 @@ static int net_rpmsg_drv_send_recv(FAR struct net_driver_s *dev,
   int ret;
 
   nxsem_init(&cookie.sem, 0, 0);
-  nxsem_set_protocol(&cookie.sem, SEM_PRIO_NONE);
 
   cookie.header   = header;
   header->command = command;
@@ -765,100 +635,6 @@ static int net_rpmsg_drv_send_recv(FAR struct net_driver_s *dev,
 out:
   nxsem_destroy(&cookie.sem);
   return ret;
-}
-
-/****************************************************************************
- * Name: net_rpmsg_drv_poll_work
- *
- * Description:
- *   Perform periodic polling from the worker thread
- *
- * Parameters:
- *   arg - The argument passed when work_queue() as called.
- *
- * Returned Value:
- *   OK on success
- *
- * Assumptions:
- *   Run on a work queue thread.
- *
- ****************************************************************************/
-
-static void net_rpmsg_drv_poll_work(FAR void *arg)
-{
-  FAR struct net_driver_s *dev = arg;
-  FAR struct net_rpmsg_drv_s *priv = dev->d_private;
-  uint32_t size;
-
-  /* Lock the network and serialize driver operations if necessary.
-   * NOTE: Serialization is only required in the case where the driver work
-   * is performed on an LP worker thread and where more than one LP worker
-   * thread has been configured.
-   */
-
-  net_lock();
-
-  /* Perform the poll */
-
-  /* Check if there is room in the send another TX packet.  We cannot perform
-   * the TX poll if he are unable to accept another packet for transmission.
-   */
-
-  if (dev->d_buf == NULL)
-    {
-      /* Try to get the payload buffer if not yet */
-
-      dev->d_buf = rpmsg_get_tx_payload_buffer(&priv->ept, &size, false);
-      if (dev->d_buf)
-        {
-          dev->d_buf += sizeof(struct net_rpmsg_transfer_s);
-          dev->d_pktsize = size - sizeof(struct net_rpmsg_transfer_s);
-        }
-    }
-
-  if (dev->d_buf)
-    {
-      /* If so, update TCP timing states and poll the network for new XMIT
-       * data.  Hmmm.. might be bug here.  Does this mean if there is a
-       * transmit in progress, we will missing TCP time state updates?
-       */
-
-      devif_timer(dev, NET_RPMSG_DRV_WDDELAY, net_rpmsg_drv_txpoll);
-    }
-
-  /* Setup the watchdog poll timer again */
-
-  wd_start(&priv->txpoll, NET_RPMSG_DRV_WDDELAY,
-           net_rpmsg_drv_poll_expiry, (wdparm_t)dev);
-  net_unlock();
-}
-
-/****************************************************************************
- * Name: net_rpmsg_drv_poll_expiry
- *
- * Description:
- *   Periodic timer handler.  Called from the timer interrupt handler.
- *
- * Parameters:
- *   arg  - The argument
- *
- * Returned Value:
- *   None
- *
- * Assumptions:
- *   Runs in the context of a the timer interrupt handler.  Local
- *   interrupts are disabled by the interrupt logic.
- *
- ****************************************************************************/
-
-static void net_rpmsg_drv_poll_expiry(wdparm_t arg)
-{
-  FAR struct net_driver_s *dev = (FAR struct net_driver_s *)arg;
-  FAR struct net_rpmsg_drv_s *priv = dev->d_private;
-
-  /* Schedule to perform the interrupt processing on the worker thread. */
-
-  work_queue(LPWORK, &priv->pollwork, net_rpmsg_drv_poll_work, dev, 0);
 }
 
 /****************************************************************************
@@ -881,7 +657,6 @@ static void net_rpmsg_drv_poll_expiry(wdparm_t arg)
 
 static int net_rpmsg_drv_ifup(FAR struct net_driver_s *dev)
 {
-  FAR struct net_rpmsg_drv_s *priv = dev->d_private;
   struct net_rpmsg_ifup_s msg =
   {
   };
@@ -889,9 +664,9 @@ static int net_rpmsg_drv_ifup(FAR struct net_driver_s *dev)
   int ret;
 
 #ifdef CONFIG_NET_IPv4
-  ninfo("Bringing up: %d.%d.%d.%d\n",
-        dev->d_ipaddr & 0xff, (dev->d_ipaddr >> 8) & 0xff,
-        (dev->d_ipaddr >> 16) & 0xff, dev->d_ipaddr >> 24);
+  ninfo("Bringing up: %u.%u.%u.%u\n",
+        ip4_addr1(dev->d_ipaddr), ip4_addr2(dev->d_ipaddr),
+        ip4_addr3(dev->d_ipaddr), ip4_addr4(dev->d_ipaddr));
 #endif
 #ifdef CONFIG_NET_IPv6
   ninfo("Bringing up: %04x:%04x:%04x:%04x:%04x:%04x:%04x:%04x\n",
@@ -944,17 +719,6 @@ static int net_rpmsg_drv_ifup(FAR struct net_driver_s *dev)
   net_ipv6addr_copy(dev->d_ipv6netmask, msg.ipv6netmask);
 #endif
 
-#ifdef CONFIG_NET_ICMPv6
-  /* Set up IPv6 multicast address filtering */
-
-  net_rpmsg_drv_ipv6multicast(dev);
-#endif
-
-  /* Set and activate a timer process */
-
-  wd_start(&priv->txpoll, NET_RPMSG_DRV_WDDELAY,
-           net_rpmsg_drv_poll_expiry, (wdparm_t)dev);
-
   net_unlock();
 
 #ifdef CONFIG_NETDB_DNSCLIENT
@@ -966,7 +730,7 @@ static int net_rpmsg_drv_ifup(FAR struct net_driver_s *dev)
       };
 
       dnsaddr.sin_family = AF_INET;
-      dnsaddr.sin_port   = htons(DNS_DEFAULT_PORT);
+      dnsaddr.sin_port   = HTONS(DNS_DEFAULT_PORT);
       memcpy(&dnsaddr.sin_addr, &msg.dnsaddr, sizeof(msg.dnsaddr));
 
       dns_add_nameserver((FAR const struct sockaddr *)&dnsaddr,
@@ -982,7 +746,7 @@ static int net_rpmsg_drv_ifup(FAR struct net_driver_s *dev)
       };
 
       dnsaddr.sin6_family = AF_INET6;
-      dnsaddr.sin6_port   = htons(DNS_DEFAULT_PORT);
+      dnsaddr.sin6_port   = HTONS(DNS_DEFAULT_PORT);
       memcpy(&dnsaddr.sin6_addr, msg.ipv6dnsaddr, sizeof(msg.ipv6dnsaddr));
 
       dns_add_nameserver((FAR const struct sockaddr *)&dnsaddr,
@@ -1021,9 +785,6 @@ static int net_rpmsg_drv_ifdown(FAR struct net_driver_s *dev)
 
   flags = enter_critical_section();
 
-  /* Cancel the TX poll timer and work */
-
-  wd_cancel(&priv->txpoll);
   work_cancel(LPWORK, &priv->pollwork);
 
   leave_critical_section(flags);
@@ -1091,7 +852,7 @@ static void net_rpmsg_drv_txavail_work(FAR void *arg)
         {
           /* If so, then poll the network for new XMIT data */
 
-          devif_timer(dev, 0, net_rpmsg_drv_txpoll);
+          devif_poll(dev, net_rpmsg_drv_txpoll);
         }
     }
 
@@ -1198,77 +959,6 @@ static int net_rpmsg_drv_rmmac(FAR struct net_driver_s *dev,
 #endif
 
 /****************************************************************************
- * Name: net_rpmsg_drv_ipv6multicast
- *
- * Description:
- *   Configure the IPv6 multicast MAC address.
- *
- * Parameters:
- *   dev  - Reference to the NuttX driver state structure
- *
- * Returned Value:
- *   Zero (OK) on success; a negated errno value on failure.
- *
- ****************************************************************************/
-
-#ifdef CONFIG_NET_ICMPv6
-static void net_rpmsg_drv_ipv6multicast(FAR struct net_driver_s *dev)
-{
-  if (dev->d_lltype == NET_LL_ETHERNET || dev->d_lltype == NET_LL_IEEE80211)
-    {
-      uint16_t tmp16;
-      uint8_t mac[6];
-
-      /* For ICMPv6, we need to add the IPv6 multicast address
-       *
-       * For IPv6 multicast addresses, the Ethernet MAC is derived by
-       * the four low-order octets OR'ed with the MAC 33:33:00:00:00:00,
-       * so for example the IPv6 address FF02:DEAD:BEEF::1:3 would map
-       * to the Ethernet MAC address 33:33:00:01:00:03.
-       *
-       * NOTES:  This appears correct for the ICMPv6 Router Solicitation
-       * Message, but the ICMPv6 Neighbor Solicitation message seems to
-       * use 33:33:ff:01:00:03.
-       */
-
-      mac[0] = 0x33;
-      mac[1] = 0x33;
-
-      tmp16  = dev->d_ipv6addr[6];
-      mac[2] = 0xff;
-      mac[3] = tmp16 >> 8;
-
-      tmp16  = dev->d_ipv6addr[7];
-      mac[4] = tmp16 & 0xff;
-      mac[5] = tmp16 >> 8;
-
-      ninfo("IPv6 Multicast: %02x:%02x:%02x:%02x:%02x:%02x\n",
-            mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
-
-      net_rpmsg_drv_addmac(dev, mac);
-
-#if defined(CONFIG_NET_ETHERNET) && defined(CONFIG_NET_ICMPv6_AUTOCONF)
-      /* Add the IPv6 all link-local nodes Ethernet address.  This is the
-       * address that we expect to receive ICMPv6 Router Advertisement
-       * packets.
-       */
-
-      net_rpmsg_drv_addmac(dev, g_ipv6_ethallnodes.ether_addr_octet);
-#endif /* CONFIG_NET_ETHERNET && CONFIG_NET_ICMPv6_AUTOCONF */
-
-#if defined(CONFIG_NET_ETHERNET) && defined(CONFIG_NET_ICMPv6_ROUTER)
-      /* Add the IPv6 all link-local routers Ethernet address.  This is the
-       * address that we expect to receive ICMPv6 Router Solicitation
-       * packets.
-       */
-
-      net_rpmsg_drv_addmac(dev, g_ipv6_ethallrouters.ether_addr_octet);
-#endif /* CONFIG_NET_ETHERNET && CONFIG_NET_ICMPv6_ROUTER */
-    }
-}
-#endif /* CONFIG_NET_ICMPv6 */
-
-/****************************************************************************
  * Name: net_rpmsg_drv_ioctl
  *
  * Description:
@@ -1294,7 +984,7 @@ static int net_rpmsg_drv_ioctl(FAR struct net_driver_s *dev, int cmd,
   ssize_t len;
   int ret;
 
-  len = net_ioctl_arglen(cmd);
+  len = net_ioctl_arglen(PF_RPMSG, cmd);
   if (len >= 0)
     {
       FAR struct net_rpmsg_ioctl_s *msg;
@@ -1350,6 +1040,7 @@ int net_rpmsg_drv_init(FAR const char *cpuname,
 {
   FAR struct net_rpmsg_drv_s *priv;
   FAR struct net_driver_s *dev;
+  int ret;
 
   /* Allocate the interface structure */
 
@@ -1366,7 +1057,7 @@ int net_rpmsg_drv_init(FAR const char *cpuname,
 
   /* Initialize the driver structure */
 
-  strcpy(dev->d_ifname, devname);
+  strlcpy(dev->d_ifname, devname, sizeof(dev->d_ifname));
   dev->d_ifup    = net_rpmsg_drv_ifup;    /* I/F up (new IP address) callback */
   dev->d_ifdown  = net_rpmsg_drv_ifdown;  /* I/F down callback */
   dev->d_txavail = net_rpmsg_drv_txavail; /* New TX data callback */
@@ -1381,13 +1072,30 @@ int net_rpmsg_drv_init(FAR const char *cpuname,
 
   /* Register the device with the openamp */
 
-  rpmsg_register_callback(dev,
+  ret = rpmsg_register_callback(dev,
                           net_rpmsg_drv_device_created,
                           net_rpmsg_drv_device_destroy,
+                          NULL,
                           NULL);
+
+  if (ret < 0)
+    {
+      kmm_free(priv);
+      return ret;
+    }
 
   /* Register the device with the OS so that socket IOCTLs can be performed */
 
-  netdev_register(dev, lltype);
-  return OK;
+  ret = netdev_register(dev, lltype);
+  if (ret < 0)
+    {
+      rpmsg_unregister_callback(dev,
+                          net_rpmsg_drv_device_created,
+                          net_rpmsg_drv_device_destroy,
+                          NULL,
+                          NULL);
+      kmm_free(priv);
+    }
+
+  return ret;
 }

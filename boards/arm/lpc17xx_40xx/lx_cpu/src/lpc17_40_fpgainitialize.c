@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/lpc17xx_40xx/lx_cpu/src/lpc17_40_fpgainitialize.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -30,7 +32,6 @@
 #include <arch/board/board.h>
 
 #include "nuttx/signal.h"
-#include "arm_arch.h"
 #include "lpc17_40_gpio.h"
 #include "arm_internal.h"
 #include "hardware/lpc17_40_syscon.h"

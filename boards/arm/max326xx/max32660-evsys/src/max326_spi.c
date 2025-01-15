@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/max326xx/max32660-evsys/src/max326_spi.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -32,7 +34,7 @@
 #include <nuttx/spi/spi.h>
 #include <arch/board/board.h>
 
-#include "arm_arch.h"
+#include "arm_internal.h"
 #include "max326_spim.h"
 
 #include "max32660-evsys.h"
@@ -88,28 +90,28 @@ void max326_spidev_initialize(void)
  ****************************************************************************/
 
 #ifdef CONFIG_MAX326XX_SPIM0
-void max326_spi0select(FAR struct spi_dev_s *dev, uint32_t devid,
+void max326_spi0select(struct spi_dev_s *dev, uint32_t devid,
                        bool selected)
 {
   spiinfo("devid: %d CS: %s\n", (int)devid,
           selected ? "assert" : "de-assert");
 }
 
-uint8_t max326_spi0status(FAR struct spi_dev_s *dev, uint32_t devid)
+uint8_t max326_spi0status(struct spi_dev_s *dev, uint32_t devid)
 {
   return 0;
 }
 #endif
 
 #ifdef CONFIG_MAX326XX_SPIM1
-void max326_spi1select(FAR struct spi_dev_s *dev, uint32_t devid,
+void max326_spi1select(struct spi_dev_s *dev, uint32_t devid,
                        bool selected)
 {
   spiinfo("devid: %d CS: %s\n", (int)devid,
           selected ? "assert" : "de-assert");
 }
 
-uint8_t max326_spi1status(FAR struct spi_dev_s *dev, uint32_t devid)
+uint8_t max326_spi1status(struct spi_dev_s *dev, uint32_t devid)
 {
   return 0;
 }
@@ -140,21 +142,21 @@ uint8_t max326_spi1status(FAR struct spi_dev_s *dev, uint32_t devid)
 
 #ifdef CONFIG_SPI_CMDDATA
 #ifdef CONFIG_MAX326XX_SPIM0
-int max326_spi0cmddata(FAR struct spi_dev_s *dev, uint32_t devid, bool cmd)
+int max326_spi0cmddata(struct spi_dev_s *dev, uint32_t devid, bool cmd)
 {
   return -ENODEV;
 }
 #endif
 
 #ifdef CONFIG_MAX326XX_SPIM1
-int max326_spi1cmddata(FAR struct spi_dev_s *dev, uint32_t devid, bool cmd)
+int max326_spi1cmddata(struct spi_dev_s *dev, uint32_t devid, bool cmd)
 {
   return -ENODEV;
 }
 #endif
 
 #ifdef CONFIG_STM32_SPI3
-int max326_spi3cmddata(FAR struct spi_dev_s *dev, uint32_t devid, bool cmd)
+int max326_spi3cmddata(struct spi_dev_s *dev, uint32_t devid, bool cmd)
 {
   return -ENODEV;
 }

@@ -22,13 +22,18 @@
  * Included Files
  ****************************************************************************/
 
+#include <nuttx/config.h>
+
 #include <assert.h>
 #include <stdint.h>
+#include <sys/param.h>
 #include <debug.h>
-#include <nuttx/config.h>
+
+#include <nuttx/board.h>
 #include <nuttx/arch.h>
 #include <nuttx/spinlock.h>
 #include <nuttx/power/pm.h>
+#include <arch/board/board.h>
 
 #include "esp32_pm.h"
 #include "xtensa.h"
@@ -44,6 +49,18 @@
 /****************************************************************************
  * Pre-processor Definitions
  ****************************************************************************/
+
+/* Does the board support an IDLE LED to indicate that the board is in the
+ * IDLE state?
+ */
+
+#ifdef CONFIG_ARCH_LEDS_CPU_ACTIVITY
+#  define BEGIN_IDLE() board_autoled_off(LED_CPU)
+#  define END_IDLE()
+#else
+#  define BEGIN_IDLE()
+#  define END_IDLE()
+#endif
 
 /* Values for the RTC Alarm to wake up from the PM_STANDBY mode
  * (which corresponds to ESP32 stop mode).  If this alarm expires,
@@ -69,15 +86,16 @@
 #  define CONFIG_PM_SLEEP_WAKEUP_NSEC 0
 #endif
 
-#define PM_IDLE_DOMAIN 0 /* Revisit */
-
-#ifndef MIN
-#  define MIN(a, b) (((a) < (b)) ? (a) : (b))
-#endif
-
 #define EXPECTED_IDLE_TIME_US (800)
 #define EARLY_WAKEUP_US       (200)
 
+#endif
+/****************************************************************************
+ * Private Data
+ ****************************************************************************/
+
+#ifdef CONFIG_PM
+static spinlock_t g_esp32_idle_lock = SP_UNLOCKED;
 #endif
 
 /****************************************************************************
@@ -85,7 +103,7 @@
  ****************************************************************************/
 
 /****************************************************************************
- * Name: up_idlepm
+ * Name: esp32_idlepm
  *
  * Description:
  *   Perform IDLE state power management.
@@ -93,12 +111,12 @@
  ****************************************************************************/
 
 #ifdef CONFIG_PM
-static void up_idlepm(void)
+static void esp32_idlepm(void)
 {
   irqstate_t flags;
 
 #ifdef CONFIG_ESP32_AUTO_SLEEP
-  flags = spin_lock_irqsave(NULL);
+  flags = spin_lock_irqsave(&g_esp32_idle_lock);
   if (esp32_pm_lockstatus() == 0)
     {
       uint64_t os_start_us;
@@ -144,7 +162,7 @@ static void up_idlepm(void)
         }
     }
 
-  spin_unlock_irqrestore(NULL, flags);
+  spin_unlock_irqrestore(&g_esp32_idle_lock, flags);
 #else /* CONFIG_ESP32_AUTO_SLEEP */
   static enum pm_state_e oldstate = PM_NORMAL;
   enum pm_state_e newstate;
@@ -158,7 +176,7 @@ static void up_idlepm(void)
 
   if (newstate != oldstate)
     {
-      flags = spin_lock_irqsave(NULL);
+      flags = spin_lock_irqsave(&g_esp32_idle_lock);
 
       /* Perform board-specific, state-dependent logic here */
 
@@ -180,7 +198,7 @@ static void up_idlepm(void)
           oldstate = newstate;
         }
 
-      spin_unlock_irqrestore(NULL, flags);
+      spin_unlock_irqrestore(&g_esp32_idle_lock, flags);
 
       /* MCU-specific power management logic */
 
@@ -208,7 +226,6 @@ static void up_idlepm(void)
             esp32_pmsleep(CONFIG_PM_SLEEP_WAKEUP_SEC * 1000000 +
                                 CONFIG_PM_SLEEP_WAKEUP_NSEC / 1000);
           }
-          break;
 
         default:
           break;
@@ -216,13 +233,6 @@ static void up_idlepm(void)
     }
   else
     {
-      if (oldstate == PM_NORMAL)
-        {
-          /* Relax normal operation */
-
-          pm_relax(PM_IDLE_DOMAIN, PM_NORMAL);
-        }
-
 #ifdef CONFIG_WATCHDOG
       /* Announce the power management state change to feed watchdog */
 
@@ -232,7 +242,7 @@ static void up_idlepm(void)
 #endif
 }
 #else
-#  define up_idlepm()
+#  define esp32_idlepm()
 #endif
 
 /****************************************************************************
@@ -266,13 +276,15 @@ void up_idle(void)
    * sleep in a reduced power mode until an interrupt occurs to save power
    */
 
+  BEGIN_IDLE();
 #if XCHAL_HAVE_INTERRUPTS
   __asm__ __volatile__ ("waiti 0");
 #endif
+  END_IDLE();
 
   /* Perform IDLE mode power management */
 
-  up_idlepm();
+  esp32_idlepm();
 
 #endif
 }

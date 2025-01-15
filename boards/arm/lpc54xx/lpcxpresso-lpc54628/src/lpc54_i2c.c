@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/lpc54xx/lpcxpresso-lpc54628/src/lpc54_i2c.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -38,7 +40,7 @@
  * Private Data
  ****************************************************************************/
 
-static FAR struct i2c_master_s *g_i2c_handle[NI2C];
+static struct i2c_master_s *g_i2c_handle[NI2C];
 
 /****************************************************************************
  * Public Functions
@@ -52,9 +54,9 @@ static FAR struct i2c_master_s *g_i2c_handle[NI2C];
  *
  ****************************************************************************/
 
-FAR struct i2c_master_s *lpc54_i2c_handle(int bus, int ndx)
+struct i2c_master_s *lpc54_i2c_handle(int bus, int ndx)
 {
-  FAR struct i2c_master_s *i2c = g_i2c_handle[ndx];
+  struct i2c_master_s *i2c = g_i2c_handle[ndx];
 
   if (i2c == NULL)
     {

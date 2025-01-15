@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/z80/src/common/z80_exit.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -28,91 +30,14 @@
 #include <sched.h>
 #include <debug.h>
 
+#include <nuttx/addrenv.h>
 #include <nuttx/arch.h>
 #include <nuttx/irq.h>
-#ifdef CONFIG_DUMP_ON_EXIT
-#  include <nuttx/fs/fs.h>
-#endif
-
 #include "chip.h"
 #include "task/task.h"
 #include "sched/sched.h"
 #include "group/group.h"
 #include "z80_internal.h"
-
-/****************************************************************************
- * Pre-processor Definitions
- ****************************************************************************/
-
-#ifndef CONFIG_DEBUG_SCHED_INFO
-#  undef CONFIG_DUMP_ON_EXIT
-#endif
-
-/****************************************************************************
- * Private Functions
- ****************************************************************************/
-
-/****************************************************************************
- * Name: _up_dumponexit
- *
- * Description:
- *   Dump the state of all tasks whenever on task exits.  This is debug
- *   instrumentation that was added to check file-related reference counting
- *   but could be useful again sometime in the future.
- *
- ****************************************************************************/
-
-#ifdef CONFIG_DUMP_ON_EXIT
-static void _up_dumponexit(FAR struct tcb_s *tcb, FAR void *arg)
-{
-  FAR struct filelist *filelist;
-#ifdef CONFIG_FILE_STREAM
-  FAR struct file_struct *filep;
-#endif
-  int i;
-  int j;
-
-  sinfo("  TCB=%p name=%s\n", tcb, tcb->argv[0]);
-  sinfo("    priority=%d state=%d\n", tcb->sched_priority, tcb->task_state);
-
-  filelist = tcb->group->tg_filelist;
-  for (i = 0; i < filelist->fl_rows; i++)
-    {
-      for (j = 0; j < CONFIG_NFILE_DESCRIPTORS_PER_BLOCK; j++)
-        {
-          struct inode *inode = filelist->fl_files[i][j].f_inode;
-          if (inode)
-            {
-              sinfo("      fd=%d refcount=%d\n",
-                    i * CONFIG_NFILE_DESCRIPTORS_PER_BLOCK + j,
-                    inode->i_crefs);
-            }
-        }
-    }
-
-#ifdef CONFIG_FILE_STREAM
-  filep = tcb->group->tg_streamlist->sl_head;
-  for (; filep != NULL; filep = filep->fs_next)
-    {
-      if (filep->fs_fd >= 0)
-        {
-#ifndef CONFIG_STDIO_DISABLE_BUFFERING
-          if (filep->fs_bufstart != NULL)
-            {
-              sinfo("      fd=%d nbytes=%d\n",
-                    filep->fs_fd,
-                    filep->fs_bufpos - filep->fs_bufstart);
-            }
-          else
-#endif
-            {
-              sinfo("      fd=%d\n", filep->fs_fd);
-            }
-        }
-    }
-#endif
-}
-#endif
 
 /****************************************************************************
  * Public Functions
@@ -133,19 +58,6 @@ void up_exit(int status)
 {
   FAR struct tcb_s *tcb = this_task();
 
-  /* Make sure that we are in a critical section with local interrupts.
-   * The IRQ state will be restored when the next task is started.
-   */
-
-  enter_critical_section();
-
-  sinfo("TCB=%p exiting\n", tcb);
-
-#ifdef CONFIG_DUMP_ON_EXIT
-  sinfo("Other tasks:\n");
-  nxsched_foreach(_up_dumponexit, NULL);
-#endif
-
   /* Destroy the task at the head of the ready to run list. */
 
   nxtask_exit();
@@ -160,6 +72,7 @@ void up_exit(int status)
   /* Adjusts time slice for SCHED_RR & SCHED_SPORADIC cases */
 
   nxsched_resume_scheduler(tcb);
+  g_running_tasks[this_cpu()] = tcb;
 
 #ifdef CONFIG_ARCH_ADDRENV
   /* Make sure that the address environment for the previously running
@@ -168,7 +81,7 @@ void up_exit(int status)
    * the ready-to-run list.
    */
 
-  group_addrenv(tcb);
+  addrenv_switch(tcb);
 #endif
 
   /* Then switch contexts */

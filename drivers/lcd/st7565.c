@@ -1,6 +1,8 @@
 /****************************************************************************
  * drivers/lcd/st7565.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -192,10 +194,11 @@ static inline int st7565_backlight(FAR struct st7565_dev_s *priv, int level);
 
 /* LCD Data Transfer Methods */
 
-static int st7565_putrun(fb_coord_t row, fb_coord_t col,
-                         FAR const uint8_t * buffer, size_t npixels);
-static int st7565_getrun(fb_coord_t row, fb_coord_t col,
-                         FAR uint8_t * buffer,
+static int st7565_putrun(FAR struct lcd_dev_s *dev, fb_coord_t row,
+                         fb_coord_t col, FAR const uint8_t *buffer,
+                         size_t npixels);
+static int st7565_getrun(FAR struct lcd_dev_s *dev, fb_coord_t row,
+                         fb_coord_t col, FAR uint8_t *buffer,
                          size_t npixels);
 
 /* LCD Configuration */
@@ -261,10 +264,10 @@ static const struct fb_videoinfo_s g_videoinfo =
 
 static const struct lcd_planeinfo_s g_planeinfo =
 {
-  .putrun  = st7565_putrun,           /* Put a run into LCD memory */
-  .getrun  = st7565_getrun,           /* Get a run from LCD memory */
-  .buffer  = (uint8_t *) g_runbuffer, /* Run scratch buffer */
-  .bpp     = ST7565_BPP,              /* Bits-per-pixel */
+  .putrun  = st7565_putrun,              /* Put a run into LCD memory */
+  .getrun  = st7565_getrun,              /* Get a run from LCD memory */
+  .buffer  = (FAR uint8_t *)g_runbuffer, /* Run scratch buffer */
+  .bpp     = ST7565_BPP,                 /* Bits-per-pixel */
 };
 
 /* This is the standard, NuttX LCD driver object */
@@ -416,6 +419,7 @@ static inline int st7565_backlight(FAR struct st7565_dev_s *priv, int level)
  * Description:
  *   This method can be used to write a partial raster line to the LCD:
  *
+ *   dev     - The lcd device
  *   row     - Starting row to write to (range: 0 <= row < yres)
  *   col     - Starting column to write to (range: 0 <= col <= xres-npixels)
  *   buffer  - The buffer containing the run to be written to the LCD
@@ -424,14 +428,11 @@ static inline int st7565_backlight(FAR struct st7565_dev_s *priv, int level)
  *
  ****************************************************************************/
 
-static int st7565_putrun(fb_coord_t row, fb_coord_t col,
-                         FAR const uint8_t * buffer, size_t npixels)
+static int st7565_putrun(FAR struct lcd_dev_s *dev, fb_coord_t row,
+                         fb_coord_t col, FAR const uint8_t *buffer,
+                         size_t npixels)
 {
-  /* Because of this line of code, we will only be able to support a single
-   * ST7565 device.
-   */
-
-  FAR struct st7565_dev_s *priv = &g_st7565dev;
+  FAR struct st7565_dev_s *priv = (FAR struct st7565_dev_s *)dev;
   FAR uint8_t *fbptr;
   FAR uint8_t *ptr;
   uint8_t fbmask;
@@ -578,15 +579,11 @@ static int st7565_putrun(fb_coord_t row, fb_coord_t col,
  *
  ****************************************************************************/
 
-static int st7565_getrun(fb_coord_t row, fb_coord_t col,
-                         FAR uint8_t * buffer,
+static int st7565_getrun(FAR struct lcd_dev_s *dev, fb_coord_t row,
+                         fb_coord_t col, FAR uint8_t *buffer,
                          size_t npixels)
 {
-  /* Because of this line of code, we will only be able to support a single
-   * ST7565 device.
-   */
-
-  FAR struct st7565_dev_s *priv = &g_st7565dev;
+  FAR struct st7565_dev_s *priv = (FAR struct st7565_dev_s *)dev;
   FAR uint8_t *fbptr;
   uint8_t page;
   uint8_t fbmask;
@@ -728,6 +725,7 @@ static int st7565_getplaneinfo(FAR struct lcd_dev_s *dev,
   DEBUGASSERT(dev && pinfo && planeno == 0);
   ginfo("planeno: %d bpp: %d\n", planeno, g_planeinfo.bpp);
   memcpy(pinfo, &g_planeinfo, sizeof(struct lcd_planeinfo_s));
+  pinfo->dev = dev;
   return OK;
 }
 
@@ -962,7 +960,7 @@ FAR struct lcd_dev_s *st7565_initialize(FAR struct st7565_lcd_s *lcd,
 
   st7565_reset(priv, true);
 
-  /* it seems too long but written in NHD‐C12864KGZ DISPLAY
+  /* it seems too long but written in NHD-C12864KGZ DISPLAY
    * INITIALIZATION...
    */
 
@@ -970,7 +968,7 @@ FAR struct lcd_dev_s *st7565_initialize(FAR struct st7565_lcd_s *lcd,
 
   st7565_reset(priv, false);
 
-  /* it seems too long but written in NHD‐C12864KGZ DISPLAY
+  /* it seems too long but written in NHD-C12864KGZ DISPLAY
    * INITIALIZATION...
    */
 

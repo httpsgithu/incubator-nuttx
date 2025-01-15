@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/sam34/sam3u-ek/src/sam_usbdev.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -32,7 +34,7 @@
 #include <nuttx/usb/usbdev.h>
 #include <nuttx/usb/usbdev_trace.h>
 
-#include "arm_arch.h"
+#include "arm_internal.h"
 #include "sam3u-ek.h"
 
 /****************************************************************************
@@ -59,7 +61,7 @@
  *
  ****************************************************************************/
 
-void sam_usbsuspend(FAR struct usbdev_s *dev, bool resume)
+void sam_usbsuspend(struct usbdev_s *dev, bool resume)
 {
   uinfo("resume: %d\n", resume);
 }

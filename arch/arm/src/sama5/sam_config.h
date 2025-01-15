@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/sama5/sam_config.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -99,6 +101,19 @@
 
 #if defined(SAMA5_HAVE_FLEXCOM_USART) && defined(SAMA5_HAVE_USART)
 #  error "Cannot have both USART and Flexcom USART"
+#endif
+
+#if defined (SAMA5_HAVE_FLEXCOM_USART)
+#  undef CONFIG_USART0_SERIAL_CONSOLE
+#  undef CONFIG_USART1_SERIAL_CONSOLE
+#  undef CONFIG_USART2_SERIAL_CONSOLE
+#  undef CONFIG_USART3_SERIAL_CONSOLE
+#  undef CONFIG_USART4_SERIAL_CONSOLE
+#  undef CONFIG_SAMA5_USART0
+#  undef CONFIG_SAMA5_USART1
+#  undef CONFIG_SAMA5_USART2
+#  undef CONFIG_SAMA5_USART3
+#  undef CONFIG_SAMA5_USART4
 #endif
 
 #undef SUPPRESS_CONSOLE_CONFIG
@@ -364,6 +379,14 @@
 #  undef  SAMA5_HAVE_UART_CONSOLE
 #  undef  SAMA5_HAVE_USART_CONSOLE
 #  undef  SAMA5_HAVE_FLEXCOM_CONSOLE
+#endif
+
+#if defined(CONFIG_SAMA5_FLEXCOM0_SPI) || \
+    defined(CONFIG_SAMA5_FLEXCOM1_SPI) || \
+    defined(CONFIG_SAMA5_FLEXCOM2_SPI) || \
+    defined(CONFIG_SAMA5_FLEXCOM3_SPI) || \
+    defined(CONFIG_SAMA5_FLEXCOM4_SPI)
+#  define SAMA5_HAVE_FLEXCOM_SPI
 #endif
 
 #endif /* __ARCH_ARM_SRC_SAMA5_SAM_CONFIG_H */

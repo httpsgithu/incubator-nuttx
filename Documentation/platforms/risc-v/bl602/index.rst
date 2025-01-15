@@ -139,8 +139,8 @@ Config download
 For details, please refer to `BLFlashEnv — BL602 IoT
 SDK <https://bouffalolab.github.io/bl_iot_sdk/Developer_Environment/BLFlashEnv/BLFlashEnv.html#iot>`__
 
-Debuging with OpenOCD
-=====================
+Debugging with OpenOCD
+======================
 
 Download OpenOCD `RISC‑V
 OpenOCD <https://static.dev.sifive.com/dev-tools/freedom-tools/v2020.12/riscv-openocd-0.10.0-2020.12.1-x86_64-linux-ubuntu14.tar.gz>`__.
@@ -212,3 +212,12 @@ LED_PWM    No
 SHA        No      
 RSA        No      
 ========== ======= =====
+
+Supported Boards
+================
+
+.. toctree::
+   :glob:
+   :maxdepth: 1
+
+   boards/*/*

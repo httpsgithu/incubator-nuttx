@@ -1,6 +1,8 @@
 /****************************************************************************
  * wireless/ieee802154/mac802154_start.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -58,7 +60,7 @@ int mac802154_req_start(MACHANDLE mac,
 
   /* Get exclusive access to the MAC */
 
-  ret = mac802154_lock(priv, true);
+  ret = nxmutex_lock(&priv->lock);
   if (ret < 0)
     {
       return ret;
@@ -185,11 +187,10 @@ int mac802154_req_start(MACHANDLE mac,
         }
     }
 
-  mac802154_unlock(priv)
-
+  nxmutex_unlock(&priv->lock);
   return OK;
 
 errout:
-  mac802154_unlock(priv)
+  nxmutex_unlock(&priv->lock);
   return ret;
 }

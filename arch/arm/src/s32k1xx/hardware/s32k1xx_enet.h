@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/s32k1xx/hardware/s32k1xx_enet.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -514,13 +516,13 @@
  */
 
 #ifdef S32K1XX_ENET_HAS_DBSWAP
-# ifndef CONFIG_ENDIAN_BIG
-#  define S32K1XX_USE_DBSWAP
-# endif
+#  ifndef CONFIG_ENDIAN_BIG
+#    define S32K1XX_USE_DBSWAP
+#  endif
 #else
-# ifndef CONFIG_ENDIAN_BIG
-#  define S32K1XX_BUFFERS_SWAP
-# endif
+#  ifndef CONFIG_ENDIAN_BIG
+#    define S32K1XX_BUFFERS_SWAP
+#  endif
 #endif
 
 #ifndef S32K1XX_BUFFERS_SWAP

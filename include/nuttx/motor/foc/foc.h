@@ -1,6 +1,8 @@
 /****************************************************************************
  * include/nuttx/motor/foc/foc.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -27,11 +29,16 @@
 
 #include <nuttx/config.h>
 #include <nuttx/compiler.h>
+#include <nuttx/mutex.h>
+#include <nuttx/semaphore.h>
+
+#include <nuttx/motor/foc/foc_pwr.h>
 
 #include <stdbool.h>
-#include <semaphore.h>
 
 #include <fixedmath.h>
+
+#ifdef CONFIG_MOTOR_FOC
 
 /****************************************************************************
  * Pre-processor Definitions
@@ -42,6 +49,8 @@
 
 #define FOCDUTY_TO_FLOAT(d)     (b16tof(d))
 #define FOCDUTY_TO_FIXED16(d)   (d)
+
+#define FOC_BOARDCFG_GAINLIST_LEN 4
 
 /****************************************************************************
  * Public Types
@@ -57,9 +66,10 @@ enum foc_fault_e
   FOC_FAULT_BOARD   = (1 << 3), /* Board-specific fault */
 };
 
-/* Phase current as signed 32-bit integer */
+/* Phase current and BEMF voltage as signed 32-bit integer */
 
 typedef int32_t foc_current_t;
+typedef int32_t foc_voltage_t;
 
 /* Phase duty cycle as unsigned fixed16.
  * We use range [0.0 to 1.0] so this gives us a 16-bit resolution.
@@ -79,8 +89,12 @@ struct foc_cfg_s
 
 struct foc_state_s
 {
+  bool          pwm_off;                       /* PWM switches disabled */
   uint8_t       fault;                         /* Fault state */
   foc_current_t curr[CONFIG_MOTOR_FOC_PHASES]; /* Phase current feedback */
+#ifdef CONFIG_MOTOR_FOC_BEMF_SENSE
+  foc_voltage_t volt[CONFIG_MOTOR_FOC_PHASES]; /* BEMF voltage feedback */
+#endif
 };
 
 /* Input data to the FOC device */
@@ -90,19 +104,52 @@ struct foc_params_s
   foc_duty_t duty[CONFIG_MOTOR_FOC_PHASES]; /* PWM duty cycle for phases */
 };
 
-/* Hardware specific configuration */
+/* Hardware specific informations */
 
-struct foc_hw_config_s
+struct foc_info_hw_s
 {
+  /* PWM configuration */
+
   uint32_t   pwm_dt_ns;   /* PWM dead-time in nano seconds */
   foc_duty_t pwm_max;     /* Maximum PWM duty cycle */
+
+  /* ADC configuration for phase current sampling
+   *
+   * In most cases it will be:
+   *
+   *   iphase_scale = iphase_ratio * adc_to_volt
+   *   adc_to_volt  = adc_ref_volt / adc_val_max
+   *   for shunt sensors iphase_ratio = 1 / (R_shunt * gain)
+   */
+
+  int32_t    iphase_scale;              /* Current phase scale [x100000] */
+  int32_t    iphase_max;                /* Maximum phase curretn [x1000] */
+
+  /* ADC configuration for BEMF sampling */
+
+#ifdef CONFIG_MOTOR_FOC_BEMF_SENSE
+  int32_t    bemf_scale;                /* BEMF sampling scale [x1000] */
+#endif
 };
 
 /* FOC driver info */
 
 struct foc_info_s
 {
-  struct foc_hw_config_s hw_cfg; /* Hardware specific configuration */
+  struct foc_info_hw_s hw_cfg; /* Hardware specific informations  */
+};
+
+/* FOC board-specific configuration */
+
+struct foc_set_boardcfg_s
+{
+  int gain;
+};
+
+struct foc_get_boardcfg_s
+{
+  int gain;
+  int gain_list[FOC_BOARDCFG_GAINLIST_LEN];
 };
 
 /* FOC device upper-half */
@@ -112,11 +159,10 @@ struct foc_dev_s
 {
   /* Fields managed by common upper-half FOC logic **************************/
 
-  uint8_t                    devno;      /* FOC device instance number */
   uint8_t                    ocount;     /* The number of times the device
                                           * has been opened
                                           */
-  sem_t                      closesem;   /* Locks out new opens while close
+  mutex_t                    closelock;  /* Locks out new opens while close
                                           * is in progress
                                           */
   sem_t                      statesem;   /* Notifier semaphore */
@@ -133,6 +179,10 @@ struct foc_dev_s
   /* FOC device input/output data *******************************************/
 
   struct foc_state_s         state;      /* FOC device state */
+
+  /* (Optional) FOC power-stage driver  *************************************/
+
+  FAR struct focpwr_dev_s    *pwr;        /* FOC power-stage driver */
 };
 
 /****************************************************************************
@@ -154,4 +204,5 @@ int foc_register(FAR const char *path, FAR struct foc_dev_s *dev);
 }
 #endif
 
+#endif /* CONFIG_MOTOR_FOC */
 #endif /* __INCLUDE_NUTTX_MOTOR_FOC_FOC_H */

@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/stm32/hardware/stm32f33xxx_hrtim.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -18,8 +20,8 @@
  *
  ****************************************************************************/
 
-#ifndef __ARCH_ARM_SRC_STM32_HARDWARE_STM32_HRTIM_H
-#define __ARCH_ARM_SRC_STM32_HARDWARE_STM32_HRTIM_H
+#ifndef __ARCH_ARM_SRC_STM32_HARDWARE_STM32F33XXX_HRTIM_H
+#define __ARCH_ARM_SRC_STM32_HARDWARE_STM32F33XXX_HRTIM_H
 
 /****************************************************************************
  * Included Files
@@ -1794,4 +1796,4 @@
 #define HRTIM_BDMADR_SHIFT             0         /* Bits 0-31: Burst DMA Data register */
 #define HRTIM_BDMADR_MASK              (0xffffffff << HRTIM_BDMADR_SHIFT)
 
-#endif /* __ARCH_ARM_SRC_STM32_HARDWARE_STM32_HRTIM_H */
+#endif /* __ARCH_ARM_SRC_STM32_HARDWARE_STM32F33XXX_HRTIM_H */

@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/stm32/nucleo-f303re/src/stm32_adc.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -304,7 +306,7 @@ static const uint32_t g_pinlist2[1] =
 
 int stm32_adc_setup(void)
 {
-  FAR struct adc_dev_s *adc;
+  struct adc_dev_s *adc;
   int ret;
   int i;
 

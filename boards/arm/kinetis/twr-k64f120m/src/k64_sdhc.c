@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/kinetis/twr-k64f120m/src/k64_sdhc.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -49,7 +51,6 @@
 #include <stdio.h>
 #include <debug.h>
 #include <errno.h>
-#include <debug.h>
 
 #include <nuttx/sdio.h>
 #include <nuttx/mmcsd.h>
@@ -124,7 +125,7 @@ static void k64_mediachange(void)
  * Name: k64_cdinterrupt
  ****************************************************************************/
 
-static int k64_cdinterrupt(int irq, FAR void *context, FAR void *arg)
+static int k64_cdinterrupt(int irq, void *context, void *arg)
 {
   /* All of the work is done by k64_mediachange() */
 

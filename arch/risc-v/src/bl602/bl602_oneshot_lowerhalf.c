@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/risc-v/src/bl602/bl602_oneshot_lowerhalf.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -29,11 +31,11 @@
 #include <assert.h>
 #include <debug.h>
 
+#include <nuttx/arch.h>
 #include <nuttx/irq.h>
 #include <nuttx/kmalloc.h>
 #include <nuttx/timers/oneshot.h>
 
-#include "riscv_arch.h"
 #include "riscv_internal.h"
 
 #include <hardware/bl602_timer.h>
@@ -360,16 +362,14 @@ static int bl602_cancel(struct oneshot_lowerhalf_s *lower,
  ****************************************************************************/
 
 struct oneshot_lowerhalf_s *oneshot_initialize(int      chan,
-                                                   uint16_t resolution)
+                                               uint16_t resolution)
 {
   struct bl602_oneshot_lowerhalf_s *priv;
   struct timer_cfg_s                    timstr;
 
   /* Allocate an instance of the lower half driver */
 
-  priv = (struct bl602_oneshot_lowerhalf_s *)kmm_zalloc(
-    sizeof(struct bl602_oneshot_lowerhalf_s));
-
+  priv = kmm_zalloc(sizeof(struct bl602_oneshot_lowerhalf_s));
   if (priv == NULL)
     {
       tmrerr("ERROR: Failed to initialized state structure\n");

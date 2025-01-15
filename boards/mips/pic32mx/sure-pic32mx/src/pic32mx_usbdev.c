@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/mips/pic32mx/sure-pic32mx/src/pic32mx_usbdev.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -140,7 +142,7 @@ void weak_function pic32mx_usbdevinitialize(void)
  *
  ****************************************************************************/
 
-int pic32mx_usbpullup(FAR struct usbdev_s *dev,  bool enable)
+int pic32mx_usbpullup(struct usbdev_s *dev,  bool enable)
 {
   /* The Sure PIC32MX does not have a USB pull-up */
 
@@ -158,7 +160,7 @@ int pic32mx_usbpullup(FAR struct usbdev_s *dev,  bool enable)
  *
  ****************************************************************************/
 
-void pic32mx_usbsuspend(FAR struct usbdev_s *dev, bool resume)
+void pic32mx_usbsuspend(struct usbdev_s *dev, bool resume)
 {
   /* Do nothing */
 }

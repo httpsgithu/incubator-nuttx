@@ -23,32 +23,31 @@
  ****************************************************************************/
 
 #include <nuttx/config.h>
+
+#include <assert.h>
+#include <debug.h>
+#include <errno.h>
+#include <stdbool.h>
+#include <stdint.h>
+#include <string.h>
+#ifdef CONFIG_SERIAL_TERMIOS
+#  include <termios.h>
+#endif
+#include <unistd.h>
+#include <sys/types.h>
+
 #include <nuttx/arch.h>
 #include <nuttx/irq.h>
 #include <nuttx/serial/serial.h>
 #include <nuttx/fs/ioctl.h>
 
-#include <sys/types.h>
-#include <stdint.h>
-#include <stdbool.h>
-#include <unistd.h>
-#include <string.h>
-#include <assert.h>
-#include <errno.h>
-#include <debug.h>
-
-#ifdef CONFIG_SERIAL_TERMIOS
-#  include <termios.h>
-#endif
-
 #include "xtensa.h"
-
+#include "esp32s2_config.h"
+#include "esp32s2_irq.h"
+#include "esp32s2_lowputc.h"
+#include "esp32s2_gpio.h"
 #include "hardware/esp32s2_uart.h"
 #include "hardware/esp32s2_system.h"
-
-#include "esp32s2_config.h"
-#include "esp32s2_cpuint.h"
-#include "esp32s2_lowputc.h"
 
 /****************************************************************************
  * Pre-processor Definitions
@@ -71,7 +70,7 @@
 #    define CONSOLE_DEV     g_uart0_dev     /* UART0 is console */
 #    define TTYS0_DEV       g_uart0_dev     /* UART0 is ttyS0 */
 #    define UART0_ASSIGNED      1
-# elif defined(CONFIG_UART1_SERIAL_CONSOLE)
+#  elif defined(CONFIG_UART1_SERIAL_CONSOLE)
 #    define CONSOLE_DEV         g_uart1_dev  /* UART1 is console */
 #    define TTYS0_DEV           g_uart1_dev  /* UART1 is ttyS0 */
 #    define UART1_ASSIGNED      1
@@ -222,7 +221,7 @@ static uart_dev_t g_uart1_dev =
  *
  * Description:
  *   This is the UART interrupt handler.  It will be invoked when an
- *   interrupt is received on the 'irq'  It should call uart_xmitchars or
+ *   interrupt is received on the 'irq'.  It should call uart_xmitchars or
  *   uart_recvchars to perform the appropriate data transfers.  The
  *   interrupt handling logic must be able to map the 'irq' number into the
  *   appropriate uart_dev_s structure in order to call these functions.
@@ -238,6 +237,18 @@ static int uart_handler(int irq, void *context, void *arg)
   uint32_t int_status;
 
   int_status = getreg32(UART_INT_ST_REG(priv->id));
+
+#ifdef HAVE_RS485
+  if ((int_status & UART_TX_BRK_IDLE_DONE_INT_ST_M) != 0 &&
+      esp32s2_txempty(dev))
+    {
+      if (dev->xmit.tail == dev->xmit.head)
+        {
+          esp32s2_gpiowrite(priv->rs485_dir_gpio,
+                            !priv->rs485_dir_polarity);
+        }
+    }
+#endif
 
   /* TX FIFO empty interrupt or UART TX done int */
 
@@ -371,6 +382,21 @@ static int esp32s2_setup(struct uart_dev_s *dev)
       esp32s2_lowputc_set_oflow(priv, false);
     }
 #endif
+#ifdef HAVE_RS485
+
+  /* Configure the idle time between transfers */
+
+  if (priv->rs485_dir_gpio != 0)
+    {
+      esp32s2_lowputc_set_tx_idle_time(priv, 1);
+    }
+  else
+#endif
+    {
+      /* No Tx idle interval */
+
+      esp32s2_lowputc_set_tx_idle_time(priv, 0);
+    }
 
   /* Reset FIFOs */
 
@@ -440,30 +466,27 @@ static int esp32s2_attach(struct uart_dev_s *dev)
 
   DEBUGASSERT(priv->cpuint == -ENOMEM);
 
-  /* Alloc a level CPU interrupt */
+  /* Set up to receive peripheral interrupts */
 
-  priv->cpuint = esp32s2_alloc_levelint(priv->int_pri);
+  priv->cpuint = esp32s2_setup_irq(priv->periph, priv->int_pri,
+                                   ESP32S2_CPUINT_LEVEL);
   if (priv->cpuint < 0)
     {
+      /* Failed to allocate a CPU interrupt of this type */
+
       return priv->cpuint;
     }
-  else
+
+  /* Attach and enable the IRQ */
+
+  ret = irq_attach(priv->irq, uart_handler, dev);
+  if (ret == OK)
     {
-      /* Disable the allocated CPU interrupt */
+      /* Enable the CPU interrupt (RX and TX interrupts are still disabled
+       * in the UART
+       */
 
-      up_disable_irq(priv->cpuint);
-
-      /* Attach a peripheral interrupt to a CPU interrupt */
-
-      esp32s2_attach_peripheral(priv->periph, priv->cpuint);
-
-      /* Attach and enable the IRQ */
-
-      ret = irq_attach(priv->irq, uart_handler, dev);
-      if (ret == OK)
-        {
-          up_enable_irq(priv->cpuint);
-        }
+      up_enable_irq(priv->irq);
     }
 
   return ret;
@@ -488,21 +511,14 @@ static void esp32s2_detach(struct uart_dev_s *dev)
 
   DEBUGASSERT(priv->cpuint != -ENOMEM);
 
-  /* Disable the CPU interrupt and detach the IRQ */
+  /* Disable and detach the CPU interrupt */
 
-  up_disable_irq(priv->cpuint);
+  up_disable_irq(priv->irq);
   irq_detach(priv->irq);
 
   /* Disassociate the peripheral interrupt from the CPU interrupt */
 
-  esp32s2_detach_peripheral(priv->periph, priv->cpuint);
-
-  /* Release the CPU interrupt */
-
-  esp32s2_free_cpuint(priv->periph);
-
-  /* Reset cpuint */
-
+  esp32s2_teardown_irq(priv->periph, priv->cpuint);
   priv->cpuint = -ENOMEM;
 }
 
@@ -525,6 +541,18 @@ static void esp32s2_txint(struct uart_dev_s *dev, bool enable)
 
   if (enable)
     {
+      /* After all bytes physically transmitted in the RS485 bus
+       * the TX_BRK_IDLE will indicate we can disable the TX pin.
+       */
+
+#ifdef HAVE_RS485
+      if (priv->rs485_dir_gpio != 0)
+        {
+          modifyreg32(UART_INT_ENA_REG(priv->id),
+                      0, UART_TX_BRK_IDLE_DONE_INT_ENA);
+        }
+#endif
+
       /* Set to receive an interrupt when the TX holding FIFO is empty or
        * a transmission is done.
        */
@@ -625,7 +653,7 @@ static bool esp32s2_rxavailable(struct uart_dev_s *dev)
 
 static bool esp32s2_txready(struct uart_dev_s *dev)
 {
-  return (esp32s2_lowputc_is_tx_fifo_full(dev->priv)) ? false : true;
+  return !esp32s2_lowputc_is_tx_fifo_full(dev->priv);
 }
 
 /****************************************************************************
@@ -651,10 +679,9 @@ static bool esp32s2_txempty(struct uart_dev_s *dev)
   struct esp32s2_uart_s *priv = dev->priv;
 
   reg = getreg32(UART_INT_RAW_REG(priv->id));
+  reg = REG_MASK(reg, UART_TX_DONE_INT_RAW);
 
-  reg =  REG_MASK(reg, UART_TXFIFO_EMPTY_INT_RAW);
-
-  return (reg > 0) ? true : false;
+  return reg > 0;
 }
 
 /****************************************************************************
@@ -671,7 +698,16 @@ static bool esp32s2_txempty(struct uart_dev_s *dev)
 
 static void esp32s2_send(struct uart_dev_s *dev, int ch)
 {
-  esp32s2_lowputc_send_byte(dev->priv, ch);
+  struct esp32s2_uart_s *priv = dev->priv;
+
+#ifdef HAVE_RS485
+  if (priv->rs485_dir_gpio != 0)
+    {
+      esp32s2_gpiowrite(priv->rs485_dir_gpio, priv->rs485_dir_polarity);
+    }
+#endif
+
+  esp32s2_lowputc_send_byte(priv, (char)ch);
 }
 
 /****************************************************************************
@@ -766,8 +802,8 @@ static int esp32s2_ioctl(struct file *filep, int cmd, unsigned long arg)
 
     case TCGETS:
       {
-        struct termios  *termiosp    = (struct termios *)arg;
-        struct esp32s2_uart_s *priv  = (struct esp32s2_uart_s *)dev->priv;
+        struct termios  *termiosp   = (struct termios *)arg;
+        struct esp32s2_uart_s *priv = (struct esp32s2_uart_s *)dev->priv;
         if (!termiosp)
           {
             ret = -EINVAL;
@@ -822,8 +858,8 @@ static int esp32s2_ioctl(struct file *filep, int cmd, unsigned long arg)
 
     case TCSETS:
       {
-        struct termios  *termiosp    = (struct termios *)arg;
-        struct esp32s2_uart_s *priv  = (struct esp32s2_uart_s *)dev->priv;
+        struct termios  *termiosp   = (struct termios *)arg;
+        struct esp32s2_uart_s *priv = (struct esp32s2_uart_s *)dev->priv;
         uint32_t baud;
         uint32_t current_int_sts;
         uint8_t  parity;
@@ -1070,7 +1106,7 @@ void xtensa_serialinit(void)
 
   uart_register("/dev/ttyS0", &TTYS0_DEV);
 
-#ifdef	TTYS1_DEV
+#ifdef TTYS1_DEV
   uart_register("/dev/ttyS1", &TTYS1_DEV);
 #endif
 }
@@ -1083,26 +1119,15 @@ void xtensa_serialinit(void)
  *
  ****************************************************************************/
 
-int up_putc(int ch)
+void up_putc(int ch)
 {
 #ifdef HAVE_SERIAL_CONSOLE
   uint32_t int_status;
 
   esp32s2_lowputc_disable_all_uart_int(CONSOLE_DEV.priv, &int_status);
-
-  /* Check for LF */
-
-  if (ch == '\n')
-    {
-      /* Add CR */
-
-      up_lowputc('\r');
-    }
-
-  up_lowputc(ch);
+  xtensa_lowputc(ch);
   esp32s2_lowputc_restore_all_uart_int(CONSOLE_DEV.priv, &int_status);
 #endif
-  return ch;
 }
 
 #else /* HAVE_UART_DEVICE */
@@ -1112,7 +1137,7 @@ int up_putc(int ch)
  *
  * Description:
  *   Stubs that may be needed.  These stubs will be used if all UARTs are
- *   disabled.  In that case, the logic in common/up_initialize() is not
+ *   disabled.  In that case, the logic in common/xtensa_initialize() is not
  *   smart enough to know that there are not UARTs and will still expect
  *   these interfaces to be provided.
  *   This may be a special case where the upper and lower half serial layers
@@ -1129,9 +1154,8 @@ void xtensa_serialinit(void)
 {
 }
 
-int up_putc(int ch)
+void up_putc(int ch)
 {
-  return ch;
 }
 
 #endif /* HAVE_UART_DEVICE */
@@ -1147,23 +1171,13 @@ int up_putc(int ch)
  *
  ****************************************************************************/
 
-int up_putc(int ch)
+void up_putc(int ch)
 {
 #ifdef HAVE_SERIAL_CONSOLE
   uint32_t int_status;
 
-  /* Check for LF */
-
-  if (ch == '\n')
-    {
-      /* Add CR */
-
-      xtensa_lowputc('\r');
-    }
-
   xtensa_lowputc(ch);
 #endif
-  return ch;
 }
 
 #endif /* USE_SERIALDRIVER */

@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/mips/pic32mx/mirtoo/src/pic32_appinit.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -101,8 +103,8 @@
 int board_app_initialize(uintptr_t arg)
 {
 #ifdef HAVE_SST25
-  FAR struct spi_dev_s *spi;
-  FAR struct mtd_dev_s *mtd;
+  struct spi_dev_s *spi;
+  struct mtd_dev_s *mtd;
   int ret;
 
   /* Get the SPI port */

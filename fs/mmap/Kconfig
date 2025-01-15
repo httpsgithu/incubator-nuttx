@@ -6,6 +6,7 @@
 config FS_RAMMAP
 	bool "File mapping emulation"
 	default n
+	depends on FS_REFCOUNT
 	---help---
 		NuttX operates in a flat open address space and is focused on MCUs that do
 		support Memory Management Units (MMUs).  Therefore, NuttX generally does not
@@ -23,5 +24,8 @@ config FS_RAMMAP
 
 		See nuttx/fs/mmap/README.txt for additional information.
 
-if FS_RAMMAP
-endif
+config FS_ANONMAP
+	bool "Anonymous mapping emulation"
+	default !DEFAULT_SMALL
+	---help---
+		Simulate private anonymous mappings by plain malloc

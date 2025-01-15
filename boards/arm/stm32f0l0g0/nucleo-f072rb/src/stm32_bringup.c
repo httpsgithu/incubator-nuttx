@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/stm32f0l0g0/nucleo-f072rb/src/stm32_bringup.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -63,7 +65,7 @@
 int stm32_bringup(void)
 {
 #ifdef HAVE_I2C_DRIVER
-  FAR struct i2c_master_s *i2c;
+  struct i2c_master_s *i2c;
 #endif
   int ret;
 

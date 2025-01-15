@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/lpc54xx/lpc54_irq.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -36,9 +38,7 @@
 #include "chip.h"
 #include "nvic.h"
 #include "ram_vectors.h"
-#include "arm_arch.h"
 #include "arm_internal.h"
-
 #include "lpc54_gpio.h"
 #include "lpc54_irq.h"
 
@@ -58,24 +58,6 @@
 
 #define NVIC_ENA_OFFSET    (0)
 #define NVIC_CLRENA_OFFSET (NVIC_IRQ0_31_CLEAR - NVIC_IRQ0_31_ENABLE)
-
-/****************************************************************************
- * Public Data
- ****************************************************************************/
-
-/* g_current_regs[] holds a references to the current interrupt level
- * register storage structure.  If is non-NULL only during interrupt
- * processing.  Access to g_current_regs[] must be through the macro
- * CURRENT_REGS for portability.
- */
-
-volatile uint32_t *g_current_regs[1];
-
-/* This is the address of the  exception vector table (determined by the
- * linker script).
- */
-
-extern uint32_t _vectors[];
 
 /****************************************************************************
  * Private Functions
@@ -141,8 +123,7 @@ static void lpc54_dumpnvic(const char *msg, int irq)
 #endif
 
 /****************************************************************************
- * Name: lpc54_nmi, lpc54_busfault, lpc54_usagefault, lpc54_pendsv,
- *       lpc54_dbgmonitor, lpc54_pendsv, lpc54_reserved
+ * Name: lpc54_nmi, lpc54_pendsv, lpc54_pendsv, lpc54_reserved
  *
  * Description:
  *   Handlers for various exceptions.  None are handled and all are fatal
@@ -152,7 +133,7 @@ static void lpc54_dumpnvic(const char *msg, int irq)
  ****************************************************************************/
 
 #ifdef CONFIG_DEBUG_FEATURES
-static int lpc54_nmi(int irq, FAR void *context, FAR void *arg)
+static int lpc54_nmi(int irq, void *context, void *arg)
 {
   up_irq_save();
   _err("PANIC!!! NMI received\n");
@@ -160,23 +141,7 @@ static int lpc54_nmi(int irq, FAR void *context, FAR void *arg)
   return 0;
 }
 
-static int lpc54_busfault(int irq, FAR void *context, FAR void *arg)
-{
-  up_irq_save();
-  _err("PANIC!!! Bus fault received\n");
-  PANIC();
-  return 0;
-}
-
-static int lpc54_usagefault(int irq, FAR void *context, FAR void *arg)
-{
-  up_irq_save();
-  _err("PANIC!!! Usage fault received\n");
-  PANIC();
-  return 0;
-}
-
-static int lpc54_pendsv(int irq, FAR void *context, FAR void *arg)
+static int lpc54_pendsv(int irq, void *context, void *arg)
 {
   up_irq_save();
   _err("PANIC!!! PendSV received\n");
@@ -184,15 +149,7 @@ static int lpc54_pendsv(int irq, FAR void *context, FAR void *arg)
   return 0;
 }
 
-static int lpc54_dbgmonitor(int irq, FAR void *context, FAR void *arg)
-{
-  up_irq_save();
-  _err("PANIC!!! Debug Monitor received\n");
-  PANIC();
-  return 0;
-}
-
-static int lpc54_reserved(int irq, FAR void *context, FAR void *arg)
+static int lpc54_reserved(int irq, void *context, void *arg)
 {
   up_irq_save();
   _err("PANIC!!! Reserved interrupt\n");
@@ -210,7 +167,6 @@ static int lpc54_reserved(int irq, FAR void *context, FAR void *arg)
  *
  ****************************************************************************/
 
-#ifdef CONFIG_ARMV7M_USEBASEPRI
 static inline void lpc54_prioritize_syscall(int priority)
 {
   uint32_t regval;
@@ -222,7 +178,6 @@ static inline void lpc54_prioritize_syscall(int priority)
   regval |= (priority << NVIC_SYSH_PRIORITY_PR11_SHIFT);
   putreg32(regval, NVIC_SYSH8_11_PRIORITY);
 }
-#endif
 
 /****************************************************************************
  * Name: lpc54_irqinfo
@@ -296,9 +251,6 @@ static int lpc54_irqinfo(int irq, uintptr_t *regaddr, uint32_t *bit,
 void up_irqinitialize(void)
 {
   uint32_t regaddr;
-#if defined(CONFIG_DEBUG_FEATURES) && !defined(CONFIG_ARMV7M_USEBASEPRI)
-  uint32_t regval;
-#endif
   int num_priority_registers;
   int i;
 
@@ -352,10 +304,6 @@ void up_irqinitialize(void)
       regaddr += 4;
     }
 
-  /* currents_regs is non-NULL only while processing an interrupt */
-
-  CURRENT_REGS = NULL;
-
   /* Attach the SVCall and Hard Fault exception handlers.  The SVCall
    * exception is used for performing context switches; The Hard Fault
    * must also be caught because a SVCall may show up as a Hard Fault
@@ -371,9 +319,7 @@ void up_irqinitialize(void)
   /* up_prioritize_irq(LPC54_IRQ_PENDSV, NVIC_SYSH_PRIORITY_MIN); */
 #endif
 
-#ifdef CONFIG_ARMV7M_USEBASEPRI
   lpc54_prioritize_syscall(NVIC_SYSH_SVCALL_PRIORITY);
-#endif
 
 #ifdef CONFIG_ARM_MPU
   /* If the MPU is enabled, then attach and enable the Memory Management
@@ -391,25 +337,15 @@ void up_irqinitialize(void)
 #ifndef CONFIG_ARM_MPU
   irq_attach(LPC54_IRQ_MEMFAULT, arm_memfault, NULL);
 #endif
-  irq_attach(LPC54_IRQ_BUSFAULT, lpc54_busfault, NULL);
-  irq_attach(LPC54_IRQ_USAGEFAULT, lpc54_usagefault, NULL);
+  irq_attach(LPC54_IRQ_BUSFAULT, arm_busfault, NULL);
+  irq_attach(LPC54_IRQ_USAGEFAULT, arm_usagefault, NULL);
   irq_attach(LPC54_IRQ_PENDSV, lpc54_pendsv, NULL);
-  irq_attach(LPC54_IRQ_DBGMONITOR, lpc54_dbgmonitor, NULL);
+  arm_enable_dbgmonitor();
+  irq_attach(LPC54_IRQ_DBGMONITOR, arm_dbgmonitor, NULL);
   irq_attach(LPC54_IRQ_RESERVED, lpc54_reserved, NULL);
 #endif
 
   lpc54_dumpnvic("initial", LPC54_IRQ_NIRQS);
-
-#if defined(CONFIG_DEBUG_FEATURES) && !defined(CONFIG_ARMV7M_USEBASEPRI)
-  /* If a debugger is connected, try to prevent it from catching hardfaults.
-   * If CONFIG_ARMV7M_USEBASEPRI, no hardfaults are expected in normal
-   * operation.
-   */
-
-  regval  = getreg32(NVIC_DEMCR);
-  regval &= ~NVIC_DEMCR_VCHARDERR;
-  putreg32(regval, NVIC_DEMCR);
-#endif
 
 #ifdef CONFIG_LPC54_GPIOIRQ
   /* Initialize GPIO interrupts */

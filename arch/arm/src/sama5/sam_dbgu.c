@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/sama5/sam_dbgu.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -40,9 +42,7 @@
 
 #include <arch/board/board.h>
 
-#include "arm_arch.h"
 #include "arm_internal.h"
-
 #include "chip.h"
 #include "hardware/sam_dbgu.h"
 #include "hardware/sam_pinmap.h"
@@ -76,7 +76,7 @@ static int  dbgu_setup(struct uart_dev_s *dev);
 static void dbgu_shutdown(struct uart_dev_s *dev);
 static int  dbgu_attach(struct uart_dev_s *dev);
 static void dbgu_detach(struct uart_dev_s *dev);
-static int  dbgu_interrupt(int irq, void *context, FAR void *arg);
+static int  dbgu_interrupt(int irq, void *context, void *arg);
 static int  dbgu_ioctl(struct file *filep, int cmd, unsigned long arg);
 static int  dbgu_receive(struct uart_dev_s *dev, unsigned int *status);
 static void dbgu_rxint(struct uart_dev_s *dev, bool enable);
@@ -307,14 +307,14 @@ static void dbgu_detach(struct uart_dev_s *dev)
  *
  * Description:
  *   This is the DBGU interrupt handler.  It will be invoked when an
- *   interrupt received on the 'irq'  It should call uart_transmitchars or
- *   uart_receivechar to perform the appropriate data transfers.  The
- *   interrupt handling logic must be able to map the 'irq' number into the
+ *   interrupt is received on the 'irq'.  It should call uart_xmitchars or
+ *   uart_recvchars to perform the appropriate data transfers.  The
+ *   interrupt handling logic must be able to map the 'arg' to the
  *   appropriate uart_dev_s structure in order to call these functions.
  *
  ****************************************************************************/
 
-static int dbgu_interrupt(int irq, void *context, FAR void *arg)
+static int dbgu_interrupt(int irq, void *context, void *arg)
 {
   struct uart_dev_s *dev = (struct uart_dev_s *)arg;
   struct dbgu_dev_s *priv;

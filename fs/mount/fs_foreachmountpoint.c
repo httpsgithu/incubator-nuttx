@@ -1,6 +1,8 @@
 /****************************************************************************
  * fs/mount/fs_foreachmountpoint.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -84,8 +86,8 @@ static int mountpoint_filter(FAR struct inode *node,
        * name and the path to the directory containing the inode.
        */
 
-      pathlen = strlen(dirpath);
-      namlen  = strlen(node->i_name) + 1;
+      pathlen = strnlen(dirpath, PATH_MAX);
+      namlen  = strnlen(node->i_name, PATH_MAX) + 1;
 
       /* Make sure that this would not exceed the maximum path length */
 
@@ -96,10 +98,11 @@ static int mountpoint_filter(FAR struct inode *node,
 
       /* Append the inode name to the directory path */
 
-      sprintf(&dirpath[pathlen], "/%s", node->i_name);
+      snprintf(&dirpath[pathlen], PATH_MAX - pathlen, "/%s", node->i_name);
 
       /* Get the status of the file system */
 
+      memset(&statbuf, 0, sizeof(struct statfs));
       if (node->u.i_mops->statfs(node, &statbuf) == OK)
         {
           /* And pass the full path and file system status to the handler */

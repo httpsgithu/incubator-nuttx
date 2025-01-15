@@ -1,6 +1,8 @@
 /****************************************************************************
  * include/syscall.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -28,11 +30,22 @@
 /* This is just a wrapper around sys/syscall.h and arch/syscall.h */
 
 #include <sys/syscall.h>
-#include <arch/syscall.h>
 
 /****************************************************************************
  * Pre-processor Definitions
  ****************************************************************************/
+
+#ifdef CONFIG_LIB_SYSCALL
+#  ifndef UP_WRAPSYM
+#    define UP_WRAPSYM(s) __wrap_##s
+#  endif
+#  ifndef UP_REALSYM
+#    define UP_REALSYM(s) __real_##s
+#  endif
+#else
+#  define UP_WRAPSYM(s) s
+#  define UP_REALSYM(s) s
+#endif
 
 /****************************************************************************
  * Public Type Definitions

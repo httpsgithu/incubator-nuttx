@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/risc-v/src/k210/hardware/k210_clint.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -28,5 +30,9 @@
 #define K210_CLINT_MSIP      (K210_CLINT_BASE + 0x0000)
 #define K210_CLINT_MTIMECMP  (K210_CLINT_BASE + 0x4000)
 #define K210_CLINT_MTIME     (K210_CLINT_BASE + 0xbff8)
+
+#define RISCV_CLINT_MSIP     K210_CLINT_MSIP
+
+#define RISCV_IPI            RISCV_CLINT_MSIP
 
 #endif /* __ARCH_RISCV_SRC_K210_HARDWARE_K210_CLINT_H */

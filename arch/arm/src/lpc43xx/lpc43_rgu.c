@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/lpc43xx/lpc43_rgu.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -28,8 +30,7 @@
 #include <nuttx/arch.h>
 
 #include "nvic.h"
-#include "arm_arch.h"
-
+#include "arm_internal.h"
 #include "chip.h"
 #include "lpc43_rgu.h"
 

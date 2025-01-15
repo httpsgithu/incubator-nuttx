@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/cxd56xx/drivers/sensors/kx022_scu.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -98,12 +100,11 @@
 
 struct kx022_dev_s
 {
-  FAR struct i2c_master_s *i2c; /* I2C interface */
-  uint8_t       addr;           /* I2C address */
-  int           port;           /* I2C port */
-
-  struct seq_s *seq;            /* Sequencer instance */
-  int           fifoid;         /* FIFO ID */
+  struct i2c_master_s *i2c; /* I2C interface */
+  uint8_t       addr;       /* I2C address */
+  int           port;       /* I2C port */
+  struct seq_s *seq;        /* Sequencer instance */
+  int           fifoid;     /* FIFO ID */
 };
 
 /****************************************************************************
@@ -112,13 +113,13 @@ struct kx022_dev_s
 
 /* Character driver methods */
 
-static int kx022_open(FAR struct file *filep);
-static int kx022_close(FAR struct file *filep);
-static ssize_t kx022_read(FAR struct file *filep, FAR char *buffer,
+static int kx022_open(struct file *filep);
+static int kx022_close(struct file *filep);
+static ssize_t kx022_read(struct file *filep, char *buffer,
                           size_t buflen);
-static ssize_t kx022_write(FAR struct file *filep, FAR const char *buffer,
+static ssize_t kx022_write(struct file *filep, const char *buffer,
                            size_t buflen);
-static int kx022_ioctl(FAR struct file *filep, int cmd, unsigned long arg);
+static int kx022_ioctl(struct file *filep, int cmd, unsigned long arg);
 
 /****************************************************************************
  * Private Data
@@ -130,12 +131,8 @@ static const struct file_operations g_kx022fops =
   kx022_close,                 /* close */
   kx022_read,                  /* read */
   kx022_write,                 /* write */
-  0,                           /* seek */
+  NULL,                        /* seek */
   kx022_ioctl,                 /* ioctl */
-#ifndef CONFIG_DISABLE_POLL
-  0,                           /* poll */
-#endif
-  0                            /* unlink */
 };
 
 /* Take XYZ data. */
@@ -166,7 +163,7 @@ static struct seq_s *g_seq = NULL;
  *
  ****************************************************************************/
 
-static uint8_t kx022_getreg8(FAR struct kx022_dev_s *priv, uint8_t regaddr)
+static uint8_t kx022_getreg8(struct kx022_dev_s *priv, uint8_t regaddr)
 {
   uint8_t regval = 0;
   uint16_t inst[2];
@@ -189,7 +186,7 @@ static uint8_t kx022_getreg8(FAR struct kx022_dev_s *priv, uint8_t regaddr)
  *
  ****************************************************************************/
 
-static void kx022_putreg8(FAR struct kx022_dev_s *priv, uint8_t regaddr,
+static void kx022_putreg8(struct kx022_dev_s *priv, uint8_t regaddr,
                           uint8_t regval)
 {
   uint16_t inst[2];
@@ -210,7 +207,7 @@ static void kx022_putreg8(FAR struct kx022_dev_s *priv, uint8_t regaddr,
  *
  ****************************************************************************/
 
-static int kx022_checkid(FAR struct kx022_dev_s *priv)
+static int kx022_checkid(struct kx022_dev_s *priv)
 {
   uint8_t devid;
 
@@ -237,7 +234,7 @@ static int kx022_checkid(FAR struct kx022_dev_s *priv)
  *
  ****************************************************************************/
 
-static void kx022_initialize(FAR struct kx022_dev_s *priv)
+static void kx022_initialize(struct kx022_dev_s *priv)
 {
   uint8_t val;
 
@@ -252,7 +249,7 @@ static void kx022_initialize(FAR struct kx022_dev_s *priv)
   kx022_putreg8(priv, KX022_ODCNTL, val);
 }
 
-static int kx022_seqinit(FAR struct kx022_dev_s *priv)
+static int kx022_seqinit(struct kx022_dev_s *priv)
 {
   DEBUGASSERT(g_seq == NULL);
 
@@ -290,10 +287,10 @@ static int kx022_seqinit(FAR struct kx022_dev_s *priv)
  *
  ****************************************************************************/
 
-static int kx022_open(FAR struct file *filep)
+static int kx022_open(struct file *filep)
 {
-  FAR struct inode *inode = filep->f_inode;
-  FAR struct kx022_dev_s *priv = inode->i_private;
+  struct inode *inode = filep->f_inode;
+  struct kx022_dev_s *priv = inode->i_private;
   uint8_t val;
 
   if (g_refcnt == 0)
@@ -333,10 +330,10 @@ static int kx022_open(FAR struct file *filep)
  *
  ****************************************************************************/
 
-static int kx022_close(FAR struct file *filep)
+static int kx022_close(struct file *filep)
 {
-  FAR struct inode *inode = filep->f_inode;
-  FAR struct kx022_dev_s *priv = inode->i_private;
+  struct inode *inode = filep->f_inode;
+  struct kx022_dev_s *priv = inode->i_private;
   uint8_t val;
 
   g_refcnt--;
@@ -367,11 +364,11 @@ static int kx022_close(FAR struct file *filep)
  * Name: kx022_read
  ****************************************************************************/
 
-static ssize_t kx022_read(FAR struct file *filep, FAR char *buffer,
+static ssize_t kx022_read(struct file *filep, char *buffer,
                           size_t len)
 {
-  FAR struct inode *inode = filep->f_inode;
-  FAR struct kx022_dev_s *priv = inode->i_private;
+  struct inode *inode = filep->f_inode;
+  struct kx022_dev_s *priv = inode->i_private;
 
   len = len / KX022_BYTESPERSAMPLE * KX022_BYTESPERSAMPLE;
   len = seq_read(priv->seq, priv->fifoid, buffer, len);
@@ -383,7 +380,7 @@ static ssize_t kx022_read(FAR struct file *filep, FAR char *buffer,
  * Name: kx022_write
  ****************************************************************************/
 
-static ssize_t kx022_write(FAR struct file *filep, FAR const char *buffer,
+static ssize_t kx022_write(struct file *filep, const char *buffer,
                            size_t buflen)
 {
   return -ENOSYS;
@@ -393,10 +390,10 @@ static ssize_t kx022_write(FAR struct file *filep, FAR const char *buffer,
  * Name: kx022_ioctl
  ****************************************************************************/
 
-static int kx022_ioctl(FAR struct file *filep, int cmd, unsigned long arg)
+static int kx022_ioctl(struct file *filep, int cmd, unsigned long arg)
 {
-  FAR struct inode *inode = filep->f_inode;
-  FAR struct kx022_dev_s *priv = inode->i_private;
+  struct inode *inode = filep->f_inode;
+  struct kx022_dev_s *priv = inode->i_private;
   int ret = OK;
 
   switch (cmd)
@@ -441,10 +438,10 @@ static int kx022_ioctl(FAR struct file *filep, int cmd, unsigned long arg)
  *
  ****************************************************************************/
 
-int kx022_init(FAR struct i2c_master_s *i2c, int port)
+int kx022_init(struct i2c_master_s *i2c, int port)
 {
-  FAR struct kx022_dev_s tmp;
-  FAR struct kx022_dev_s *priv = &tmp;
+  struct kx022_dev_s tmp;
+  struct kx022_dev_s *priv = &tmp;
   int ret;
 
   /* Setup temporary device structure for initialization */
@@ -488,16 +485,16 @@ int kx022_init(FAR struct i2c_master_s *i2c, int port)
  *
  ****************************************************************************/
 
-int kx022_register(FAR const char *devpath, int minor,
-                   FAR struct i2c_master_s *i2c, int port)
+int kx022_register(const char *devpath, int minor,
+                   struct i2c_master_s *i2c, int port)
 {
-  FAR struct kx022_dev_s *priv;
+  struct kx022_dev_s *priv;
   char path[16];
   int ret;
 
   /* Initialize the KX022 device structure */
 
-  priv = (FAR struct kx022_dev_s *)kmm_malloc(sizeof(struct kx022_dev_s));
+  priv = kmm_malloc(sizeof(struct kx022_dev_s));
   if (!priv)
     {
       snerr("Failed to allocate instance\n");

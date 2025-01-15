@@ -1,6 +1,8 @@
 /****************************************************************************
  * sched/sched/sched_idletask.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -43,14 +45,14 @@
  *   Check if the caller is an IDLE thread.  For most implementations of
  *   the SYSLOG output semaphore locking is required for mutual exclusion.
  *   The idle threads are unable to lock semaphores because they cannot
- *   want.  So IDLE thread output is a special case and is treated much as
+ *   wait.  So IDLE thread output is a special case and is treated much as
  *   we treat debug output from an interrupt handler.
  *
  * Input Parameters:
  *   None
  *
  * Returned Value:
- *   true if the calling task is and IDLE thread.
+ *   true if the calling task is an IDLE thread.
  *
  ****************************************************************************/
 
@@ -62,7 +64,7 @@ bool sched_idletask(void)
    * have been initialized and, in that case, rtcb may be NULL.
    */
 
-  DEBUGASSERT(rtcb != NULL || g_nx_initstate < OSINIT_TASKLISTS);
+  DEBUGASSERT(rtcb != NULL || !OSINIT_TASK_READY());
   if (rtcb != NULL)
     {
       /* The IDLE task TCB is distinguishable by a few things:
@@ -76,7 +78,7 @@ bool sched_idletask(void)
        * different PIDs in the SMP configuration.
        */
 
-      return (rtcb->flink == NULL);
+      return is_idle_task(rtcb);
     }
 
   /* We must be on the IDLE thread if we are early in initialization */

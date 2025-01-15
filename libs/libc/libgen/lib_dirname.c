@@ -1,6 +1,8 @@
 /****************************************************************************
  * libs/libc/libgen/lib_dirname.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -88,7 +90,7 @@ FAR char *dirname(FAR char *path)
     }
 
   /* Get the address of the last '/' which is not at the end of the path and,
-   * therefor, must be the end of the directory component.
+   * therefore, must be the end of the directory component.
    */
 
   p = strrchr(path, '/');

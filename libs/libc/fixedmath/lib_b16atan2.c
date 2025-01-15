@@ -1,6 +1,8 @@
 /****************************************************************************
  * libs/libc/fixedmath/lib_b16atan2.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -23,6 +25,7 @@
  ****************************************************************************/
 
 #include <fixedmath.h>
+#include <sys/param.h>
 
 /****************************************************************************
  * Pre-processor Definitions
@@ -37,16 +40,8 @@
 #define B16_HALFPI 0x00019220 /* 1.570796327 */
 #define B16_PI     0x00032440 /* 3.141592654 */
 
-#ifndef MAX
-#  define MAX(a,b) (a > b ? a : b)
-#endif
-
-#ifndef MIN
-#  define MIN(a,b) (a < b ? a : b)
-#endif
-
 #ifndef ABS
-#  define ABS(a)   (a < 0 ? -a : a)
+#  define ABS(a)   ((a) < 0 ? -(a) : (a))
 #endif
 
 /****************************************************************************

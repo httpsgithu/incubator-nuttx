@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/x86/include/types.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -32,7 +34,7 @@
 /* Include architecture-specific limits */
 
 #ifdef CONFIG_ARCH_I486
-# include <arch/i486/types.h>
+#  include <arch/i486/types.h>
 #endif
 
 /****************************************************************************

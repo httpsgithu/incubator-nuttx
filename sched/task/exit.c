@@ -1,6 +1,8 @@
 /****************************************************************************
  * sched/task/exit.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -29,12 +31,12 @@
 #include <debug.h>
 #include <errno.h>
 
+#include <nuttx/irq.h>
 #include <nuttx/fs/fs.h>
 
 #include "task/task.h"
 #include "group/group.h"
 #include "sched/sched.h"
-#include "pthread/pthread.h"
 
 /****************************************************************************
  * Public Functions
@@ -53,25 +55,6 @@
 
 void _exit(int status)
 {
-  up_exit(status);
-}
-
-/****************************************************************************
- * Name: exit
- *
- * Description:
- *   The exit() function causes normal process termination and the value of
- *   status & 0377 to be returned to the parent.
- *
- *   All functions registered with atexit() and on_exit() are called, in the
- *   reverse order of their registration.
- *
- *   All open streams are flushed and closed.
- *
- ****************************************************************************/
-
-void exit(int status)
-{
   FAR struct tcb_s *tcb = this_task();
 
   /* Only the lower 8-bits of status are used */
@@ -84,27 +67,34 @@ void exit(int status)
    * exit through a different mechanism.
    */
 
-  group_kill_children(tcb);
+  if ((tcb->flags & TCB_FLAG_TTYPE_MASK) != TCB_FLAG_TTYPE_KERNEL)
+    {
+      group_kill_children(tcb);
+    }
+
 #endif
 
-#if !defined(CONFIG_DISABLE_PTHREAD) && !defined(CONFIG_PTHREAD_MUTEX_UNSAFE)
-  /* Recover any mutexes still held by the canceled thread */
+  /* Make sure that we are in a critical section with local interrupts.
+   * The IRQ state will be restored when the next task is started.
+   */
 
-  pthread_mutex_inconsistent(tcb);
-#endif
+  enter_critical_section();
 
   /* Perform common task termination logic.  This will get called again later
-   * through logic kicked off by _exit().  However, we need to call it before
-   * calling _exit() in order to handle atexit() and on_exit() callbacks and
-   * so that we can flush buffered I/O (both of which may required
-   * suspending).
+   * through logic kicked off by up_exit().
+   *
+   * REVISIT: Tt should not be necessary to call this here, but releasing the
+   * task group (especially the group file list) requires that it is done
+   * here.
+   *
+   * The reason? up_exit removes the current process from the ready-to-run
+   * list and trying to execute code that depends on this_task() crashes at
+   * once, or does something very naughty.
    */
 
-  nxtask_exithook(tcb, status, false);
+  tcb->flags |= TCB_FLAG_EXIT_PROCESSING;
 
-  /* Then "really" exit.  Only the lower 8 bits of the exit status are
-   * used.
-   */
+  nxtask_exithook(tcb, status);
 
-  _exit(status);
+  up_exit(status);
 }

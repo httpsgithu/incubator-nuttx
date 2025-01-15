@@ -1,6 +1,8 @@
 /****************************************************************************
  * net/local/local_listen.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -23,10 +25,8 @@
  ****************************************************************************/
 
 #include <nuttx/config.h>
-#if defined(CONFIG_NET) && defined(CONFIG_NET_LOCAL_STREAM)
 
 #include <assert.h>
-#include <queue.h>
 #include <errno.h>
 #include <debug.h>
 
@@ -67,7 +67,7 @@
 
 int local_listen(FAR struct socket *psock, int backlog)
 {
-  FAR struct local_conn_s *server;
+  FAR struct local_conn_s *server = psock->s_conn;
 
   /* Verify that the sockfd corresponds to a connected SOCK_STREAM in this
    * address family.
@@ -80,14 +80,14 @@ int local_listen(FAR struct socket *psock, int backlog)
       return -EOPNOTSUPP;
     }
 
-  server = (FAR struct local_conn_s *)psock->s_conn;
+  net_lock();
 
   /* Some sanity checks */
 
   if (server->lc_proto != SOCK_STREAM ||
-      server->lc_state == LOCAL_STATE_UNBOUND ||
-      server->lc_type != LOCAL_TYPE_PATHNAME)
+      server->lc_state == LOCAL_STATE_UNBOUND)
     {
+      net_unlock();
       return -EOPNOTSUPP;
     }
 
@@ -96,7 +96,11 @@ int local_listen(FAR struct socket *psock, int backlog)
 
   /* Set the backlog value */
 
-  DEBUGASSERT((unsigned)backlog < 256);
+  if (backlog > UINT8_MAX)
+    {
+      backlog = UINT8_MAX;
+    }
+
   server->u.server.lc_backlog = backlog;
 
   /* Is this the first time since being bound to an address and that
@@ -105,17 +109,12 @@ int local_listen(FAR struct socket *psock, int backlog)
 
   if (server->lc_state == LOCAL_STATE_BOUND)
     {
-      /* The connection should not reside in any other list */
-
-      DEBUGASSERT(server->lc_node.flink == NULL &&
-                  server->lc_node.flink == NULL);
-
       /* And change the server state to listing */
 
       server->lc_state = LOCAL_STATE_LISTENING;
     }
 
+  net_unlock();
+
   return OK;
 }
-
-#endif /* CONFIG_NET && CONFIG_NET_LOCAL_STREAM */

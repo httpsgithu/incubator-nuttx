@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/risc-v/src/k210/k210_start.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -28,7 +30,7 @@
 #include <nuttx/arch.h>
 #include <arch/board/board.h>
 
-#include "riscv_arch.h"
+#include "riscv_internal.h"
 #include "k210_clockconfig.h"
 #include "k210_userspace.h"
 #include "k210.h"
@@ -48,27 +50,22 @@
  * Public Data
  ****************************************************************************/
 
-/* NOTE: g_idle_topstack needs to point the top of the idle stack
- * for CPU0 and this value is used in up_initial_state()
- */
-
-uintptr_t g_idle_topstack = K210_IDLESTACK0_TOP;
-volatile bool g_serial_ok = false;
-
-extern void k210_cpu_boot(uint32_t);
-
 /****************************************************************************
  * Public Functions
  ****************************************************************************/
 
 /****************************************************************************
- * Name: k210_start
+ * Name: __k210_start
  ****************************************************************************/
 
 void __k210_start(uint32_t mhartid)
 {
   const uint32_t *src;
   uint32_t *dest;
+
+  /* Configure FPU */
+
+  riscv_fpuconfig();
 
   if (0 < mhartid)
     {
@@ -79,7 +76,7 @@ void __k210_start(uint32_t mhartid)
    * certain that there are no issues with the state of global variables.
    */
 
-  for (dest = &_sbss; dest < &_ebss; )
+  for (dest = (uint32_t *)_sbss; dest < (uint32_t *)_ebss; )
     {
       *dest++ = 0;
     }
@@ -90,7 +87,9 @@ void __k210_start(uint32_t mhartid)
    * end of all of the other read-only data (.text, .rodata) at _eronly.
    */
 
-  for (src = &_eronly, dest = &_sdata; dest < &_edata; )
+  for (src = (const uint32_t *)_eronly,
+       dest = (uint32_t *)_sdata; dest < (uint32_t *)_edata;
+      )
     {
       *dest++ = *src++;
     }
@@ -110,8 +109,6 @@ void __k210_start(uint32_t mhartid)
 #endif
 
   showprogress('B');
-
-  g_serial_ok = true;
 
   /* Do board initialization */
 
@@ -135,11 +132,10 @@ void __k210_start(uint32_t mhartid)
   nx_start();
 
 cpu1:
-
   showprogress('a');
 
 #if defined(CONFIG_SMP) && (CONFIG_SMP_NCPUS == 2)
-  k210_cpu_boot(mhartid);
+  riscv_cpu_boot(mhartid);
 #endif
 
   while (true)

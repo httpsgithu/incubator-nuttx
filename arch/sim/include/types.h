@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/sim/include/types.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -86,26 +88,25 @@ typedef _int64_t           _intmax_t;
 typedef _uint64_t          _uintmax_t;
 #endif
 
-#if defined(CONFIG_HOST_X86_64) && !defined(CONFIG_SIM_M32)
-/* 64-bit build on 64-bit machine: A size is 8 bytes */
-
-#if defined(__SIZE_TYPE__)
-/* If __SIZE_TYPE__ is defined we define ssize_t based on size_t.
- * We simply change "unsigned" to "signed" for this single definition
- * to make sure ssize_t and size_t only differ by their signedness.
- */
-
-#define unsigned signed
-typedef __SIZE_TYPE__      _ssize_t;
-#undef unsigned
-typedef __SIZE_TYPE__      _size_t;
+#if defined(__WCHAR_TYPE__)
+typedef __WCHAR_TYPE__     _wchar_t;
+#elif defined(_MSC_VER)
+typedef unsigned short     _wchar_t;
 #else
-typedef signed long long   _ssize_t;
-typedef unsigned long long _size_t;
+typedef int                _wchar_t;
 #endif
 
+#ifdef _MSC_VER
+typedef unsigned short     _wint_t;
 #else
-/* 32-bit build on 32- or 64-bit machine: A size is 4 bytes */
+typedef int                _wint_t;
+#endif
+
+#ifdef _MSC_VER
+typedef unsigned short     _wctype_t;
+#else
+typedef int                _wctype_t;
+#endif
 
 #if defined(__SIZE_TYPE__)
 /* If __SIZE_TYPE__ is defined we define ssize_t based on size_t.
@@ -120,11 +121,12 @@ typedef __SIZE_TYPE__      _size_t;
 #elif defined(CONFIG_ARCH_SIZET_LONG)
 typedef signed long        _ssize_t;
 typedef unsigned long      _size_t;
+#elif defined(_WIN64)
+typedef signed long long   _ssize_t;
+typedef unsigned long long _size_t;
 #else
 typedef signed int         _ssize_t;
 typedef unsigned int       _size_t;
-#endif
-
 #endif
 
 /* This is the size of the interrupt state save returned by

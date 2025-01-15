@@ -1,6 +1,8 @@
 /****************************************************************************
  * sched/sched/sched_mergeprioritized.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -26,8 +28,9 @@
 
 #include <stdint.h>
 #include <stdbool.h>
-#include <queue.h>
 #include <assert.h>
+
+#include <nuttx/queue.h>
 
 #include "sched/sched.h"
 
@@ -39,7 +42,7 @@
  * Name: nxsched_merge_prioritized
  *
  * Description:
- *  This function merges the content of the prioritized task list '1ist1'
+ *  This function merges the content of the prioritized task list 'list1'
  *  into the prioritized task list, 'list2'.  On return 'list2' will contain
  *  the prioritized content of both lists; 'list1' will be empty.
  *
@@ -84,7 +87,7 @@ void nxsched_merge_prioritized(FAR dq_queue_t *list1, FAR dq_queue_t *list2,
     {
       /* Special case.. list1 is empty.  There is nothing to be done. */
 
-      goto out;
+      return;
     }
 
   /* Now the TCBs are no longer accessible and we can change the state on
@@ -107,7 +110,7 @@ void nxsched_merge_prioritized(FAR dq_queue_t *list1, FAR dq_queue_t *list2,
       /* Special case.. list2 is empty.  Move list1 to list2. */
 
       dq_move(&clone, list2);
-      goto out;
+      return;
     }
 
   /* Now loop until all entries from list1 have been merged into list2. tcb1
@@ -156,8 +159,4 @@ void nxsched_merge_prioritized(FAR dq_queue_t *list1, FAR dq_queue_t *list2,
         }
     }
   while (tcb1 != NULL);
-
-out:
-
-  return;
 }

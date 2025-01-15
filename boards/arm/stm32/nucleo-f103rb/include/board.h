@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/stm32/nucleo-f103rb/include/board.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -18,8 +20,8 @@
  *
  ****************************************************************************/
 
-#ifndef __BOARDS_ARM_STM32_NUCLEOF103RB_INCLUDE_BOARD_H
-#define __BOARDS_ARM_STM32_NUCLEOF103RB_INCLUDE_BOARD_H
+#ifndef __BOARDS_ARM_STM32_NUCLEO_F103RB_INCLUDE_BOARD_H
+#define __BOARDS_ARM_STM32_NUCLEO_F103RB_INCLUDE_BOARD_H
 
 /****************************************************************************
  * Included Files
@@ -30,10 +32,6 @@
 #ifndef __ASSEMBLY__
 #  include <stdint.h>
 #  include <stdbool.h>
-#endif
-
-#ifdef __KERNEL__
-#  include "stm32.h"
 #endif
 
 /****************************************************************************
@@ -211,6 +209,6 @@
 #  define GPIO_FOC_DEBUG3 (GPIO_OUTPUT|GPIO_CNF_OUTPP|GPIO_MODE_50MHz| \
                            GPIO_OUTPUT_CLEAR|GPIO_PORTC|GPIO_PIN5)
 
-#endif  /* CONFIG_BOARD_STM32_IHM07M1 */
+#endif /* CONFIG_BOARD_STM32_IHM07M1 */
 
 #endif /* __BOARDS_ARM_STM32_NUCLEO_F103RB_INCLUDE_BOARD_H */

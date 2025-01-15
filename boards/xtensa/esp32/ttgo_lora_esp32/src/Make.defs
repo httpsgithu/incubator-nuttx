@@ -1,6 +1,8 @@
 ############################################################################
 # boards/xtensa/esp32/ttgo_lora_esp32/src/Make.defs
 #
+# SPDX-License-Identifier: Apache-2.0
+#
 # Licensed to the Apache Software Foundation (ASF) under one or more
 # contributor license agreements.  See the NOTICE file distributed with
 # this work for additional information regarding copyright ownership.  The
@@ -17,10 +19,6 @@
 # under the License.
 #
 ############################################################################
-
-include $(TOPDIR)/Make.defs
-
-CONFIGFILE = $(TOPDIR)$(DELIM)include$(DELIM)nuttx$(DELIM)config.h
 
 CSRCS = esp32_boot.c esp32_bringup.c
 
@@ -47,19 +45,11 @@ ifeq ($(CONFIG_ARCH_BUTTONS),y)
 CSRCS += esp32_buttons.c
 endif
 
-SCRIPTOUT = $(BOARD_DIR)$(DELIM)scripts$(DELIM)esp32_out.ld
-
-.PHONY = context distclean
-
-$(SCRIPTOUT): $(LDSCRIPT_TEMPLATE) $(CONFIGFILE)
-	$(Q) $(CC) -isystem $(TOPDIR)/include -C -P -x c -E $(LDSCRIPT_TEMPLATE) -o $@
-
-context:: $(SCRIPTOUT)
-
-distclean::
-	$(call DELFILE, $(SCRIPTOUT))
+ifeq ($(CONFIG_LPWAN_SX127X),y)
+CSRCS += esp32_sx127x.c
+endif
 
 DEPPATH += --dep-path board
 VPATH += :board
-CFLAGS += $(shell $(INCDIR) "$(CC)" $(TOPDIR)$(DELIM)arch$(DELIM)$(CONFIG_ARCH)$(DELIM)src$(DELIM)board$(DELIM)board)
+CFLAGS += ${INCDIR_PREFIX}$(TOPDIR)$(DELIM)arch$(DELIM)$(CONFIG_ARCH)$(DELIM)src$(DELIM)board$(DELIM)board
 

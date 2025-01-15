@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/renesas/rx65n/rx65n-rsk1mb/include/board.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -18,15 +20,15 @@
  *
  ****************************************************************************/
 
-#ifndef __BOARDS_RENESAS_RX65N_RX65N_RSKLMB_INCLUDE_BOARD_H
-#define __BOARDS_RENESAS_RX65N_RX65N_RSKLMB_INCLUDE_BOARD_H
+#ifndef __BOARDS_RENESAS_RX65N_RX65N_RSK1MB_INCLUDE_BOARD_H
+#define __BOARDS_RENESAS_RX65N_RX65N_RSK1MB_INCLUDE_BOARD_H
 
 /****************************************************************************
  * Included Files
  ****************************************************************************/
 
 #ifndef __ASSEMBLY__
-# include <stdint.h>
+#  include <stdint.h>
 #endif
 
 /****************************************************************************
@@ -128,4 +130,4 @@ extern "C"
 #endif
 #endif
 
-#endif /* __BOARDS_RENESAS_RX65N_RX65N_RSKLMB_INCLUDE_BOARD_H */
+#endif /* __BOARDS_RENESAS_RX65N_RX65N_RSK1MB_INCLUDE_BOARD_H */

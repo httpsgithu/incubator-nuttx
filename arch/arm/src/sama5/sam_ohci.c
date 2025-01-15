@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/sama5/sam_ohci.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -37,6 +39,7 @@
 #include <nuttx/arch.h>
 #include <nuttx/kmalloc.h>
 #include <nuttx/wqueue.h>
+#include <nuttx/mutex.h>
 #include <nuttx/semaphore.h>
 #include <nuttx/usb/usb.h>
 #include <nuttx/usb/ohci.h>
@@ -48,9 +51,7 @@
 
 #include <arch/board/board.h> /* May redefine PIO settings */
 
-#include "arm_arch.h"
 #include "arm_internal.h"
-
 #include "chip.h"
 #include "sam_periphclks.h"
 #include "sam_memories.h"
@@ -125,17 +126,15 @@
 
 #define SAM_BUFALLOC (CONFIG_SAMA5_OHCI_TDBUFFERS * CONFIG_SAMA5_OHCI_TDBUFSIZE)
 
-/* If UDPHS is enabled, then don't use port A */
-
-#ifdef CONFIG_SAMA5_UDPHS
-#  undef CONFIG_SAMA5_UHPHS_RHPORT1
-#endif
-
-/* For now, suppress use of PORTA in any event.  I use that for SAM-BA and
- * would prefer that the board not try to drive VBUS on that port!
+/* Suppress use of PORTA unless board-specific dual-role-port support
+ * has been included. Generally port A is used as a device-only port,
+ * typically for SAM-BA and the possibility of enabling host VBUS power
+ * for this port would be a BAD idea
  */
 
-#undef CONFIG_SAMA5_UHPHS_RHPORT1
+#if defined(CONFIG_SAMA5_UDPHS) && !defined(CONFIG_SAMA5_USB_DRP)
+#  undef CONFIG_SAMA5_UHPHS_RHPORT1
+#endif
 
 /* Debug */
 
@@ -205,7 +204,7 @@
 /* This structure contains one endpoint list.  The main reason for the
  * existence of this structure is to contain the sem_t value associated with
  * the ED.  It doesn't work well within the ED itself because then the
- * semaphore counter is subject to DMA cache operations (invalidate a
+ * semaphore counter is subject to DMA cache operations (invalidating a
  * modified semaphore count is fatal!).
  */
 
@@ -256,11 +255,11 @@ struct sam_ohci_s
 
 #ifndef CONFIG_USBHOST_INT_DISABLE
   uint8_t ininterval;          /* Minimum periodic IN EP polling interval: 2, 4, 6, 16, or 32 */
-  uint8_t outinterval;         /* Minimum periodic IN EP polling interval: 2, 4, 6, 16, or 32 */
+  uint8_t outinterval;         /* Minimum periodic OUT EP polling interval: 2, 4, 6, 16, or 32 */
 #endif
 
-  sem_t exclsem;               /* Support mutually exclusive access */
-  sem_t pscsem;                /* Semaphore to wait Writeback Done Head event */
+  rmutex_t lock;               /* Support mutually exclusive access */
+  sem_t pscsem;                /* Semaphore to wait for Root Hub Status Change event */
   struct work_s work;          /* Supports interrupt bottom half */
 
 #ifdef CONFIG_USBHOST_HUB
@@ -269,12 +268,14 @@ struct sam_ohci_s
   volatile struct usbhost_hubport_s *hport;
 #endif
 
+  struct usbhost_devaddr_s devgen;  /* Address generation data */
+
   /* Root hub ports */
 
   struct sam_rhport_s rhport[SAM_OHCI_NRHPORT];
 };
 
-/* The OCHI expects the size of an endpoint descriptor to be 16 bytes.
+/* The OHCI expects the size of an endpoint descriptor to be 16 bytes.
  * However, the size allocated for an endpoint descriptor is 32 bytes.  This
  * is necessary first because the Cortex-A5 cache line size is 32 bytes and
  * this is the smallest amount of memory that we can perform cache
@@ -299,7 +300,7 @@ struct sam_ed_s
 
 #define SIZEOF_SAM_ED_S 32
 
-/* The OCHI expects the size of an transfer descriptor to be 16 bytes.
+/* The OHCI expects the size of an transfer descriptor to be 16 bytes.
  * However, the size allocated for an endpoint descriptor is 32 bytes in
  * RAM.  This extra 16-bytes is used by the OHCI host driver in order to
  * maintain additional endpoint-specific data.
@@ -339,15 +340,9 @@ static void sam_checkreg(uint32_t addr, uint32_t val, bool iswrite);
 static uint32_t sam_getreg(uint32_t addr);
 static void sam_putreg(uint32_t val, uint32_t addr);
 #else
-# define sam_getreg(addr)     getreg32(addr)
-# define sam_putreg(val,addr) putreg32(val,addr)
+#  define sam_getreg(addr)     getreg32(addr)
+#  define sam_putreg(val,addr) putreg32(val,addr)
 #endif
-
-/* Semaphores ***************************************************************/
-
-static int  sam_takesem(sem_t *sem);
-static int  sam_takesem_noncancelable(sem_t *sem);
-#define sam_givesem(s) nxsem_post(s);
 
 /* Byte stream access helper functions **************************************/
 
@@ -468,11 +463,19 @@ static void sam_disconnect(struct usbhost_driver_s *drvr,
  * single global instance.
  */
 
-static struct sam_ohci_s g_ohci;
+static struct sam_ohci_s g_ohci =
+{
+  .lock = NXRMUTEX_INITIALIZER,
+  .pscsem = SEM_INITIALIZER(0),
+};
 
 /* This is the connection/enumeration interface */
 
-static struct usbhost_connection_s g_ohciconn;
+static struct usbhost_connection_s g_ohciconn =
+{
+  .wait = sam_wait,
+  .enumerate = sam_enumerate,
+};
 
 /* This is a free list of EDs and TD buffers */
 
@@ -626,54 +629,6 @@ static void sam_putreg(uint32_t val, uint32_t addr)
   putreg32(val, addr);
 }
 #endif
-
-/****************************************************************************
- * Name: sam_takesem
- *
- * Description:
- *   This is just a wrapper to handle the annoying behavior of semaphore
- *   waits that return due to the receipt of a signal.
- *
- ****************************************************************************/
-
-static int sam_takesem(sem_t *sem)
-{
-  return nxsem_wait_uninterruptible(sem);
-}
-
-/****************************************************************************
- * Name: sam_takesem_noncancelable
- *
- * Description:
- *   This is just a wrapper to handle the annoying behavior of semaphore
- *   waits that return due to the receipt of a signal.  This version also
- *   ignores attempts to cancel the thread.
- *
- ****************************************************************************/
-
-static int sam_takesem_noncancelable(sem_t *sem)
-{
-  int result;
-  int ret = OK;
-
-  do
-    {
-      result = nxsem_wait_uninterruptible(sem);
-
-      /* The only expected error is ECANCELED which would occur if the
-       * calling thread were canceled.
-       */
-
-      DEBUGASSERT(result == OK || result == -ECANCELED);
-      if (ret == OK && result < 0)
-        {
-          ret = result;
-        }
-    }
-  while (result < 0);
-
-  return ret;
-}
 
 /****************************************************************************
  * Name: sam_getle16
@@ -1379,6 +1334,8 @@ static inline int sam_reminted(struct sam_ed_s *ed)
            */
 
           prev->hw.nexted = ed->hw.nexted;
+          up_clean_dcache((uintptr_t)prev,
+                          (uintptr_t)prev + sizeof(struct ohci_ed_s));
         }
 
 #ifdef CONFIG_USBHOST_TRACE
@@ -1473,7 +1430,7 @@ static inline int sam_remisoced(struct sam_ed_s *ed)
  *
  * Description:
  *   Enqueue a transfer descriptor.  Notice that this function only supports
- *   queue on TD per ED.
+ *   queueing one TD per ED.
  *
  ****************************************************************************/
 
@@ -1611,7 +1568,7 @@ static int sam_ep0enqueue(struct sam_rhport_s *rhport)
 
   /* Initialize the control endpoint for this port.
    * Set up some default values (like max packetsize = 8).
-   * NOTE that the SKIP bit is set until the first readl TD is added.
+   * NOTE that the SKIP bit is set until the first real TD is added.
    */
 
   memset(edctrl, 0, sizeof(struct sam_ed_s));
@@ -1915,27 +1872,27 @@ static int sam_ctrltd(struct sam_rhport_s *rhport,
        *
        * REVISIT:  Is this safe?  NO.  This is a bug and needs rethinking.
        * We need to lock all of the port-resources (not OHCI common) until
-       * the transfer is complete.  But we can't use the common OHCI exclsem
+       * the transfer is complete.  But we can't use the common OHCI lock
        * or we will deadlock while waiting (because the working thread that
-       * wakes this thread up needs the exclsem).
+       * wakes this thread up needs the lock).
        */
 #warning REVISIT
-      sam_givesem(&g_ohci.exclsem);
+      nxrmutex_unlock(&g_ohci.lock);
 
-      /* Wait for the Writeback Done Head interrupt  Loop to handle any false
-       * alarm semaphore counts.
+      /* Wait for the Writeback Done Head interrupt.  Loop to handle any
+       * false alarm semaphore counts.
        */
 
       while (eplist->wdhwait && ret >= 0)
         {
-          ret = sam_takesem(&eplist->wdhsem);
+          ret = nxsem_wait_uninterruptible(&eplist->wdhsem);
         }
 
-      /* Re-acquire the ECHI semaphore.  The caller expects to be holding
+      /* Re-acquire the OHCI semaphore.  The caller expects to be holding
        * this upon return.
        */
 
-      ret2 = sam_takesem_noncancelable(&g_ohci.exclsem);
+      ret2 = nxrmutex_lock(&g_ohci.lock);
       if (ret2 < 0)
         {
           ret = ret2;
@@ -2029,7 +1986,7 @@ static void sam_rhsc_bottomhalf(void)
 
                       if (g_ohci.pscwait)
                         {
-                          sam_givesem(&g_ohci.pscsem);
+                          nxsem_post(&g_ohci.pscsem);
                           g_ohci.pscwait = false;
                         }
                     }
@@ -2089,7 +2046,7 @@ static void sam_rhsc_bottomhalf(void)
 
                   if (g_ohci.pscwait)
                     {
-                      sam_givesem(&g_ohci.pscsem);
+                      nxsem_post(&g_ohci.pscsem);
                       g_ohci.pscwait = false;
                     }
                 }
@@ -2215,15 +2172,14 @@ static void sam_wdh_bottomhalf(void)
             }
 #endif
 
-          /* Determine the number of bytes actually transfer by* subtracting
-           * the buffer start address from the CBP.    A value of zero means
-           * that all bytes were transferred.
+          /* Determine the number of bytes actually transferred.
+           * A CBP value of zero means that all bytes were transferred.
            */
 
           tmp = (uintptr_t)td->hw.cbp;
           if (tmp == 0)
             {
-              /* Set the (fake) CBP to the end of the buffer + 1 */
+              /* All bytes have been transferred */
 
               tmp = eplist->buflen;
             }
@@ -2253,7 +2209,7 @@ static void sam_wdh_bottomhalf(void)
 
       if (eplist->wdhwait)
         {
-          sam_givesem(&eplist->wdhsem);
+          nxsem_post(&eplist->wdhsem);
           eplist->wdhwait = false;
         }
 
@@ -2275,7 +2231,7 @@ static void sam_wdh_bottomhalf(void)
  *
  * Description:
  *   OHCI interrupt bottom half.  This function runs on the high priority
- *   worker thread and was xcheduled when the last interrupt occurred.  The
+ *   worker thread and was scheduled when the last interrupt occurred.  The
  *   set of pending interrupts is provided as the argument.  OHCI interrupts
  *   were disabled when this function is scheduled so no further interrupts
  *   can occur until this work re-enables OHCI interrupts
@@ -2291,7 +2247,7 @@ static void sam_ohci_bottomhalf(void *arg)
    * real option (other than to reschedule and delay).
    */
 
-  sam_takesem_noncancelable(&g_ohci.exclsem);
+  nxrmutex_lock(&g_ohci.lock);
 
   /* Root hub status change interrupt */
 
@@ -2344,7 +2300,7 @@ static void sam_ohci_bottomhalf(void *arg)
   /* Now re-enable interrupts */
 
   sam_putreg(OHCI_INT_MIE, SAM_USBHOST_INTEN);
-  sam_givesem(&g_ohci.exclsem);
+  nxrmutex_unlock(&g_ohci.lock);
 }
 
 /****************************************************************************
@@ -2452,7 +2408,7 @@ static int sam_wait(struct usbhost_connection_s *conn,
        */
 
       g_ohci.pscwait = true;
-      ret = sam_takesem(&g_ohci.pscsem);
+      ret = nxsem_wait_uninterruptible(&g_ohci.pscsem);
       if (ret < 0)
         {
           return ret;
@@ -2628,11 +2584,19 @@ static int sam_ep0configure(struct usbhost_driver_s *drvr, usbhost_ep_t ep0,
   usbhost_vtrace2(OHCI_VTRACE2_EP0CONFIG, speed, funcaddr);
   DEBUGASSERT(rhport && maxpacketsize < 2048);
 
+  /* Expect the device to be unplugged during enumeration */
+
+  if (!ep0list || !ep0list->ed)
+    {
+      _err("Device was probably removed\n");
+      return -ENOMEM;
+    }
+
   edctrl = ep0list->ed;
 
   /* We must have exclusive access to EP0 and the control list */
 
-  ret = sam_takesem(&g_ohci.exclsem);
+  ret = nxrmutex_lock(&g_ohci.lock);
   if (ret < 0)
     {
       return ret;
@@ -2655,7 +2619,7 @@ static int sam_ep0configure(struct usbhost_driver_s *drvr, usbhost_ep_t ep0,
 
   up_clean_dcache((uintptr_t)edctrl,
                   (uintptr_t)edctrl + sizeof(struct ohci_ed_s));
-  sam_givesem(&g_ohci.exclsem);
+  nxrmutex_unlock(&g_ohci.lock);
 
   usbhost_vtrace2(OHCI_VTRACE2_EP0CTRLED, RHPORT(rhport),
                   (uint16_t)edctrl->hw.ctrl);
@@ -2709,7 +2673,7 @@ static int sam_epalloc(struct usbhost_driver_s *drvr,
 
   /* Allocate a container for the endpoint data */
 
-  eplist = (struct sam_eplist_s *)kmm_zalloc(sizeof(struct sam_eplist_s));
+  eplist = kmm_zalloc(sizeof(struct sam_eplist_s));
   if (!eplist)
     {
       usbhost_trace1(OHCI_TRACE1_EPLISTALLOC_FAILED, 0);
@@ -2720,17 +2684,11 @@ static int sam_epalloc(struct usbhost_driver_s *drvr,
 
   nxsem_init(&eplist->wdhsem, 0, 0);
 
-  /* The wdhsem semaphore is used for signaling and, hence, should not have
-   * priority inheritance enabled.
-   */
-
-  nxsem_set_protocol(&eplist->wdhsem, SEM_PRIO_NONE);
-
   /* We must have exclusive access to the ED pool, the bulk list, the
    * periodic list, and the interrupt table.
    */
 
-  ret = sam_takesem(&g_ohci.exclsem);
+  ret = nxrmutex_lock(&g_ohci.lock);
   if (ret < 0)
     {
       goto errout_with_eplist;
@@ -2742,7 +2700,7 @@ static int sam_epalloc(struct usbhost_driver_s *drvr,
   if (!ed)
     {
       usbhost_trace1(OHCI_TRACE1_EDALLOC_FAILED, 0);
-      goto errout_with_semaphore;
+      goto errout_with_lock;
     }
 
   td = sam_tdalloc();
@@ -2861,15 +2819,15 @@ static int sam_epalloc(struct usbhost_driver_s *drvr,
   /* Success.. return an opaque reference to the endpoint list container */
 
   *ep = (usbhost_ep_t)eplist;
-  sam_givesem(&g_ohci.exclsem);
+  nxrmutex_unlock(&g_ohci.lock);
   return OK;
 
 errout_with_td:
   sam_tdfree(td);
 errout_with_ed:
   sam_edfree(ed);
-errout_with_semaphore:
-  sam_givesem(&g_ohci.exclsem);
+errout_with_lock:
+  nxrmutex_unlock(&g_ohci.lock);
 errout_with_eplist:
   kmm_free(eplist);
 errout:
@@ -2916,7 +2874,7 @@ static int sam_epfree(struct usbhost_driver_s *drvr, usbhost_ep_t ep)
    * periodic list and the interrupt table.
    */
 
-  ret2 = sam_takesem_noncancelable(&g_ohci.exclsem);
+  ret2 = nxrmutex_lock(&g_ohci.lock);
 
   /* Remove the ED to the correct list depending on the transfer type */
 
@@ -2952,7 +2910,7 @@ static int sam_epfree(struct usbhost_driver_s *drvr, usbhost_ep_t ep)
 
   nxsem_destroy(&eplist->wdhsem);
   kmm_free(eplist);
-  sam_givesem(&g_ohci.exclsem);
+  nxrmutex_unlock(&g_ohci.lock);
   return ret < 0 ? ret : ret2;
 }
 
@@ -2998,7 +2956,7 @@ static int sam_alloc(struct usbhost_driver_s *drvr,
 
   /* We must have exclusive access to the transfer buffer pool */
 
-  ret = sam_takesem(&g_ohci.exclsem);
+  ret = nxrmutex_lock(&g_ohci.lock);
   if (ret < 0)
     {
       return ret;
@@ -3013,7 +2971,7 @@ static int sam_alloc(struct usbhost_driver_s *drvr,
       ret = OK;
     }
 
-  sam_givesem(&g_ohci.exclsem);
+  nxrmutex_unlock(&g_ohci.lock);
   return ret;
 }
 
@@ -3049,9 +3007,9 @@ static int sam_free(struct usbhost_driver_s *drvr, uint8_t *buffer)
 
   /* We must have exclusive access to the transfer buffer pool */
 
-  ret = sam_takesem_noncancelable(&g_ohci.exclsem);
+  ret = nxrmutex_lock(&g_ohci.lock);
   sam_tbfree(buffer);
-  sam_givesem(&g_ohci.exclsem);
+  nxrmutex_unlock(&g_ohci.lock);
   return ret;
 }
 
@@ -3171,7 +3129,7 @@ static int sam_ctrlin(struct usbhost_driver_s *drvr, usbhost_ep_t ep0,
   struct sam_rhport_s *rhport = (struct sam_rhport_s *)drvr;
   struct sam_eplist_s *eplist = (struct sam_eplist_s *)ep0;
   uint16_t len;
-  int  ret;
+  int ret;
 
   DEBUGASSERT(rhport != NULL && eplist != NULL && req != NULL);
 
@@ -3187,7 +3145,7 @@ static int sam_ctrlin(struct usbhost_driver_s *drvr, usbhost_ep_t ep0,
 
   /* We must have exclusive access to EP0 and the control list */
 
-  ret = sam_takesem(&g_ohci.exclsem);
+  ret = nxrmutex_lock(&g_ohci.lock);
   if (ret < 0)
     {
       return ret;
@@ -3213,7 +3171,7 @@ static int sam_ctrlin(struct usbhost_driver_s *drvr, usbhost_ep_t ep0,
    * it to be reloaded from RAM after the DMA.
    */
 
-  sam_givesem(&g_ohci.exclsem);
+  nxrmutex_unlock(&g_ohci.lock);
   up_invalidate_dcache((uintptr_t)buffer, (uintptr_t)buffer + len);
   return ret;
 }
@@ -3241,7 +3199,7 @@ static int sam_ctrlout(struct usbhost_driver_s *drvr, usbhost_ep_t ep0,
 
   /* We must have exclusive access to EP0 and the control list */
 
-  ret = sam_takesem(&g_ohci.exclsem);
+  ret = nxrmutex_lock(&g_ohci.lock);
   if (ret < 0)
     {
       return ret;
@@ -3264,7 +3222,7 @@ static int sam_ctrlout(struct usbhost_driver_s *drvr, usbhost_ep_t ep0,
         }
     }
 
-  sam_givesem(&g_ohci.exclsem);
+  nxrmutex_unlock(&g_ohci.lock);
   return ret;
 }
 
@@ -3413,7 +3371,7 @@ static ssize_t sam_transfer(struct usbhost_driver_s *drvr, usbhost_ep_t ep,
    * table.
    */
 
-  ret = sam_takesem(&g_ohci.exclsem);
+  ret = nxrmutex_lock(&g_ohci.lock);
   if (ret < 0)
     {
       return (ssize_t)ret;
@@ -3444,28 +3402,28 @@ static ssize_t sam_transfer(struct usbhost_driver_s *drvr, usbhost_ep_t ep,
    *
    * REVISIT:  Is this safe?  NO.  This is a bug and needs rethinking.
    * We need to lock all of the port-resources (not OHCI common) until
-   * the transfer is complete.  But we can't use the common OHCI exclsem
+   * the transfer is complete.  But we can't use the common OHCI lock
    * or we will deadlock while waiting (because the working thread that
-   * wakes this thread up needs the exclsem).
+   * wakes this thread up needs the lock).
    */
 
 #warning REVISIT
-  sam_givesem(&g_ohci.exclsem);
+  nxrmutex_unlock(&g_ohci.lock);
 
-  /* Wait for the Writeback Done Head interrupt  Loop to handle any false
+  /* Wait for the Writeback Done Head interrupt.  Loop to handle any false
    * alarm semaphore counts.
    */
 
   while (eplist->wdhwait && ret >= 0)
     {
-      ret = sam_takesem(&eplist->wdhsem);
+      ret = nxsem_wait_uninterruptible(&eplist->wdhsem);
     }
 
-  /* Re-acquire the OCHI semaphore.  The caller expects to be holding
+  /* Re-acquire the OHCI semaphore.  The caller expects to be holding
    * this upon return.
    */
 
-  ret2 = sam_takesem(&g_ohci.exclsem);
+  ret2 = nxrmutex_lock(&g_ohci.lock);
   if (ret2 < 0)
     {
       ret = ret2;
@@ -3498,7 +3456,7 @@ static ssize_t sam_transfer(struct usbhost_driver_s *drvr, usbhost_ep_t ep,
       nbytes = eplist->xfrd;
       DEBUGASSERT(nbytes >= 0 && nbytes <= buflen);
 
-      sam_givesem(&g_ohci.exclsem);
+      nxrmutex_unlock(&g_ohci.lock);
       return nbytes;
     }
 
@@ -3525,7 +3483,7 @@ errout:
   /* Make sure that there is no outstanding request on this endpoint */
 
   eplist->wdhwait = false;
-  sam_givesem(&g_ohci.exclsem);
+  nxrmutex_unlock(&g_ohci.lock);
   return (ssize_t)ret;
 }
 
@@ -3681,7 +3639,7 @@ static int sam_asynch(struct usbhost_driver_s *drvr, usbhost_ep_t ep,
    * table.
    */
 
-  ret = sam_takesem(&g_ohci.exclsem);
+  ret = nxrmutex_lock(&g_ohci.lock);
   if (ret < 0)
     {
       return ret;
@@ -3711,7 +3669,7 @@ static int sam_asynch(struct usbhost_driver_s *drvr, usbhost_ep_t ep,
    * when the transfer completes.
    */
 
-  sam_givesem(&g_ohci.exclsem);
+  nxrmutex_unlock(&g_ohci.lock);
   return OK;
 
 errout:
@@ -3720,7 +3678,7 @@ errout:
 
   eplist->callback = NULL;
   eplist->arg      = NULL;
-  sam_givesem(&g_ohci.exclsem);
+  nxrmutex_unlock(&g_ohci.lock);
   return ret;
 }
 #endif /* CONFIG_USBHOST_ASYNCH */
@@ -3841,7 +3799,7 @@ static int sam_cancel(struct usbhost_driver_s *drvr, usbhost_ep_t ep)
 
           /* Wake up the waiting thread */
 
-          sam_givesem(&eplist->wdhsem);
+          nxsem_post(&eplist->wdhsem);
           eplist->wdhwait = false;
         }
 #ifdef CONFIG_USBHOST_ASYNCH
@@ -3911,7 +3869,7 @@ static int sam_connect(struct usbhost_driver_s *drvr,
   if (g_ohci.pscwait)
     {
       g_ohci.pscwait = false;
-      sam_givesem(&g_ohci.pscsem);
+      nxsem_post(&g_ohci.pscsem);
     }
 
   leave_critical_section(flags);
@@ -3954,20 +3912,18 @@ static void sam_disconnect(struct usbhost_driver_s *drvr,
   DEBUGASSERT(rhport != NULL && hport != NULL && hport->ep0);
   ep0 = (struct sam_eplist_s *)hport->ep0;
 
-  /* Remove the disconnected port from the control list */
-
-  sam_ep0dequeue(ep0);
-
-  /* Did we just dequeue EP0 from a hoot hub port? */
+  /* Did we just dequeue EP0 from a root hub port? */
 
   if (ROOTHUB(hport))
     {
+      /* Remove the disconnected port from the control list */
+
+      sam_ep0dequeue(ep0);
       rhport->ep0init = false;
     }
 
   /* Unbind the class from the port */
 
-  hport->ep0      = NULL;
   hport->devclass = NULL;
 }
 
@@ -4014,17 +3970,6 @@ struct usbhost_connection_s *sam_ohci_initialize(int controller)
   DEBUGASSERT(controller == 0);
   DEBUGASSERT(sizeof(struct sam_ed_s)  == SIZEOF_SAM_ED_S);
   DEBUGASSERT(sizeof(struct sam_gtd_s) == SIZEOF_SAM_TD_S);
-
-  /* Initialize the state data structure */
-
-  nxsem_init(&g_ohci.pscsem,  0, 0);
-  nxsem_init(&g_ohci.exclsem, 0, 1);
-
-  /* The pscsem semaphore is used for signaling and, hence, should not have
-   * priority inheritance enabled.
-   */
-
-  nxsem_set_protocol(&g_ohci.pscsem, SEM_PRIO_NONE);
 
 #ifndef CONFIG_USBHOST_INT_DISABLE
   g_ohci.ininterval  = MAX_PERINTERVAL;
@@ -4126,6 +4071,10 @@ struct usbhost_connection_s *sam_ohci_initialize(int controller)
       buffer += CONFIG_SAMA5_OHCI_TDBUFSIZE;
     }
 
+  /* Initialize function address generation logic */
+
+  usbhost_devaddr_initialize(&g_ohci.devgen);
+
   /* Initialize the root hub port structures */
 
   for (i = 0; i < SAM_OHCI_NRHPORT; i++)
@@ -4152,6 +4101,7 @@ struct usbhost_connection_s *sam_ohci_initialize(int controller)
       rhport->drvr.connect        = sam_connect;
 #endif
       rhport->drvr.disconnect     = sam_disconnect;
+      rhport->hport.pdevgen       = &g_ohci.devgen;
 
       /* Initialize the public port representation */
 
@@ -4164,10 +4114,6 @@ struct usbhost_connection_s *sam_ohci_initialize(int controller)
       hport->port                 = i;
       hport->speed                = USB_SPEED_FULL;
       hport->funcaddr             = 0;
-
-      /* Initialize function address generation logic */
-
-      usbhost_devaddr_initialize(&rhport->hport);
     }
 
   /* Wait 50MS then perform hardware reset */
@@ -4215,7 +4161,7 @@ struct usbhost_connection_s *sam_ohci_initialize(int controller)
   sam_putreg((SAM_ALL_INTS | OHCI_INT_MIE), SAM_USBHOST_INTEN);
 
 #ifndef CONFIG_SAMA5_EHCI
-  /* Attach USB host controller interrupt handler.  If ECHI is enabled,
+  /* Attach USB host controller interrupt handler.  If EHCI is enabled,
    * then it will manage the shared interrupt.
    */
 
@@ -4259,7 +4205,7 @@ struct usbhost_connection_s *sam_ohci_initialize(int controller)
                       i + 1, g_ohci.rhport[i].connected);
     }
 
-  /* Enable interrupts at the interrupt controller.  If ECHI is enabled,
+  /* Enable interrupts at the interrupt controller.  If EHCI is enabled,
    * then it will manage the shared interrupt.
    */
 
@@ -4269,10 +4215,6 @@ struct usbhost_connection_s *sam_ohci_initialize(int controller)
 
   usbhost_vtrace1(OHCI_VTRACE1_INITIALIZED, 0);
 
-  /* Initialize and return the connection interface */
-
-  g_ohciconn.wait      = sam_wait;
-  g_ohciconn.enumerate = sam_enumerate;
   return &g_ohciconn;
 }
 
@@ -4286,7 +4228,7 @@ struct usbhost_connection_s *sam_ohci_initialize(int controller)
  *
  ****************************************************************************/
 
-int sam_ohci_tophalf(int irq, void *context, FAR void *arg)
+int sam_ohci_tophalf(int irq, void *context, void *arg)
 {
   uint32_t intst;
   uint32_t inten;

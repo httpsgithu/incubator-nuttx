@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/risc-v/src/common/riscv_backtrace.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -25,7 +27,6 @@
 #include <nuttx/config.h>
 #include <nuttx/arch.h>
 #include "sched/sched.h"
-
 #include "riscv_internal.h"
 
 /****************************************************************************
@@ -61,18 +62,22 @@ static inline uintptr_t getfp(void)
  *
  ****************************************************************************/
 
+nosanitize_address
 static int backtrace(uintptr_t *base, uintptr_t *limit,
                      uintptr_t *fp, uintptr_t *ra,
-                     void **buffer, int size)
+                     void **buffer, int size, int *skip)
 {
   int i = 0;
 
   if (ra)
     {
-      buffer[i++] = ra;
+      if ((*skip)-- <= 0)
+        {
+          buffer[i++] = ra;
+        }
     }
 
-  for (; i < size; fp = (uintptr_t *)*(fp - 2), i++)
+  for (; i < size; fp = (uintptr_t *)*(fp - 2))
     {
       if (fp > limit || fp < base)
         {
@@ -85,7 +90,10 @@ static int backtrace(uintptr_t *base, uintptr_t *limit,
           break;
         }
 
-      buffer[i] = ra;
+      if ((*skip)-- <= 0)
+        {
+          buffer[i++] = ra;
+        }
     }
 
   return i;
@@ -113,16 +121,24 @@ static int backtrace(uintptr_t *base, uintptr_t *limit,
  *   tcb    - Address of the task's TCB
  *   buffer - Return address from the corresponding stack frame
  *   size   - Maximum number of addresses that can be stored in buffer
+ *   skip   - number of addresses to be skipped
  *
  * Returned Value:
  *   up_backtrace() returns the number of addresses returned in buffer
  *
+ * Assumptions:
+ *   Have to make sure tcb keep safe during function executing, it means
+ *   1. Tcb have to be self or not-running.  In SMP case, the running task
+ *      PC & SP cannot be backtrace, as whose get from tcb is not the newest.
+ *   2. Tcb have to keep not be freed.  In task exiting case, have to
+ *      make sure the tcb get from pid and up_backtrace in one critical
+ *      section procedure.
+ *
  ****************************************************************************/
 
-int up_backtrace(struct tcb_s *tcb, void **buffer, int size)
+int up_backtrace(struct tcb_s *tcb, void **buffer, int size, int skip)
 {
   struct tcb_s *rtcb = running_task();
-  irqstate_t flags;
   int ret;
 
   if (size <= 0 || !buffer)
@@ -135,43 +151,62 @@ int up_backtrace(struct tcb_s *tcb, void **buffer, int size)
       if (up_interrupt_context())
         {
 #if CONFIG_ARCH_INTERRUPTSTACK > 15
-          ret = backtrace((void *)&g_intstackalloc,
-                          (void *)((uint32_t)&g_intstackalloc +
+          ret = backtrace((uintptr_t *)g_intstackalloc,
+                          (uintptr_t *)(g_intstackalloc +
                                        CONFIG_ARCH_INTERRUPTSTACK),
-                          (void *)getfp(), NULL, buffer, size);
+                          (void *)getfp(), NULL, buffer, size, &skip);
 #else
           ret = backtrace(rtcb->stack_base_ptr,
                           rtcb->stack_base_ptr + rtcb->adj_stack_size,
-                          (void *)getfp(), NULL, buffer, size);
+                          (void *)getfp(), NULL, buffer, size, &skip);
 #endif
           if (ret < size)
             {
               ret += backtrace(rtcb->stack_base_ptr,
-                               rtcb->stack_base_ptr +
-                               rtcb->adj_stack_size,
-                               (void *)CURRENT_REGS[REG_FP],
-                               (void *)CURRENT_REGS[REG_EPC],
-                               &buffer[ret], size - ret);
+                               rtcb->stack_base_ptr + rtcb->adj_stack_size,
+                               running_regs()[REG_FP],
+                               running_regs()[REG_EPC],
+                               &buffer[ret], size - ret, &skip);
             }
         }
       else
         {
-          ret = backtrace(rtcb->stack_base_ptr,
-                          rtcb->stack_base_ptr + rtcb->adj_stack_size,
-                          (void *)getfp(), NULL, buffer, size);
+#ifdef CONFIG_ARCH_KERNEL_STACK
+          if (rtcb->xcp.ustkptr != NULL)
+            {
+              ret = backtrace(rtcb->stack_base_ptr,
+                              rtcb->stack_base_ptr + rtcb->adj_stack_size,
+                              (void *)*(rtcb->xcp.ustkptr + 1), NULL,
+                              buffer, size, &skip);
+            }
+          else
+#endif
+            {
+              ret = backtrace(rtcb->stack_base_ptr,
+                              rtcb->stack_base_ptr + rtcb->adj_stack_size,
+                              (void *)getfp(), NULL, buffer, size, &skip);
+            }
         }
     }
   else
     {
-      flags = enter_critical_section();
-
-      ret = backtrace(tcb->stack_base_ptr,
-                      tcb->stack_base_ptr + tcb->adj_stack_size,
-                      (void *)tcb->xcp.regs[REG_FP],
-                      (void *)tcb->xcp.regs[REG_EPC],
-                      buffer, size);
-
-      leave_critical_section(flags);
+#ifdef CONFIG_ARCH_KERNEL_STACK
+      if (tcb->xcp.ustkptr != NULL)
+        {
+          ret = backtrace(tcb->stack_base_ptr,
+                          tcb->stack_base_ptr + tcb->adj_stack_size,
+                          (void *)*(tcb->xcp.ustkptr + 1), NULL,
+                          buffer, size, &skip);
+        }
+      else
+#endif
+        {
+          ret = backtrace(tcb->stack_base_ptr,
+                          tcb->stack_base_ptr + tcb->adj_stack_size,
+                          (void *)tcb->xcp.regs[REG_FP],
+                          (void *)tcb->xcp.regs[REG_EPC],
+                          buffer, size, &skip);
+        }
     }
 
   return ret;

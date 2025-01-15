@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/kinetis/hardware/kinetis_flexbus.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -67,8 +69,6 @@
 #define KINETIS_FB_CSPMCR_OFFSET   0x0060 /* Chip select port multiplexing control register */
 
 /* Register Addresses *******************************************************/
-
-# define    0x4000c000 /* FlexBus */
 
 #define KINETIS_FB_CS_BASE(n)      (KINETIS_FLEXBUSC_BASE+KINETIS_FB_CS_OFFSET(n))
 #define KINETIS_FB_CSAR(n)         (KINETIS_FB_CS_BASE(n)+KINETIS_FB_CSAR_OFFSET)

@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/arm/arm_nommuhead.S
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -52,13 +54,15 @@
  * below.
  */
 	.text
+	.syntax	unified
+	.arm
 	.global __start
 	.type	__start, #function
 __start:
 
 	/* First, setup initial processor mode */
 
-	mov		r0, #(PSR_MODE_SVC | PSR_I_BIT | PSR_F_BIT )
+	mov		r0, #(PSR_MODE_SYS | PSR_I_BIT | PSR_F_BIT )
 	msr		cpsr, r0
 
 	/* Setup system stack (and get the BSS range) */

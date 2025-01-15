@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/lpc43xx/lpc4370-link2/src/lpc43_userleds.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -31,9 +33,7 @@
 #include <arch/board/board.h>
 
 #include "chip.h"
-#include "arm_arch.h"
 #include "arm_internal.h"
-
 #include "lpc4370-link2.h"
 
 #ifndef CONFIG_ARCH_LEDS
@@ -47,7 +47,7 @@
  ****************************************************************************/
 
 #ifdef LED_VERBOSE
-static void led_dumppins(FAR const char *msg)
+static void led_dumppins(const char *msg)
 {
   lpc43_pin_dump(PINCONFIG_LED, msg);
   lpc43_gpio_dump(GPIO_LED, msg);

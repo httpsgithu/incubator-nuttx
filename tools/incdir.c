@@ -1,6 +1,8 @@
 /****************************************************************************
  * tools/incdir.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -21,8 +23,10 @@
 /****************************************************************************
  * Included Files
  ****************************************************************************/
-
+#ifndef CONFIG_WINDOWS_NATIVE
 #include <sys/utsname.h>
+#endif
+
 #include <stdbool.h>
 #include <stdlib.h>
 #include <stdarg.h>
@@ -65,7 +69,9 @@ enum compiler_e
   COMPILER_CLANG,
   COMPILER_MINGW,
   COMPILER_SDCC,
-  COMPILER_ZDSII
+  COMPILER_ZDSII,
+  COMPILER_TASKING,
+  COMPILER_GHS
 };
 
 /****************************************************************************
@@ -113,17 +119,13 @@ static void show_help(const char *progname, int exitcode)
   exit(exitcode);
 }
 
-static enum os_e get_os(char *ccname)
+static enum os_e get_os(void)
 {
+#ifdef CONFIG_WINDOWS_NATIVE
+  return OS_WINDOWS;
+#else
   struct utsname buf;
   int ret;
-
-  /* Check for MinGW which implies a Windows native environment */
-
-  if (strstr(ccname, "mingw") != NULL)
-    {
-      return OS_WINDOWS;
-    }
 
   /* Get the context names */
 
@@ -167,9 +169,10 @@ static enum os_e get_os(char *ccname)
               buf.sysname);
       return OS_UNKNOWN;
     }
+#endif
 }
 
-static enum compiler_e get_compiler(char *ccname, enum os_e os)
+static enum compiler_e get_compiler(char *ccname)
 {
   /* Let's assume that all GCC compiler paths contain the string gcc or
    * g++ and no non-GCC compiler paths include these substrings.
@@ -191,6 +194,11 @@ static enum compiler_e get_compiler(char *ccname, enum os_e os)
     {
       return COMPILER_SDCC;
     }
+  else if (strstr(ccname, "ccarm") != NULL ||
+           strstr(ccname, "cxarm") != NULL)
+    {
+      return COMPILER_GHS;
+    }
   else if (strstr(ccname, "mingw") != NULL)
     {
       return COMPILER_MINGW;
@@ -200,6 +208,10 @@ static enum compiler_e get_compiler(char *ccname, enum os_e os)
            strstr(ccname, "ez80cc") != NULL)
     {
       return COMPILER_ZDSII;
+    }
+  else if (strstr(ccname, "ctc") != NULL)
+    {
+      return COMPILER_TASKING;
     }
   else
     {
@@ -325,14 +337,14 @@ int main(int argc, char **argv, char **envp)
    * files.
    */
 
-  os = get_os(ccname);
+  os = get_os();
   if (os == OS_UNKNOWN)
     {
       fprintf(stderr, "ERROR:  Operating system not recognized\n");
       show_advice(progname, EXIT_FAILURE);
     }
 
-  compiler = get_compiler(ccname, os);
+  compiler = get_compiler(ccname);
   if (compiler == COMPILER_UNKNOWN)
     {
       fprintf(stderr, "ERROR:  Compiler not recognized.\n");
@@ -347,6 +359,11 @@ int main(int argc, char **argv, char **envp)
 #ifdef HOST_CYGWIN
       wintool = true;
 #endif
+    }
+  else if (compiler == COMPILER_SDCC || compiler == COMPILER_TASKING ||
+           compiler == COMPILER_GHS)
+    {
+      cmdarg = "-I";
     }
   else
     {
@@ -378,15 +395,15 @@ int main(int argc, char **argv, char **envp)
           ssize_t bufsize;
 
           bufsize = cygwin_conv_path(CCP_POSIX_TO_WIN_A, dirname, NULL, 0);
-          convpath = (char *)malloc(bufsize);
+          convpath = malloc(bufsize);
           if (convpath == NULL)
             {
               fprintf(stderr, "ERROR:  Failed to allocate buffer.\n");
               exit(EXIT_FAILURE);
             }
 
-          (void)cygwin_conv_path(CCP_POSIX_TO_WIN_A, dirname, convpath,
-                                 bufsize);
+          cygwin_conv_path(CCP_POSIX_TO_WIN_A, dirname, convpath,
+                           bufsize);
           incpath = convpath;
         }
       else
@@ -458,7 +475,7 @@ int main(int argc, char **argv, char **envp)
       segsize   = ret;
       respsize += (response == NULL) ? segsize + 1 : segsize;
 
-      response = (char *)malloc(respsize);
+      response = malloc(respsize);
       if (response == NULL)
         {
           fprintf(stderr, "ERROR: Failed to allocate response.\n");

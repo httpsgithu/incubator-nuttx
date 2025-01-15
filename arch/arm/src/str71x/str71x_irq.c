@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/str71x/str71x_irq.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -33,21 +35,8 @@
 
 #include "arm.h"
 #include "chip.h"
-#include "arm_arch.h"
 #include "arm_internal.h"
 #include "str71x.h"
-
-/****************************************************************************
- * Public Data
- ****************************************************************************/
-
-/* g_current_regs[] holds a references to the current interrupt level
- * register storage structure.  If is non-NULL only during interrupt
- * processing.  Access to g_current_regs[] must be through the macro
- * CURRENT_REGS for portability.
- */
-
-volatile uint32_t *g_current_regs[1];
 
 /****************************************************************************
  * Public Functions
@@ -59,10 +48,6 @@ volatile uint32_t *g_current_regs[1];
 
 void up_irqinitialize(void)
 {
-  /* Currents_regs is non-NULL only while processing an interrupt */
-
-  CURRENT_REGS = NULL;
-
   /* The bulk of IRQ initialization if performed in str71x_head.S, so we
    * have very little to do here -- basically just enabling interrupts;
    *
@@ -89,7 +74,7 @@ void up_irqinitialize(void)
   /* Enable global ARM interrupts */
 
 #ifndef CONFIG_SUPPRESS_INTERRUPTS
-  up_irq_restore(PSR_MODE_SVC | PSR_F_BIT);
+  up_irq_restore(PSR_MODE_SYS | PSR_F_BIT);
 #endif
 }
 

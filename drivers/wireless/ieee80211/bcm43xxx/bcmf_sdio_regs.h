@@ -1,6 +1,8 @@
 /****************************************************************************
  * drivers/wireless/ieee80211/bcm43xxx/bcmf_sdio_regs.h
  *
+ * SPDX-License-Identifier: ISC
+ *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
  * copyright notice and this permission notice appear in all copies.
@@ -15,8 +17,8 @@
  *
  ****************************************************************************/
 
-#ifndef __DRIVERS_WIRELESS_IEEE80211_BCMF_SDIO_REGS_H
-#define __DRIVERS_WIRELESS_IEEE80211_BCMF_SDIO_REGS_H
+#ifndef __DRIVERS_WIRELESS_IEEE80211_BCM43XXX_BCMF_SDIO_REGS_H
+#define __DRIVERS_WIRELESS_IEEE80211_BCM43XXX_BCMF_SDIO_REGS_H
 
 #define SDIO_FUNC_0        0
 #define SDIO_FUNC_1        1
@@ -246,4 +248,4 @@
 
 #define SBSDIO_SBWINDOW_MASK   0xffff8000
 
-#endif /* __DRIVERS_WIRELESS_IEEE80211_BCMF_SDIO_REGS_H */
+#endif /* __DRIVERS_WIRELESS_IEEE80211_BCM43XXX_BCMF_SDIO_REGS_H */

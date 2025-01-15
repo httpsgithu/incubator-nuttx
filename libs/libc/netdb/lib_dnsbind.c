@@ -1,6 +1,8 @@
 /****************************************************************************
  * libs/libc/netdb/lib_dnsbind.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -61,23 +63,16 @@
  *
  ****************************************************************************/
 
-int dns_bind(void)
+int dns_bind(sa_family_t family, bool stream)
 {
+  int stype = stream ? SOCK_STREAM : SOCK_DGRAM;
   struct timeval tv;
   int sd;
   int ret;
 
-  /* Has the DNS client been properly initialized? */
-
-  if (!dns_initialize())
-    {
-      nerr("ERROR: DNS client has not been initialized\n");
-      return -EDESTADDRREQ;
-    }
-
   /* Create a new socket */
 
-  sd = socket(PF_INET, SOCK_DGRAM, 0);
+  sd = socket(family, stype | SOCK_CLOEXEC, 0);
   if (sd < 0)
     {
       ret = -get_errno();
@@ -91,6 +86,17 @@ int dns_bind(void)
   tv.tv_usec = 0;
 
   ret = setsockopt(sd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(struct timeval));
+  if (ret >= 0)
+    {
+      /* Set up a send timeout */
+
+      tv.tv_sec  = CONFIG_NETDB_DNSCLIENT_SEND_TIMEOUT;
+      tv.tv_usec = 0;
+
+      ret = setsockopt(sd, SOL_SOCKET, SO_SNDTIMEO, &tv,
+                       sizeof(struct timeval));
+    }
+
   if (ret < 0)
     {
       ret = -get_errno();

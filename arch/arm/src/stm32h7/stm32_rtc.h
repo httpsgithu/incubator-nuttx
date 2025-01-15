@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/stm32h7/stm32_rtc.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -45,7 +47,7 @@
 #define STM32_RTC_PRESCALER_MIN             1      /* Maximum speed of 16384 Hz */
 
 #if !defined(CONFIG_STM32H7_RTC_MAGIC)
-# define CONFIG_STM32H7_RTC_MAGIC           (0xfacefeed)
+#  define CONFIG_STM32H7_RTC_MAGIC          (0xfacefeed)
 #endif
 
 #if !defined(CONFIG_STM32H7_RTC_MAGIC_TIME_SET)
@@ -53,7 +55,7 @@
 #endif
 
 #if !defined(CONFIG_STM32H7_RTC_MAGIC_REG)
-# define CONFIG_STM32H7_RTC_MAGIC_REG       (0)
+#  define CONFIG_STM32H7_RTC_MAGIC_REG      (0)
 #endif
 
 #define RTC_MAGIC                            CONFIG_STM32H7_RTC_MAGIC
@@ -105,7 +107,7 @@ extern "C"
  ****************************************************************************/
 
 #ifdef CONFIG_STM32H7_HAVE_RTC_SUBSECONDS
-int stm32_rtc_getdatetime_with_subseconds(FAR struct tm *tp, FAR long *nsec);
+int stm32_rtc_getdatetime_with_subseconds(struct tm *tp, long *nsec);
 #endif
 
 /****************************************************************************
@@ -126,7 +128,7 @@ int stm32_rtc_getdatetime_with_subseconds(FAR struct tm *tp, FAR long *nsec);
 
 #ifdef CONFIG_RTC_DATETIME
 struct tm;
-int stm32_rtc_setdatetime(FAR const struct tm *tp);
+int stm32_rtc_setdatetime(const struct tm *tp);
 #endif
 
 /****************************************************************************
@@ -166,7 +168,7 @@ bool stm32_rtc_havesettime(void);
 
 #ifdef CONFIG_RTC_DRIVER
 struct rtc_lowerhalf_s;
-FAR struct rtc_lowerhalf_s *stm32_rtc_lowerhalf(void);
+struct rtc_lowerhalf_s *stm32_rtc_lowerhalf(void);
 #endif
 
 #undef EXTERN

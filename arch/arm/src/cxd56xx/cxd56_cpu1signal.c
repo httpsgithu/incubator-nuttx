@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/cxd56xx/cxd56_cpu1signal.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -26,6 +28,7 @@
 #include <stdlib.h>
 #include <errno.h>
 #include <sched.h>
+#include <nuttx/sched.h>
 #include <nuttx/kthread.h>
 #include <debug.h>
 
@@ -47,19 +50,19 @@
 #define CXD56CPU1_CPUID          1
 
 /****************************************************************************
- * Private Type
+ * Private Types
  ****************************************************************************/
 
 struct cxd56_sigtype_s
 {
   int                    use;
   cxd56_cpu1sighandler_t handler;
-  FAR void *             data;
+  void                  *data;
 };
 
 struct cxd56cpu1_info_s
 {
-  int                    workerpid;
+  pid_t                  workerpid;
   int                    ndev;
   struct cxd56_sigtype_s sigtype[CXD56_CPU1_DATA_TYPE_MAX];
 };
@@ -69,15 +72,21 @@ struct cxd56cpu1_info_s
  ****************************************************************************/
 
 static struct cxd56cpu1_info_s g_cpu1_info =
+{
+  INVALID_PROCESS_ID,
+  0,
   {
-    0
-  };
+    {
+      0
+    }
+  }
+};
 
 /****************************************************************************
  * Private Functions
  ****************************************************************************/
 
-static int cxd56cpu1_worker(int argc, FAR char *argv[])
+static int cxd56cpu1_worker(int argc, char *argv[])
 {
   struct cxd56cpu1_info_s *priv = &g_cpu1_info;
   iccmsg_t                 msg;
@@ -151,7 +160,7 @@ void cxd56_cpu1sigunregisterhandler(uint8_t sigtype)
   priv->sigtype[sigtype].handler = NULL;
 }
 
-int cxd56_cpu1siginit(uint8_t sigtype, FAR void *data)
+int cxd56_cpu1siginit(uint8_t sigtype, void *data)
 {
   struct cxd56cpu1_info_s *priv = &g_cpu1_info;
   int                      pid;
@@ -161,8 +170,6 @@ int cxd56_cpu1siginit(uint8_t sigtype, FAR void *data)
     {
       return -ENODEV;
     }
-
-  sched_lock();
 
   if (priv->sigtype[sigtype].use)
     {
@@ -181,8 +188,6 @@ int cxd56_cpu1siginit(uint8_t sigtype, FAR void *data)
 
   priv->ndev++;
 
-  sched_unlock();
-
   cxd56_iccinit(CXD56_PROTO_GNSS);
 
   ret = cxd56_iccinitmsg(CXD56CPU1_CPUID);
@@ -193,9 +198,9 @@ int cxd56_cpu1siginit(uint8_t sigtype, FAR void *data)
     }
 
   pid = kthread_create("gnss_receiver",
-                    CONFIG_CXD56CPU1_WORKER_THREAD_PRIORITY,
-                    CONFIG_CXD56CPU1_WORKER_STACKSIZE, cxd56cpu1_worker,
-                    (FAR char * const *) NULL);
+                       CONFIG_CXD56CPU1_WORKER_THREAD_PRIORITY,
+                       CONFIG_CXD56CPU1_WORKER_STACKSIZE, cxd56cpu1_worker,
+                       NULL);
 
   if (pid < 0)
     {
@@ -214,14 +219,13 @@ err0:
   return ret;
 
 err1:
-  sched_unlock();
   return ret;
 }
 
 int cxd56_cpu1siguninit(uint8_t sigtype)
 {
   struct cxd56cpu1_info_s *priv = &g_cpu1_info;
-  int                      pid;
+  pid_t                    pid;
   int                      ret;
 
   if (sigtype >= CXD56_CPU1_DATA_TYPE_MAX)
@@ -229,12 +233,9 @@ int cxd56_cpu1siguninit(uint8_t sigtype)
       return -ENODEV;
     }
 
-  sched_lock();
-
   if (!priv->sigtype[sigtype].use)
     {
       ret = -EBUSY;
-      sched_unlock();
       return ret;
     }
 
@@ -249,9 +250,7 @@ int cxd56_cpu1siguninit(uint8_t sigtype)
     }
 
   pid             = priv->workerpid;
-  priv->workerpid = 0;
-
-  sched_unlock();
+  priv->workerpid = INVALID_PROCESS_ID;
 
   ret = kthread_delete(pid);
 

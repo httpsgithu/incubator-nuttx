@@ -1,6 +1,8 @@
 /****************************************************************************
  * drivers/bch/bchlib_write.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -33,6 +35,7 @@
 #include <debug.h>
 
 #include <nuttx/fs/fs.h>
+#include <nuttx/drivers/drivers.h>
 
 #include "bch.h"
 
@@ -49,7 +52,7 @@
  *
  ****************************************************************************/
 
-ssize_t bchlib_write(FAR void *handle, FAR const char *buffer, size_t offset,
+ssize_t bchlib_write(FAR void *handle, FAR const char *buffer, off_t offset,
         size_t len)
 {
   FAR struct bchlib_s *bch = (FAR struct bchlib_s *)handle;
@@ -132,7 +135,8 @@ ssize_t bchlib_write(FAR void *handle, FAR const char *buffer, size_t offset,
 
       /* Flush the dirty sector to keep the sector sequence */
 
-      ret = bchlib_flushsector(bch);
+      ret = bchlib_flushsector(bch, sector <= bch->sector &&
+                               bch->sector < (sector + nsectors));
       if (ret < 0)
         {
           ferr("ERROR: Flush failed: %d\n", ret);

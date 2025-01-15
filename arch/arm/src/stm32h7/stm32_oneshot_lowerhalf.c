@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/stm32h7/stm32_oneshot_lowerhalf.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -56,7 +58,7 @@ struct stm32_oneshot_lowerhalf_s
 
   struct stm32_oneshot_s oneshot; /* STM32-specific oneshot state */
   oneshot_callback_t callback;    /* Internal handler that receives callback */
-  FAR void *arg;                  /* Argument that is passed to the handler */
+  void *arg;                      /* Argument that is passed to the handler */
 };
 
 /****************************************************************************
@@ -65,13 +67,13 @@ struct stm32_oneshot_lowerhalf_s
 
 static void stm32_oneshot_handler(void *arg);
 
-static int stm32_max_delay(FAR struct oneshot_lowerhalf_s *lower,
-                           FAR struct timespec *ts);
-static int stm32_start(FAR struct oneshot_lowerhalf_s *lower,
-                       oneshot_callback_t callback, FAR void *arg,
-                       FAR const struct timespec *ts);
-static int stm32_cancel(FAR struct oneshot_lowerhalf_s *lower,
-                        FAR struct timespec *ts);
+static int stm32_max_delay(struct oneshot_lowerhalf_s *lower,
+                           struct timespec *ts);
+static int stm32_start(struct oneshot_lowerhalf_s *lower,
+                       oneshot_callback_t callback, void *arg,
+                       const struct timespec *ts);
+static int stm32_cancel(struct oneshot_lowerhalf_s *lower,
+                        struct timespec *ts);
 
 /****************************************************************************
  * Private Data
@@ -107,10 +109,10 @@ static const struct oneshot_operations_s g_oneshot_ops =
 
 static void stm32_oneshot_handler(void *arg)
 {
-  FAR struct stm32_oneshot_lowerhalf_s *priv =
-    (FAR struct stm32_oneshot_lowerhalf_s *)arg;
+  struct stm32_oneshot_lowerhalf_s *priv =
+    (struct stm32_oneshot_lowerhalf_s *)arg;
   oneshot_callback_t callback;
-  FAR void *cbarg;
+  void *cbarg;
 
   DEBUGASSERT(priv != NULL);
 
@@ -153,11 +155,11 @@ static void stm32_oneshot_handler(void *arg)
  *
  ****************************************************************************/
 
-static int stm32_max_delay(FAR struct oneshot_lowerhalf_s *lower,
-                           FAR struct timespec *ts)
+static int stm32_max_delay(struct oneshot_lowerhalf_s *lower,
+                           struct timespec *ts)
 {
-  FAR struct stm32_oneshot_lowerhalf_s *priv =
-    (FAR struct stm32_oneshot_lowerhalf_s *)lower;
+  struct stm32_oneshot_lowerhalf_s *priv =
+    (struct stm32_oneshot_lowerhalf_s *)lower;
   uint64_t usecs;
   int ret;
 
@@ -195,12 +197,12 @@ static int stm32_max_delay(FAR struct oneshot_lowerhalf_s *lower,
  *
  ****************************************************************************/
 
-static int stm32_start(FAR struct oneshot_lowerhalf_s *lower,
-                       oneshot_callback_t callback, FAR void *arg,
-                       FAR const struct timespec *ts)
+static int stm32_start(struct oneshot_lowerhalf_s *lower,
+                       oneshot_callback_t callback, void *arg,
+                       const struct timespec *ts)
 {
-  FAR struct stm32_oneshot_lowerhalf_s *priv =
-    (FAR struct stm32_oneshot_lowerhalf_s *)lower;
+  struct stm32_oneshot_lowerhalf_s *priv =
+    (struct stm32_oneshot_lowerhalf_s *)lower;
   irqstate_t flags;
   int ret;
 
@@ -247,11 +249,11 @@ static int stm32_start(FAR struct oneshot_lowerhalf_s *lower,
  *
  ****************************************************************************/
 
-static int stm32_cancel(FAR struct oneshot_lowerhalf_s *lower,
-                        FAR struct timespec *ts)
+static int stm32_cancel(struct oneshot_lowerhalf_s *lower,
+                        struct timespec *ts)
 {
-  FAR struct stm32_oneshot_lowerhalf_s *priv =
-    (FAR struct stm32_oneshot_lowerhalf_s *)lower;
+  struct stm32_oneshot_lowerhalf_s *priv =
+    (struct stm32_oneshot_lowerhalf_s *)lower;
   irqstate_t flags;
   int ret;
 
@@ -296,15 +298,15 @@ static int stm32_cancel(FAR struct oneshot_lowerhalf_s *lower,
  *
  ****************************************************************************/
 
-FAR struct oneshot_lowerhalf_s *oneshot_initialize(int chan,
-                                                   uint16_t resolution)
+struct oneshot_lowerhalf_s *oneshot_initialize(int chan,
+                                               uint16_t resolution)
 {
-  FAR struct stm32_oneshot_lowerhalf_s *priv;
+  struct stm32_oneshot_lowerhalf_s *priv;
   int ret;
 
   /* Allocate an instance of the lower half driver */
 
-  priv = (FAR struct stm32_oneshot_lowerhalf_s *)
+  priv = (struct stm32_oneshot_lowerhalf_s *)
     kmm_zalloc(sizeof(struct stm32_oneshot_lowerhalf_s));
 
   if (priv == NULL)

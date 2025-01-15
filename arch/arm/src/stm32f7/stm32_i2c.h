@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/stm32f7/stm32_i2c.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -18,8 +20,8 @@
  *
  ****************************************************************************/
 
-#ifndef __ARCH_ARM_SRC_STM32F7_STM32F7_I2C_H
-#define __ARCH_ARM_SRC_STM32F7_STM32F7_I2C_H
+#ifndef __ARCH_ARM_SRC_STM32F7_STM32_I2C_H
+#define __ARCH_ARM_SRC_STM32F7_STM32_I2C_H
 
 /****************************************************************************
  * Included Files
@@ -67,7 +69,7 @@
  *
  ****************************************************************************/
 
-FAR struct i2c_master_s *stm32_i2cbus_initialize(int port);
+struct i2c_master_s *stm32_i2cbus_initialize(int port);
 
 /****************************************************************************
  * Name: stm32_i2cbus_uninitialize
@@ -84,6 +86,6 @@ FAR struct i2c_master_s *stm32_i2cbus_initialize(int port);
  *
  ****************************************************************************/
 
-int stm32_i2cbus_uninitialize(FAR struct i2c_master_s *dev);
+int stm32_i2cbus_uninitialize(struct i2c_master_s *dev);
 
-#endif /* __ARCH_ARM_SRC_STM32F7_STM32F7_I2C_H */
+#endif /* __ARCH_ARM_SRC_STM32F7_STM32_I2C_H */

@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/lc823450/lc823450_ipl2.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -61,7 +63,6 @@
 #include <libgen.h>
 
 #include "arm_internal.h"
-#include "arm_arch.h"
 
 #ifdef CONFIG_ADC
 #  include "lc823450_adc.h"
@@ -112,7 +113,6 @@ static struct
  ****************************************************************************/
 
 static char copybuf[512];
-static void *tmp;
 
 /****************************************************************************
  * Private Functions
@@ -189,7 +189,7 @@ static int install_recovery(const char *srcpath)
       return -1;
     }
 
-  ret = file_open(&rfile, srcpath, O_RDONLY, 0444);
+  ret = file_open(&rfile, srcpath, O_RDONLY | O_CLOEXEC, 0444);
 
   if (file_read(&rfile, &upg_image, sizeof(upg_image)) != sizeof(upg_image))
     {
@@ -268,8 +268,7 @@ err:
 static void load_kernel(const char *name, const char *devname)
 {
   int i;
-
-  tmp = (void *)0x02040000;
+  void *tmp = (void *)0x02040000;
 
   blk_read(tmp, 512 * 1024, devname, 0);
 
@@ -290,10 +289,9 @@ static void load_kernel(const char *name, const char *devname)
 
   __asm__ __volatile__
     (
-     "ldr r0, =tmp\n"
-     "ldr r1, [r0, #0]\n" /* r1 = 0x02040000 */
-     "ldr sp, [r1, #0]\n" /* set sp */
-     "ldr pc, [r1, #4]"   /* set pc, start nuttx */
+     "ldr sp, [%0, #0]\n" /* set sp */
+     "ldr pc, [%0, #4]"   /* set pc, start nuttx */
+     : : "r"(tmp)
      );
 }
 
@@ -456,7 +454,7 @@ extern volatile int g_update_flag;
 #ifdef CONFIG_CHARGER
 static void chg_disable(void)
 {
-  FAR struct i2c_dev_s *i2c;
+  struct i2c_dev_s *i2c;
   int ret;
   uint32_t freq;
 

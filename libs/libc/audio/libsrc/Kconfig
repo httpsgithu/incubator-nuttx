@@ -4,21 +4,12 @@
 #
 
 config AUDIO_SRC
-	bool "Audio Samplerate Convertor Library"
+	bool "Audio Samplerate Converter Library"
 	default n
 	---help---
 		Enable build for various SRC functions
 
 if AUDIO_SRC
-
-choice
-	prompt "Audio Conversion Quality"
-	default SINC_FAST_CONVERTER
-	---help---
-		Audio Conversion Quality options:
-		    Slowest conversion speed with best quality.
-		    Medium conversion speed with medium qulity
-		    Fastest conversion with lowest quality
 
 config SINC_FAST_CONVERTER
 	bool "Fastest conversion with lowest quality"
@@ -36,8 +27,6 @@ config SINC_BEST_CONVERTER
 	bool "Slowest conversion speed with best quality"
 	---help---
 		Slowest conversion speed with best quality.
-		 Not suitable for most boards due to resource constrains.
-
-endchoice
+		Not suitable for most boards due to resource constrains.
 
 endif # LIBSRC

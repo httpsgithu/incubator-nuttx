@@ -1,17 +1,22 @@
 /****************************************************************************
  * drivers/rf/dat-31r5-sp.c
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
+ * SPDX-License-Identifier: Apache-2.0
  *
- *     http://www.apache.org/licenses/LICENSE-2.0
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.  The
+ * ASF licenses this file to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance with the
+ * License.  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.  See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
  *
  ****************************************************************************/
 
@@ -64,8 +69,6 @@ struct dat31r5sp_dev_s
 
 /* Character driver methods */
 
-static int dat31r5sp_open(FAR struct file *filep);
-static int dat31r5sp_close(FAR struct file *filep);
 static ssize_t dat31r5sp_read(FAR struct file *filep, FAR char *buffer,
                               size_t buflen);
 static ssize_t dat31r5sp_write(FAR struct file *filep,
@@ -79,13 +82,12 @@ static int dat31r5sp_ioctl(FAR struct file *filep, int cmd,
 
 static const struct file_operations g_dat31r5sp_fops =
 {
-  dat31r5sp_open,
-  dat31r5sp_close,
-  dat31r5sp_read,
-  dat31r5sp_write,
-  NULL,
-  dat31r5sp_ioctl,
-  NULL
+  NULL,             /* open */
+  NULL,             /* close */
+  dat31r5sp_read,   /* read */
+  dat31r5sp_write,  /* write */
+  NULL,             /* seek */
+  dat31r5sp_ioctl,  /* ioctl */
 };
 
 /****************************************************************************
@@ -137,34 +139,6 @@ static void dat31r5sp_set_attenuation(FAR struct dat31r5sp_dev_s *priv,
   SPI_SELECT(priv->spi, priv->spidev, false);
 
   SPI_LOCK(priv->spi, false);
-}
-
-/****************************************************************************
- * Name: dat31r5sp_open
- *
- * Description:
- *   This function is called whenever the DAT-31R5-SP+ device is
- *   opened.
- *
- ****************************************************************************/
-
-static int dat31r5sp_open(FAR struct file *filep)
-{
-  return OK;
-}
-
-/****************************************************************************
- * Name: dat31r5sp_close
- *
- * Description:
- *   This function is called whenever the DAT-31R5-SP+ device is
- *   closed.
- *
- ****************************************************************************/
-
-static int dat31r5sp_close(FAR struct file *filep)
-{
-  return OK;
 }
 
 /****************************************************************************

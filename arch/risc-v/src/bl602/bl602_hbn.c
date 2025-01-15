@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/risc-v/src/bl602/bl602_hbn.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -26,7 +28,7 @@
 #include "hardware/bl602_hbn.h"
 #include "bl602_hbn.h"
 #include "bl602_rtc.h"
-#include "riscv_arch.h"
+#include "riscv_internal.h"
 
 /****************************************************************************
  * Private Types

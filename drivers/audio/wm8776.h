@@ -1,6 +1,8 @@
 /****************************************************************************
  * drivers/audio/wm8776.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -31,8 +33,10 @@
 #include <pthread.h>
 
 #include <nuttx/mqueue.h>
+#include <nuttx/mutex.h>
 #include <nuttx/wqueue.h>
 #include <nuttx/fs/ioctl.h>
+#include <nuttx/spinlock_type.h>
 
 #ifdef CONFIG_AUDIO
 
@@ -76,7 +80,7 @@ struct wm8776_dev_s
 
   struct audio_lowerhalf_s dev;             /* WM8776 audio lower half (this device) */
 
-  const FAR struct wm8776_lower_s *lower;   /* Pointer to the board lower functions */
+  FAR const struct wm8776_lower_s *lower;   /* Pointer to the board lower functions */
   FAR struct i2c_master_s *i2c;             /* I2C driver to use */
   FAR struct i2s_dev_s   *i2s;              /* I2S driver to use */
   struct dq_queue_s       pendq;            /* Queue of pending buffers to be sent */
@@ -85,7 +89,7 @@ struct wm8776_dev_s
   char                    mqname[16];       /* Our message queue name */
   pthread_t               threadid;         /* ID of our thread */
   uint32_t                bitrate;          /* Actual programmed bit rate */
-  sem_t                   pendsem;          /* Protect pendq */
+  mutex_t                 pendlock;         /* Protect pendq */
   uint16_t                samprate;         /* Configured samprate (samples/sec) */
 #ifndef CONFIG_AUDIO_EXCLUDE_VOLUME
 #ifndef CONFIG_AUDIO_EXCLUDE_BALANCE
@@ -104,6 +108,7 @@ struct wm8776_dev_s
 #endif
   bool                    reserved;         /* True: Device is reserved */
   volatile int            result;           /* The result of the last transfer */
+  spinlock_t              lock;             /* Spinlock */
 };
 
 #endif /* CONFIG_AUDIO */

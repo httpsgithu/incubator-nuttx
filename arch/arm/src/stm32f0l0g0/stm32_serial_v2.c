@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/stm32f0l0g0/stm32_serial_v2.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -37,15 +39,14 @@
 #include <nuttx/arch.h>
 #include <nuttx/fs/ioctl.h>
 #include <nuttx/serial/serial.h>
+#include <nuttx/spinlock.h>
 #include <nuttx/power/pm.h>
 
 #ifdef CONFIG_SERIAL_TERMIOS
 #  include <termios.h>
 #endif
 
-#include "arm_arch.h"
 #include "arm_internal.h"
-
 #include "chip.h"
 #include "stm32_gpio.h"
 #include "hardware/stm32_pinmap.h"
@@ -53,13 +54,6 @@
 #include "stm32_uart.h"
 
 #include <arch/board/board.h>
-
-#ifdef CONFIG_STM32F0L0G0_USART3
-#  error not supported yet
-#endif
-#ifdef CONFIG_STM32F0L0G0_USART4
-#  error not supported yet
-#endif
 
 /****************************************************************************
  * Pre-processor Definitions
@@ -76,9 +70,6 @@
 
 #if defined(CONFIG_PM) && !defined(CONFIG_STM32F0L0G0_PM_SERIAL_ACTIVITY)
 #  define CONFIG_STM32F0L0G0_PM_SERIAL_ACTIVITY 10
-#endif
-#if defined(CONFIG_PM)
-#  define PM_IDLE_DOMAIN             0 /* Revisit */
 #endif
 
 /* Keep track if a Break was set
@@ -167,6 +158,7 @@ struct up_dev_s
   const uint32_t    rs485_dir_gpio;     /* U[S]ART RS-485 DIR GPIO pin configuration */
   const bool        rs485_dir_polarity; /* U[S]ART RS-485 DIR pin state for TX enabled */
 #endif
+  spinlock_t        lock;
 };
 
 /****************************************************************************
@@ -178,7 +170,7 @@ static int  up_setup(struct uart_dev_s *dev);
 static void up_shutdown(struct uart_dev_s *dev);
 static int  up_attach(struct uart_dev_s *dev);
 static void up_detach(struct uart_dev_s *dev);
-static int  up_interrupt(int irq, void *context, FAR void *arg);
+static int  up_interrupt(int irq, void *context, void *arg);
 static int  up_ioctl(struct file *filep, int cmd, unsigned long arg);
 static int  up_receive(struct uart_dev_s *dev, unsigned int *status);
 static void up_rxint(struct uart_dev_s *dev, bool enable);
@@ -294,6 +286,7 @@ static struct up_dev_s g_usart1priv =
   .rs485_dir_polarity = true,
 #  endif
 #endif
+  .lock               = SP_UNLOCKED,
 };
 #endif
 
@@ -348,12 +341,119 @@ static struct up_dev_s g_usart2priv =
   .rs485_dir_polarity = true,
 #  endif
 #endif
+  .lock               = SP_UNLOCKED,
 };
 #endif
 
-/* TODO: USART3 */
+/* This describes the state of the STM32 USART3 port. */
 
-/* TODO: USART4 */
+#ifdef CONFIG_STM32F0L0G0_USART3
+static struct up_dev_s g_usart3priv =
+{
+  .dev =
+    {
+#if CONSOLE_USART == 3
+      .isconsole = true,
+#endif
+      .recv      =
+      {
+        .size    = CONFIG_USART3_RXBUFSIZE,
+        .buffer  = g_usart3rxbuffer,
+      },
+      .xmit      =
+      {
+        .size    = CONFIG_USART3_TXBUFSIZE,
+        .buffer  = g_usart3txbuffer,
+      },
+      .ops       = &g_uart_ops,
+      .priv      = &g_usart3priv,
+    },
+
+  .irq           = STM32_IRQ_USART3,
+  .rxftcfg       = 0,           /* No FIFO */
+  .parity        = CONFIG_USART3_PARITY,
+  .bits          = CONFIG_USART3_BITS,
+  .stopbits2     = CONFIG_USART3_2STOP,
+  .baud          = CONFIG_USART3_BAUD,
+  .apbclock      = STM32_PCLK1_FREQUENCY,
+  .usartbase     = STM32_USART3_BASE,
+  .tx_gpio       = GPIO_USART3_TX,
+  .rx_gpio       = GPIO_USART3_RX,
+#if defined(CONFIG_SERIAL_OFLOWCONTROL) && defined(CONFIG_USART3_OFLOWCONTROL)
+  .oflow         = true,
+  .cts_gpio      = GPIO_USART3_CTS,
+#endif
+#if defined(CONFIG_SERIAL_IFLOWCONTROL) && defined(CONFIG_USART3_IFLOWCONTROL)
+  .iflow         = true,
+  .rts_gpio      = GPIO_USART3_RTS,
+#endif
+
+#ifdef CONFIG_USART3_RS485
+  .rs485_dir_gpio = GPIO_USART3_RS485_DIR,
+#  if (CONFIG_USART3_RS485_DIR_POLARITY == 0)
+  .rs485_dir_polarity = false,
+#  else
+  .rs485_dir_polarity = true,
+#  endif
+#endif
+  .lock               = SP_UNLOCKED,
+};
+#endif
+
+/* This describes the state of the STM32 USART4 port. */
+
+#ifdef CONFIG_STM32F0L0G0_USART4
+static struct up_dev_s g_usart4priv =
+{
+  .dev =
+    {
+#if CONSOLE_USART == 4
+      .isconsole = true,
+#endif
+      .recv      =
+      {
+        .size    = CONFIG_USART4_RXBUFSIZE,
+        .buffer  = g_usart4rxbuffer,
+      },
+      .xmit      =
+      {
+        .size    = CONFIG_USART4_TXBUFSIZE,
+        .buffer  = g_usart4txbuffer,
+      },
+      .ops       = &g_uart_ops,
+      .priv      = &g_usart4priv,
+    },
+
+  .irq           = STM32_IRQ_USART4,
+  .rxftcfg       = 0,           /* No FIFO */
+  .parity        = CONFIG_USART4_PARITY,
+  .bits          = CONFIG_USART4_BITS,
+  .stopbits2     = CONFIG_USART4_2STOP,
+  .baud          = CONFIG_USART4_BAUD,
+  .apbclock      = STM32_PCLK1_FREQUENCY,
+  .usartbase     = STM32_USART4_BASE,
+  .tx_gpio       = GPIO_USART4_TX,
+  .rx_gpio       = GPIO_USART4_RX,
+#if defined(CONFIG_SERIAL_OFLOWCONTROL) && defined(CONFIG_USART4_OFLOWCONTROL)
+  .oflow         = true,
+  .cts_gpio      = GPIO_USART4_CTS,
+#endif
+#if defined(CONFIG_SERIAL_IFLOWCONTROL) && defined(CONFIG_USART4_IFLOWCONTROL)
+  .iflow         = true,
+  .rts_gpio      = GPIO_USART4_RTS,
+#endif
+
+#ifdef CONFIG_USART4_RS485
+  .rs485_dir_gpio = GPIO_USART4_RS485_DIR,
+#  if (CONFIG_USART4_RS485_DIR_POLARITY == 0)
+  .rs485_dir_polarity = false,
+#  else
+  .rs485_dir_polarity = true,
+#  endif
+#endif
+  .lock               = SP_UNLOCKED,
+};
+#endif
 
 /* This table lets us iterate over the configured USARTs */
 
@@ -405,18 +505,6 @@ static inline void up_serialout(struct up_dev_s *priv,
 }
 
 /****************************************************************************
- * Name: up_serialmod
- ****************************************************************************/
-
-static inline void up_serialmod(struct up_dev_s *priv, int offset,
-                                uint32_t clrbits, uint32_t setbits)
-{
-  uint32_t addr = priv->usartbase + offset;
-  uint32_t regval = (getreg32(addr) & ~clrbits) | setbits;
-  putreg32(regval, addr);
-}
-
-/****************************************************************************
  * Name: up_setusartint
  ****************************************************************************/
 
@@ -451,11 +539,11 @@ static void up_restoreusartint(struct up_dev_s *priv, uint16_t ie)
 {
   irqstate_t flags;
 
-  flags = enter_critical_section();
+  flags = spin_lock_irqsave(&priv->lock);
 
   up_setusartint(priv, ie);
 
-  leave_critical_section(flags);
+  spin_unlock_irqrestore(&priv->lock, flags);
 }
 
 /****************************************************************************
@@ -466,7 +554,7 @@ static void up_disableusartint(struct up_dev_s *priv, uint16_t *ie)
 {
   irqstate_t flags;
 
-  flags = enter_critical_section();
+  flags = spin_lock_irqsave(&priv->lock);
 
   if (ie)
     {
@@ -510,7 +598,7 @@ static void up_disableusartint(struct up_dev_s *priv, uint16_t *ie)
 
   up_setusartint(priv, 0);
 
-  leave_critical_section(flags);
+  spin_unlock_irqrestore(&priv->lock, flags);
 }
 
 /****************************************************************************
@@ -987,14 +1075,14 @@ static void up_detach(struct uart_dev_s *dev)
  *
  * Description:
  *   This is the USART interrupt handler.  It will be invoked when an
- *   interrupt received on the 'irq'  It should call uart_transmitchars or
- *   uart_receivechar to perform the appropriate data transfers.  The
- *   interrupt handling logic must be able to map the 'irq' number into the
+ *   interrupt is received on the 'irq'.  It should call uart_xmitchars or
+ *   uart_recvchars to perform the appropriate data transfers.  The
+ *   interrupt handling logic must be able to map the 'arg' to the
  *   appropriate uart_dev_s structure in order to call these functions.
  *
  ****************************************************************************/
 
-static int up_interrupt(int irq, void *context, FAR void *arg)
+static int up_interrupt(int irq, void *context, void *arg)
 {
   struct up_dev_s *priv = (struct up_dev_s *)arg;
   int  passes;
@@ -1128,7 +1216,7 @@ static int up_ioctl(struct file *filep, int cmd, unsigned long arg)
     || defined(CONFIG_STM32F0L0G0_SERIALBRK_BSDCOMPAT)
   struct up_dev_s   *priv  = (struct up_dev_s *)dev->priv;
 #endif
-  int                ret    = OK;
+  int                ret   = OK;
 
   switch (cmd)
     {
@@ -1235,7 +1323,7 @@ static int up_ioctl(struct file *filep, int cmd, unsigned long arg)
 #endif
           CS8;
 
-        /* TODO: CCTS_IFLOW, CCTS_OFLOW */
+        /* TODO: CRTS_IFLOW, CCTS_OFLOW */
       }
       break;
 
@@ -1635,6 +1723,7 @@ static void up_txint(struct uart_dev_s *dev, bool enable)
 #  ifdef CONFIG_STM32_SERIALBRK_BSDCOMPAT
       if (priv->ie & USART_CR1_IE_BREAK_INPROGRESS)
         {
+          leave_critical_section(flags);
           return;
         }
 #  endif
@@ -1792,7 +1881,7 @@ static int up_pm_prepare(struct pm_callback_s *cb, int domain,
  *
  ****************************************************************************/
 
-FAR uart_dev_t *stm32_serial_get_uart(int uart_num)
+uart_dev_t *stm32_serial_get_uart(int uart_num)
 {
   int uart_idx = uart_num - 1;
 
@@ -1889,7 +1978,7 @@ void arm_serialinit(void)
 
   /* Register all remaining USARTs */
 
-  strcpy(devname, "/dev/ttySx");
+  strlcpy(devname, "/dev/ttySx", sizeof(devname));
 
   for (i = 0; i < STM32_NSERIAL; i++)
     {
@@ -1925,28 +2014,17 @@ void arm_serialinit(void)
  *
  ****************************************************************************/
 
-int up_putc(int ch)
+void up_putc(int ch)
 {
 #if CONSOLE_USART > 0
   struct up_dev_s *priv = g_uart_devs[CONSOLE_USART - 1];
   uint16_t ie;
 
   up_disableusartint(priv, &ie);
-
-  /* Check for LF */
-
-  if (ch == '\n')
-    {
-      /* Add CR */
-
-      arm_lowputc('\r');
-    }
-
   arm_lowputc(ch);
   up_restoreusartint(priv, ie);
 
 #endif
-  return ch;
 }
 
 #else /* USE_SERIALDRIVER */
@@ -1959,21 +2037,11 @@ int up_putc(int ch)
  *
  ****************************************************************************/
 
-int up_putc(int ch)
+void up_putc(int ch)
 {
 #if CONSOLE_USART > 0
-  /* Check for LF */
-
-  if (ch == '\n')
-    {
-      /* Add CR */
-
-      arm_lowputc('\r');
-    }
-
   arm_lowputc(ch);
 #endif
-  return ch;
 }
 
 #endif /* USE_SERIALDRIVER */

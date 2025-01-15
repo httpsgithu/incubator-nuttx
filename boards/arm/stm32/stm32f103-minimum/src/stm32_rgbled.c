@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/stm32/stm32f103-minimum/src/stm32_rgbled.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -33,7 +35,7 @@
 #include <arch/board/board.h>
 
 #include "chip.h"
-#include "arm_arch.h"
+#include "arm_internal.h"
 #include "stm32_pwm.h"
 #include "stm32f103_minimum.h"
 

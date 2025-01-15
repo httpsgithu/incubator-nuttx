@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/kinetis/kinetis_flexcan.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -33,7 +35,6 @@
 #include <debug.h>
 #include <errno.h>
 
-#include <nuttx/can.h>
 #include <nuttx/wdog.h>
 #include <nuttx/irq.h>
 #include <nuttx/arch.h>
@@ -42,7 +43,7 @@
 #include <nuttx/net/netdev.h>
 #include <nuttx/net/can.h>
 
-#include "arm_arch.h"
+#include "arm_internal.h"
 #include "chip.h"
 #include "kinetis_config.h"
 #include "hardware/kinetis_flexcan.h"
@@ -490,8 +491,8 @@ uint32_t kinetis_bitratetotimeseg(struct flexcan_timeseg *timeseg,
 
 /* Common TX logic */
 
-static bool kinetis_txringfull(FAR struct kinetis_driver_s *priv);
-static int  kinetis_transmit(FAR struct kinetis_driver_s *priv);
+static bool kinetis_txringfull(struct kinetis_driver_s *priv);
+static int  kinetis_transmit(struct kinetis_driver_s *priv);
 static int  kinetis_txpoll(struct net_driver_s *dev);
 
 /* Helper functions */
@@ -507,17 +508,17 @@ static uint32_t kinetis_waitesr2_change(uint32_t base,
 
 /* Interrupt handling */
 
-static void kinetis_receive(FAR struct kinetis_driver_s *priv,
+static void kinetis_receive(struct kinetis_driver_s *priv,
                             uint32_t flags);
-static void kinetis_txdone_work(FAR void *arg);
-static void kinetis_txdone(FAR struct kinetis_driver_s *priv);
+static void kinetis_txdone_work(void *arg);
+static void kinetis_txdone(struct kinetis_driver_s *priv);
 
-static int  kinetis_flexcan_interrupt(int irq, FAR void *context,
-                                      FAR void *arg);
+static int  kinetis_flexcan_interrupt(int irq, void *context,
+                                      void *arg);
 
 /* Watchdog timer expirations */
 #ifdef TX_TIMEOUT_WQ
-static void kinetis_txtimeout_work(FAR void *arg);
+static void kinetis_txtimeout_work(void *arg);
 static void kinetis_txtimeout_expiry(wdparm_t arg);
 #endif
 
@@ -526,7 +527,7 @@ static void kinetis_txtimeout_expiry(wdparm_t arg);
 static int  kinetis_ifup(struct net_driver_s *dev);
 static int  kinetis_ifdown(struct net_driver_s *dev);
 
-static void kinetis_txavail_work(FAR void *arg);
+static void kinetis_txavail_work(void *arg);
 static int  kinetis_txavail(struct net_driver_s *dev);
 
 #ifdef CONFIG_NETDEV_IOCTL
@@ -558,7 +559,7 @@ static void kinetis_reset(struct kinetis_driver_s *priv);
  *
  ****************************************************************************/
 
-static bool kinetis_txringfull(FAR struct kinetis_driver_s *priv)
+static bool kinetis_txringfull(struct kinetis_driver_s *priv)
 {
   uint32_t mbi = 0;
 
@@ -595,7 +596,7 @@ static bool kinetis_txringfull(FAR struct kinetis_driver_s *priv)
  *
  ****************************************************************************/
 
-static int kinetis_transmit(FAR struct kinetis_driver_s *priv)
+static int kinetis_transmit(struct kinetis_driver_s *priv)
 {
   /* Attempt to write frame */
 
@@ -725,7 +726,7 @@ static int kinetis_transmit(FAR struct kinetis_driver_s *priv)
 
       cs.rtr = frame->can_id & FLAGRTR ? 1 : 0;
 
-      cs.dlc = len_to_can_dlc[frame->len];
+      cs.dlc = g_len_to_can_dlc[frame->len];
 
       frame_data_word = (uint32_t *)&frame->data[0];
 
@@ -786,8 +787,8 @@ static int kinetis_transmit(FAR struct kinetis_driver_s *priv)
 
 static int kinetis_txpoll(struct net_driver_s *dev)
 {
-  FAR struct kinetis_driver_s *priv =
-    (FAR struct kinetis_driver_s *)dev->d_private;
+  struct kinetis_driver_s *priv =
+    (struct kinetis_driver_s *)dev->d_private;
 
   /* If the polling resulted in data that should be sent out on the network,
    * the field d_len is set to a value > 0.
@@ -795,26 +796,23 @@ static int kinetis_txpoll(struct net_driver_s *dev)
 
   if (priv->dev.d_len > 0)
     {
-      if (!devif_loopback(&priv->dev))
+      kinetis_txdone(priv);
+
+      /* Send the packet */
+
+      kinetis_transmit(priv);
+
+      /* Check if there is room in the device to hold another packet. If
+       * not, return a non-zero value to terminate the poll.
+       */
+
+      if ((getreg32(priv->base + KINETIS_CAN_ESR2_OFFSET) &
+          (CAN_ESR2_IMB | CAN_ESR2_VPS)) ==
+          (CAN_ESR2_IMB | CAN_ESR2_VPS))
         {
-          kinetis_txdone(priv);
-
-          /* Send the packet */
-
-          kinetis_transmit(priv);
-
-          /* Check if there is room in the device to hold another packet. If
-           * not, return a non-zero value to terminate the poll.
-           */
-
-          if ((getreg32(priv->base + KINETIS_CAN_ESR2_OFFSET) &
-              (CAN_ESR2_IMB | CAN_ESR2_VPS)) ==
-              (CAN_ESR2_IMB | CAN_ESR2_VPS))
+          if (kinetis_txringfull(priv))
             {
-              if (kinetis_txringfull(priv))
-                {
-                  return -EBUSY;
-                }
+              return -EBUSY;
             }
         }
     }
@@ -843,7 +841,7 @@ static int kinetis_txpoll(struct net_driver_s *dev)
  *
  ****************************************************************************/
 
-static void kinetis_receive(FAR struct kinetis_driver_s *priv,
+static void kinetis_receive(struct kinetis_driver_s *priv,
                             uint32_t flags)
 {
   uint32_t mb_index;
@@ -860,9 +858,11 @@ static void kinetis_receive(FAR struct kinetis_driver_s *priv,
       /* Read the frame contents */
 
 #ifdef CONFIG_NET_CAN_CANFD
-      if (rf->cs.edl) /* CAN FD frame */
+      if (rf->cs.edl)
         {
-        struct canfd_frame *frame = (struct canfd_frame *)priv->rxdesc;
+          /* CAN FD frame */
+
+          struct canfd_frame *frame = (struct canfd_frame *)priv->rxdesc;
 
           if (rf->cs.ide)
             {
@@ -879,7 +879,7 @@ static void kinetis_receive(FAR struct kinetis_driver_s *priv,
               frame->can_id |= FLAGRTR;
             }
 
-          frame->len = can_dlc_to_len[rf->cs.dlc];
+          frame->len = g_can_dlc_to_len[rf->cs.dlc];
 
           frame_data_word = (uint32_t *)&frame->data[0];
 
@@ -900,10 +900,12 @@ static void kinetis_receive(FAR struct kinetis_driver_s *priv,
           priv->dev.d_len = sizeof(struct canfd_frame);
           priv->dev.d_buf = (uint8_t *)frame;
         }
-      else /* CAN 2.0 Frame */
+      else
 #endif
         {
-        struct can_frame *frame = (struct can_frame *)priv->rxdesc;
+          /* CAN 2.0 Frame */
+
+          struct can_frame *frame = (struct can_frame *)priv->rxdesc;
 
           if (rf->cs.ide)
             {
@@ -982,7 +984,7 @@ static void kinetis_receive(FAR struct kinetis_driver_s *priv,
  *
  ****************************************************************************/
 
-static void kinetis_txdone(FAR struct kinetis_driver_s *priv)
+static void kinetis_txdone(struct kinetis_driver_s *priv)
 {
   uint32_t flags;
   uint32_t mbi;
@@ -1037,9 +1039,9 @@ static void kinetis_txdone(FAR struct kinetis_driver_s *priv)
  *
  ****************************************************************************/
 
-static void kinetis_txdone_work(FAR void *arg)
+static void kinetis_txdone_work(void *arg)
 {
-  FAR struct kinetis_driver_s *priv = (FAR struct kinetis_driver_s *)arg;
+  struct kinetis_driver_s *priv = (struct kinetis_driver_s *)arg;
 
   kinetis_txdone(priv);
 
@@ -1048,7 +1050,7 @@ static void kinetis_txdone_work(FAR void *arg)
    */
 
   net_lock();
-  devif_timer(&priv->dev, 0, kinetis_txpoll);
+  devif_poll(&priv->dev, kinetis_txpoll);
   net_unlock();
 }
 
@@ -1072,10 +1074,10 @@ static void kinetis_txdone_work(FAR void *arg)
  *
  ****************************************************************************/
 
-static int kinetis_flexcan_interrupt(int irq, FAR void *context,
-                                     FAR void *arg)
+static int kinetis_flexcan_interrupt(int irq, void *context,
+                                     void *arg)
 {
-  FAR struct kinetis_driver_s *priv = (struct kinetis_driver_s *)arg;
+  struct kinetis_driver_s *priv = (struct kinetis_driver_s *)arg;
 
   if (irq == priv->config->mb_irq)
     {
@@ -1128,9 +1130,9 @@ static int kinetis_flexcan_interrupt(int irq, FAR void *context,
  ****************************************************************************/
 #ifdef TX_TIMEOUT_WQ
 
-static void kinetis_txtimeout_work(FAR void *arg)
+static void kinetis_txtimeout_work(void *arg)
 {
-  FAR struct kinetis_driver_s *priv = (FAR struct kinetis_driver_s *)arg;
+  struct kinetis_driver_s *priv = (struct kinetis_driver_s *)arg;
   uint32_t flags;
   uint32_t mbi;
   uint32_t mb_bit;
@@ -1188,7 +1190,7 @@ static void kinetis_txtimeout_work(FAR void *arg)
 
 static void kinetis_txtimeout_expiry(wdparm_t arg)
 {
-  FAR struct kinetis_driver_s *priv = (FAR struct kinetis_driver_s *)arg;
+  struct kinetis_driver_s *priv = (struct kinetis_driver_s *)arg;
 
   /* Schedule to perform the TX timeout processing on the worker thread */
 
@@ -1304,8 +1306,8 @@ static uint32_t kinetis_waitfreezeack_change(uint32_t base,
 
 static int kinetis_ifup(struct net_driver_s *dev)
 {
-  FAR struct kinetis_driver_s *priv =
-    (FAR struct kinetis_driver_s *)dev->d_private;
+  struct kinetis_driver_s *priv =
+    (struct kinetis_driver_s *)dev->d_private;
 
   if (!kinetis_initialize(priv))
     {
@@ -1357,8 +1359,8 @@ static int kinetis_ifup(struct net_driver_s *dev)
 
 static int kinetis_ifdown(struct net_driver_s *dev)
 {
-  FAR struct kinetis_driver_s *priv =
-    (FAR struct kinetis_driver_s *)dev->d_private;
+  struct kinetis_driver_s *priv =
+    (struct kinetis_driver_s *)dev->d_private;
 
   kinetis_reset(priv);
 
@@ -1383,9 +1385,9 @@ static int kinetis_ifdown(struct net_driver_s *dev)
  *
  ****************************************************************************/
 
-static void kinetis_txavail_work(FAR void *arg)
+static void kinetis_txavail_work(void *arg)
 {
-  FAR struct kinetis_driver_s *priv = (FAR struct kinetis_driver_s *)arg;
+  struct kinetis_driver_s *priv = (struct kinetis_driver_s *)arg;
 
   /* Ignore the notification if the interface is not yet up */
 
@@ -1404,7 +1406,7 @@ static void kinetis_txavail_work(FAR void *arg)
            * new XMIT data.
            */
 
-          devif_timer(&priv->dev, 0, kinetis_txpoll);
+          devif_poll(&priv->dev, kinetis_txpoll);
         }
     }
 
@@ -1432,8 +1434,8 @@ static void kinetis_txavail_work(FAR void *arg)
 
 static int kinetis_txavail(struct net_driver_s *dev)
 {
-  FAR struct kinetis_driver_s *priv =
-    (FAR struct kinetis_driver_s *)dev->d_private;
+  struct kinetis_driver_s *priv =
+    (struct kinetis_driver_s *)dev->d_private;
 
   /* Is our single work structure available?  It may not be if there are
    * pending interrupt actions and we will have to ignore the Tx
@@ -1472,8 +1474,8 @@ static int kinetis_txavail(struct net_driver_s *dev)
 static int kinetis_ioctl(struct net_driver_s *dev, int cmd,
                          unsigned long arg)
 {
-  FAR struct kinetis_driver_s *priv =
-      (FAR struct kinetis_driver_s *)dev->d_private;
+  struct kinetis_driver_s *priv =
+      (struct kinetis_driver_s *)dev->d_private;
 
   int ret;
 

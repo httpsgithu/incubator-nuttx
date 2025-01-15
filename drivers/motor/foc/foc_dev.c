@@ -1,6 +1,7 @@
 /****************************************************************************
  * drivers/motor/foc/foc_dev.c
- * Upper-half FOC controller logic
+ *
+ * SPDX-License-Identifier: Apache-2.0
  *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -60,17 +61,15 @@ static int foc_params_set(FAR struct foc_dev_s *dev,
 static int foc_fault_clear(FAR struct foc_dev_s *dev);
 static int foc_info_get(FAR struct foc_dev_s *dev,
                         FAR struct foc_info_s *info);
+static int foc_pwm_off(FAR struct foc_dev_s *dev, bool off);
 
 static int foc_notifier(FAR struct foc_dev_s *dev,
-                        FAR foc_current_t *current);
+                        FAR foc_current_t *current,
+                        FAR foc_voltage_t *voltage);
 
 /****************************************************************************
  * Private Data
  ****************************************************************************/
-
-/* Device counter */
-
-static uint8_t g_devno_cntr = 0;
 
 /* File operations */
 
@@ -82,17 +81,13 @@ static const struct file_operations g_foc_fops =
   NULL,                         /* write */
   NULL,                         /* seek */
   foc_ioctl,                    /* ioctl */
-  NULL                          /* poll */
-#ifndef CONFIG_DISABLE_PSEUDOFS_OPERATIONS
-  , NULL                        /* unlink */
-#endif
 };
 
 /* FOC callbacks from the lower-half implementation to this driver */
 
 static struct foc_callbacks_s g_foc_callbacks =
 {
-  .notifier = foc_notifier,
+  foc_notifier
 };
 
 /****************************************************************************
@@ -113,7 +108,6 @@ static int foc_open(FAR struct file *filep)
   FAR struct foc_dev_s *dev   = inode->i_private;
   uint8_t               tmp   = 0;
   int                   ret   = OK;
-  irqstate_t            flags;
 
   /* Non-blocking operations not supported */
 
@@ -125,7 +119,7 @@ static int foc_open(FAR struct file *filep)
 
   /* If the port is the middle of closing, wait until the close is finished */
 
-  ret = nxsem_wait(&dev->closesem);
+  ret = nxmutex_lock(&dev->closelock);
   if (ret >= 0)
     {
       /* Increment the count of references to the device.  If this the first
@@ -147,10 +141,6 @@ static int foc_open(FAR struct file *filep)
 
           if (tmp == 1)
             {
-              /* Yes.. perform one time driver setup */
-
-              flags = enter_critical_section();
-
               ret = foc_setup(dev);
               if (ret == OK)
                 {
@@ -158,8 +148,6 @@ static int foc_open(FAR struct file *filep)
 
                   dev->ocount = tmp;
                 }
-
-              leave_critical_section(flags);
             }
           else
             {
@@ -169,7 +157,7 @@ static int foc_open(FAR struct file *filep)
             }
         }
 
-      nxsem_post(&dev->closesem);
+      nxmutex_unlock(&dev->closelock);
     }
 
 errout:
@@ -189,9 +177,8 @@ static int foc_close(FAR struct file *filep)
   FAR struct inode     *inode = filep->f_inode;
   FAR struct foc_dev_s *dev   = inode->i_private;
   int                   ret   = 0;
-  irqstate_t            flags;
 
-  ret = nxsem_wait(&dev->closesem);
+  ret = nxmutex_lock(&dev->closelock);
   if (ret >= 0)
     {
       /* Decrement the references to the driver. If the reference count will
@@ -201,7 +188,7 @@ static int foc_close(FAR struct file *filep)
       if (dev->ocount > 1)
         {
           dev->ocount--;
-          nxsem_post(&dev->closesem);
+          nxmutex_unlock(&dev->closelock);
         }
       else
         {
@@ -211,11 +198,8 @@ static int foc_close(FAR struct file *filep)
 
           /* Shutdown the device */
 
-          flags = enter_critical_section();
           ret = foc_shutdown(dev);
-          leave_critical_section(flags);
-
-          nxsem_post(&dev->closesem);
+          nxmutex_unlock(&dev->closelock);
         }
     }
 
@@ -252,6 +236,9 @@ static int foc_close(FAR struct file *filep)
  *   MTRIOC_GET_INFO:     Get the FOC device info,
  *                        arg: struct foc_info_s pointer
  *
+ *   MTRIOC_PWM_OFF:      Force all PWM switches to the off state.
+ *                        arg: bool pointer
+ *
  ****************************************************************************/
 
 static int foc_ioctl(FAR struct file *filep, int cmd, unsigned long arg)
@@ -259,9 +246,6 @@ static int foc_ioctl(FAR struct file *filep, int cmd, unsigned long arg)
   FAR struct inode     *inode = filep->f_inode;
   FAR struct foc_dev_s *dev   = inode->i_private;
   int                   ret   = 0;
-  irqstate_t            flags;
-
-  flags = enter_critical_section();
 
   switch (cmd)
     {
@@ -361,7 +345,7 @@ static int foc_ioctl(FAR struct file *filep, int cmd, unsigned long arg)
 
       case MTRIOC_GET_INFO:
         {
-          FAR struct foc_info_s *info = (struct foc_info_s *)arg;
+          FAR struct foc_info_s *info = (FAR struct foc_info_s *)arg;
 
           DEBUGASSERT(info != NULL);
 
@@ -373,6 +357,21 @@ static int foc_ioctl(FAR struct file *filep, int cmd, unsigned long arg)
 
           break;
         }
+
+      case MTRIOC_PWM_OFF:
+      {
+        FAR bool *off = (FAR bool *)arg;
+
+        DEBUGASSERT(off != NULL);
+
+        ret = foc_pwm_off(dev, *off);
+        if (ret != OK)
+          {
+            mtrerr("MTRIOC_PWM_OFF failed %d\n", ret);
+          }
+
+        break;
+      }
 
       /* Not supported */
 
@@ -387,8 +386,6 @@ static int foc_ioctl(FAR struct file *filep, int cmd, unsigned long arg)
           break;
         }
     }
-
-  leave_critical_section(flags);
 
   return ret;
 }
@@ -407,6 +404,8 @@ static int foc_lower_ops_assert(FAR struct foc_lower_ops_s *ops)
   DEBUGASSERT(ops->setup);
   DEBUGASSERT(ops->shutdown);
   DEBUGASSERT(ops->start);
+  DEBUGASSERT(ops->pwm_off);
+  DEBUGASSERT(ops->info_get);
   DEBUGASSERT(ops->ioctl);
   DEBUGASSERT(ops->bind);
   DEBUGASSERT(ops->fault_clear);
@@ -462,7 +461,6 @@ static int foc_setup(FAR struct foc_dev_s *dev)
   if (ret < 0)
     {
       mtrerr("foc_lower_bind failed %d\n", ret);
-      set_errno(EINVAL);
       goto errout;
     }
 
@@ -527,6 +525,13 @@ static int foc_start(FAR struct foc_dev_s *dev)
       goto errout;
     }
 
+  if (!dev->state.pwm_off)
+    {
+      /* Make sure that PWM is enabled if pwm_off was not called before */
+
+      ret = foc_pwm_off(dev, false);
+    }
+
   /* Start the FOC */
 
   ret = FOC_OPS_START(dev, true);
@@ -560,6 +565,10 @@ static int foc_stop(FAR struct foc_dev_s *dev)
   /* Zero duty cycle */
 
   memset(&d_zero, 0, CONFIG_MOTOR_FOC_PHASES * sizeof(foc_duty_t));
+
+  /* Make sure that PWM is disabled */
+
+  ret = foc_pwm_off(dev, true);
 
   /* Reset duty cycle */
 
@@ -606,8 +615,8 @@ static int foc_cfg_set(FAR struct foc_dev_s *dev, FAR struct foc_cfg_s *cfg)
 
   memcpy(&dev->cfg, cfg, sizeof(struct foc_cfg_s));
 
-  mtrinfo("FOC %" PRIu8 " PWM=%" PRIu32 " notifier=%" PRIu32 "\n",
-          dev->devno, dev->cfg.pwm_freq, dev->cfg.notifier_freq);
+  mtrinfo("FOC PWM=%" PRIu32 " notifier=%" PRIu32 "\n",
+          dev->cfg.pwm_freq, dev->cfg.notifier_freq);
 
   /* Call arch configuration */
 
@@ -709,6 +718,16 @@ static int foc_params_set(FAR struct foc_dev_s *dev,
   DEBUGASSERT(dev);
   DEBUGASSERT(params);
 
+  /* If PWM switches are turned off, the change of duty cycle has no
+   * effect.
+   */
+
+  if (dev->state.pwm_off)
+    {
+      ret = -EPERM;
+      goto errout;
+    }
+
 #ifdef CONFIG_MOTOR_FOC_TRACE
   FOC_OPS_TRACE(dev, FOC_TRACE_PARAMS, true);
 #endif
@@ -721,6 +740,7 @@ static int foc_params_set(FAR struct foc_dev_s *dev,
   FOC_OPS_TRACE(dev, FOC_TRACE_PARAMS, false);
 #endif
 
+errout:
   return ret;
 }
 
@@ -735,11 +755,28 @@ static int foc_params_set(FAR struct foc_dev_s *dev,
 static int foc_info_get(FAR struct foc_dev_s *dev,
                         FAR struct foc_info_s *info)
 {
-  /* Copy data from device */
+  /* Call lower-half logic */
 
-  memcpy(info, &dev->info, sizeof(struct foc_info_s));
+  return FOC_OPS_INFOGET(dev, info);
+}
 
-  return OK;
+/****************************************************************************
+ * Name: foc_info_get
+ *
+ * Description:
+ *   Force all PWM swichtes to the off state
+ *
+ ****************************************************************************/
+
+static int foc_pwm_off(FAR struct foc_dev_s *dev, bool off)
+{
+  DEBUGASSERT(dev);
+
+  /* Update device state */
+
+  dev->state.pwm_off = off;
+
+  return FOC_OPS_PWMOFF(dev, off);
 }
 
 /****************************************************************************
@@ -751,7 +788,8 @@ static int foc_info_get(FAR struct foc_dev_s *dev,
  ****************************************************************************/
 
 static int foc_notifier(FAR struct foc_dev_s *dev,
-                        FAR foc_current_t *current)
+                        FAR foc_current_t *current,
+                        FAR foc_voltage_t *voltage)
 {
   int ret  = OK;
   int sval = 0;
@@ -762,18 +800,23 @@ static int foc_notifier(FAR struct foc_dev_s *dev,
   FOC_OPS_TRACE(dev, FOC_TRACE_NOTIFIER, true);
 #endif
 
-  /* Disable pre-emption until all of the waiting threads have been
-   * restarted. This is necessary to assure that the sval behaves as
-   * expected in the following while loop
-   */
-
-  sched_lock();
-
   /* Copy currents */
 
   memcpy(&dev->state.curr,
          current,
          sizeof(foc_current_t) * CONFIG_MOTOR_FOC_PHASES);
+
+#ifdef CONFIG_MOTOR_FOC_BEMF_SENSE
+  /* Copy voltage */
+
+  memcpy(&dev->state.volt,
+         voltage,
+         sizeof(foc_voltage_t) * CONFIG_MOTOR_FOC_PHASES);
+#else
+  /* If BEMF sampling is not enabled then voltage must be NULL */
+
+  DEBUGASSERT(voltage == NULL);
+#endif
 
   /* Check if the previous cycle was handled */
 
@@ -788,7 +831,7 @@ static int foc_notifier(FAR struct foc_dev_s *dev,
         {
           /* This is a critical fault */
 
-          DEBUGASSERT(0);
+          DEBUGPANIC();
 
           /* Set timeout fault if not in debug mode */
 
@@ -816,10 +859,6 @@ static int foc_notifier(FAR struct foc_dev_s *dev,
             }
         }
     }
-
-  /* Now we can let the restarted threads run */
-
-  sched_unlock();
 
 #ifdef CONFIG_MOTOR_FOC_TRACE
   FOC_OPS_TRACE(dev, FOC_TRACE_NOTIFIER, false);
@@ -857,23 +896,9 @@ int foc_register(FAR const char *path, FAR struct foc_dev_s *dev)
   DEBUGASSERT(dev->lower->ops);
   DEBUGASSERT(dev->lower->data);
 
-  /* Check if the device instance is supported by the driver */
-
-  if (dev->devno > CONFIG_MOTOR_FOC_INST)
-    {
-      mtrerr("Unsupported foc devno %d\n\n", dev->devno);
-      set_errno(EINVAL);
-      ret = ERROR;
-      goto errout;
-    }
-
   /* Reset counter */
 
   dev->ocount = 0;
-
-  /* Store device number */
-
-  dev->devno = g_devno_cntr;
 
   /* Assert the lower-half interface */
 
@@ -883,26 +908,20 @@ int foc_register(FAR const char *path, FAR struct foc_dev_s *dev)
       goto errout;
     }
 
-  /* Initialize semaphores */
+  /* Initialize mutex & semaphores */
 
-  nxsem_init(&dev->closesem, 0, 1);
+  nxmutex_init(&dev->closelock);
   nxsem_init(&dev->statesem, 0, 0);
-  nxsem_set_protocol(&dev->statesem, SEM_PRIO_NONE);
 
   /* Register the FOC character driver */
 
-  ret = register_driver(path, &g_foc_fops, 0444, dev);
+  ret = register_driver(path, &g_foc_fops, 0666, dev);
   if (ret < 0)
     {
-      nxsem_destroy(&dev->closesem);
-      set_errno(ret);
-      ret = ERROR;
+      nxmutex_destroy(&dev->closelock);
+      nxsem_destroy(&dev->statesem);
       goto errout;
     }
-
-  /* Increase device counter */
-
-  g_devno_cntr += 1;
 
 errout:
   return ret;

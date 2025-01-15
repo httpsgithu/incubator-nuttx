@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/cxd56xx/drivers/sensors/bm1383glv_scu.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -93,11 +95,11 @@
 
 struct bm1383glv_dev_s
 {
-  FAR struct i2c_master_s *i2c; /* I2C interface */
-  uint8_t addr;                 /* I2C address */
-  int port;                     /* I2C port */
-  struct seq_s *seq;            /* Sequencer instance */
-  int minor;                    /* Minor device number */
+  struct i2c_master_s *i2c; /* I2C interface */
+  uint8_t addr;             /* I2C address */
+  int port;                 /* I2C port */
+  struct seq_s *seq;        /* Sequencer instance */
+  int minor;                /* Minor device number */
 };
 
 /****************************************************************************
@@ -106,13 +108,13 @@ struct bm1383glv_dev_s
 
 /* Character driver methods */
 
-static int bm1383glv_open(FAR struct file *filep);
-static int bm1383glv_close(FAR struct file *filep);
-static ssize_t bm1383glv_read(FAR struct file *filep, FAR char *buffer,
+static int bm1383glv_open(struct file *filep);
+static int bm1383glv_close(struct file *filep);
+static ssize_t bm1383glv_read(struct file *filep, char *buffer,
                               size_t buflen);
-static ssize_t bm1383glv_write(FAR struct file *filep,
-                               FAR const char *buffer, size_t buflen);
-static int bm1383glv_ioctl(FAR struct file *filep, int cmd,
+static ssize_t bm1383glv_write(struct file *filep,
+                               const char *buffer, size_t buflen);
+static int bm1383glv_ioctl(struct file *filep, int cmd,
                            unsigned long arg);
 
 /****************************************************************************
@@ -125,12 +127,8 @@ static const struct file_operations g_bm1383glvfops =
   bm1383glv_close,             /* close */
   bm1383glv_read,              /* read */
   bm1383glv_write,             /* write */
-  0,                           /* seek */
+  NULL,                        /* seek */
   bm1383glv_ioctl,             /* ioctl */
-#ifndef CONFIG_DISABLE_POLL
-  0,                           /* poll */
-#endif
-  0                            /* unlink */
 };
 
 /* Device is not BM1383AGLV but BM1383GLV */
@@ -173,7 +171,7 @@ static struct seq_s *g_seq = NULL;
  *
  ****************************************************************************/
 
-static uint8_t bm1383glv_getreg8(FAR struct bm1383glv_dev_s *priv,
+static uint8_t bm1383glv_getreg8(struct bm1383glv_dev_s *priv,
                                  uint8_t regaddr)
 {
   uint8_t regval = 0;
@@ -197,7 +195,7 @@ static uint8_t bm1383glv_getreg8(FAR struct bm1383glv_dev_s *priv,
  *
  ****************************************************************************/
 
-static void bm1383glv_putreg8(FAR struct bm1383glv_dev_s *priv,
+static void bm1383glv_putreg8(struct bm1383glv_dev_s *priv,
                               uint8_t regaddr, uint8_t regval)
 {
   uint16_t inst[2];
@@ -218,7 +216,7 @@ static void bm1383glv_putreg8(FAR struct bm1383glv_dev_s *priv,
  *
  ****************************************************************************/
 
-static int bm1383glv_checkid(FAR struct bm1383glv_dev_s *priv)
+static int bm1383glv_checkid(struct bm1383glv_dev_s *priv)
 {
   uint8_t devid;
 
@@ -252,7 +250,7 @@ static int bm1383glv_checkid(FAR struct bm1383glv_dev_s *priv)
  *
  ****************************************************************************/
 
-static int bm1383glv_seqinit(FAR struct bm1383glv_dev_s *priv)
+static int bm1383glv_seqinit(struct bm1383glv_dev_s *priv)
 {
   const uint16_t *inst;
   uint16_t nr;
@@ -299,10 +297,10 @@ static int bm1383glv_seqinit(FAR struct bm1383glv_dev_s *priv)
  *
  ****************************************************************************/
 
-static int bm1383glv_open(FAR struct file *filep)
+static int bm1383glv_open(struct file *filep)
 {
-  FAR struct inode *inode = filep->f_inode;
-  FAR struct bm1383glv_dev_s *priv = inode->i_private;
+  struct inode *inode = filep->f_inode;
+  struct bm1383glv_dev_s *priv = inode->i_private;
   uint8_t val;
 
   if (g_refcnt == 0)
@@ -362,10 +360,10 @@ static int bm1383glv_open(FAR struct file *filep)
  *
  ****************************************************************************/
 
-static int bm1383glv_close(FAR struct file *filep)
+static int bm1383glv_close(struct file *filep)
 {
-  FAR struct inode *inode = filep->f_inode;
-  FAR struct bm1383glv_dev_s *priv = inode->i_private;
+  struct inode *inode = filep->f_inode;
+  struct bm1383glv_dev_s *priv = inode->i_private;
 
   g_refcnt--;
 
@@ -400,11 +398,11 @@ static int bm1383glv_close(FAR struct file *filep)
  * Name: bm1383glv_read
  ****************************************************************************/
 
-static ssize_t bm1383glv_read(FAR struct file *filep, FAR char *buffer,
+static ssize_t bm1383glv_read(struct file *filep, char *buffer,
                               size_t len)
 {
-  FAR struct inode *inode = filep->f_inode;
-  FAR struct bm1383glv_dev_s *priv = inode->i_private;
+  struct inode *inode = filep->f_inode;
+  struct bm1383glv_dev_s *priv = inode->i_private;
 
   len = len / BM1383GLV_BYTESPERSAMPLE * BM1383GLV_BYTESPERSAMPLE;
   len = seq_read(priv->seq, priv->minor, buffer, len);
@@ -416,8 +414,8 @@ static ssize_t bm1383glv_read(FAR struct file *filep, FAR char *buffer,
  * Name: bm1383glv_write
  ****************************************************************************/
 
-static ssize_t bm1383glv_write(FAR struct file *filep,
-                               FAR const char *buffer, size_t buflen)
+static ssize_t bm1383glv_write(struct file *filep,
+                               const char *buffer, size_t buflen)
 {
   return -ENOSYS;
 }
@@ -426,11 +424,11 @@ static ssize_t bm1383glv_write(FAR struct file *filep,
  * Name: bm1383glv_ioctl
  ****************************************************************************/
 
-static int bm1383glv_ioctl(FAR struct file *filep, int cmd,
+static int bm1383glv_ioctl(struct file *filep, int cmd,
                            unsigned long arg)
 {
-  FAR struct inode *inode = filep->f_inode;
-  FAR struct bm1383glv_dev_s *priv = inode->i_private;
+  struct inode *inode = filep->f_inode;
+  struct bm1383glv_dev_s *priv = inode->i_private;
   int ret = OK;
 
   switch (cmd)
@@ -475,10 +473,10 @@ static int bm1383glv_ioctl(FAR struct file *filep, int cmd,
  *
  ****************************************************************************/
 
-int bm1383glv_init(FAR struct i2c_master_s *i2c, int port)
+int bm1383glv_init(struct i2c_master_s *i2c, int port)
 {
-  FAR struct bm1383glv_dev_s tmp;
-  FAR struct bm1383glv_dev_s *priv = &tmp;
+  struct bm1383glv_dev_s tmp;
+  struct bm1383glv_dev_s *priv = &tmp;
   int ret;
 
   /* Setup temporary device structure for initialization */
@@ -517,16 +515,16 @@ int bm1383glv_init(FAR struct i2c_master_s *i2c, int port)
  *
  ****************************************************************************/
 
-int bm1383glv_register(FAR const char *devpath, int minor,
-                       FAR struct i2c_master_s *i2c, int port)
+int bm1383glv_register(const char *devpath, int minor,
+                       struct i2c_master_s *i2c, int port)
 {
-  FAR struct bm1383glv_dev_s *priv;
+  struct bm1383glv_dev_s *priv;
   char path[16];
   int ret;
 
   /* Initialize the BM1383GLV device structure */
 
-  priv = (FAR struct bm1383glv_dev_s *)
+  priv = (struct bm1383glv_dev_s *)
     kmm_malloc(sizeof(struct bm1383glv_dev_s));
   if (!priv)
     {

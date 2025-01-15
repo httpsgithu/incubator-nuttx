@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/renesas/src/rx65n/rx65n_cmtw0.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -18,8 +20,8 @@
  *
  ****************************************************************************/
 
-#ifndef __ARCH_RENESAS_SRC_RX65N_CMTW0_H
-#define __ARCH_RENESAS_SRC_RX65N_CMTW0_H
+#ifndef __ARCH_RENESAS_SRC_RX65N_RX65N_CMTW0_H
+#define __ARCH_RENESAS_SRC_RX65N_RX65N_CMTW0_H
 
 /****************************************************************************
  * Included Files
@@ -95,4 +97,4 @@ void rx65n_cmtw0_start(uint8_t type, uint32_t timeout);
 
 void rx65n_cmtw0_stop(uint8_t type);
 
-#endif /* __ARCH_RENESAS_SRC_RX65N_CMTW0_H */
+#endif /* __ARCH_RENESAS_SRC_RX65N_RX65N_CMTW0_H */

@@ -1,15 +1,8 @@
 /****************************************************************************
  * include/nuttx/wireless/bluetooth/bt_core.h
- * Bluetooth subsystem core APIs.
  *
- *   Copyright (C) 2018 Gregory Nutt. All rights reserved.
- *   Author: Gregory Nutt <gnutt@nuttx.org>
- *
- * Ported from the Intel/Zephyr arduino101_firmware_source-v1.tar package
- * where the code was released with a compatible 3-clause BSD license:
- *
- *   Copyright (c) 2016, Intel Corporation
- *   All rights reserved.
+ * SPDX-License-Identifier: BSD-2-Clause
+ * SPDX-FileCopyrightText: 2016, Intel Corporation. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -203,15 +196,15 @@ static inline int bt_addr_le_to_str(FAR const bt_addr_le_t *addr, char *str,
   switch (addr->type)
   {
     case BT_ADDR_LE_PUBLIC:
-      strcpy(type, "public");
+      strlcpy(type, "public", sizeof(type));
       break;
 
     case BT_ADDR_LE_RANDOM:
-      strcpy(type, "random");
+      strlcpy(type, "random", sizeof(type));
       break;
 
     default:
-      sprintf(type, "0x%02x", addr->type);
+      snprintf(type, sizeof(type), "0x%02x", addr->type);
       break;
   }
 
@@ -223,5 +216,21 @@ static inline int bt_addr_le_to_str(FAR const bt_addr_le_t *addr, char *str,
 /****************************************************************************
  * Public Function Prototypes
  ****************************************************************************/
+
+/****************************************************************************
+ * Name: bt_add_services
+ *
+ * Description:
+ *   Register services and start advertising.
+ *
+ * Input Parameters:
+ *   None
+ *
+ * Returned Value:
+ *   Zero in case of success or negative value in case of error.
+ *
+ ****************************************************************************/
+
+int bt_add_services(void);
 
 #endif /* __INCLUDE_NUTTX_WIRELESS_BLUETOOTH_BT_CORE_H */

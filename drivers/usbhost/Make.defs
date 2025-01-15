@@ -1,6 +1,8 @@
 ############################################################################
 # drivers/usbhost/Make.defs
 #
+# SPDX-License-Identifier: Apache-2.0
+#
 # Licensed to the Apache Software Foundation (ASF) under one or more
 # contributor license agreements.  See the NOTICE file distributed with
 # this work for additional information regarding copyright ownership.  The
@@ -18,7 +20,6 @@
 #
 ############################################################################
 
-CSRCS += hid_parser.c
 
 ifeq ($(CONFIG_USBHOST),y)
 
@@ -47,6 +48,10 @@ ifeq ($(CONFIG_USBHOST_CDCMBIM),y)
 CSRCS += usbhost_cdcmbim.c
 endif
 
+ifeq ($(CONFIG_USBHOST_HID),y)
+CSRCS += hid_parser.c
+endif
+
 ifeq ($(CONFIG_USBHOST_HIDKBD),y)
 CSRCS += usbhost_hidkbd.c
 endif
@@ -67,6 +72,10 @@ ifeq ($(CONFIG_USBHOST_FT232R),y)
 CSRCS += usbhost_ft232r.c
 endif
 
+ifeq ($(CONFIG_USBHOST_BTHCI),y)
+CSRCS += usbhost_bthci.c
+endif
+
 # HCD debug/trace logic
 
 ifeq ($(CONFIG_USBHOST_TRACE),y)
@@ -82,4 +91,4 @@ endif
 
 DEPPATH += --dep-path usbhost
 VPATH += :usbhost
-CFLAGS += ${shell $(INCDIR) "$(CC)" $(TOPDIR)$(DELIM)drivers$(DELIM)usbhost}
+CFLAGS += ${INCDIR_PREFIX}$(TOPDIR)$(DELIM)drivers$(DELIM)usbhost

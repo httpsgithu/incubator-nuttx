@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/misoc/src/common/misoc_net.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -39,7 +41,7 @@
 #include <nuttx/irq.h>
 #include <nuttx/wdog.h>
 #include <nuttx/wqueue.h>
-#include <nuttx/net/arp.h>
+#include <nuttx/net/ip.h>
 #include <nuttx/net/netdev.h>
 
 #include <arch/board/board.h>
@@ -73,14 +75,8 @@
  */
 
 #ifndef CONFIG_MISOC_NET_NINTERFACES
-# define CONFIG_MISOC_NET_NINTERFACES 1
+#  define CONFIG_MISOC_NET_NINTERFACES 1
 #endif
-
-/* TX poll delay = 1 seconds.
- * CLK_TCK is the number of clock ticks per second
- */
-
-#define MISOC_NET_WDDELAY   (1*CLK_TCK)
 
 /* TX timeout = 1 minute */
 
@@ -101,7 +97,6 @@
 struct misoc_net_driver_s
 {
   bool misoc_net_bifup;               /* true:ifup false:ifdown */
-  struct wdog_s misoc_net_txpoll;     /* TX poll timer */
   struct wdog_s misoc_net_txtimeout;  /* TX timeout timer */
   struct work_s misoc_net_irqwork;    /* For deferring interrupt work to the work queue */
   struct work_s misoc_net_pollwork;   /* For deferring poll work to the work queue */
@@ -123,7 +118,8 @@ struct misoc_net_driver_s
 
 /* A single packet buffer is used */
 
-static uint8_t g_pktbuf[MAX_NETDEV_PKTSIZE + CONFIG_NET_GUARDSIZE];
+static uint8_t g_pktbuf[CONFIG_MISOC_NET_NINTERFACES]
+                       [MAX_NETDEV_PKTSIZE + CONFIG_NET_GUARDSIZE];
 
 /* Driver state structure */
 
@@ -135,42 +131,36 @@ static struct misoc_net_driver_s g_misoc_net[CONFIG_MISOC_NET_NINTERFACES];
 
 /* Common TX logic */
 
-static int  misoc_net_transmit(FAR struct misoc_net_driver_s *priv);
-static int  misoc_net_txpoll(FAR struct net_driver_s *dev);
+static int  misoc_net_transmit(struct misoc_net_driver_s *priv);
+static int  misoc_net_txpoll(struct net_driver_s *dev);
 
 /* Interrupt handling */
 
-static void misoc_net_receive(FAR struct misoc_net_driver_s *priv);
-static void misoc_net_txdone(FAR struct misoc_net_driver_s *priv);
+static void misoc_net_receive(struct misoc_net_driver_s *priv);
+static void misoc_net_txdone(struct misoc_net_driver_s *priv);
 
-static void misoc_net_interrupt_work(FAR void *arg);
-static int  misoc_net_interrupt(int irq, FAR void *context, FAR void *arg);
+static void misoc_net_interrupt_work(void *arg);
+static int  misoc_net_interrupt(int irq, void *context, void *arg);
 
 /* Watchdog timer expirations */
 
-static void misoc_net_txtimeout_work(FAR void *arg);
+static void misoc_net_txtimeout_work(void *arg);
 static void misoc_net_txtimeout_expiry(wdparm_t arg);
-
-static void misoc_net_poll_work(FAR void *arg);
-static void misoc_net_poll_expiry(wdparm_t arg);
 
 /* NuttX callback functions */
 
-static int misoc_net_ifup(FAR struct net_driver_s *dev);
-static int misoc_net_ifdown(FAR struct net_driver_s *dev);
+static int misoc_net_ifup(struct net_driver_s *dev);
+static int misoc_net_ifdown(struct net_driver_s *dev);
 
-static void misoc_net_txavail_work(FAR void *arg);
-static int misoc_net_txavail(FAR struct net_driver_s *dev);
+static void misoc_net_txavail_work(void *arg);
+static int misoc_net_txavail(struct net_driver_s *dev);
 
 #if defined(CONFIG_NET_MCASTGROUP) || defined(CONFIG_NET_ICMPv6)
-static int misoc_net_addmac(FAR struct net_driver_s *dev,
-                            FAR const uint8_t *mac);
+static int misoc_net_addmac(struct net_driver_s *dev,
+                            const uint8_t *mac);
 #ifdef CONFIG_NET_MCASTGROUP
-static int misoc_net_rmmac(FAR struct net_driver_s *dev,
-                           FAR const uint8_t *mac);
-#endif
-#ifdef CONFIG_NET_ICMPv6
-static void misoc_net_ipv6multicast(FAR struct misoc_net_driver_s *priv);
+static int misoc_net_rmmac(struct net_driver_s *dev,
+                           const uint8_t *mac);
 #endif
 #endif
 
@@ -197,7 +187,7 @@ static void misoc_net_ipv6multicast(FAR struct misoc_net_driver_s *priv);
  *
  ****************************************************************************/
 
-static int misoc_net_transmit(FAR struct misoc_net_driver_s *priv)
+static int misoc_net_transmit(struct misoc_net_driver_s *priv)
 {
   /* Verify that the hardware is ready to send another packet.  If we get
    * here, then we are committed to sending a packet; Higher level logic
@@ -206,7 +196,7 @@ static int misoc_net_transmit(FAR struct misoc_net_driver_s *priv)
 
   /* Increment statistics */
 
-  NETDEV_TXPACKETS(priv->misoc_net_dev);
+  NETDEV_TXPACKETS(&priv->misoc_net_dev);
 
   /* Send the packet: address=priv->misoc_net_dev.d_buf,
    * length=priv->misoc_net_dev.d_len
@@ -286,50 +276,14 @@ static int misoc_net_transmit(FAR struct misoc_net_driver_s *priv)
  *
  ****************************************************************************/
 
-static int misoc_net_txpoll(FAR struct net_driver_s *dev)
+static int misoc_net_txpoll(struct net_driver_s *dev)
 {
-  FAR struct misoc_net_driver_s *priv =
-    (FAR struct misoc_net_driver_s *)dev->d_private;
+  struct misoc_net_driver_s *priv =
+    (struct misoc_net_driver_s *)dev->d_private;
 
-  /* If the polling resulted in data that should be sent out on the network,
-   * the field d_len is set to a value > 0.
-   */
+  /* Send the packet */
 
-  if (priv->misoc_net_dev.d_len > 0)
-    {
-      /* Look up the destination MAC address and add it to the Ethernet
-       * header.
-       */
-
-#ifdef CONFIG_NET_IPv4
-#ifdef CONFIG_NET_IPv6
-      if (IFF_IS_IPv4(priv->misoc_net_dev.d_flags))
-#endif
-        {
-          arp_out(&priv->misoc_net_dev);
-        }
-#endif /* CONFIG_NET_IPv4 */
-
-#ifdef CONFIG_NET_IPv6
-#ifdef CONFIG_NET_IPv4
-      else
-#endif
-        {
-          neighbor_out(&priv->misoc_net_dev);
-        }
-#endif /* CONFIG_NET_IPv6 */
-
-      if (!devif_loopback(&priv->misoc_net_dev))
-        {
-          /* Send the packet */
-
-          misoc_net_transmit(priv);
-
-          /* Check if there is room in the device to hold another packet.
-           * If not, return a non-zero value to terminate the poll.
-           */
-        }
-    }
+  misoc_net_transmit(priv);
 
   /* If zero is returned, the polling will continue until all connections
    * have been examined.
@@ -355,7 +309,7 @@ static int misoc_net_txpoll(FAR struct net_driver_s *dev)
  *
  ****************************************************************************/
 
-static void misoc_net_receive(FAR struct misoc_net_driver_s *priv)
+static void misoc_net_receive(struct misoc_net_driver_s *priv)
 {
   uint8_t rxslot;
   uint32_t rxlen;
@@ -401,6 +355,7 @@ static void misoc_net_receive(FAR struct misoc_net_driver_s *priv)
 
       priv->misoc_net_dev.d_len = rxlen;
 
+      NETDEV_RXPACKETS(&priv->misoc_net_dev);
 #ifdef CONFIG_NET_PKT
       /* When packet sockets are enabled, feed the frame into the tap */
 
@@ -415,11 +370,8 @@ static void misoc_net_receive(FAR struct misoc_net_driver_s *priv)
           ninfo("IPv4 frame\n");
           NETDEV_RXIPV4(&priv->misoc_net_dev);
 
-          /* Handle ARP on input then give the IPv4 packet to the network
-           * layer
-           */
+          /* Receive an IPv4 packet from the network device */
 
-          arp_ipin(&priv->misoc_net_dev);
           ipv4_input(&priv->misoc_net_dev);
 
           /* If the above function invocation resulted in data that should be
@@ -428,21 +380,6 @@ static void misoc_net_receive(FAR struct misoc_net_driver_s *priv)
 
           if (priv->misoc_net_dev.d_len > 0)
             {
-              /* Update the Ethernet header with the correct MAC address */
-
-#ifdef CONFIG_NET_IPv6
-              if (IFF_IS_IPv4(priv->misoc_net_dev.d_flags))
-#endif
-                {
-                  arp_out(&priv->misoc_net_dev);
-                }
-#ifdef CONFIG_NET_IPv6
-              else
-                {
-                  neighbor_out(&kel->misoc_net_dev);
-                }
-#endif
-
               /* And send the packet */
 
               misoc_net_transmit(priv);
@@ -466,21 +403,6 @@ static void misoc_net_receive(FAR struct misoc_net_driver_s *priv)
 
           if (priv->misoc_net_dev.d_len > 0)
             {
-              /* Update the Ethernet header with the correct MAC address */
-
-#ifdef CONFIG_NET_IPv4
-              if (IFF_IS_IPv4(priv->misoc_net_dev.d_flags))
-                {
-                  arp_out(&priv->misoc_net_dev);
-                }
-              else
-#endif
-#ifdef CONFIG_NET_IPv6
-                {
-                  neighbor_out(&priv->misoc_net_dev);
-                }
-#endif
-
               /* And send the packet */
 
               misoc_net_transmit(priv);
@@ -489,9 +411,9 @@ static void misoc_net_receive(FAR struct misoc_net_driver_s *priv)
       else
 #endif
 #ifdef CONFIG_NET_ARP
-      if (BUF->type == htons(ETHTYPE_ARP))
+      if (BUF->type == HTONS(ETHTYPE_ARP))
         {
-          arp_arpin(&priv->misoc_net_dev);
+          arp_input(&priv->misoc_net_dev);
           NETDEV_RXARP(&priv->misoc_net_dev);
 
           /* If the above function invocation resulted in data that should be
@@ -529,11 +451,11 @@ static void misoc_net_receive(FAR struct misoc_net_driver_s *priv)
  *
  ****************************************************************************/
 
-static void misoc_net_txdone(FAR struct misoc_net_driver_s *priv)
+static void misoc_net_txdone(struct misoc_net_driver_s *priv)
 {
   /* Check for errors and update statistics */
 
-  NETDEV_TXDONE(priv->misoc_net_dev);
+  NETDEV_TXDONE(&priv->misoc_net_dev);
 
   /* Check if there are pending transmissions */
 
@@ -569,9 +491,9 @@ static void misoc_net_txdone(FAR struct misoc_net_driver_s *priv)
  *
  ****************************************************************************/
 
-static void misoc_net_interrupt_work(FAR void *arg)
+static void misoc_net_interrupt_work(void *arg)
 {
-  FAR struct misoc_net_driver_s *priv = (FAR struct misoc_net_driver_s *)arg;
+  struct misoc_net_driver_s *priv = (struct misoc_net_driver_s *)arg;
 
   /* Process pending Ethernet interrupts */
 
@@ -624,9 +546,9 @@ static void misoc_net_interrupt_work(FAR void *arg)
  *
  ****************************************************************************/
 
-static int misoc_net_interrupt(int irq, FAR void *context, FAR void *arg)
+static int misoc_net_interrupt(int irq, void *context, void *arg)
 {
-  FAR struct misoc_net_driver_s *priv = &g_misoc_net[0];
+  struct misoc_net_driver_s *priv = &g_misoc_net[0];
 
   /* Disable further Ethernet interrupts.  Because Ethernet interrupts are
    * also disabled if the TX timeout event occurs, there can be no race
@@ -672,14 +594,14 @@ static int misoc_net_interrupt(int irq, FAR void *context, FAR void *arg)
  *
  ****************************************************************************/
 
-static void misoc_net_txtimeout_work(FAR void *arg)
+static void misoc_net_txtimeout_work(void *arg)
 {
-  FAR struct misoc_net_driver_s *priv = (FAR struct misoc_net_driver_s *)arg;
+  struct misoc_net_driver_s *priv = (struct misoc_net_driver_s *)arg;
 
   /* Increment statistics and dump debug info */
 
   net_lock();
-  NETDEV_TXTIMEOUTS(priv->misoc_net_dev);
+  NETDEV_TXTIMEOUTS(&priv->misoc_net_dev);
 
   /* Then reset the hardware */
 
@@ -709,7 +631,7 @@ static void misoc_net_txtimeout_work(FAR void *arg)
 
 static void misoc_net_txtimeout_expiry(wdparm_t arg)
 {
-  FAR struct misoc_net_driver_s *priv = (FAR struct misoc_net_driver_s *)arg;
+  struct misoc_net_driver_s *priv = (struct misoc_net_driver_s *)arg;
 
 #if 0 /* REVISIT */
   /* Disable further Ethernet interrupts.  This will prevent some race
@@ -724,77 +646,6 @@ static void misoc_net_txtimeout_expiry(wdparm_t arg)
 
   work_queue(HPWORK, &priv->misoc_net_irqwork,
              misoc_net_txtimeout_work, priv, 0);
-}
-
-/****************************************************************************
- * Function: misoc_net_poll_work
- *
- * Description:
- *   Perform periodic polling from the worker thread
- *
- * Input Parameters:
- *   arg - The argument passed when work_queue() as called.
- *
- * Returned Value:
- *   OK on success
- *
- * Assumptions:
- *   The network is locked.
- *
- ****************************************************************************/
-
-static void misoc_net_poll_work(FAR void *arg)
-{
-  FAR struct misoc_net_driver_s *priv = (FAR struct misoc_net_driver_s *)arg;
-
-  /* Perform the poll */
-
-  net_lock();
-
-  /* Check if there is room in the send another TX packet.  We cannot perform
-   * the TX poll if he are unable to accept another packet for transmission.
-   */
-
-  /* If so, update TCP timing states and poll the network for new XMIT data.
-   * Hmmm.. might be bug here.  Does this mean if there is a transmit in
-   * progress, we will missing TCP time state updates?
-   */
-
-  devif_timer(&priv->misoc_net_dev, MISOC_NET_WDDELAY, misoc_net_txpoll);
-
-  /* Setup the watchdog poll timer again */
-
-  wd_start(&priv->misoc_net_txpoll, MISOC_NET_WDDELAY,
-           misoc_net_poll_expiry, (wdparm_t)priv);
-
-  net_unlock();
-}
-
-/****************************************************************************
- * Function: misoc_net_poll_expiry
- *
- * Description:
- *   Periodic timer handler.  Called from the timer interrupt handler.
- *
- * Input Parameters:
- *   arg  - The argument
- *
- * Returned Value:
- *   None
- *
- * Assumptions:
- *   Global interrupts are disabled by the watchdog logic.
- *
- ****************************************************************************/
-
-static void misoc_net_poll_expiry(wdparm_t arg)
-{
-  FAR struct misoc_net_driver_s *priv = (FAR struct misoc_net_driver_s *)arg;
-
-  /* Schedule to perform the interrupt processing on the worker thread. */
-
-  work_queue(HPWORK, &priv->misoc_net_pollwork,
-             misoc_net_poll_work, priv, 0);
 }
 
 /****************************************************************************
@@ -814,16 +665,16 @@ static void misoc_net_poll_expiry(wdparm_t arg)
  *
  ****************************************************************************/
 
-static int misoc_net_ifup(FAR struct net_driver_s *dev)
+static int misoc_net_ifup(struct net_driver_s *dev)
 {
   irqstate_t flags;
-  FAR struct misoc_net_driver_s *priv =
-    (FAR struct misoc_net_driver_s *)dev->d_private;
+  struct misoc_net_driver_s *priv =
+    (struct misoc_net_driver_s *)dev->d_private;
 
 #ifdef CONFIG_NET_IPv4
-  ninfo("Bringing up: %d.%d.%d.%d\n",
-        dev->d_ipaddr & 0xff, (dev->d_ipaddr >> 8) & 0xff,
-        (dev->d_ipaddr >> 16) & 0xff, dev->d_ipaddr >> 24);
+  ninfo("Bringing up: %u.%u.%u.%u\n",
+        ip4_addr1(dev->d_ipaddr), ip4_addr2(dev->d_ipaddr),
+        ip4_addr3(dev->d_ipaddr), ip4_addr4(dev->d_ipaddr));
 #endif
 #ifdef CONFIG_NET_IPv6
   ninfo("Bringing up: %04x:%04x:%04x:%04x:%04x:%04x:%04x:%04x\n",
@@ -834,22 +685,7 @@ static int misoc_net_ifup(FAR struct net_driver_s *dev)
 
   /* Initialize PHYs, Ethernet interface, and setup up Ethernet interrupts */
 
-  /* Instantiate the MAC address from
-   * priv->misoc_net_dev.d_mac.ether.ether_addr_octet
-   */
-
-#ifdef CONFIG_NET_ICMPv6
-  /* Set up IPv6 multicast address filtering */
-
-  misoc_net_ipv6multicast(priv);
-#endif
-
   flags = enter_critical_section();
-
-  /* Set and activate a timer process */
-
-  wd_start(&priv->misoc_net_txpoll, MISOC_NET_WDDELAY,
-           misoc_net_poll_expiry, (wdparm_t)priv);
 
   priv->misoc_net_bifup = true;
   up_enable_irq(ETHMAC_INTERRUPT);
@@ -877,10 +713,10 @@ static int misoc_net_ifup(FAR struct net_driver_s *dev)
  *
  ****************************************************************************/
 
-static int misoc_net_ifdown(FAR struct net_driver_s *dev)
+static int misoc_net_ifdown(struct net_driver_s *dev)
 {
-  FAR struct misoc_net_driver_s *priv =
-    (FAR struct misoc_net_driver_s *)dev->d_private;
+  struct misoc_net_driver_s *priv =
+    (struct misoc_net_driver_s *)dev->d_private;
   irqstate_t flags;
 
   /* Disable the Ethernet interrupt */
@@ -891,9 +727,8 @@ static int misoc_net_ifdown(FAR struct net_driver_s *dev)
   ethmac_sram_reader_ev_enable_write(0);
   ethmac_sram_writer_ev_enable_write(0);
 
-  /* Cancel the TX poll timer and TX timeout timers */
+  /* Cancel the TX timeout timers */
 
-  wd_cancel(&priv->misoc_net_txpoll);
   wd_cancel(&priv->misoc_net_txtimeout);
 
   /* Put the EMAC in its reset, non-operational state.  This should be
@@ -925,10 +760,10 @@ static int misoc_net_ifdown(FAR struct net_driver_s *dev)
  *
  ****************************************************************************/
 
-static void misoc_net_txavail_work(FAR void *arg)
+static void misoc_net_txavail_work(void *arg)
 {
-  FAR struct misoc_net_driver_s *priv =
-    (FAR struct misoc_net_driver_s *)arg;
+  struct misoc_net_driver_s *priv =
+    (struct misoc_net_driver_s *)arg;
 
   /* Ignore the notification if the interface is not yet up */
 
@@ -941,7 +776,7 @@ static void misoc_net_txavail_work(FAR void *arg)
         {
           /* If so, then poll the network for new XMIT data */
 
-          devif_timer(&priv->misoc_net_dev, 0, misoc_net_txpoll);
+          devif_poll(&priv->misoc_net_dev, misoc_net_txpoll);
         }
     }
 
@@ -967,10 +802,10 @@ static void misoc_net_txavail_work(FAR void *arg)
  *
  ****************************************************************************/
 
-static int misoc_net_txavail(FAR struct net_driver_s *dev)
+static int misoc_net_txavail(struct net_driver_s *dev)
 {
-  FAR struct misoc_net_driver_s *priv =
-    (FAR struct misoc_net_driver_s *)dev->d_private;
+  struct misoc_net_driver_s *priv =
+    (struct misoc_net_driver_s *)dev->d_private;
 
   /* Is our single work structure available?  It may not be if there are
    * pending interrupt actions and we will have to ignore the Tx
@@ -1007,11 +842,11 @@ static int misoc_net_txavail(FAR struct net_driver_s *dev)
  ****************************************************************************/
 
 #if defined(CONFIG_NET_MCASTGROUP) || defined(CONFIG_NET_ICMPv6)
-static int misoc_net_addmac(FAR struct net_driver_s *dev,
-                            FAR const uint8_t *mac)
+static int misoc_net_addmac(struct net_driver_s *dev,
+                            const uint8_t *mac)
 {
-  FAR struct misoc_net_driver_s *priv =
-    (FAR struct misoc_net_driver_s *)dev->d_private;
+  struct misoc_net_driver_s *priv =
+    (struct misoc_net_driver_s *)dev->d_private;
 
   /* Add the MAC address to the hardware multicast routing table */
 
@@ -1038,90 +873,17 @@ static int misoc_net_addmac(FAR struct net_driver_s *dev,
  ****************************************************************************/
 
 #ifdef CONFIG_NET_MCASTGROUP
-static int misoc_net_rmmac(FAR struct net_driver_s *dev,
-                           FAR const uint8_t *mac)
+static int misoc_net_rmmac(struct net_driver_s *dev,
+                           const uint8_t *mac)
 {
-  FAR struct misoc_net_driver_s *priv =
-    (FAR struct misoc_net_driver_s *)dev->d_private;
+  struct misoc_net_driver_s *priv =
+    (struct misoc_net_driver_s *)dev->d_private;
 
   /* Add the MAC address to the hardware multicast routing table */
 
   return OK;
 }
 #endif
-
-/****************************************************************************
- * Function: misoc_net_ipv6multicast
- *
- * Description:
- *   Configure the IPv6 multicast MAC address.
- *
- * Input Parameters:
- *   priv - A reference to the private driver state structure
- *
- * Returned Value:
- *   OK on success; Negated errno on failure.
- *
- * Assumptions:
- *
- ****************************************************************************/
-
-#ifdef CONFIG_NET_ICMPv6
-static void misoc_net_ipv6multicast(FAR struct misoc_net_driver_s *priv)
-{
-  FAR struct net_driver_s *dev;
-  uint16_t tmp16;
-  uint8_t mac[6];
-
-  /* For ICMPv6, we need to add the IPv6 multicast address
-   *
-   * For IPv6 multicast addresses, the Ethernet MAC is derived by
-   * the four low-order octets OR'ed with the MAC 33:33:00:00:00:00,
-   * so for example the IPv6 address FF02:DEAD:BEEF::1:3 would map
-   * to the Ethernet MAC address 33:33:00:01:00:03.
-   *
-   * NOTES:  This appears correct for the ICMPv6 Router Solicitation
-   * Message, but the ICMPv6 Neighbor Solicitation message seems to
-   * use 33:33:ff:01:00:03.
-   */
-
-  mac[0] = 0x33;
-  mac[1] = 0x33;
-
-  dev    = &priv->dev;
-  tmp16  = dev->d_ipv6addr[6];
-  mac[2] = 0xff;
-  mac[3] = tmp16 >> 8;
-
-  tmp16  = dev->d_ipv6addr[7];
-  mac[4] = tmp16 & 0xff;
-  mac[5] = tmp16 >> 8;
-
-  ninfo("IPv6 Multicast: %02x:%02x:%02x:%02x:%02x:%02x\n",
-        mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
-
-  misoc_net_addmac(dev, mac);
-
-#ifdef CONFIG_NET_ICMPv6_AUTOCONF
-  /* Add the IPv6 all link-local nodes Ethernet address.  This is the
-   * address that we expect to receive ICMPv6 Router Advertisement
-   * packets.
-   */
-
-  misoc_net_addmac(dev, g_ipv6_ethallnodes.ether_addr_octet);
-
-#endif /* CONFIG_NET_ICMPv6_AUTOCONF */
-#ifdef CONFIG_NET_ICMPv6_ROUTER
-  /* Add the IPv6 all link-local routers Ethernet address.  This is the
-   * address that we expect to receive ICMPv6 Router Solicitation
-   * packets.
-   */
-
-  misoc_net_addmac(dev, g_ipv6_ethallrouters.ether_addr_octet);
-
-#endif /* CONFIG_NET_ICMPv6_ROUTER */
-}
-#endif /* CONFIG_NET_ICMPv6 */
 
 /****************************************************************************
  * Public Functions
@@ -1146,7 +908,7 @@ static void misoc_net_ipv6multicast(FAR struct misoc_net_driver_s *priv)
 
 int misoc_net_initialize(int intf)
 {
-  FAR struct misoc_net_driver_s *priv;
+  struct misoc_net_driver_s *priv;
 
   /* Get the interface structure associated with this interface number. */
 
@@ -1179,7 +941,7 @@ int misoc_net_initialize(int intf)
   priv->tx_buf  = priv->tx0_buf;
   priv->tx_slot = 0;
 
-  priv->misoc_net_dev.d_buf     = g_pktbuf;           /* Single packet buffer */
+  priv->misoc_net_dev.d_buf     = g_pktbuf[intf];     /* Single packet buffer */
   priv->misoc_net_dev.d_ifup    = misoc_net_ifup;     /* I/F up (new IP address) callback */
   priv->misoc_net_dev.d_ifdown  = misoc_net_ifdown;   /* I/F down callback */
   priv->misoc_net_dev.d_txavail = misoc_net_txavail;  /* New TX data callback */

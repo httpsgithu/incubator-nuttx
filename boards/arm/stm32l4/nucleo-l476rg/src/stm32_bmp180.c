@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/stm32l4/nucleo-l476rg/src/stm32_bmp180.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -44,7 +46,7 @@
  * Name: stm32_bmp180initialize
  *
  * Description:
- *   Initialize and register the MPL115A Pressure Sensor driver.
+ *   Initialize and register the BMP180 Pressure Sensor driver.
  *
  * Input Parameters:
  *   devpath - The full path to the driver to register. E.g., "/dev/press0"
@@ -54,9 +56,9 @@
  *
  ****************************************************************************/
 
-int stm32_bmp180initialize(FAR const char *devpath)
+int stm32_bmp180initialize(const char *devpath)
 {
-  FAR struct i2c_master_s *i2c;
+  struct i2c_master_s *i2c;
   int ret;
 
   sninfo("Initializing BMP180!\n");

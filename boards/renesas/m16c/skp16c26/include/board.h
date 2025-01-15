@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/renesas/m16c/skp16c26/include/board.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -18,8 +20,8 @@
  *
  ****************************************************************************/
 
-#ifndef __BOARDS_RENESAS_M32262F8_SKP16C26_INCLUDE_BOARD_H
-#define __BOARDS_RENESAS_M32262F8_SKP16C26_INCLUDE_BOARD_H
+#ifndef __BOARDS_RENESAS_M16C_SKP16C26_INCLUDE_BOARD_H
+#define __BOARDS_RENESAS_M16C_SKP16C26_INCLUDE_BOARD_H
 
 /****************************************************************************
  * Included Files
@@ -51,7 +53,7 @@
 
 /* Xin Freq */
 
-#define	M16C_XIN_FREQ	20000000	/* 20MHz */
+#define M16C_XIN_FREQ  20000000  /* 20MHz */
 
 /* Interrupt Priority Levels ************************************************/
 
@@ -117,4 +119,4 @@
 
 #endif
 
-#endif /* __BOARDS_RENESAS_M32262F8_SKP16C26_INCLUDE_BOARD_H */
+#endif /* __BOARDS_RENESAS_M16C_SKP16C26_INCLUDE_BOARD_H */

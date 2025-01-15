@@ -1,6 +1,8 @@
 /****************************************************************************
  * include/nuttx/lcd/st7567.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -18,8 +20,8 @@
  *
  ****************************************************************************/
 
-#ifndef __INCLUDE_NUTTX_ST7567_H
-#define __INCLUDE_NUTTX_ST7567_H
+#ifndef __INCLUDE_NUTTX_LCD_ST7567_H
+#define __INCLUDE_NUTTX_LCD_ST7567_H
 
 /****************************************************************************
  * Included Files
@@ -135,4 +137,4 @@ void st7567_power(unsigned int devno, bool on);
 }
 #endif
 
-#endif /* __INCLUDE_NUTTX_ST7567_H */
+#endif /* __INCLUDE_NUTTX_LCD_ST7567_H */

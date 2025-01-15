@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/nrf52/hardware/nrf52_tim.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -100,7 +102,7 @@
 /* PRESCALER Register */
 
 #define TIM_PRESCALER_SHIFT                (0)                        /* Bits 0-3: Prescaler value */
-#define TIM_PRESCALER_MAX                  (0xf)
+#define TIM_PRESCALER_MAX                  (9)
 #define TIM_PRESCALER_MASK                 (TIM_PRESCALER_MAX << TIM_PRESCALER_SHIFT)
 
 #endif /* __ARCH_ARM_SRC_NRF52_HARDWARE_NRF52_TIM_H */

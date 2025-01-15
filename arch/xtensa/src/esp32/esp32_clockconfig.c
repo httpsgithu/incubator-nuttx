@@ -23,7 +23,9 @@
  ****************************************************************************/
 
 #include <nuttx/config.h>
+
 #include <stdint.h>
+#include <sys/param.h>
 
 #include "xtensa.h"
 #include "xtensa_attr.h"
@@ -35,10 +37,6 @@
 /****************************************************************************
  * Pre-processor Definitions
  ****************************************************************************/
-
-#ifndef MIN
-#define MIN(a, b) (((a) < (b)) ? (a) : (b))
-#endif
 
 #ifndef CONFIG_ESP_CONSOLE_UART_NUM
 #define CONFIG_ESP_CONSOLE_UART_NUM 0
@@ -218,42 +216,3 @@ void esp32_clockconfig(void)
   esp32_rtc_bbpll_configure(xtal_freq, source_freq_mhz);
   esp32_set_cpu_freq(freq_mhz);
 }
-
-/****************************************************************************
- * Name:  esp_clk_cpu_freq
- *
- * Description:
- *   Get CPU frequency
- *
- * Input Parameters:
- *   None
- *
- * Returned Value:
- *   CPU frequency
- *
- ****************************************************************************/
-
-int IRAM_ATTR esp_clk_cpu_freq(void)
-{
-  return g_ticks_per_us_pro * MHZ;
-}
-
-/****************************************************************************
- * Name:  esp_clk_apb_freq
- *
- * Description:
- *   Return current APB clock frequency.
- *
- * Input Parameters:
- *   None
- *
- * Returned Value:
- *   APB clock frequency, in Hz
- *
- ****************************************************************************/
-
-int IRAM_ATTR esp_clk_apb_freq(void)
-{
-  return MIN(g_ticks_per_us_pro, 80) * MHZ;
-}
-

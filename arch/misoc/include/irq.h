@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/misoc/include/irq.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -29,22 +31,23 @@
  * Included Files
  ****************************************************************************/
 
+#include <sys/types.h>
+#ifndef __ASSEMBLY__
+#  include <stdbool.h>
+#endif
+
 #include <nuttx/irq.h>
 #include <arch/chip/irq.h>
 
 #ifdef CONFIG_ARCH_CHIP_LM32
-# include <arch/lm32/irq.h>
+#  include <arch/lm32/irq.h>
 #endif
 #ifdef CONFIG_ARCH_CHIP_MINERVA
-# include <arch/minerva/irq.h>
+#  include <arch/minerva/irq.h>
 #endif
 
 /****************************************************************************
  * Pre-processor Definitions
- ****************************************************************************/
-
-/****************************************************************************
- * Public Function Prototypes
  ****************************************************************************/
 
 #ifndef __ASSEMBLY__
@@ -55,6 +58,64 @@ extern "C"
 #else
 #define EXTERN extern
 #endif
+
+/****************************************************************************
+ * Inline functions
+ ****************************************************************************/
+
+/* Return the current value of the stack pointer */
+
+static inline_function uint32_t up_getsp(void)
+{
+  register uint32_t sp;
+
+  __asm__ __volatile__("addi %0, sp, 0" : "=r" (sp));
+
+  return sp;
+}
+
+/****************************************************************************
+ * Public Data
+ ****************************************************************************/
+
+/* This holds a references to the current interrupt level register storage
+ * structure.  It is non-NULL only during interrupt processing.
+ */
+
+EXTERN volatile uint32_t *g_current_regs;
+
+/****************************************************************************
+ * Public Function Prototypes
+ ****************************************************************************/
+
+/****************************************************************************
+ * Inline functions
+ ****************************************************************************/
+
+static inline_function uint32_t *up_current_regs(void)
+{
+  return (uint32_t *)g_current_regs;
+}
+
+static inline_function void up_set_current_regs(uint32_t *regs)
+{
+  g_current_regs = regs;
+}
+
+/****************************************************************************
+ * Name: up_interrupt_context
+ *
+ * Description:
+ *   Return true is we are currently executing in the interrupt
+ *   handler context.
+ *
+ ****************************************************************************/
+
+#define up_interrupt_context() (up_current_regs() != NULL)
+
+/****************************************************************************
+ * Public Function Prototypes
+ ****************************************************************************/
 
 irqstate_t up_irq_save(void);
 irqstate_t up_irq_enable(void);

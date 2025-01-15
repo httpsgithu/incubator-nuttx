@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/stm32h7/stm32.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -18,8 +20,8 @@
  *
  ****************************************************************************/
 
-#ifndef __ARCH_ARM_SRC_STM32H7_STM32H7_H
-#define __ARCH_ARM_SRC_STM32H7_STM32H7_H
+#ifndef __ARCH_ARM_SRC_STM32H7_STM32_H
+#define __ARCH_ARM_SRC_STM32H7_STM32_H
 
 /****************************************************************************
  * Included Files
@@ -36,6 +38,7 @@
 
 #include "chip.h"
 #include "stm32_gpio.h"
+#include "stm32_fdcan_sock.h"
 #include "stm32_fmc.h"
 #include "stm32_i2c.h"
 #include "stm32_spi.h"

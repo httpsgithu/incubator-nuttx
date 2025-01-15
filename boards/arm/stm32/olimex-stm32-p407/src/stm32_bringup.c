@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/stm32/olimex-stm32-p407/src/stm32_bringup.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -39,8 +41,7 @@
 #endif
 
 #ifdef CONFIG_MODULE
-#  include "nuttx/symtab.h"
-#  include "nuttx/lib/modlib.h"
+#  include <nuttx/lib/modlib.h>
 #endif
 
 #ifdef CONFIG_STM32_OTGFS
@@ -84,7 +85,7 @@ extern const int MODSYMS_NSYMBOLS_VAR;
 int stm32_bringup(void)
 {
 #ifdef HAVE_MMCSD
-  FAR struct sdio_dev_s *sdio;
+  struct sdio_dev_s *sdio;
 #endif
   int ret;
 
@@ -137,7 +138,7 @@ int stm32_bringup(void)
   sdio_mediachange(sdio, true);
 #endif
 
-#ifdef CONFIG_CAN
+#ifdef CONFIG_STM32_CAN_CHARDRIVER
   /* Initialize CAN and register the CAN driver. */
 
   ret = stm32_can_setup();

@@ -1,6 +1,8 @@
 /****************************************************************************
  * sched/signal/sig_unmaskpendingsignal.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -65,8 +67,9 @@ bool nxsig_unmask_pendingsignal(void)
    * can only be changed on this thread of execution.
    */
 
-  unmaskedset = ~(rtcb->sigprocmask) & nxsig_pendingset(rtcb);
-  if (unmaskedset == NULL_SIGNAL_SET)
+  unmaskedset = nxsig_pendingset(rtcb);
+  nxsig_nandset(&unmaskedset, &unmaskedset, &rtcb->sigprocmask);
+  if (sigisemptyset(&unmaskedset))
     {
       sched_unlock();
       return false;
@@ -109,7 +112,7 @@ bool nxsig_unmask_pendingsignal(void)
             }
         }
     }
-  while (unmaskedset != NULL_SIGNAL_SET);
+  while (!sigisemptyset(&unmaskedset));
 
   sched_unlock();
   return true;

@@ -1,6 +1,8 @@
 /****************************************************************************
  * drivers/video/isx012_reg.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -667,6 +669,7 @@
 #define AE_INIT_MASK_CNT            (AE_BASE+0x002B)
 #define AESPEED_INIT                (AE_BASE+0x0031)
 #define AESPEED_FAST                (AE_BASE+0x0032)
+#define SPOT_FRM_NUM                (AE_BASE+0x0033)
 #define FASTMOVE_TIMEOUT            (AE_BASE+0x003D)
 #define AE_START_LEVEL              (AE_BASE+0x0040)
 
@@ -1400,5 +1403,7 @@
 #define REGVAL_YGAMMA_OFF           (1)
 
 #define REGVAL_INTCLR0_ALLCLEAR     (0x3F)
+
+#define DEVICESTS_SLEEP             (2)
 
 #endif /* __INCLUDE_NUTTX_VIDEO_ISX012_REG_H */

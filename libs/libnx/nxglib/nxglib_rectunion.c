@@ -1,6 +1,8 @@
 /****************************************************************************
  * libs/libnx/nxglib/nxglib_rectunion.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -34,7 +36,7 @@
  * Name: nxgl_rectunion
  *
  * Description:
- *   Given two rectanges, src1 and src2, return the larger rectangle that
+ *   Given two rectangles, src1 and src2, return the larger rectangle that
  *   contains both, dest.
  *
  ****************************************************************************/

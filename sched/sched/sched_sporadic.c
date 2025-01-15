@@ -1,6 +1,8 @@
 /****************************************************************************
  * sched/sched/sched_sporadic.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -27,6 +29,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <string.h>
+#include <sys/param.h>
 #include <assert.h>
 #include <debug.h>
 #include <errno.h>
@@ -42,14 +45,6 @@
 #include "sched/sched.h"
 
 #ifdef CONFIG_SCHED_SPORADIC
-
-/****************************************************************************
- * Pre-processor Definitions
- ****************************************************************************/
-
-#ifndef MIN
-#  define MIN(a,b) (((a) < (b)) ? (a) : (b))
-#endif
 
 /****************************************************************************
  * Private Function Prototypes
@@ -463,7 +458,7 @@ static void sporadic_budget_expire(wdparm_t arg)
 
   if (nxsched_islocked_tcb(tcb))
     {
-      DEBUGASSERT((mrepl->flags && SPORADIC_FLAG_ALLOCED) != 0);
+      DEBUGASSERT((mrepl->flags & SPORADIC_FLAG_ALLOCED) != 0);
 
       /* Set the timeslice to the magic value */
 
@@ -784,7 +779,7 @@ int nxsched_initialize_sporadic(FAR struct tcb_s *tcb)
    * sporadic scheduling parameters and state data.
    */
 
-  sporadic = (FAR struct sporadic_s *)kmm_zalloc(sizeof(struct sporadic_s));
+  sporadic = kmm_zalloc(sizeof(struct sporadic_s));
   if (sporadic == NULL)
     {
       serr("ERROR: Failed to allocate sporadic data structure\n");

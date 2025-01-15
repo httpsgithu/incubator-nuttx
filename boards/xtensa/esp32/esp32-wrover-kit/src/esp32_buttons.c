@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/xtensa/esp32/esp32-wrover-kit/src/esp32_buttons.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -102,7 +104,7 @@ uint32_t board_buttons(void)
       b0 = b1;
     }
 
-  iinfo("b=%d n=%d \n", b0, n);
+  iinfo("b=%d n=%d\n", b0, n);
 
   /* Low value means that the button is pressed */
 
@@ -127,10 +129,10 @@ uint32_t board_buttons(void)
  ****************************************************************************/
 
 #ifdef CONFIG_ARCH_IRQBUTTONS
-int board_button_irq(int id, xcpt_t irqhandler, FAR void *arg)
+int board_button_irq(int id, xcpt_t irqhandler, void *arg)
 {
   int ret;
-  DEBUGASSERT(id == BUTTON_BOOT);
+  DEBUGASSERT(id == 0);
 
   int irq = ESP32_PIN2IRQ(BUTTON_BOOT);
 

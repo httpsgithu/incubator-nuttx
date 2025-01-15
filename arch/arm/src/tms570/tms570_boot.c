@@ -1,15 +1,10 @@
 /****************************************************************************
  * arch/arm/src/tms570/tms570_boot.c
  *
- *   Copyright (C) 2015 Gregory Nutt. All rights reserved.
- *   Author: Gregory Nutt <gnutt@nuttx.org>
- *
- * This is primarily original code.  However, some logic in this file was
- * inspired/leveraged from TI's Project0 which has a compatible BSD license
- * and credit should be given in any case:
- *
- *   Copyright (c) 2012, Texas Instruments Incorporated
- *   All rights reserved.
+ * SPDX-License-Identifier: BSD-3-Clause
+ * SPDX-FileCopyrightText: 2015 Gregory Nutt. All rights reserved.
+ * SPDX-FileCopyrightText: 2012 Texas Instruments Incorporated
+ * SPDX-FileContributor: Gregory Nutt <gnutt@nuttx.org>
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -54,10 +49,8 @@
 
 #include "chip.h"
 #include "arm.h"
-#include "fpu.h"
 #include "sctlr.h"
 #include "arm_internal.h"
-#include "arm_arch.h"
 
 #include <nuttx/init.h>
 
@@ -106,9 +99,7 @@
 
 static inline void tms570_event_export(void)
 {
-  uint32_t pmcr = cp15_rdpmcr();
-  pmcr |= PCMR_X;
-  cp15_wrpmcr(pmcr);
+  cp15_pmu_pmcr(PMCR_X);
 }
 
 /****************************************************************************
@@ -376,11 +367,9 @@ void arm_boot(void)
 
   tms570_esm_initialize();
 
-#ifdef CONFIG_ARCH_FPU
   /* Initialize the FPU */
 
   arm_fpuconfig();
-#endif
 
 #ifdef CONFIG_ARMV7R_MEMINIT
   /* Initialize the .bss and .data sections as well as RAM functions

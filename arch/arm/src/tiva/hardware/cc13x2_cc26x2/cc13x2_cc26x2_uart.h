@@ -1,14 +1,10 @@
 /****************************************************************************
  * arch/arm/src/tiva/hardware/cc13x2_cc26x2/cc13x2_cc26x2_uart.h
  *
- *   Copyright (C) 2018 Gregory Nutt. All rights reserved.
- *   Author: Gregory Nutt <gnutt@nuttx.org>
- *
- * Technical content derives from a TI header file that has a compatible
- * BSD license:
- *
- *   Copyright (c) 2015-2017, Texas Instruments Incorporated
- *   All rights reserved.
+ * SPDX-License-Identifier: BSD-3-Clause
+ * SPDX-FileCopyrightText: 2018 Gregory Nutt. All rights reserved.
+ * SPDX-FileCopyrightText: 2015-2017, Texas Instruments Incorporated
+ * SPDX-FileContributor: Gregory Nutt <gnutt@nuttx.org>
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -39,8 +35,8 @@
  *
  ****************************************************************************/
 
-#ifndef __ARCH_ARM_SRC_TIVA_HARDWARE_CC13X20_CC26X2_CC13X20_CC26X2_UART_H
-#define __ARCH_ARM_SRC_TIVA_HARDWARE_CC13X20_CC26X2_CC13X20_CC26X2_UART_H
+#ifndef __ARCH_ARM_SRC_TIVA_HARDWARE_CC13X2_CC26X2_CC13X2_CC26X2_UART_H
+#define __ARCH_ARM_SRC_TIVA_HARDWARE_CC13X2_CC26X2_CC13X2_CC26X2_UART_H
 
 /****************************************************************************
  * Included Files
@@ -273,4 +269,4 @@
  * Public Data
  ****************************************************************************/
 
-#endif /* __ARCH_ARM_SRC_TIVA_HARDWARE_CC13X20_CC26X2_CC13X20_CC26X2_UART_H */
+#endif /* __ARCH_ARM_SRC_TIVA_HARDWARE_CC13X2_CC26X2_CC13X2_CC26X2_UART_H */

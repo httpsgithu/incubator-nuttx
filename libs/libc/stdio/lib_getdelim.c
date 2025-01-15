@@ -1,6 +1,8 @@
 /****************************************************************************
  * libs/libc/stdio/lib_getdelim.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -31,20 +33,6 @@
 /****************************************************************************
  * Pre-processor Definitions
  ****************************************************************************/
-
-/* Some environments may return CR as end-of-line, others LF, and others
- * both.  Because of the definition of the getline() function, it can handle
- * only single character line terminators.
- */
-
-#undef HAVE_GETLINE
-#if defined(CONFIG_EOL_IS_CR)
-#  define HAVE_GETLINE 1
-#  define EOLCH        '\r'
-#elif defined(CONFIG_EOL_IS_LF)
-#  define HAVE_GETLINE 1
-#  define EOLCH        '\n'
-#endif
 
 #define BUFSIZE_INIT   64
 #define BUFSIZE_INCR   32
@@ -107,7 +95,7 @@ ssize_t getdelim(FAR char **lineptr, size_t *n, int delimiter,
 
   if (lineptr == NULL || n == NULL || stream == NULL)
     {
-      ret = -EINVAL;
+      ret = EINVAL;
       goto errout;
     }
 
@@ -135,10 +123,10 @@ ssize_t getdelim(FAR char **lineptr, size_t *n, int delimiter,
   dest = *lineptr;
   if (dest == NULL)
     {
-      dest = (FAR char *)lib_malloc(bufsize);
+      dest = lib_malloc(bufsize);
       if (dest == NULL)
         {
-          ret = -ENOMEM;
+          ret = ENOMEM;
           goto errout;
         }
 
@@ -170,10 +158,10 @@ ssize_t getdelim(FAR char **lineptr, size_t *n, int delimiter,
            */
 
           bufsize  += BUFSIZE_INCR;
-          newbuffer = (FAR char *)lib_realloc(*lineptr, bufsize);
+          newbuffer = lib_realloc(*lineptr, bufsize);
           if (newbuffer == NULL)
             {
-              ret = -ENOMEM;
+              ret = ENOMEM;
               goto errout;
             }
 
@@ -188,13 +176,9 @@ ssize_t getdelim(FAR char **lineptr, size_t *n, int delimiter,
       ch = fgetc(stream);
       if (ch == EOF)
         {
-#ifdef __KERNEL_
-          return -ENODATA;
-#else
           /* errno is not set in this case */
 
           return -1;
-#endif
         }
 
       /* Save the character in the user buffer and increment the number of
@@ -218,16 +202,12 @@ ssize_t getdelim(FAR char **lineptr, size_t *n, int delimiter,
   return ncopied;
 
 errout:
-#ifdef __KERNEL_
-  return ret;
-#else
-  set_errno(-ret);
+  set_errno(ret);
   return -1;
-#endif
 }
 
 /****************************************************************************
- * Name: getdelim()
+ * Name: getline()
  *
  * Description:
  *   The getline() function will be equivalent to the getdelim() function
@@ -240,9 +220,7 @@ errout:
  *
  ****************************************************************************/
 
-#ifdef HAVE_GETLINE
 ssize_t getline(FAR char **lineptr, size_t *n, FAR FILE *stream)
 {
-  return getdelim(lineptr, n, EOLCH, stream);
+  return getdelim(lineptr, n, '\n', stream);
 }
-#endif

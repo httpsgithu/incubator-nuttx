@@ -69,17 +69,17 @@
 /* First pick the console and ttys0.  This could be any of UART0-5 */
 
 #if defined(CONFIG_UART0_SERIAL_CONSOLE)
-#    define CONSOLE_DEV         g_uart0port  /* UART0 is console */
-#    define TTYS0_DEV           g_uart0port  /* UART0 is ttyS0 */
-#    define UART0_ASSIGNED      1
+#  define CONSOLE_DEV           g_uart0port  /* UART0 is console */
+#  define TTYS0_DEV             g_uart0port  /* UART0 is ttyS0 */
+#  define UART0_ASSIGNED        1
 #elif defined(CONFIG_UART1_SERIAL_CONSOLE)
-#    define CONSOLE_DEV         g_uart1port  /* UART1 is console */
-#    define TTYS0_DEV           g_uart1port  /* UART1 is ttyS0 */
-#    define UART1_ASSIGNED      1
+#  define CONSOLE_DEV           g_uart1port  /* UART1 is console */
+#  define TTYS0_DEV             g_uart1port  /* UART1 is ttyS0 */
+#  define UART1_ASSIGNED        1
 #elif defined(CONFIG_UART2_SERIAL_CONSOLE)
-#    define CONSOLE_DEV         g_uart2port  /* UART2 is console */
-#    define TTYS0_DEV           g_uart2port  /* UART2 is ttyS0 */
-#    define UART2_ASSIGNED      1
+#  define CONSOLE_DEV           g_uart2port  /* UART2 is console */
+#  define TTYS0_DEV             g_uart2port  /* UART2 is ttyS0 */
+#  define UART2_ASSIGNED        1
 #else
 #  undef CONSOLE_DEV                         /* No console */
 #  if defined(CONFIG_ESP32_UART0)
@@ -146,52 +146,52 @@
  */
 
 #if defined(CONFIG_ESP32_UART0_TXDMA) && defined(CONFIG_ESP32_UART1_TXDMA) && defined(CONFIG_ESP32_UART2_TXDMA)
-  #ifdef CONFIG_ESP32_UART0_EXC
-    #define UART0_DMA 0
-    #define UART1_DMA 1
-    #define UART2_DMA 1
-  #elif defined(CONFIG_ESP32_UART1_EXC)
-    #define UART0_DMA 1
-    #define UART1_DMA 0
-    #define UART2_DMA 1
-  #elif defined(CONFIG_ESP32_UART2_EXC)
-    #define UART0_DMA 1
-    #define UART1_DMA 1
-    #define UART2_DMA 0
-  #endif
-  #define USE_DMA0  1
-  #define USE_DMA1  1
+#  ifdef CONFIG_ESP32_UART0_EXC
+#    define UART0_DMA 0
+#    define UART1_DMA 1
+#    define UART2_DMA 1
+#  elif defined(CONFIG_ESP32_UART1_EXC)
+#    define UART0_DMA 1
+#    define UART1_DMA 0
+#    define UART2_DMA 1
+#  elif defined(CONFIG_ESP32_UART2_EXC)
+#    define UART0_DMA 1
+#    define UART1_DMA 1
+#    define UART2_DMA 0
+#  endif
+#  define USE_DMA0  1
+#  define USE_DMA1  1
 #else
-  #ifdef CONFIG_ESP32_UART0_TXDMA
-    #define UART0_DMA 0
-    #define USE_DMA0  1
-  #endif
-  #ifdef CONFIG_ESP32_UART1_TXDMA
-    #ifndef USE_DMA0
-      #define UART1_DMA 0
-      #define USE_DMA0  1
-    #else
-      #define UART1_DMA 1
-      #define USE_DMA1  1
-    #endif
-  #endif
-  #ifdef CONFIG_ESP32_UART2_TXDMA
-    #ifndef USE_DMA0
-      #define UART2_DMA 0
-      #define USE_DMA0  1
-    #else
-      #define UART2_DMA 1
-      #define USE_DMA1  1
-    #endif
-  #endif
+#  ifdef CONFIG_ESP32_UART0_TXDMA
+#    define UART0_DMA 0
+#    define USE_DMA0  1
+#  endif
+#  ifdef CONFIG_ESP32_UART1_TXDMA
+#    ifndef USE_DMA0
+#      define UART1_DMA 0
+#      define USE_DMA0  1
+#    else
+#      define UART1_DMA 1
+#      define USE_DMA1  1
+#    endif
+#  endif
+#  ifdef CONFIG_ESP32_UART2_TXDMA
+#    ifndef USE_DMA0
+#      define UART2_DMA 0
+#      define USE_DMA0  1
+#    else
+#      define UART2_DMA 1
+#      define USE_DMA1  1
+#    endif
+#  endif
 #endif
 
 /* UART DMA controllers */
 
 #if defined(USE_DMA0) && defined(USE_DMA1)
-#define UART_DMA_CONTROLLERS_NUM 2
+#  define UART_DMA_CONTROLLERS_NUM 2
 #else
-#define UART_DMA_CONTROLLERS_NUM 1
+#  define UART_DMA_CONTROLLERS_NUM 1
 #endif
 
 /* Semaphores to control access to each DMA.
@@ -202,10 +202,10 @@
  */
 
 #ifdef USE_DMA0
-static sem_t g_dma0_sem;
+static sem_t g_dma0_sem = SEM_INITIALIZER(1);
 #endif
 #ifdef USE_DMA1
-static sem_t g_dma1_sem;
+static sem_t g_dma1_sem = SEM_INITIALIZER(1);
 #endif
 
 /* UART DMA RX/TX descriptors */
@@ -244,7 +244,11 @@ struct esp32_config_s
 #endif
 #ifdef CONFIG_SERIAL_TXDMA
   uint8_t  dma_chan;            /* DMA instance 0-1 */
-  sem_t *  dma_sem;             /* DMA semaphore */
+  sem_t   *dma_sem;             /* DMA semaphore */
+#endif
+#ifdef HAVE_RS485
+  uint8_t  rs485_dir_gpio;      /* UART RS-485 DIR GPIO pin cfg */
+  bool     rs485_dir_polarity;  /* UART RS-485 DIR TXEN polarity */
 #endif
 };
 
@@ -380,6 +384,14 @@ static const struct esp32_config_s g_uart0config =
 #endif
 #endif
 #endif
+#ifdef CONFIG_ESP32_UART0_RS485
+  .rs485_dir_gpio = CONFIG_ESP32_UART0_RS485_DIR_PIN,
+#if (CONFIG_ESP32_UART0_RS485_DIR_POLARITY == 0)
+  .rs485_dir_polarity = false,
+#else
+  .rs485_dir_polarity = true,
+#endif
+#endif
 };
 
 static struct esp32_dev_s g_uart0priv =
@@ -390,25 +402,25 @@ static struct esp32_dev_s g_uart0priv =
   .bits           = CONFIG_UART0_BITS,
   .stopbits2      = CONFIG_UART0_2STOP,
 #ifdef CONFIG_SERIAL_TXDMA
-#ifdef CONFIG_ESP32_UART0_TXDMA
+#  ifdef CONFIG_ESP32_UART0_TXDMA
   .txdma          = true,    /* TX DMA enabled for this UART */
-#else
+#  else
   .txdma          = false,   /* TX DMA disabled for this UART */
-#endif
+#  endif
 #endif
 #ifdef CONFIG_SERIAL_IFLOWCONTROL
-#ifdef CONFIG_UART0_IFLOWCONTROL
+#  ifdef CONFIG_UART0_IFLOWCONTROL
   .iflow          = true,    /* Input flow control (RTS) enabled */
-#else
+#  else
   .iflow          = false,   /* Input flow control (RTS) disabled */
-#endif
+#  endif
 #endif
 #ifdef CONFIG_SERIAL_OFLOWCONTROL
-#ifdef CONFIG_UART0_OFLOWCONTROL
+#  ifdef CONFIG_UART0_OFLOWCONTROL
   .oflow          = true,    /* Output flow control (CTS) enabled */
-#else
+#  else
   .oflow          = false,   /* Output flow control (CTS) disabled */
-#endif
+#  endif
 #endif
 };
 
@@ -450,14 +462,22 @@ static const struct esp32_config_s g_uart1config =
   .ctssig         = U1CTS_IN_IDX,
 #endif
 #ifdef CONFIG_SERIAL_TXDMA
-#ifdef CONFIG_ESP32_UART1_TXDMA
+#  ifdef CONFIG_ESP32_UART1_TXDMA
   .dma_chan       = UART1_DMA,
-#if UART1_DMA == 0
+#    if UART1_DMA == 0
   .dma_sem        = &g_dma0_sem,
-#else
+#    else
   .dma_sem        = &g_dma1_sem,
+#    endif
+#  endif
 #endif
-#endif
+#ifdef CONFIG_ESP32_UART1_RS485
+  .rs485_dir_gpio = CONFIG_ESP32_UART1_RS485_DIR_PIN,
+#  if (CONFIG_ESP32_UART1_RS485_DIR_POLARITY == 0)
+  .rs485_dir_polarity = false,
+#  else
+  .rs485_dir_polarity = true,
+#  endif
 #endif
 };
 
@@ -469,25 +489,25 @@ static struct esp32_dev_s g_uart1priv =
   .bits           = CONFIG_UART1_BITS,
   .stopbits2      = CONFIG_UART1_2STOP,
 #ifdef CONFIG_SERIAL_TXDMA
-#ifdef CONFIG_ESP32_UART1_TXDMA
+#  ifdef CONFIG_ESP32_UART1_TXDMA
   .txdma          = true,    /* TX DMA enabled for this UART */
-#else
+#  else
   .txdma          = false,   /* TX DMA disabled for this UART */
-#endif
+#  endif
 #endif
 #ifdef CONFIG_SERIAL_IFLOWCONTROL
-#ifdef CONFIG_UART1_IFLOWCONTROL
+#  ifdef CONFIG_UART1_IFLOWCONTROL
   .iflow          = true,    /* input flow control (RTS) enabled */
-#else
+#  else
   .iflow          = false,   /* input flow control (RTS) disabled */
-#endif
+#  endif
 #endif
 #ifdef CONFIG_SERIAL_OFLOWCONTROL
-#ifdef CONFIG_UART1_OFLOWCONTROL
+#  ifdef CONFIG_UART1_OFLOWCONTROL
   .oflow          = true,    /* output flow control (CTS) enabled */
-#else
+#  else
   .oflow          = false,   /* output flow control (CTS) disabled */
-#endif
+#  endif
 #endif
 };
 
@@ -529,14 +549,22 @@ static const struct esp32_config_s g_uart2config =
   .ctssig         = U2CTS_IN_IDX,
 #endif
 #ifdef CONFIG_SERIAL_TXDMA
-#ifdef CONFIG_ESP32_UART2_TXDMA
+#  ifdef CONFIG_ESP32_UART2_TXDMA
   .dma_chan       = UART2_DMA,
-#if UART2_DMA == 0
+#    if UART2_DMA == 0
   .dma_sem        = &g_dma0_sem,
-#else
+#    else
   .dma_sem        = &g_dma1_sem,
+#    endif
+#  endif
 #endif
-#endif
+#ifdef CONFIG_ESP32_UART2_RS485
+  .rs485_dir_gpio = CONFIG_ESP32_UART2_RS485_DIR_PIN,
+#  if (CONFIG_ESP32_UART2_RS485_DIR_POLARITY == 0)
+  .rs485_dir_polarity = false,
+#  else
+  .rs485_dir_polarity = true,
+#  endif
 #endif
 };
 
@@ -548,25 +576,25 @@ static struct esp32_dev_s g_uart2priv =
   .bits           = CONFIG_UART2_BITS,
   .stopbits2      = CONFIG_UART2_2STOP,
 #ifdef CONFIG_SERIAL_TXDMA
-#ifdef CONFIG_ESP32_UART2_TXDMA
+#  ifdef CONFIG_ESP32_UART2_TXDMA
   .txdma          = true,    /* TX DMA enabled for this UART */
-#else
+#  else
   .txdma          = false,   /* TX DMA disabled for this UART */
-#endif
+#  endif
 #endif
 #ifdef CONFIG_SERIAL_IFLOWCONTROL
-#ifdef CONFIG_UART2_IFLOWCONTROL
+#  ifdef CONFIG_UART2_IFLOWCONTROL
   .iflow          = true,    /* input flow control (RTS) enabled */
-#else
+#  else
   .iflow          = false,   /* input flow control (RTS) disabled */
-#endif
+#  endif
 #endif
 #ifdef CONFIG_SERIAL_OFLOWCONTROL
-#ifdef CONFIG_UART2_OFLOWCONTROL
+#  ifdef CONFIG_UART2_OFLOWCONTROL
   .oflow          = true,    /* output flow control (CTS) enabled */
-#else
+#  else
   .oflow          = false,   /* output flow control (CTS) disabled */
-#endif
+#  endif
 #endif
 };
 
@@ -611,22 +639,29 @@ static void esp32_dmasend(struct uart_dev_s *dev)
     {
       struct esp32_dmadesc_s *dmadesc;
       uint8_t *tp;
-    #ifdef CONFIG_XTENSA_IMEM_USE_SEPARATE_HEAP
+#ifdef CONFIG_ESP32_SPIRAM
       uint8_t *alloctp = NULL;
-    #endif
+#endif
 
-      /* If the buffer comes from PSRAM, allocate a new one from DRAM */
+      /* If the buffer comes from PSRAM, allocate a new one from
+       * Internal SRAM.
+       */
 
-    #ifdef CONFIG_XTENSA_IMEM_USE_SEPARATE_HEAP
+#ifdef CONFIG_ESP32_SPIRAM
       if (esp32_ptr_extram(dev->dmatx.buffer))
         {
+#  ifdef CONFIG_MM_KERNEL_HEAP
+          alloctp = kmm_malloc(dev->dmatx.length);
+#  elif defined(CONFIG_XTENSA_IMEM_USE_SEPARATE_HEAP)
           alloctp = xtensa_imm_malloc(dev->dmatx.length);
+#  endif
+
           DEBUGASSERT(alloctp != NULL);
           memcpy(alloctp, dev->dmatx.buffer, dev->dmatx.length);
           tp = alloctp;
         }
       else
-    #endif
+#endif
         {
           tp = (uint8_t *)dev->dmatx.buffer;
         }
@@ -652,12 +687,16 @@ static void esp32_dmasend(struct uart_dev_s *dev)
       modifyreg32(UHCI_DMA_OUT_LINK_REG(priv->config->dma_chan),
                   UHCI_OUTLINK_STOP_M, UHCI_OUTLINK_START_M);
 
-    #ifdef CONFIG_XTENSA_IMEM_USE_SEPARATE_HEAP
+#ifdef CONFIG_ESP32_SPIRAM
       if (alloctp != NULL)
         {
+#  ifdef CONFIG_MM_KERNEL_HEAP
+          kmm_free(alloctp);
+#  elif defined(CONFIG_XTENSA_IMEM_USE_SEPARATE_HEAP)
           xtensa_imm_free(alloctp);
+#  endif
         }
-    #endif
+#endif
     }
 }
 
@@ -1017,7 +1056,7 @@ static int esp32_attach(struct uart_dev_s *dev)
 
   /* Set up to receive peripheral interrupts on the current CPU */
 
-  priv->cpu = up_cpu_index();
+  priv->cpu = this_cpu();
   priv->cpuint = esp32_setup_irq(priv->cpu, priv->config->periph,
                                  1, ESP32_CPUINT_LEVEL);
   if (priv->cpuint < 0)
@@ -1147,7 +1186,7 @@ static void dma_attach(uint8_t dma_chan)
 
   /* Set up to receive peripheral interrupts on the current CPU */
 
-  cpu = up_cpu_index();
+  cpu = this_cpu();
   dma_cpuint = esp32_setup_irq(cpu, periph, 1, ESP32_CPUINT_LEVEL);
   if (dma_cpuint < 0)
     {
@@ -1171,7 +1210,7 @@ static void dma_attach(uint8_t dma_chan)
 }
 
 /****************************************************************************
- * Name: esp32_interrupt
+ * Name: esp32_interrupt_dma
  *
  * Description:
  *   DMA interrupt.
@@ -1204,23 +1243,23 @@ static int esp32_interrupt_dma(int irq, void *context, void *arg)
 
   switch (value)
     {
-#ifdef CONFIG_ESP32_UART0_TXDMA
+#  ifdef CONFIG_ESP32_UART0_TXDMA
       case UHCI_UART0_CE_M:
         dev = &g_uart0port;
       break;
-#endif
+#  endif
 
-#ifdef CONFIG_ESP32_UART1_TXDMA
+#  ifdef CONFIG_ESP32_UART1_TXDMA
       case UHCI_UART1_CE_M:
         dev = &g_uart1port;
       break;
-#endif
+#  endif
 
-#ifdef CONFIG_ESP32_UART2_TXDMA
+#  ifdef CONFIG_ESP32_UART2_TXDMA
       case UHCI_UART2_CE_M:
         dev = &g_uart2port;
       break;
-#endif
+#  endif
 
       default:
         dmaerr("No UART selected\n");
@@ -1243,13 +1282,13 @@ static int esp32_interrupt_dma(int irq, void *context, void *arg)
           nxsem_post(&g_dma0_sem);
           modifyreg32(DPORT_PERIP_CLK_EN_REG, DPORT_UHCI0_CLK_EN, 0);
         }
-    #ifdef USE_DMA1
+#  ifdef USE_DMA1
       else
         {
           nxsem_post(&g_dma1_sem);
           modifyreg32(DPORT_PERIP_CLK_EN_REG, DPORT_UHCI1_CLK_EN, 0);
         }
-    #endif
+#  endif
     }
   else
     {
@@ -1308,10 +1347,11 @@ static void dma_config(uint8_t dma_chan)
  * Name: esp32_interrupt
  *
  * Description:
- *   This is the common UART interrupt handler.  It will be invoked
- *   when an interrupt received on the device.  It should call
- *   uart_transmitchars or uart_receivechar to perform the appropriate data
- *   transfers.
+ *   This is the common UART interrupt handler.  It will be invoked when an
+ *   interrupt is received on the 'irq'.  It should call uart_xmitchars or
+ *   uart_recvchars to perform the appropriate data transfers.  The
+ *   interrupt handling logic must be able to map the 'arg' to the
+ *   appropriate uart_dev_s structure in order to call these functions.
  *
  ****************************************************************************/
 
@@ -1345,8 +1385,25 @@ static int esp32_interrupt(int cpuint, void *context, void *arg)
 
       regval = (UART_RXFIFO_FULL_INT_CLR | UART_FRM_ERR_INT_CLR |
                 UART_RXFIFO_TOUT_INT_CLR | UART_TX_DONE_INT_CLR |
-                UART_TXFIFO_EMPTY_INT_CLR);
+                UART_TXFIFO_EMPTY_INT_CLR | UART_TX_BRK_IDLE_DONE_INT_CLR);
       putreg32(regval, UART_INT_CLR_REG(priv->config->id));
+
+#ifdef HAVE_RS485
+      if ((enabled & UART_TX_BRK_IDLE_DONE_INT_ENA) != 0 &&
+          (status & UART_TX_DONE_INT_ST) != 0)
+        {
+          /* If all bytes were transmitted, then we can disable the RS485
+           * transmit (TX/nTX) pin.
+           */
+
+          nfifo = REG_MASK(status, UART_TXFIFO_CNT);
+          if (nfifo == 0)
+            {
+              esp32_gpiowrite(priv->config->rs485_dir_gpio,
+                              !priv->config->rs485_dir_polarity);
+            }
+        }
+#endif
 
       /* Are Rx interrupts enabled?  The upper layer may hold off Rx input
        * by disabling the Rx interrupts if there is no place to saved the
@@ -1354,7 +1411,7 @@ static int esp32_interrupt(int cpuint, void *context, void *arg)
        */
 
       if ((enabled & (UART_RXFIFO_FULL_INT_ENA |
-                     UART_RXFIFO_TOUT_INT_ENA)) != 0)
+                      UART_RXFIFO_TOUT_INT_ENA)) != 0)
         {
           /* Is there any data waiting in the Rx FIFO? */
 
@@ -1426,8 +1483,8 @@ static int esp32_ioctl(struct file *filep, int cmd, unsigned long arg)
 #ifdef CONFIG_SERIAL_TERMIOS
     case TCGETS:
       {
-        struct termios  *termiosp = (struct termios *)arg;
-        struct esp32_dev_s *priv    = (struct esp32_dev_s *)dev->priv;
+        struct termios *termiosp = (struct termios *)arg;
+        struct esp32_dev_s *priv = (struct esp32_dev_s *)dev->priv;
 
         if (!termiosp)
           {
@@ -1446,12 +1503,12 @@ static int esp32_ioctl(struct file *filep, int cmd, unsigned long arg)
 
         /* Return flow control */
 
-#ifdef CONFIG_SERIAL_OFLOWCONTROL
+#  ifdef CONFIG_SERIAL_OFLOWCONTROL
         termiosp->c_cflag |= (priv->oflow) ? CCTS_OFLOW : 0;
-#endif
-#ifdef CONFIG_SERIAL_IFLOWCONTROL
+#  endif
+#  ifdef CONFIG_SERIAL_IFLOWCONTROL
         termiosp->c_cflag |= (priv->iflow) ? CRTS_IFLOW : 0;
-#endif
+#  endif
         /* Return baud */
 
         cfsetispeed(termiosp, priv->baud);
@@ -1486,19 +1543,19 @@ static int esp32_ioctl(struct file *filep, int cmd, unsigned long arg)
 
     case TCSETS:
       {
-        struct termios  *termiosp = (struct termios *)arg;
-        struct esp32_dev_s *priv    = (struct esp32_dev_s *)dev->priv;
+        struct termios *termiosp = (struct termios *)arg;
+        struct esp32_dev_s *priv = (struct esp32_dev_s *)dev->priv;
         uint32_t baud;
         uint32_t intena;
         uint8_t parity;
         uint8_t nbits;
         bool stop2;
-#ifdef CONFIG_SERIAL_IFLOWCONTROL
+#  ifdef CONFIG_SERIAL_IFLOWCONTROL
         bool iflow;
-#endif
-#ifdef CONFIG_SERIAL_OFLOWCONTROL
+#  endif
+#  ifdef CONFIG_SERIAL_OFLOWCONTROL
         bool oflow;
-#endif
+#  endif
 
         if (!termiosp)
           {
@@ -1530,11 +1587,11 @@ static int esp32_ioctl(struct file *filep, int cmd, unsigned long arg)
           case CS8:
             nbits = 8;
             break;
-#if 0
+#  if 0
           case CS9:
             nbits = 9;
             break;
-#endif
+#  endif
           default:
             ret = -EINVAL;
             break;
@@ -1557,12 +1614,12 @@ static int esp32_ioctl(struct file *filep, int cmd, unsigned long arg)
 
         /* Decode flow control */
 
-#ifdef CONFIG_SERIAL_IFLOWCONTROL
+#  ifdef CONFIG_SERIAL_IFLOWCONTROL
         iflow = (termiosp->c_cflag &  CRTS_IFLOW) != 0;
-#endif
-#ifdef CONFIG_SERIAL_OFLOWCONTROL
+#  endif
+#  ifdef CONFIG_SERIAL_OFLOWCONTROL
         oflow = (termiosp->c_cflag & CCTS_OFLOW) != 0;
-#endif
+#  endif
         /* Verify that all settings are valid before committing */
 
         if (ret == OK)
@@ -1573,12 +1630,12 @@ static int esp32_ioctl(struct file *filep, int cmd, unsigned long arg)
             priv->parity    = parity;
             priv->bits      = nbits;
             priv->stopbits2 = stop2;
-#ifdef CONFIG_SERIAL_IFLOWCONTROL
+#  ifdef CONFIG_SERIAL_IFLOWCONTROL
             priv->iflow = iflow;
-#endif
-#ifdef CONFIG_SERIAL_OFLOWCONTROL
+#  endif
+#  ifdef CONFIG_SERIAL_OFLOWCONTROL
             priv->oflow = oflow;
-#endif
+#  endif
             /* effect the changes immediately - note that we do not
              * implement TCSADRAIN / TCSAFLUSH
              */
@@ -1697,6 +1754,14 @@ static void esp32_send(struct uart_dev_s *dev, int ch)
 {
   struct esp32_dev_s *priv = (struct esp32_dev_s *)dev->priv;
 
+#ifdef HAVE_RS485
+  if (priv->config->rs485_dir_gpio != 0)
+    {
+      esp32_gpiowrite(priv->config->rs485_dir_gpio,
+                      priv->config->rs485_dir_polarity);
+    }
+#endif
+
   putreg32((uint32_t)ch, AHB_UART_FIFO_REG(priv->config->id));
 }
 
@@ -1720,22 +1785,34 @@ static void esp32_txint(struct uart_dev_s *dev, bool enable)
 
       if (enable)
         {
+          /* After all bytes physically transmitted in the RS485 bus
+           * the TX_BRK_IDLE will indicate we can disable the TX pin.
+           */
+
+#ifdef HAVE_RS485
+          if (priv->config->rs485_dir_gpio != 0)
+            {
+              modifyreg32(UART_INT_ENA_REG(priv->config->id),
+                          0, UART_TX_BRK_IDLE_DONE_INT_ENA);
+            }
+#endif
+
           /* Set to receive an interrupt when the TX holding register
            * is empty.
            */
 
-    #ifndef CONFIG_SUPPRESS_SERIAL_INTS
+#ifndef CONFIG_SUPPRESS_SERIAL_INTS
           modifyreg32(UART_INT_ENA_REG(priv->config->id),
                       0, (UART_TX_DONE_INT_ENA | UART_TXFIFO_EMPTY_INT_ENA));
 
-    #else
+#else
           /* Fake a TX interrupt here by just calling uart_xmitchars() with
            * interrupts disabled (note this may recurse).
            */
 
           spin_unlock_irqrestore(&priv->lock, flags);
           uart_xmitchars(dev);
-    #endif
+#endif
         }
       else
         {
@@ -1807,6 +1884,11 @@ static void esp32_config_pins(struct esp32_dev_s *priv)
    * But only one GPIO pad can connect with input signal
    */
 
+  /* Keep TX pin in high level to avoid "?" trash character
+   * This "?" is the Unicode replacement character (U+FFFD)
+   */
+
+  esp32_gpiowrite(priv->config->txpin, true);
   esp32_configgpio(priv->config->txpin, OUTPUT_FUNCTION_3);
   esp32_gpio_matrix_out(priv->config->txpin, priv->config->txsig, 0, 0);
 
@@ -1827,6 +1909,17 @@ static void esp32_config_pins(struct esp32_dev_s *priv)
     {
       esp32_configgpio(priv->config->ctspin, INPUT_FUNCTION_3);
       esp32_gpio_matrix_in(priv->config->ctspin, priv->config->ctssig, 0);
+    }
+#endif
+
+#ifdef HAVE_RS485
+  if (priv->config->rs485_dir_gpio != 0)
+    {
+      esp32_configgpio(priv->config->rs485_dir_gpio, OUTPUT_FUNCTION_3);
+      esp32_gpio_matrix_out(priv->config->rs485_dir_gpio,
+                            SIG_GPIO_OUT_IDX, 0, 0);
+      esp32_gpiowrite(priv->config->rs485_dir_gpio,
+                      !priv->config->rs485_dir_polarity);
     }
 #endif
 }
@@ -1942,7 +2035,7 @@ void esp32_lowsetup(void)
  * Description:
  *   Performs the low level UART initialization early in debug so that the
  *   serial console will be available during bootup.  This must be called
- *   before up_serialinit.
+ *   before xtensa_serialinit.
  *
  ****************************************************************************/
 
@@ -1977,7 +2070,7 @@ void xtensa_earlyserialinit(void)
  *
  * Description:
  *   Register serial console and serial ports.  This assumes
- *   that up_earlyserialinit was called previously.
+ *   that xtensa_earlyserialinit was called previously.
  *
  ****************************************************************************/
 
@@ -2003,12 +2096,10 @@ void xtensa_serialinit(void)
 
 #ifdef CONFIG_SERIAL_TXDMA
 #ifdef USE_DMA0
-  nxsem_init(&g_dma0_sem, 0, 1);
   dma_config(0);
   dma_attach(0);
 #endif
 #ifdef USE_DMA1
-  nxsem_init(&g_dma1_sem, 0, 1);
   dma_config(1);
   dma_attach(1);
 #endif
@@ -2023,29 +2114,17 @@ void xtensa_serialinit(void)
  *
  ****************************************************************************/
 
-int up_putc(int ch)
+void up_putc(int ch)
 {
 #ifdef HAVE_SERIAL_CONSOLE
   uint32_t intena;
 
   esp32_disableallints(CONSOLE_DEV.priv, &intena);
 
-  /* Check for LF */
-
-  if (ch == '\n')
-    {
-      /* Add CR */
-
-      while (!esp32_txready(&CONSOLE_DEV));
-      esp32_send(&CONSOLE_DEV, '\r');
-    }
-
   while (!esp32_txready(&CONSOLE_DEV));
   esp32_send(&CONSOLE_DEV, ch);
 
   esp32_restoreuartint(CONSOLE_DEV.priv, intena);
 #endif
-
-  return ch;
 }
 #endif /* USE_SERIALDRIVER */

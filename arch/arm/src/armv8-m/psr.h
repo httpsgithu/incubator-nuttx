@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/armv8-m/psr.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -18,8 +20,8 @@
  *
  ****************************************************************************/
 
-#ifndef __ARCH_ARM_SRC_COMMON_ARMV8_M_PSR_H
-#define __ARCH_ARM_SRC_COMMON_ARMV8_M_PSR_H
+#ifndef __ARCH_ARM_SRC_ARMV8_M_PSR_H
+#define __ARCH_ARM_SRC_ARMV8_M_PSR_H
 
 /****************************************************************************
  * Included Files
@@ -89,11 +91,12 @@
 #define ARMV8M_FPSCR_IDC           (1 << 7)  /* Bit 7: Input Denormal */
 
 #define ARMV8M_FPSCR_LTPSIZE_SHIFT 16        /* Bits 16-18: Vector element size */
-#define ARMV8M_FPSCR_LTPSIZE_8BIT  (0x0 << ARMV8M_FPSCR_RM_SHIFT)
-#define ARMV8M_FPSCR_LTPSIZE_16BIT (0x1 << ARMV8M_FPSCR_RM_SHIFT)
-#define ARMV8M_FPSCR_LTPSIZE_32BIT (0x2 << ARMV8M_FPSCR_RM_SHIFT)
-#define ARMV8M_FPSCR_LTPSIZE_DONE  (0x3 << ARMV8M_FPSCR_RM_SHIFT)
-#define ARMV8M_FPSCR_LTPSIZE_MASK  (0x7 << ARMV8M_FPSCR_RM_SHIFT)
+#define ARMV8M_FPSCR_LTPSIZE_8BIT  (0x0 << ARMV8M_FPSCR_LTPSIZE_SHIFT)
+#define ARMV8M_FPSCR_LTPSIZE_16BIT (0x1 << ARMV8M_FPSCR_LTPSIZE_SHIFT)
+#define ARMV8M_FPSCR_LTPSIZE_32BIT (0x2 << ARMV8M_FPSCR_LTPSIZE_SHIFT)
+#define ARMV8M_FPSCR_LTPSIZE_64BIT (0x3 << ARMV8M_FPSCR_LTPSIZE_SHIFT)
+#define ARMV8M_FPSCR_LTPSIZE_NONE  (0x4 << ARMV8M_FPSCR_LTPSIZE_SHIFT)
+#define ARMV8M_FPSCR_LTPSIZE_MASK  (0x7 << ARMV8M_FPSCR_LTPSIZE_SHIFT)
 
 #define ARMV8M_FPSCR_FZ16          (1 << 19) /* Bit 19: Flush-to-zero mode(half-precision) */
 
@@ -117,4 +120,4 @@
  * Inline Functions
  ****************************************************************************/
 
-#endif /* __ARCH_ARM_SRC_COMMON_ARMV8_M_PSR_H */
+#endif /* __ARCH_ARM_SRC_ARMV8_M_PSR_H */

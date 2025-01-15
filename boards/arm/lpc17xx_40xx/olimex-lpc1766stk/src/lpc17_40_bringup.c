@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/lpc17xx_40xx/olimex-lpc1766stk/src/lpc17_40_bringup.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -177,7 +179,7 @@ static int nsh_waiter(int argc, char *argv[])
 #ifdef HAVE_MMCSD
 static int nsh_sdinitialize(void)
 {
-  FAR struct spi_dev_s *ssp;
+  struct spi_dev_s *ssp;
   int ret;
 
   /* Enable power to the SD/MMC via a GPIO. LOW enables SD/MMC. */
@@ -237,7 +239,6 @@ errout:
 #ifdef HAVE_USBHOST
 static int nsh_usbhostinitialize(void)
 {
-  int pid;
   int ret;
 
   /* First, register all of the class drivers needed to support the drivers
@@ -313,10 +314,10 @@ static int nsh_usbhostinitialize(void)
 
       syslog(LOG_ERR, "ERROR: Start nsh_waiter\n");
 
-      pid = kthread_create("usbhost", CONFIG_LPC1766STK_USBHOST_PRIO,
+      ret = kthread_create("usbhost", CONFIG_LPC1766STK_USBHOST_PRIO,
                            CONFIG_LPC1766STK_USBHOST_STACKSIZE,
-                           (main_t)nsh_waiter, (FAR char * const *)NULL);
-      return pid < 0 ? -ENOEXEC : OK;
+                           nsh_waiter, NULL);
+      return ret < 0 ? -ENOEXEC : OK;
     }
 
   return -ENODEV;

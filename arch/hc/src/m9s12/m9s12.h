@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/hc/src/m9s12/m9s12.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -33,7 +35,7 @@
 #  include <nuttx/spi/spi.h>
 #endif
 
-#include "up_internal.h"
+#include "hc_internal.h"
 #include "chip.h"
 
 /****************************************************************************
@@ -294,7 +296,7 @@ int hcs12_dumpgpio(uint16_t pinset, const char *msg);
  * Description:
  *   Initialize the Ethernet driver for one interface.  If the STM32 chip
  *   supports multiple Ethernet controllers, then bould specific logic
- *   must implement up_netinitialize() and call this function to initialize
+ *   must implement hc_netinitialize() and call this function to initialize
  *   the desiresed interfaces.
  *
  * Input Parameters:

@@ -1,6 +1,8 @@
 /****************************************************************************
  * drivers/usbhost/usbhost_composite.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -773,7 +775,7 @@ int usbhost_composite(FAR struct usbhost_hubport_s *hport,
    * configuration descriptor for each member class.
    */
 
-  cfgbuffer = (FAR uint8_t *)kmm_malloc(CUSTOM_CONFIG_BUFSIZE);
+  cfgbuffer = kmm_malloc(CUSTOM_CONFIG_BUFSIZE);
   if (cfgbuffer == NULL)
     {
       uerr("ERROR: Failed to allocate configuration buffer");

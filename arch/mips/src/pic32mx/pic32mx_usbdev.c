@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/mips/src/pic32mx/pic32mx_usbdev.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -33,6 +35,7 @@
 
 #include <nuttx/config.h>
 
+#include <sys/param.h>
 #include <sys/types.h>
 #include <stdint.h>
 #include <stdbool.h>
@@ -51,7 +54,7 @@
 
 #include <nuttx/irq.h>
 
-#include "mips_arch.h"
+#include "mips_internal.h"
 #include "pic32mx.h"
 #include "pic32mx_usbotg.h"
 
@@ -239,16 +242,6 @@
 
 #define PHYS_ADDR(va) ((uint32_t)(va) & 0x1fffffff)
 #define VIRT_ADDR(pa) (KSEG1_BASE | (uint32_t)(pa))
-
-/* Ever-present MIN and MAX macros */
-
-#ifndef MIN
-#  define MIN(a,b) (a < b ? a : b)
-#endif
-
-#ifndef MAX
-#  define MAX(a,b) (a > b ? a : b)
-#endif
 
 /* Byte ordering in host-based values */
 
@@ -484,7 +477,7 @@ static void pic32mx_ep0outcomplete(struct pic32mx_usbdev_s *priv);
 static void pic32mx_ep0incomplete(struct pic32mx_usbdev_s *priv);
 static void pic32mx_ep0transfer(struct pic32mx_usbdev_s *priv,
                 uint16_t ustat);
-static int  pic32mx_interrupt(int irq, void *context, FAR void *arg);
+static int  pic32mx_interrupt(int irq, void *context, void *arg);
 
 /* Endpoint helpers *********************************************************/
 
@@ -886,10 +879,10 @@ static void pic32mx_wrcomplete(struct pic32mx_usbdev_s *priv,
   epno   = USB_EPNO(privep->ep.eplog);
 
 #ifdef CONFIG_USBDEV_NOWRITEAHEAD
-  uinfo("EP%d: len=%d xfrd=%d inflight=%d\n",
+  uinfo("EP%d: len=%zu xfrd=%zu inflight=%d\n",
         epno, privreq->req.len, privreq->req.xfrd, privreq->inflight[0]);
 #else
-  uinfo("EP%d: len=%d xfrd=%d inflight={%d, %d}\n",
+  uinfo("EP%d: len=%zu xfrd=%zu inflight={%d, %d}\n",
         epno, privreq->req.len, privreq->req.xfrd,
         privreq->inflight[0], privreq->inflight[1]);
 #endif
@@ -1208,7 +1201,7 @@ static int pic32mx_wrstart(struct pic32mx_usbdev_s *priv,
       bytesleft = privreq->req.len;
     }
 
-  uinfo("epno=%d req=%p: len=%d xfrd=%d index=%d nullpkt=%d\n",
+  uinfo("epno=%d req=%p: len=%zu xfrd=%zu index=%d nullpkt=%d\n",
         epno, privreq, privreq->req.len, xfrd, index, privep->txnullpkt);
 
   /* Get the number of bytes left to be sent in the packet */
@@ -1323,7 +1316,7 @@ static int pic32mx_rdcomplete(struct pic32mx_usbdev_s *priv,
   bdtout = privep->bdtout;
   epno   = USB_EPNO(privep->ep.eplog);
 
-  uinfo("EP%d: len=%d xfrd=%d\n",
+  uinfo("EP%d: len=%zu xfrd=%zu\n",
         epno, privreq->req.len, privreq->req.xfrd);
   bdtinfo("EP%d BDT OUT [%p] {%08x, %08x}\n",
         epno, bdtout, bdtout->status, bdtout->addr);
@@ -2697,7 +2690,7 @@ static void pic32mx_ep0transfer(struct pic32mx_usbdev_s *priv,
  * Name: pic32mx_interrupt
  ****************************************************************************/
 
-static int pic32mx_interrupt(int irq, void *context, FAR void *arg)
+static int pic32mx_interrupt(int irq, void *context, void *arg)
 {
   /* For now there is only one USB controller, but we will always refer to
    * it using a pointer to make any future ports to multiple USB controllers
@@ -2949,7 +2942,7 @@ static int pic32mx_interrupt(int irq, void *context, FAR void *arg)
    */
 
 interrupt_exit:
-  up_clrpend_irq(PIC32MX_IRQSRC_USB);
+  mips_clrpend_irq(PIC32MX_IRQSRC_USB);
   usbtrace(TRACE_INTEXIT(PIC32MX_TRACEINTID_INTERRUPT), usbir | otgir);
   return OK;
 }
@@ -3193,7 +3186,7 @@ static int pic32mx_epconfigure(struct usbdev_ep_s *ep,
   if (!ep || !desc)
     {
       usbtrace(TRACE_DEVERROR(PIC32MX_TRACEERR_INVALIDPARMS), 0);
-      uerr("ERROR: ep=%p desc=%p\n");
+      uerr("ERROR: ep=%p desc=%p\n", ep, desc);
       return -EINVAL;
     }
 #endif
@@ -3374,7 +3367,7 @@ static struct usbdev_req_s *pic32mx_epallocreq(struct usbdev_ep_s *ep)
 
   usbtrace(TRACE_EPALLOCREQ, USB_EPNO(ep->eplog));
 
-  privreq = (struct pic32mx_req_s *)kmm_malloc(sizeof(struct pic32mx_req_s));
+  privreq = kmm_malloc(sizeof(struct pic32mx_req_s));
   if (!privreq)
     {
       usbtrace(TRACE_DEVERROR(PIC32MX_TRACEERR_ALLOCFAIL), 0);
@@ -4319,7 +4312,7 @@ static void pic32mx_hwshutdown(struct pic32mx_usbdev_s *priv)
  ****************************************************************************/
 
 /****************************************************************************
- * Name: up_usbinitialize
+ * Name: mips_usbinitialize
  *
  * Description:
  *   Initialize the USB driver
@@ -4332,7 +4325,7 @@ static void pic32mx_hwshutdown(struct pic32mx_usbdev_s *priv)
  *
  ****************************************************************************/
 
-void up_usbinitialize(void)
+void mips_usbinitialize(void)
 {
   /* For now there is only one USB controller, but we will always refer to
    * it using a pointer to make any future ports to multiple USB controllers
@@ -4364,12 +4357,12 @@ void up_usbinitialize(void)
     {
       usbtrace(TRACE_DEVERROR(PIC32MX_TRACEERR_IRQREGISTRATION),
                (uint16_t)PIC32MX_IRQ_USB);
-      up_usbuninitialize();
+      mips_usbuninitialize();
     }
 }
 
 /****************************************************************************
- * Name: up_usbuninitialize
+ * Name: mips_usbuninitialize
  * Description:
  *   Initialize the USB driver
  * Input Parameters:
@@ -4380,7 +4373,7 @@ void up_usbinitialize(void)
  *
  ****************************************************************************/
 
-void up_usbuninitialize(void)
+void mips_usbuninitialize(void)
 {
   /* For now there is only one USB controller, but we will always refer to
    * it using a pointer to make any future ports to multiple USB controllers

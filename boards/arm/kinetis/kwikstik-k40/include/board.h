@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/kinetis/kwikstik-k40/include/board.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -18,8 +20,8 @@
  *
  ****************************************************************************/
 
-#ifndef __BOARDS_ARM_KINETIS_KWIKSTIK-K40_INCLUDE_BOARD_H
-#define __BOARDS_ARM_KINETIS_KWIKSTIK-K40_INCLUDE_BOARD_H
+#ifndef __BOARDS_ARM_KINETIS_KWIKSTIK_K40_INCLUDE_BOARD_H
+#define __BOARDS_ARM_KINETIS_KWIKSTIK_K40_INCLUDE_BOARD_H
 
 /****************************************************************************
  * Included Files
@@ -27,7 +29,7 @@
 
 #include <nuttx/config.h>
 #ifndef __ASSEMBLY__
-# include <stdint.h>
+#  include <stdint.h>
 #endif
 
 /****************************************************************************
@@ -240,4 +242,4 @@
 #define PIN_I2C1_SCL    PIN_I2C1_SCL_2
 #define PIN_I2C1_SDA    PIN_I2C1_SDA_2
 
-#endif /* __BOARDS_ARM_KINETIS_KWIKSTIK-K40_INCLUDE_BOARD_H */
+#endif /* __BOARDS_ARM_KINETIS_KWIKSTIK_K40_INCLUDE_BOARD_H */

@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/stm32/common/include/board_hall3ph.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -18,8 +20,8 @@
  *
  ****************************************************************************/
 
-#ifndef __BOARD_HALL3PH_H
-#define __BOARD_HALL3PH_H
+#ifndef __BOARDS_ARM_STM32_COMMON_INCLUDE_BOARD_HALL3PH_H
+#define __BOARDS_ARM_STM32_COMMON_INCLUDE_BOARD_HALL3PH_H
 
 /****************************************************************************
  * Included Files
@@ -64,4 +66,4 @@ int board_hall3ph_initialize(int devno, int pha, int phb, int phc);
 }
 #endif
 
-#endif // __BOARD_HALL3PH_H
+#endif /* __BOARDS_ARM_STM32_COMMON_INCLUDE_BOARD_HALL3PH_H */

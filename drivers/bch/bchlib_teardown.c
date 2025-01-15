@@ -1,6 +1,8 @@
 /****************************************************************************
  * drivers/bch/bchlib_teardown.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -31,6 +33,7 @@
 
 #include <nuttx/kmalloc.h>
 #include <nuttx/fs/fs.h>
+#include <nuttx/drivers/drivers.h>
 
 #include "bch.h"
 
@@ -42,8 +45,7 @@
  * Name: bchlib_teardown
  *
  * Description:
- *   Setup so that the block driver referenced by 'blkdev' can be accessed
- *   similar to a character device.
+ *   Close the block driver and free resources
  *
  ****************************************************************************/
 
@@ -62,7 +64,7 @@ int bchlib_teardown(FAR void *handle)
 
   /* Flush any pending data to the block driver */
 
-  bchlib_flushsector(bch);
+  bchlib_flushsector(bch, false);
 
   /* Close the block driver */
 
@@ -75,7 +77,7 @@ int bchlib_teardown(FAR void *handle)
       kmm_free(bch->buffer);
     }
 
-  nxsem_destroy(&bch->sem);
+  nxmutex_destroy(&bch->lock);
   kmm_free(bch);
   return OK;
 }

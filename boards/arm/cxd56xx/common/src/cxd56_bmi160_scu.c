@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/cxd56xx/common/src/cxd56_bmi160_scu.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -31,6 +33,7 @@
 #include <nuttx/board.h>
 #include <nuttx/spi/spi.h>
 #include <nuttx/sensors/bmi160.h>
+#include <arch/board/cxd56_bmi160.h>
 #include <arch/chip/scu.h>
 
 #if defined(CONFIG_SENSORS_BMI160_SCU_SPI)
@@ -61,7 +64,7 @@
 int board_bmi160_initialize(int bus)
 {
   int ret;
-  FAR struct spi_dev_s *spi;
+  struct spi_dev_s *spi;
 
   sninfo("Initializing BMI160..\n");
 
@@ -115,11 +118,11 @@ int board_bmi160_initialize(int bus)
 int board_bmi160_initialize(int bus)
 {
   int ret;
-  FAR struct i2c_master_s *i2c;
+  struct i2c_master_s *i2c;
 
   sninfo("Initializing BMI160..\n");
 
-  /* Initialize i2c deivce */
+  /* Initialize i2c device */
 
   i2c = cxd56_i2cbus_initialize(bus);
   if (!i2c)
@@ -164,5 +167,5 @@ int board_bmi160_initialize(int bus)
   return ret;
 }
 
-#endif  /* CONFIG_SENSORS_BMI160_SCU_SPI */
-#endif  /* CONFIG_SENSORS_BMI160_SCU */
+#endif /* CONFIG_SENSORS_BMI160_SCU_SPI */
+#endif /* CONFIG_SENSORS_BMI160_SCU */

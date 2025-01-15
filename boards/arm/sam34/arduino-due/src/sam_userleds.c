@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/sam34/arduino-due/src/sam_userleds.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -28,11 +30,11 @@
 #include <stdbool.h>
 #include <debug.h>
 
-#include <arch/board/board.h>
-
 #include "chip.h"
 #include "sam_gpio.h"
 #include "arduino-due.h"
+
+#include <arch/board/board.h>
 
 #ifndef CONFIG_ARCH_LEDS
 

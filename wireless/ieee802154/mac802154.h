@@ -1,6 +1,8 @@
 /****************************************************************************
  * wireless/ieee802154/mac802154.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -138,7 +140,7 @@ int mac802154_get_mhrlen(MACHANDLE mac,
 
 int mac802154_req_data(MACHANDLE mac,
                        FAR const struct ieee802154_frame_meta_s *meta,
-                       FAR struct iob_s *frame, bool allowinterrupt);
+                       FAR struct iob_s *frame);
 
 /****************************************************************************
  * Name: mac802154_req_purge

@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/stm32/stm32_cordic.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -50,6 +52,6 @@
  *
  ****************************************************************************/
 
-FAR struct cordic_lowerhalf_s *stm32_cordicinitialize(void);
+struct cordic_lowerhalf_s *stm32_cordicinitialize(void);
 
 #endif /* __ARCH_ARM_SRC_STM32_STM32_CORDIC_H */

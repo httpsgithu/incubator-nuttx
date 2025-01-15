@@ -1,6 +1,8 @@
 /****************************************************************************
  * include/hex2bin.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -35,34 +37,6 @@
 /****************************************************************************
  * Pre-processor Definitions
  ****************************************************************************/
-
-/* Some environments may return CR as end-of-line, others LF, and others
- * both.  If not specified, the logic here assumes either (but not both) as
- * the default.
- */
-
-#if defined(CONFIG_EOL_IS_CR)
-#  undef  CONFIG_EOL_IS_LF
-#  undef  CONFIG_EOL_IS_BOTH_CRLF
-#  undef  CONFIG_EOL_IS_EITHER_CRLF
-#elif defined(CONFIG_EOL_IS_LF)
-#  undef  CONFIG_EOL_IS_CR
-#  undef  CONFIG_EOL_IS_BOTH_CRLF
-#  undef  CONFIG_EOL_IS_EITHER_CRLF
-#elif defined(CONFIG_EOL_IS_BOTH_CRLF)
-#  undef  CONFIG_EOL_IS_CR
-#  undef  CONFIG_EOL_IS_LF
-#  undef  CONFIG_EOL_IS_EITHER_CRLF
-#elif defined(CONFIG_EOL_IS_EITHER_CRLF)
-#  undef  CONFIG_EOL_IS_CR
-#  undef  CONFIG_EOL_IS_LF
-#  undef  CONFIG_EOL_IS_BOTH_CRLF
-#else
-#  undef  CONFIG_EOL_IS_CR
-#  undef  CONFIG_EOL_IS_LF
-#  undef  CONFIG_EOL_IS_BOTH_CRLF
-#  define CONFIG_EOL_IS_EITHER_CRLF 1
-#endif
 
 /****************************************************************************
  * Public Types
@@ -128,8 +102,8 @@ extern "C"
 struct lib_instream_s;
 struct lib_sostream_s;
 int hex2bin(FAR struct lib_instream_s *instream,
-            FAR struct lib_sostream_s *outstream, uint32_t baseaddr,
-            uint32_t endpaddr, enum hex2bin_swap_e swap);
+            FAR struct lib_sostream_s *outstream, unsigned long baseaddr,
+            unsigned long endpaddr, enum hex2bin_swap_e swap);
 
 /****************************************************************************
  * Name: hex2mem
@@ -155,7 +129,7 @@ int hex2bin(FAR struct lib_instream_s *instream,
  *
  ****************************************************************************/
 
-int hex2mem(int fd, uint32_t baseaddr, uint32_t endpaddr,
+int hex2mem(int fd, unsigned long baseaddr, unsigned long endpaddr,
             enum hex2bin_swap_e swap);
 
 /****************************************************************************
@@ -182,44 +156,8 @@ int hex2mem(int fd, uint32_t baseaddr, uint32_t endpaddr,
  *
  ****************************************************************************/
 
-int fhex2mem(FAR FILE *instream, uint32_t baseaddr, uint32_t endpaddr,
-             enum hex2bin_swap_e swap);
-
-/****************************************************************************
- * Name: hex2bin_main
- *
- * Description:
- *   Main entry point when hex2bin is built as an NSH built-in task.
- *
- * Input Parameters:
- *   Standard task inputs
- *
- * Returned Value:
- *   EXIT_SUCCESS on success; EXIT_FAILURE on failure
- *
- ****************************************************************************/
-
-#ifdef CONFIG_SYSTEM_HEX2BIN_BUILTIN
-int hex2bin_main(int argc, char **argv);
-#endif /* CONFIG_SYSTEM_HEX2BIN_BUILTIN */
-
-/****************************************************************************
- * Name: hex2mem_main
- *
- * Description:
- *   Main entry point when hex2mem is built as an NSH built-in task.
- *
- * Input Parameters:
- *   Standard task inputs
- *
- * Returned Value:
- *   EXIT_SUCCESS on success; EXIT_FAILURE on failure
- *
- ****************************************************************************/
-
-#ifdef CONFIG_SYSTEM_HEX2MEM_BUILTIN
-int hex2mem_main(int argc, char **argv);
-#endif /* CONFIG_SYSTEM_HEX2MEM_BUILTIN */
+int fhex2mem(FAR FILE *instream, unsigned long baseaddr,
+             unsigned long endpaddr, enum hex2bin_swap_e swap);
 
 #undef EXTERN
 #ifdef __cplusplus

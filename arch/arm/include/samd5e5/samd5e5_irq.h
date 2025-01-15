@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/include/samd5e5/samd5e5_irq.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -22,8 +24,8 @@
  * only indirectly through nuttx/irq.h
  */
 
-#ifndef __ARCH_ARM_INCLUDE_SAMD5E5_SAM4L_IRQ_H
-#define __ARCH_ARM_INCLUDE_SAMD5E5_SAM4L_IRQ_H
+#ifndef __ARCH_ARM_INCLUDE_SAMD5E5_SAMD5E5_IRQ_H
+#define __ARCH_ARM_INCLUDE_SAMD5E5_SAMD5E5_IRQ_H
 
 /****************************************************************************
  * Included Files
@@ -229,4 +231,4 @@ extern "C"
 #endif
 #endif
 
-#endif /* __ARCH_ARM_INCLUDE_SAMD5E5_SAM4L_IRQ_H */
+#endif /* __ARCH_ARM_INCLUDE_SAMD5E5_SAMD5E5_IRQ_H */

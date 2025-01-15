@@ -1,6 +1,8 @@
 /****************************************************************************
  * net/mld/mld_poll.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -60,9 +62,8 @@ void mld_poll(FAR struct net_driver_s *dev)
 
   /* Setup the poll operation */
 
-  dev->d_appdata = &dev->d_buf[NET_LL_HDRLEN(dev) + IPv6_HDRLEN];
-  dev->d_len     = 0;
-  dev->d_sndlen  = 0;
+  dev->d_len    = 0;
+  dev->d_sndlen = 0;
 
   /* Check if a general query is pending */
 

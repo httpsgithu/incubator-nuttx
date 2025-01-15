@@ -1,6 +1,8 @@
 /****************************************************************************
  * libs/libc/pthread/pthread_mutexattr_init.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -27,6 +29,7 @@
 #include <pthread.h>
 #include <errno.h>
 #include <debug.h>
+#include <sched.h>
 
 /****************************************************************************
  * Public Functions
@@ -44,15 +47,13 @@
  * Returned Value:
  *   0 if successful.  Otherwise, an error code.
  *
- * Assumptions:
- *
  ****************************************************************************/
 
 int pthread_mutexattr_init(FAR pthread_mutexattr_t *attr)
 {
   int ret = OK;
 
-  linfo("attr=0x%p\n", attr);
+  linfo("attr=%p\n", attr);
 
   if (!attr)
     {
@@ -62,9 +63,18 @@ int pthread_mutexattr_init(FAR pthread_mutexattr_t *attr)
     {
       attr->pshared = 0;
 
-#ifdef CONFIG_PRIORITY_INHERITANCE
-      attr->proto   = SEM_PRIO_INHERIT;
+#ifdef CONFIG_PRIORITY_PROTECT
+      attr->proto   = PTHREAD_PRIO_NONE;
+      attr->ceiling = sched_get_priority_min(SCHED_FIFO);
 #endif
+
+#ifdef CONFIG_PRIORITY_INHERITANCE
+#  ifdef CONFIG_PTHREAD_MUTEX_DEFAULT_PRIO_INHERIT
+      attr->proto   = PTHREAD_PRIO_INHERIT;
+#  else
+      attr->proto   = PTHREAD_PRIO_NONE;
+#  endif
+#endif /* CONFIG_PRIORITY_INHERITANCE */
 
 #ifdef CONFIG_PTHREAD_MUTEX_TYPES
       attr->type    = PTHREAD_MUTEX_DEFAULT;

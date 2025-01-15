@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/lpc31xx/olimex-lpc-h3131/src/lpc31_mmcsd.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -56,7 +58,7 @@
 
 int lpc31_mmcsd_initialize(int slot, int minor)
 {
-  FAR struct sdio_dev_s *sdio;
+  struct sdio_dev_s *sdio;
   int ret;
 
   /* First, get an instance of the SDIO interface */

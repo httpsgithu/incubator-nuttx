@@ -1,5 +1,7 @@
 /**************************************************************************
- * arch/x86/src/qemu/up_saveusercontext.S
+ * arch/x86/src/qemu/x86_saveusercontext.S
+ *
+ * SPDX-License-Identifier: Apache-2.0
  *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -24,7 +26,7 @@
 
 #include <nuttx/config.h>
 #include <arch/irq.h>
-#include "up_internal.h"
+#include "x86_internal.h"
 
 	.file	"qemu_saveusercontext.S"
 
@@ -66,7 +68,7 @@
  * Name: up_saveusercontext
  *
  * Full C prototype:
- *  int up_saveusercontext(uint32_t *regs);
+ *  int up_saveusercontext(void *regs);
  *
  * Description:
  *  Save the "user" context.  It is not necessary to save all of the
@@ -124,7 +126,6 @@ up_saveusercontext:
 	 * NOTE:  We don't yet know the value for REG_ESP!  That depends upon
 	 * if a priority change occurs or not.
 	 */
-
 
 	leal	4(%esp), %ecx
 	movl	%ecx, (4*REG_SP)(%eax)

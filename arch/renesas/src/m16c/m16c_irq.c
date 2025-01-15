@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/renesas/src/m16c/m16c_irq.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -28,17 +30,11 @@
 #include <nuttx/arch.h>
 #include <nuttx/irq.h>
 
-#include "up_internal.h"
+#include "renesas_internal.h"
 
 /****************************************************************************
  * Public Functions
  ****************************************************************************/
-
-/* This holds a references to the current interrupt level register storage
- * structure.  If is non-NULL only during interrupt processing.
- */
-
-volatile uint32_t *g_current_regs; /* Actually a pointer to the beginning of a uint8_t array */
 
 /****************************************************************************
  * Name: up_irqinitialize
@@ -46,8 +42,6 @@ volatile uint32_t *g_current_regs; /* Actually a pointer to the beginning of a u
 
 void up_irqinitialize(void)
 {
-  g_current_regs = NULL;
-
   /* And finally, enable interrupts */
 
 #ifndef CONFIG_SUPPRESS_INTERRUPTS

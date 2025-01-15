@@ -1,6 +1,8 @@
 /****************************************************************************
  * include/nuttx/sensors/aht10.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -18,8 +20,8 @@
  *
  ****************************************************************************/
 
-#ifndef __INCLUDE_NUTT_SENSORS_AHT10_H
-#define __INCLUDE_NUTT_SENSORS_AHT10_H
+#ifndef __INCLUDE_NUTTX_SENSORS_AHT10_H
+#define __INCLUDE_NUTTX_SENSORS_AHT10_H
 
 /****************************************************************************
  * Included Files
@@ -69,4 +71,4 @@ struct aht10_conv_data_s
 int aht10_register(FAR const char *devpath, FAR struct i2c_master_s *i2c,
                    uint8_t addr);
 
-#endif /* __INCLUDE_NUTT_SENSORS_AHT10_H */
+#endif /* __INCLUDE_NUTTX_SENSORS_AHT10_H */

@@ -299,7 +299,7 @@ endchoice
 
 config CXD56_AUDIO_I2S_RATE_1
 	int "I2S0 data rate"
-	default  48000
+	default 48000
 	range 48000 192000
 	---help---
 		This designates input and output data rate of I2S.
@@ -353,7 +353,7 @@ endchoice
 
 config CXD56_AUDIO_I2S_RATE_2
 	int "I2S1 data rate"
-	default  48000
+	default 48000
 	range 48000 192000
 	---help---
 		This designates input and output data rate of I2S1.
@@ -466,7 +466,7 @@ config SPRESENSE_EXTENSION
 		present, then the SPresense will need to run at a higher power mode,
 		selected by this option.
 
-if  SPRESENSE_EXTENSION
+if SPRESENSE_EXTENSION
 config SDCARD_TXS02612
 	bool "SD Card TXS02612 port expander with voltage level translation"
 	default y
@@ -497,6 +497,12 @@ choice
 	prompt "LCD SPI connection"
 	default LCD_ON_EXTENSION_BOARD
 
+config LCD_ON_LTE_EXTENSION_BOARD
+	bool "LTE extension board: SPI3"
+	select CXD56_SPI3
+	---help---
+		Display connected to LTE extension board.
+
 config LCD_ON_EXTENSION_BOARD
 	bool "Extension board: SPI4"
 	select CXD56_SPI4
@@ -514,6 +520,189 @@ config LCD_ON_MAIN_BOARD
 		Display connected to main board.
 
 endchoice
+
+if LCD_ON_MAIN_BOARD
+
+choice
+	prompt "LCD ILI934x RST Pin selection"
+	default LCD_RSTPIN_I2S0_BCK
+
+config LCD_RSTPIN_UART2_TX
+	bool "UART2_TX (D01) PIN"
+
+config LCD_RSTPIN_UART2_RX
+	bool "UART2_RX (D00) PIN"
+
+config LCD_RSTPIN_UART2_RTS
+	bool "UART2_RTS (D28) PIN"
+
+config LCD_RSTPIN_UART2_CTS
+	bool "UART2_CTS (D27) PIN"
+
+config LCD_RSTPIN_I2S0_BCK
+	bool "I2S0_BCK (D26) PIN"
+
+config LCD_RSTPIN_I2S0_LRCK
+	bool "I2S0_LRCK (D25) PIN"
+
+config LCD_RSTPIN_SEN_IRQ_IN
+	bool "SEN_IRQ_IN (D22) PIN"
+
+config LCD_RSTPIN_EMMC_DATA3
+	bool "EMMC_DATA3 (D21) PIN"
+
+config LCD_RSTPIN_EMMC_DATA2
+	bool "EMMC_DATA2 (D20) PIN"
+
+config LCD_RSTPIN_I2S0_DATA_IN
+	bool "I2S0_DATA_IN (D19) PIN"
+
+config LCD_RSTPIN_I2S0_DATA_OUT
+	bool "I2S0_DATA_OUT (D18) PIN"
+
+config LCD_RSTPIN_I2C0_SCL
+	bool "I2C0_SCL (D15) PIN"
+
+config LCD_RSTPIN_I2C0_SDA
+	bool "I2C0_SDA (D14) PIN"
+
+endchoice
+
+choice
+	prompt "LCD ILI934x DC Pin selection"
+	default LCD_DCPIN_I2S0_LRCK
+
+config LCD_DCPIN_UART2_TX
+	bool "UART2_TX (D01) PIN"
+
+config LCD_DCPIN_UART2_RX
+	bool "UART2_RX (D00) PIN"
+
+config LCD_DCPIN_UART2_RTS
+	bool "UART2_RTS (D28) PIN"
+
+config LCD_DCPIN_UART2_CTS
+	bool "UART2_CTS (D27) PIN"
+
+config LCD_DCPIN_I2S0_BCK
+	bool "I2S0_BCK (D26) PIN"
+
+config LCD_DCPIN_I2S0_LRCK
+	bool "I2S0_LRCK (D25) PIN"
+
+config LCD_DCPIN_SEN_IRQ_IN
+	bool "SEN_IRQ_IN (D22) PIN"
+
+config LCD_DCPIN_EMMC_DATA3
+	bool "EMMC_DATA3 (D21) PIN"
+
+config LCD_DCPIN_EMMC_DATA2
+	bool "EMMC_DATA2 (D20) PIN"
+
+config LCD_DCPIN_I2S0_DATA_IN
+	bool "I2S0_DATA_IN (D19) PIN"
+
+config LCD_DCPIN_I2S0_DATA_OUT
+	bool "I2S0_DATA_OUT (D18) PIN"
+
+config LCD_DCPIN_I2C0_SCL
+	bool "I2C0_SCL (D15) PIN"
+
+config LCD_DCPIN_I2C0_SDA
+	bool "I2C0_SDA (D14) PIN"
+
+endchoice
+
+endif
+
+if LCD_ON_EXTENSION_BOARD || LCD_ON_LTE_EXTENSION_BOARD
+
+choice
+	prompt "LCD ILI934x RST Pin selection"
+	default LCD_RSTPIN_SPI2_MISO
+
+config LCD_RSTPIN_I2C0_SCL_E
+	bool "I2C0_SCL (D15) PIN"
+
+config LCD_RSTPIN_I2C0_SDA_E
+	bool "I2C0_SDA (D14) PIN"
+
+config LCD_RSTPIN_PWM2
+	bool "PWM2 (D09) PIN"
+
+config LCD_RSTPIN_SPI2_MISO
+	bool "SPI2_MISO (D08) PIN"
+
+config LCD_RSTPIN_SPI3_CS1_X
+	bool "SPI3_CS1_X (D07) PIN"
+
+config LCD_RSTPIN_PWM0
+	bool "PWM0 (D06) PIN"
+
+config LCD_RSTPIN_PWM1
+	bool "PWM1 (D05) PIN"
+
+config LCD_RSTPIN_SPI2_MOSI
+	bool "SPI2_MOSI (D04) PIN"
+
+config LCD_RSTPIN_PWM3
+	bool "PWM3 (D03) PIN"
+
+config LCD_RSTPIN_HIF_IRQ_OUT
+	bool "HIF_IRQ_OUT (D02) PIN"
+
+config LCD_RSTPIN_UART2_TX_E
+	bool "UART2_TX (D01) PIN"
+
+config LCD_RSTPIN_UART2_RX_E
+	bool "UART2_RX (D00) PIN"
+
+endchoice
+
+choice
+	prompt "LCD ILI934x DC Pin selection"
+	default LCD_DCPIN_PWM2
+
+config LCD_DCPIN_I2C0_SCL_E
+	bool "I2C0_SCL (D15) PIN"
+
+config LCD_DCPIN_I2C0_SDA_E
+	bool "I2C0_SDA (D14) PIN"
+
+config LCD_DCPIN_PWM2
+	bool "PWM2 (D09) PIN"
+
+config LCD_DCPIN_SPI2_MISO
+	bool "SPI2_MISO (D08) PIN"
+
+config LCD_DCPIN_SPI3_CS1_X
+	bool "SPI3_CS1_X (D07) PIN"
+
+config LCD_DCPIN_PWM0
+	bool "PWM0 (D06) PIN"
+
+config LCD_DCPIN_PWM1
+	bool "PWM1 (D05) PIN"
+
+config LCD_DCPIN_SPI2_MOSI
+	bool "SPI2_MOSI (D04) PIN"
+
+config LCD_DCPIN_PWM3
+	bool "PWM3 (D03) PIN"
+
+config LCD_DCPIN_HIF_IRQ_OUT
+	bool "HIF_IRQ_OUT (D02) PIN"
+
+config LCD_DCPIN_UART2_TX_E
+	bool "UART2_TX (D01) PIN"
+
+config LCD_DCPIN_UART2_RX_E
+	bool "UART2_RX (D00) PIN"
+
+endchoice
+
+endif
+
 endif
 
 choice
@@ -573,7 +762,22 @@ config CXD56_LTE_SPI5_DMAC
 
 endif # CXD56_LTE_SPI5
 
+config CXD56_LTE_LATE_INITIALIZE
+	bool "Alt1250 driver late initialize"
+	default n
+	---help---
+		LTE driver can be initialized on an application code after system booted up
+		by enabling this configuration switch.
+
 endif # CXD56_LTE
+
+config CXD56_EMMC_LATE_INITIALIZE
+	bool "eMMC driver late initialize"
+	default n
+	depends on CXD56_EMMC
+	---help---
+		eMMC driver can be initialized on an application code after system booted up
+		by enabling this configuration switch.
 
 config CXD56_BINARY
 	bool "spk binary format"
@@ -581,5 +785,90 @@ config CXD56_BINARY
 	---help---
 		Create nuttx.spk binary format used on spresense board and boards
 		based on cxd56xx arch.
+
+config CXD56_CAMERA_LATE_INITIALIZE
+	bool "Camera drivers late initialization"
+	default n
+	depends on CXD56_CISIF
+	---help---
+		The camera drivers can be initialized on an application code after system booted up
+		by enabling this configuration switch.
+
+config CXD56_SDCARD_AUTOMOUNT
+	bool "SDCARD automounter"
+	default n
+	depends on FS_AUTOMOUNTER && CXD56_SDIO
+
+if CXD56_SDCARD_AUTOMOUNT
+
+config CXD56_SDCARD_AUTOMOUNT_FSTYPE
+	string "SDCARD file system type"
+	default "vfat"
+
+config CXD56_SDCARD_AUTOMOUNT_BLKDEV
+	string "SDCARD block device"
+	default "/dev/mmcsd0"
+
+config CXD56_SDCARD_AUTOMOUNT_MOUNTPOINT
+	string "SDCARD mount point"
+	default "/mnt/sd0"
+
+config CXD56_SDCARD_AUTOMOUNT_DDELAY
+	int "SDCARD debounce delay (milliseconds)"
+	default 1000
+
+config CXD56_SDCARD_AUTOMOUNT_UDELAY
+	int "SDCARD unmount retry delay (milliseconds)"
+	default 2000
+
+endif # CXD56_SDCARD_AUTOMOUNT
+
+choice
+	prompt "eMMC Power Pin selection"
+	default CXD56_EMMC_POWER_PIN_NONE
+
+config CXD56_EMMC_POWER_PIN_NONE
+	bool "None"
+
+config CXD56_EMMC_POWER_PIN_I2S0_BCK
+	bool "Use PIN I2S0_BCK"
+
+config CXD56_EMMC_POWER_PIN_UART2_CTS
+	bool "Use PIN UART2_CTS"
+
+endchoice
+
+choice
+	prompt "BLE1507 Add-on board Reset Pin selection"
+	default CXD56_BLE1507_RESET_PIN_NONE
+
+config CXD56_BLE1507_RESET_PIN_NONE
+	bool "None"
+
+config CXD56_BLE1507_RESET_PIN_I2S0_DATA_IN
+	bool "Use PIN I2S0_DATA_IN"
+
+config CXD56_BLE1507_RESET_PIN_EMMC_DATA2
+	bool "Use PIN EMMC_DATA2"
+
+endchoice
+
+config CXD56_GNSS_ADDON
+	bool "CXD5610 GNSS Add-on board"
+	default n
+	depends on SENSORS_CXD5610_GNSS && CXD56_I2C0 && !CXD56_I2C0_SCUSEQ
+	---help---
+		The CXD5610 GNSS Add-on driver can be registered.
+
+if CXD56_GNSS_ADDON
+
+config CXD56_GNSS_ADDON_LATE_INITIALIZE
+	bool "CXD5610 GNSS driver late initialization"
+	default n
+	---help---
+		The CXD5610 gnss driver can be initialized on an application code
+		after system booted up by enabling this configuration switch.
+
+endif # CXD56_GNSS_ADDON
 
 endif

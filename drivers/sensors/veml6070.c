@@ -1,6 +1,8 @@
 /****************************************************************************
  * drivers/sensors/veml6070.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -65,16 +67,14 @@ struct veml6070_dev_s
 /* I2C Helpers */
 
 static int     veml6070_read8(FAR struct veml6070_dev_s *priv, int offset,
-                 FAR uint8_t *regval);
+                              FAR uint8_t *regval);
 static int     veml6070_write8(FAR struct veml6070_dev_s *priv,
-                 uint8_t regval);
+                               uint8_t regval);
 
 /* Character driver methods */
 
-static int     veml6070_open(FAR struct file *filep);
-static int     veml6070_close(FAR struct file *filep);
 static ssize_t veml6070_read(FAR struct file *filep, FAR char *buffer,
-                 size_t buflen);
+                             size_t buflen);
 static ssize_t veml6070_write(FAR struct file *filep,
                  FAR const char *buffer, size_t buflen);
 
@@ -84,16 +84,10 @@ static ssize_t veml6070_write(FAR struct file *filep,
 
 static const struct file_operations g_veml6070_fops =
 {
-  veml6070_open,   /* open */
-  veml6070_close,  /* close */
+  NULL,            /* open */
+  NULL,            /* close */
   veml6070_read,   /* read */
   veml6070_write,  /* write */
-  NULL,            /* seek */
-  NULL,            /* ioctl */
-  NULL             /* poll */
-#ifndef CONFIG_DISABLE_PSEUDOFS_OPERATIONS
-  , NULL           /* unlink */
-#endif
 };
 
 /****************************************************************************
@@ -171,32 +165,6 @@ static int veml6070_write8(FAR struct veml6070_dev_s *priv, uint8_t regval)
 }
 
 /****************************************************************************
- * Name: veml6070_open
- *
- * Description:
- *   This function is called whenever the VEML6070 device is opened.
- *
- ****************************************************************************/
-
-static int veml6070_open(FAR struct file *filep)
-{
-  return OK;
-}
-
-/****************************************************************************
- * Name: veml6070_close
- *
- * Description:
- *   This routine is called when the VEML6070 device is closed.
- *
- ****************************************************************************/
-
-static int veml6070_close(FAR struct file *filep)
-{
-  return OK;
-}
-
-/****************************************************************************
  * Name: veml6070_read
  ****************************************************************************/
 
@@ -209,11 +177,10 @@ static ssize_t veml6070_read(FAR struct file *filep, FAR char *buffer,
   int msb = 1;
   uint16_t regdata;
 
-  DEBUGASSERT(filep);
   inode = filep->f_inode;
 
-  DEBUGASSERT(inode && inode->i_private);
-  priv  = (FAR struct veml6070_dev_s *)inode->i_private;
+  DEBUGASSERT(inode->i_private);
+  priv  = inode->i_private;
 
   /* Check if the user is reading the right size */
 
@@ -300,6 +267,7 @@ static ssize_t veml6070_write(FAR struct file *filep,
 int veml6070_register(FAR const char *devpath, FAR struct i2c_master_s *i2c,
                        uint8_t addr)
 {
+  FAR struct veml6070_dev_s *priv;
   int ret;
 
   /* Sanity check */
@@ -308,9 +276,7 @@ int veml6070_register(FAR const char *devpath, FAR struct i2c_master_s *i2c,
 
   /* Initialize the VEML6070 device structure */
 
-  FAR struct veml6070_dev_s *priv =
-    (FAR struct veml6070_dev_s *)kmm_malloc(sizeof(struct veml6070_dev_s));
-
+  priv = kmm_malloc(sizeof(struct veml6070_dev_s));
   if (priv == NULL)
     {
       snerr("ERROR: Failed to allocate instance\n");

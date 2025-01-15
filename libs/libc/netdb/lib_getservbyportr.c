@@ -1,6 +1,8 @@
 /****************************************************************************
  * libs/libc/netdb/lib_getservbyportr.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -33,8 +35,6 @@
 #include <netdb.h>
 
 #include "lib_netdb.h"
-
-#ifdef CONFIG_LIBC_NETDB
 
 /****************************************************************************
  * Public Functions
@@ -81,7 +81,7 @@ int getservbyport_r(int port, FAR const char *proto,
         {
           result_buf->s_name = (FAR char *)g_services_db[i].s_name;
           result_buf->s_aliases = NULL;
-          result_buf->s_port = htons(port);
+          result_buf->s_port = HTONS(port);
 
           if (g_services_db[i].s_protocol == IPPROTO_TCP)
             {
@@ -100,4 +100,3 @@ int getservbyport_r(int port, FAR const char *proto,
   return ENOENT;
 }
 
-#endif /* CONFIG_LIBC_NETDB */

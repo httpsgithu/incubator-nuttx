@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/stm32/stm3210e-eval/src/stm32_composite.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -67,7 +69,7 @@
  ****************************************************************************/
 
 #ifdef CONFIG_USBMSC_COMPOSITE
-static FAR void *g_mschandle;
+static void *g_mschandle;
 #endif
 
 /****************************************************************************
@@ -99,8 +101,8 @@ static FAR void *g_mschandle;
 
 #ifdef CONFIG_USBMSC_COMPOSITE
 static int board_mscclassobject(int minor,
-                                FAR struct usbdev_devinfo_s *devinfo,
-                                FAR struct usbdevclass_driver_s **classdev)
+                                struct usbdev_devinfo_s *devinfo,
+                                struct usbdevclass_driver_s **classdev)
 {
   int ret;
 
@@ -163,7 +165,7 @@ static int board_mscclassobject(int minor,
  ****************************************************************************/
 
 #ifdef CONFIG_USBMSC_COMPOSITE
-static void board_mscuninitialize(FAR struct usbdevclass_driver_s *classdev)
+static void board_mscuninitialize(struct usbdevclass_driver_s *classdev)
 {
   DEBUGASSERT(g_mschandle != NULL);
   usbmsc_uninitialize(g_mschandle);
@@ -188,7 +190,7 @@ static void board_mscuninitialize(FAR struct usbdevclass_driver_s *classdev)
  ****************************************************************************/
 
 #ifdef CONFIG_USBMSC_COMPOSITE
-static FAR void *board_composite0_connect(int port)
+static void *board_composite0_connect(int port)
 {
   /* Here we are composing the configuration of the usb composite device.
    *
@@ -268,7 +270,7 @@ static FAR void *board_composite0_connect(int port)
   ifnobase += dev[1].devinfo.ninterfaces;
   strbase  += dev[1].devinfo.nstrings;
 
-  return composite_initialize(2, dev);
+  return composite_initialize(composite_getdevdescs(), dev, 2);
 }
 #endif
 
@@ -288,7 +290,7 @@ static FAR void *board_composite0_connect(int port)
  *
  ****************************************************************************/
 
-static FAR void *board_composite1_connect(int port)
+static void *board_composite1_connect(int port)
 {
   /* REVISIT:  This configuration currently fails.  stm32_epallocpma() fails
    * allocate a buffer for the 6th endpoint.  Currently it supports 7x64 byte
@@ -336,7 +338,7 @@ static FAR void *board_composite1_connect(int port)
       strbase  += dev[i].devinfo.nstrings;
     }
 
-  return composite_initialize(2, dev);
+  return composite_initialize(composite_getdevdescs(), dev, 2);
 #else
   return NULL;
 #endif
@@ -366,7 +368,7 @@ int board_composite_initialize(int port)
    */
 
 #ifndef CONFIG_NSH_BUILTIN_APPS
-  FAR struct sdio_dev_s *sdio;
+  struct sdio_dev_s *sdio;
   int ret;
 
   /* First, get an instance of the SDIO interface */
@@ -426,7 +428,7 @@ int board_composite_initialize(int port)
  *
  ****************************************************************************/
 
-FAR void *board_composite_connect(int port, int configid)
+void *board_composite_connect(int port, int configid)
 {
   if (configid == 0)
     {

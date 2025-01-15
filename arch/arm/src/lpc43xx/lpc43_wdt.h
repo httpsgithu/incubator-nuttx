@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/lpc43xx/lpc43_wdt.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -18,8 +20,8 @@
  *
  ****************************************************************************/
 
-#ifndef __ARCH_ARM_SRC_LPC43XX_CHIP_LPC43_WDT_H
-#define __ARCH_ARM_SRC_LPC43XX_CHIP_LPC43_WDT_H
+#ifndef __ARCH_ARM_SRC_LPC43XX_LPC43_WDT_H
+#define __ARCH_ARM_SRC_LPC43XX_LPC43_WDT_H
 
 /****************************************************************************
  * Included Files
@@ -69,7 +71,7 @@ extern "C"
  ****************************************************************************/
 
 #ifdef CONFIG_LPC43_WWDT
-void lpc43_wwdtinitialize(FAR const char *devpath);
+void lpc43_wwdtinitialize(const char *devpath);
 #endif
 
 #undef EXTERN
@@ -79,4 +81,4 @@ void lpc43_wwdtinitialize(FAR const char *devpath);
 
 #endif /* __ASSEMBLY__ */
 #endif /* CONFIG_WATCHDOG */
-#endif /* __ARCH_ARM_SRC_LPC43XX_CHIP_LPC43_WDT_H */
+#endif /* __ARCH_ARM_SRC_LPC43XX_LPC43_WDT_H */

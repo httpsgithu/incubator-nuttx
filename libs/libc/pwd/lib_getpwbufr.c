@@ -1,6 +1,8 @@
 /****************************************************************************
  * libs/libc/pwd/lib_getpwbufr.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -47,6 +49,7 @@
  *   uid    - Value to set the passwd structure's pw_uid field to.
  *   gid    - Value to set the passwd structure's pw_gid field to.
  *   name   - Value to set the passwd structure's pw_name field to.
+ *   gecos  - Value to set the passwd structure's pw_gecos field to.
  *   dir    - Value to set the passwd structure's pw_dir field to.
  *   shell  - Value to set the passwd structure's pw_shell field to.
  *   pwd    - Pointer to the space to store the retrieved passwd structure
@@ -63,13 +66,24 @@
  ****************************************************************************/
 
 int getpwbuf_r(uid_t uid, gid_t gid, FAR const char *name,
-               FAR const char *dir, FAR const char *shell,
+               FAR const char *gecos, FAR const char *dir,
+               FAR const char *shell, FAR const char *passwd,
                FAR struct passwd *pwd, FAR char *buf, size_t buflen,
                FAR struct passwd **result)
 {
   size_t reqdlen;
+  size_t nsize;
+  size_t gsize;
+  size_t dsize;
+  size_t ssize;
+  size_t psize;
 
-  reqdlen = strlen(name) + 1 + strlen(dir) + 1 + strlen(shell) + 1;
+  nsize = strlen(name) + 1;
+  gsize = strlen(gecos) + 1;
+  dsize = strlen(dir) + 1;
+  ssize = strlen(shell) + 1;
+  psize = strlen(passwd) + 1;
+  reqdlen = nsize + gsize + dsize + ssize + psize;
 
   if (buflen < reqdlen)
     {
@@ -79,15 +93,19 @@ int getpwbuf_r(uid_t uid, gid_t gid, FAR const char *name,
       return ERANGE;
     }
 
-  pwd->pw_name  = buf;
-  pwd->pw_dir   = &buf[strlen(name) + 1];
-  pwd->pw_shell = &buf[strlen(name) + 1 + strlen(dir) + 1];
+  pwd->pw_name   = buf;
+  pwd->pw_gecos  = &buf[nsize];
+  pwd->pw_dir    = &buf[nsize + gsize];
+  pwd->pw_shell  = &buf[nsize + gsize + dsize];
+  pwd->pw_passwd = &buf[nsize + gsize + dsize + ssize];
 
   pwd->pw_uid = uid;
   pwd->pw_gid = gid;
-  strcpy(pwd->pw_name, name);
-  strcpy(pwd->pw_dir, dir);
-  strcpy(pwd->pw_shell, shell);
+  strlcpy(pwd->pw_name, name, nsize);
+  strlcpy(pwd->pw_gecos, gecos, gsize);
+  strlcpy(pwd->pw_dir, dir, dsize);
+  strlcpy(pwd->pw_shell, shell, ssize);
+  strlcpy(pwd->pw_passwd, passwd, psize);
 
   *result = pwd;
   return 0;

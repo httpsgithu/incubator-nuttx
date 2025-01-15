@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/cxd56xx/cxd56_sysctl.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -27,6 +29,7 @@
 #include <nuttx/arch.h>
 #include <nuttx/fs/fs.h>
 #include <nuttx/fs/ioctl.h>
+#include <nuttx/mutex.h>
 #include <nuttx/semaphore.h>
 
 #include <stdio.h>
@@ -56,31 +59,29 @@
  * Private Function Prototypes
  ****************************************************************************/
 
-static int  sysctl_ioctl(FAR struct file *filep, int cmd, unsigned long arg);
-static int  sysctl_semtake(sem_t *semid);
-static void sysctl_semgive(sem_t *semid);
+static int  sysctl_ioctl(struct file *filep, int cmd, unsigned long arg);
 static int  sysctl_rxhandler(int cpuid, int protoid,
                              uint32_t pdata, uint32_t data,
-                             FAR void *userdata);
+                             void *userdata);
 
 /****************************************************************************
  * Private Data
  ****************************************************************************/
 
-static sem_t g_exc;
-static sem_t g_sync;
+static mutex_t g_lock = NXMUTEX_INITIALIZER;
+static sem_t g_sync = SEM_INITIALIZER(0);
 static int g_errcode = 0;
 
 static const struct file_operations g_sysctlfops =
 {
-  .ioctl = sysctl_ioctl,
+  .ioctl = sysctl_ioctl
 };
 
 /****************************************************************************
  * Private Functions
  ****************************************************************************/
 
-static int sysctl_ioctl(FAR struct file *filep, int cmd, unsigned long arg)
+static int sysctl_ioctl(struct file *filep, int cmd, unsigned long arg)
 {
   int ret = OK;
 
@@ -96,27 +97,16 @@ static int sysctl_ioctl(FAR struct file *filep, int cmd, unsigned long arg)
   return ret;
 }
 
-static int sysctl_semtake(sem_t *semid)
-{
-  return nxsem_wait_uninterruptible(semid);
-}
-
-static void sysctl_semgive(sem_t *semid)
-{
-  nxsem_post(semid);
-}
-
 static int sysctl_rxhandler(int cpuid, int protoid,
                             uint32_t pdata, uint32_t data,
-                            FAR void *userdata)
+                            void *userdata)
 {
   DEBUGASSERT(cpuid == 0);
   DEBUGASSERT(protoid == CXD56_PROTO_SYSCTL);
 
   g_errcode = (int)data;
 
-  sysctl_semgive(&g_sync);
-
+  nxsem_post(&g_sync);
   return OK;
 }
 
@@ -131,7 +121,7 @@ int cxd56_sysctlcmd(uint8_t id, uint32_t data)
 
   /* Get exclusive access */
 
-  ret = sysctl_semtake(&g_exc);
+  ret = nxmutex_lock(&g_lock);
   if (ret < 0)
     {
       return ret;
@@ -146,17 +136,17 @@ int cxd56_sysctlcmd(uint8_t id, uint32_t data)
   ret = cxd56_iccsend(CXD56_PROTO_SYSCTL, &msg, SYSCTL_TIMEOUT);
   if (ret < 0)
     {
-      sysctl_semgive(&g_exc);
+      nxmutex_unlock(&g_lock);
       _err("Timeout.\n");
       return ret;
     }
 
   /* Wait for reply message from system CPU */
 
-  ret = sysctl_semtake(&g_sync);
+  ret = nxsem_wait_uninterruptible(&g_sync);
   if (ret < 0)
     {
-      sysctl_semgive(&g_exc);
+      nxmutex_unlock(&g_lock);
       return ret;
     }
 
@@ -164,20 +154,13 @@ int cxd56_sysctlcmd(uint8_t id, uint32_t data)
 
   ret = g_errcode;
 
-  sysctl_semgive(&g_exc);
-
+  nxmutex_unlock(&g_lock);
   return ret;
 }
 
 void cxd56_sysctlinitialize(void)
 {
   cxd56_iccinit(CXD56_PROTO_SYSCTL);
-
-  nxsem_init(&g_exc, 0, 1);
-  nxsem_init(&g_sync, 0, 0);
-  nxsem_set_protocol(&g_sync, SEM_PRIO_NONE);
-
   cxd56_iccregisterhandler(CXD56_PROTO_SYSCTL, sysctl_rxhandler, NULL);
-
   register_driver("/dev/sysctl", &g_sysctlfops, 0666, NULL);
 }

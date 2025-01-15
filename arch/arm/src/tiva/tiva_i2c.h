@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/tiva/tiva_i2c.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -52,7 +54,7 @@
  *
  ****************************************************************************/
 
-FAR struct i2c_master_s *tiva_i2cbus_initialize(int port);
+struct i2c_master_s *tiva_i2cbus_initialize(int port);
 
 /****************************************************************************
  * Name: tiva_i2cbus_uninitialize
@@ -69,6 +71,6 @@ FAR struct i2c_master_s *tiva_i2cbus_initialize(int port);
  *
  ****************************************************************************/
 
-int tiva_i2cbus_uninitialize(FAR struct i2c_master_s *dev);
+int tiva_i2cbus_uninitialize(struct i2c_master_s *dev);
 
 #endif /* __ARCH_ARM_SRC_TIVA_TIVA_I2C_H */

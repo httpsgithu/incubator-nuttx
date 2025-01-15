@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/z80/src/common/z80_initialize.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -22,29 +24,22 @@
  * Included Files
  ****************************************************************************/
 
-#include <nuttx/config.h>
-
-#include <debug.h>
-
 #include <nuttx/arch.h>
 #include <nuttx/board.h>
-#include <nuttx/mm/mm.h>
-#include <nuttx/drivers/drivers.h>
-#include <nuttx/fs/loop.h>
-#include <nuttx/net/loopback.h>
-#include <nuttx/net/telnet.h>
-#include <nuttx/net/tun.h>
-#include <nuttx/note/note_driver.h>
-#include <nuttx/syslog/syslog_console.h>
-#include <nuttx/serial/pty.h>
-#include <nuttx/crypto/crypto.h>
-#include <nuttx/power/pm.h>
-
 #include <arch/board/board.h>
 
 #include "chip/switch.h"
-#include "z80_arch.h"
 #include "z80_internal.h"
+
+/****************************************************************************
+ * Public Data
+ ****************************************************************************/
+
+/* This holds a references to the current interrupt level register storage
+ * structure.  It is non-NULL only during interrupt processing.
+ */
+
+volatile FAR chipreg_t *g_current_regs;
 
 /****************************************************************************
  * Public Functions
@@ -76,7 +71,7 @@ void up_initialize(void)
 #if CONFIG_MM_REGIONS > 1
   /* Add any extra memory fragments to the memory manager */
 
-  up_addregion();
+  z80_addregion();
 #endif
 
 #ifdef CONFIG_PM
@@ -97,89 +92,15 @@ void up_initialize(void)
   z80_mmu_initialize();
 #endif
 
-  /* Register devices */
-
-#if defined(CONFIG_DEV_NULL)
-  devnull_register();   /* Standard /dev/null */
-#endif
-
-#if defined(CONFIG_DEV_RANDOM)
-  devrandom_register(); /* Standard /dev/random */
-#endif
-
-#if defined(CONFIG_DEV_URANDOM)
-  devurandom_register();   /* Standard /dev/urandom */
-#endif
-
-#if defined(CONFIG_DEV_ZERO)
-  devzero_register();   /* Standard /dev/zero */
-#endif
-
-#if defined(CONFIG_DEV_LOOP)
-  loop_register();      /* Standard /dev/loop */
-#endif
-
-#if defined(CONFIG_DRIVER_NOTE)
-  note_register();      /* Non-standard /dev/note */
-#endif
-
   /* Initialize the serial device driver */
 
 #ifdef USE_SERIALDRIVER
   z80_serial_initialize();
 #endif
 
-#ifdef CONFIG_RPMSG_UART
-  rpmsg_serialinit();
-#endif
-
-  /* Initialize the console device driver (if it is other than the standard
-   * serial driver).
-   */
-
-#if defined(CONFIG_CONSOLE_SYSLOG)
-  syslog_console_init();
-#endif
-
-#ifdef CONFIG_PSEUDOTERM_SUSV1
-  /* Register the master pseudo-terminal multiplexor device */
-
-  ptmx_register();
-#endif
-
-#if defined(CONFIG_CRYPTO)
-  /* Initialize the HW crypto and /dev/crypto */
-
-  up_cryptoinitialize();
-#endif
-
-#ifdef CONFIG_CRYPTO_CRYPTODEV
-  devcrypto_register();
-#endif
-
-#ifndef CONFIG_NETDEV_LATEINIT
   /* Initialize the network */
 
-  up_netinitialize();
-#endif
-
-#ifdef CONFIG_NET_LOOPBACK
-  /* Initialize the local loopback device */
-
-  localhost_initialize();
-#endif
-
-#ifdef CONFIG_NET_TUN
-  /* Initialize the TUN device */
-
-  tun_initialize();
-#endif
-
-#ifdef CONFIG_NETDEV_TELNET
-  /* Initialize the Telnet session factory */
-
-  telnet_initialize();
-#endif
+  z80_netinitialize();
 
   board_autoled_on(LED_IRQSENABLED);
 }

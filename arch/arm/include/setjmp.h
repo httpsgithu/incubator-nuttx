@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/include/setjmp.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -32,7 +34,6 @@
  * Public Types
  ****************************************************************************/
 
-#if defined(CONFIG_ARCH_ARMV7M) || defined(CONFIG_ARCH_ARMV8M)
 struct setjmp_buf_s
 {
   /* Note: core registers r0-r3 are caller-saved */
@@ -75,10 +76,6 @@ struct setjmp_buf_s
 /* Traditional typedef for setjmp_buf */
 
 typedef struct setjmp_buf_s jmp_buf[1];
-
-#else
-#  error "setjmp() not compiled!"
-#endif /* CONFIG_ARCH_ARMV7M */
 
 /****************************************************************************
  * Public Function Prototypes

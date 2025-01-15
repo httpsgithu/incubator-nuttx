@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/nrf52/nrf52832-dk/src/nrf52_boot.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -29,9 +31,7 @@
 #include <nuttx/board.h>
 #include <arch/board/board.h>
 
-#include "arm_arch.h"
 #include "arm_internal.h"
-
 #include "nrf52832-dk.h"
 
 /****************************************************************************
@@ -56,6 +56,12 @@ void nrf52_board_initialize(void)
 #ifdef CONFIG_ARCH_LEDS
   board_autoled_initialize();
 #endif
+
+#ifdef CONFIG_NRF52_SPI_MASTER
+  /* Configure SPI chip selects */
+
+  nrf52_spidev_initialize();
+#endif
 }
 
 /****************************************************************************
@@ -76,6 +82,6 @@ void board_late_initialize(void)
 {
   /* Perform board-specific initialization */
 
-  (void)nrf52_bringup();
+  nrf52_bringup();
 }
 #endif

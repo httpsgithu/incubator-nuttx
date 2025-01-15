@@ -1,6 +1,8 @@
 ############################################################################
 # drivers/video/Make.defs
 #
+# SPDX-License-Identifier: Apache-2.0
+#
 # Licensed to the Apache Software Foundation (ASF) under one or more
 # contributor license agreements.  See the NOTICE file distributed with
 # this work for additional information regarding copyright ownership.  The
@@ -27,7 +29,7 @@ ifeq ($(CONFIG_VIDEO_FB),y)
 endif
 
 ifeq ($(CONFIG_VIDEO_STREAM),y)
-  CSRCS += video.c video_framebuff.c
+  CSRCS += v4l2_core.c video_framebuff.c v4l2_cap.c v4l2_m2m.c
 endif
 
 # These video drivers depend on I2C support
@@ -38,10 +40,22 @@ ifeq ($(CONFIG_VIDEO_ISX012),y)
   CSRCS += isx012.c
 endif
 
+ifeq ($(CONFIG_VIDEO_ISX019),y)
+  CSRCS += isx019.c
+endif
+
 ifeq ($(CONFIG_VIDEO_OV2640),y)
   CSRCS += ov2640.c
 endif
 
+endif
+
+ifeq ($(CONFIG_GOLDFISH_FB),y)
+  CSRCS += goldfish_fb.c
+endif
+
+ifeq ($(CONFIG_GOLDFISH_GPU_FB),y)
+  CSRCS += goldfish_gpu_fb.c
 endif
 
 # These video drivers depend on SPI support
@@ -54,10 +68,17 @@ endif
 
 endif
 
+ifeq ($(CONFIG_GOLDFISH_CAMERA),y)
+  CSRCS += goldfish_camera.c
+endif
+
+include video/vnc/Make.defs
+include video/mipidsi/Make.defs
+
 # Include video driver build support
 
 DEPPATH += --dep-path video
 VPATH += :video
-CFLAGS += ${shell $(INCDIR) "$(CC)" $(TOPDIR)$(DELIM)drivers$(DELIM)video}
+CFLAGS += ${INCDIR_PREFIX}$(TOPDIR)$(DELIM)drivers$(DELIM)video
 
 endif

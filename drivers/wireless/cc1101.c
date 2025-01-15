@@ -1,6 +1,8 @@
 /****************************************************************************
  * drivers/wireless/cc1101.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -92,6 +94,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <fcntl.h>
+#include <poll.h>
 #include <assert.h>
 #include <errno.h>
 #include <debug.h>
@@ -304,27 +307,14 @@ static const struct file_operations g_cc1101ops =
   cc1101_file_write, /* write */
   NULL,              /* seek */
   NULL,              /* ioctl */
+  NULL,              /* mmap */
+  NULL,              /* truncate */
   cc1101_file_poll   /* poll */
-#ifndef CONFIG_DISABLE_PSEUDOFS_OPERATIONS
-  ,
-  NULL               /* unlink */
-#endif
 };
 
 /****************************************************************************
  * Private Functions
  ****************************************************************************/
-
-static int cc1101_takesem(FAR sem_t *sem)
-{
-  return nxsem_wait(sem);
-}
-
-/****************************************************************************
- * Name: cc1101_givesem
- ****************************************************************************/
-
-#define cc1101_givesem(sem) nxsem_post(sem)
 
 /****************************************************************************
  * Name: cc1101_file_open
@@ -342,15 +332,14 @@ static int cc1101_file_open(FAR struct file *filep)
 
   wlinfo("Opening CC1101 dev\n");
 
-  DEBUGASSERT(filep);
   inode = filep->f_inode;
 
-  DEBUGASSERT(inode && inode->i_private);
-  dev = (FAR struct cc1101_dev_s *)inode->i_private;
+  DEBUGASSERT(inode->i_private);
+  dev = inode->i_private;
 
   /* Get exclusive access to the driver data structure */
 
-  ret = cc1101_takesem(&dev->devsem);
+  ret = nxmutex_lock(&dev->devlock);
   if (ret < 0)
     {
       return ret;
@@ -369,7 +358,7 @@ static int cc1101_file_open(FAR struct file *filep)
   dev->nopens++;
 
 errout:
-  nxsem_post(&dev->devsem);
+  nxmutex_unlock(&dev->devlock);
   return ret;
 }
 
@@ -390,15 +379,14 @@ static int cc1101_file_close(FAR struct file *filep)
 
   wlinfo("Closing CC1101 dev\n");
 
-  DEBUGASSERT(filep);
   inode = filep->f_inode;
 
-  DEBUGASSERT(inode && inode->i_private);
-  dev = (FAR struct cc1101_dev_s *)inode->i_private;
+  DEBUGASSERT(inode->i_private);
+  dev = inode->i_private;
 
   /* Get exclusive access to the driver data structure */
 
-  ret = cc1101_takesem(&dev->devsem);
+  ret = nxmutex_lock(&dev->devlock);
   if (ret < 0)
     {
       return ret;
@@ -410,7 +398,7 @@ static int cc1101_file_close(FAR struct file *filep)
 #endif
   dev->nopens--;
 
-  nxsem_post(&dev->devsem);
+  nxmutex_unlock(&dev->devlock);
   return OK;
 }
 
@@ -432,23 +420,22 @@ static ssize_t cc1101_file_write(FAR struct file *filep,
 
   wlinfo("write CC1101 dev\n");
 
-  DEBUGASSERT(filep);
   inode = filep->f_inode;
 
-  DEBUGASSERT(inode && inode->i_private);
-  dev = (FAR struct cc1101_dev_s *)inode->i_private;
+  DEBUGASSERT(inode->i_private);
+  dev = inode->i_private;
 
   /* Get exclusive access to the driver data structure */
 
-  ret = cc1101_takesem(&dev->devsem);
+  ret = nxmutex_lock(&dev->devlock);
   if (ret < 0)
     {
       return ret;
     }
 
-  ret = cc1101_write(dev, (const uint8_t *)buffer, buflen);
+  ret = cc1101_write(dev, (FAR const uint8_t *)buffer, buflen);
   cc1101_send(dev);
-  nxsem_post(&dev->devsem);
+  nxmutex_unlock(&dev->devlock);
   return ret;
 }
 
@@ -465,7 +452,7 @@ static void fifo_put(FAR struct cc1101_dev_s *dev, FAR uint8_t *buffer,
   int ret;
   int i;
 
-  ret = cc1101_takesem(&dev->sem_rx_buffer);
+  ret = nxmutex_lock(&dev->lock_rx_buffer);
   if (ret < 0)
     {
       return;
@@ -484,7 +471,7 @@ static void fifo_put(FAR struct cc1101_dev_s *dev, FAR uint8_t *buffer,
     }
 
   dev->nxt_write = (dev->nxt_write + 1) % CONFIG_WL_CC1101_RXFIFO_LEN;
-  nxsem_post(&dev->sem_rx_buffer);
+  nxmutex_unlock(&dev->lock_rx_buffer);
 }
 
 /****************************************************************************
@@ -501,7 +488,7 @@ static uint8_t fifo_get(FAR struct cc1101_dev_s *dev, FAR uint8_t *buffer,
   uint8_t i;
   int ret;
 
-  ret = cc1101_takesem(&dev->sem_rx_buffer);
+  ret = nxmutex_lock(&dev->lock_rx_buffer);
   if (ret < 0)
     {
       return ret;
@@ -525,7 +512,7 @@ static uint8_t fifo_get(FAR struct cc1101_dev_s *dev, FAR uint8_t *buffer,
   dev->fifo_len--;
 
 no_data:
-  nxsem_post(&dev->sem_rx_buffer);
+  nxmutex_unlock(&dev->lock_rx_buffer);
   return pktlen;
 }
 
@@ -544,13 +531,12 @@ static ssize_t cc1101_file_read(FAR struct file *filep, FAR char *buffer,
   FAR struct inode *inode;
   int ret;
 
-  DEBUGASSERT(filep);
   inode = filep->f_inode;
 
-  DEBUGASSERT(inode && inode->i_private);
-  dev = (FAR struct cc1101_dev_s *)inode->i_private;
+  DEBUGASSERT(inode->i_private);
+  dev = inode->i_private;
 
-  ret = cc1101_takesem(&dev->devsem);
+  ret = nxmutex_lock(&dev->devlock);
   if (ret < 0)
     {
       return ret;
@@ -571,8 +557,8 @@ static ssize_t cc1101_file_read(FAR struct file *filep, FAR char *buffer,
       return ret;
     }
 
-  buflen = fifo_get(dev, (uint8_t *)buffer, buflen);
-  nxsem_post(&dev->devsem);
+  buflen = fifo_get(dev, (FAR uint8_t *)buffer, buflen);
+  nxmutex_unlock(&dev->devlock);
   return buflen;
 }
 
@@ -593,15 +579,15 @@ static int cc1101_file_poll(FAR struct file *filep, FAR struct pollfd *fds,
 
   wlinfo("setup: %d\n", (int)setup);
 
-  DEBUGASSERT(filep && fds);
+  DEBUGASSERT(fds);
   inode = filep->f_inode;
 
-  DEBUGASSERT(inode && inode->i_private);
-  dev = (FAR struct cc1101_dev_s *)inode->i_private;
+  DEBUGASSERT(inode->i_private);
+  dev = inode->i_private;
 
   /* Exclusive access */
 
-  ret = cc1101_takesem(&dev->devsem);
+  ret = nxmutex_lock(&dev->devlock);
   if (ret < 0)
     {
       return ret;
@@ -636,14 +622,13 @@ static int cc1101_file_poll(FAR struct file *filep, FAR struct pollfd *fds,
        * don't wait for RX.
        */
 
-      cc1101_takesem(&dev->sem_rx_buffer);
+      nxmutex_lock(&dev->lock_rx_buffer);
       if (dev->fifo_len > 0)
         {
-          dev->pfd->revents |= POLLIN; /* Data available for input */
-          nxsem_post(dev->pfd->sem);
+          poll_notify(&fds, 1, POLLIN);
         }
 
-      nxsem_post(&dev->sem_rx_buffer);
+      nxmutex_unlock(&dev->lock_rx_buffer);
     }
   else /* Tear it down */
     {
@@ -651,7 +636,7 @@ static int cc1101_file_poll(FAR struct file *filep, FAR struct pollfd *fds,
     }
 
 errout:
-  nxsem_post(&dev->devsem);
+  nxmutex_unlock(&dev->devlock);
   return ret;
 }
 
@@ -875,7 +860,7 @@ void cc1101_dumpregs(struct cc1101_dev_s *dev, uint8_t addr, uint8_t length)
 
       for (i = 0, j = 0; i < readsize; i++, j += 3)
         {
-          sprintf(&outbuf[j], " %02x", regbuf[i]);
+          snprintf(&outbuf[j], sizeof(outbuf) - j, " %02x", regbuf[i]);
         }
 
       /* Dump the formatted data to the syslog output */
@@ -949,7 +934,7 @@ void cc1101_setpacketctrl(struct cc1101_dev_s *dev)
  *
  ****************************************************************************/
 
-FAR int cc1101_init2(FAR struct cc1101_dev_s *dev)
+int cc1101_init2(FAR struct cc1101_dev_s *dev)
 {
   int ret;
 
@@ -1423,7 +1408,7 @@ int cc1101_send(FAR struct cc1101_dev_s *dev)
     }
 
   cc1101_strobe(dev, CC1101_STX);
-  cc1101_takesem(&dev->sem_tx);
+  nxsem_wait(&dev->sem_tx);
 
   /* this is set MCSM1, send auto to rx */
 
@@ -1490,13 +1475,17 @@ int cc1101_register(FAR const char *path, FAR struct cc1101_dev_s *dev)
   dev->nxt_read  = 0;
   dev->nxt_write = 0;
   dev->fifo_len  = 0;
-  nxsem_init(&(dev->devsem), 0, 1);
-  nxsem_init(&(dev->sem_rx_buffer), 0, 1);
-  nxsem_init(&(dev->sem_rx), 0, 0);
-  nxsem_init(&(dev->sem_tx), 0, 0);
+  nxmutex_init(&dev->devlock);
+  nxmutex_init(&dev->lock_rx_buffer);
+  nxsem_init(&dev->sem_rx, 0, 0);
+  nxsem_init(&dev->sem_tx, 0, 0);
 
   if (cc1101_init2(dev) < 0)
     {
+      nxmutex_destroy(&dev->devlock);
+      nxmutex_destroy(&dev->lock_rx_buffer);
+      nxsem_destroy(&dev->sem_rx);
+      nxsem_destroy(&dev->sem_tx);
       kmm_free(dev);
       wlerr("ERROR: Failed to initialize cc1101_init\n");
       return -ENODEV;
@@ -1541,9 +1530,7 @@ void cc1101_isr_process(FAR void *arg)
 
           if (dev->pfd)
             {
-              dev->pfd->revents |= POLLIN; /* Data available for input */
-              wlinfo("Wake up polled fd\n");
-              nxsem_post(dev->pfd->sem);
+              poll_notify(&dev->pfd, 1, POLLIN);
             }
         }
         break;

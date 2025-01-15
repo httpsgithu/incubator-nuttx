@@ -1,6 +1,8 @@
 /****************************************************************************
  * fs/vfs/fs_fsync.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -32,10 +34,9 @@
 #include <nuttx/sched.h>
 #include <nuttx/cancelpt.h>
 #include <nuttx/fs/fs.h>
+#include <nuttx/fs/ioctl.h>
 
 #include "inode/inode.h"
-
-#ifndef CONFIG_DISABLE_MOUNTPOINT
 
 /****************************************************************************
  * Public Functions
@@ -53,14 +54,8 @@
 
 int file_fsync(FAR struct file *filep)
 {
-  struct inode *inode;
-
-  /* Was this file opened for write access? */
-
-  if ((filep->f_oflags & O_WROK) == 0)
-    {
-      return -EBADF;
-    }
+  FAR struct inode *inode;
+  int ret;
 
   /* Is this inode a registered mountpoint? Does it support the
    * sync operations may be relevant to device drivers but only
@@ -68,15 +63,28 @@ int file_fsync(FAR struct file *filep)
    */
 
   inode = filep->f_inode;
-  if (!inode || !INODE_IS_MOUNTPT(inode) ||
-      !inode->u.i_mops || !inode->u.i_mops->sync)
+  if (inode != NULL)
     {
-      return -EINVAL;
+#ifndef CONFIG_DISABLE_MOUNTPOINT
+      if (INODE_IS_MOUNTPT(inode))
+        {
+          if (inode->u.i_mops && inode->u.i_mops->sync)
+            {
+              /* Yes, then tell the mountpoint to sync this file */
+
+              return inode->u.i_mops->sync(filep);
+            }
+        }
+      else
+#endif
+      if (inode->u.i_ops && inode->u.i_ops->ioctl)
+        {
+          ret = inode->u.i_ops->ioctl(filep, BIOC_FLUSH, 0);
+          return ret >= 0 ? 0 : ret;
+        }
     }
 
-  /* Yes, then tell the mountpoint to sync this file */
-
-  return inode->u.i_mops->sync(filep);
+  return -EINVAL;
 }
 
 /****************************************************************************
@@ -104,11 +112,10 @@ int fsync(int fd)
       goto errout;
     }
 
-  DEBUGASSERT(filep != NULL);
-
   /* Perform the fsync operation */
 
   ret = file_fsync(filep);
+  fs_putfilep(filep);
   if (ret < 0)
     {
       goto errout;
@@ -122,5 +129,3 @@ errout:
   set_errno(-ret);
   return ERROR;
 }
-
-#endif /* !CONFIG_DISABLE_MOUNTPOINT */

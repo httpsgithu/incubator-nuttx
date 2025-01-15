@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/stm32f0l0g0/nucleo-f072rb/include/board.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -28,7 +30,7 @@
 #include <nuttx/config.h>
 
 #ifndef __ASSEMBLY__
-# include <stdint.h>
+#  include <stdint.h>
 #endif
 
 /****************************************************************************
@@ -216,20 +218,26 @@
 
 /* Alternate Pin Functions **************************************************/
 
-/* USART 1 */
+/* USART 1
+ *   PA9 -  CN10 pin 21
+ *   PA10 - CN10 pin 33
+ */
 
-#define GPIO_USART1_TX           GPIO_USART1_TX_2 /* PA9  CN10 pin 21 */
-#define GPIO_USART1_RX           GPIO_USART1_RX_2 /* PA10 CN10 pin 33 */
+#define GPIO_USART1_TX     (GPIO_USART1_TX_2|GPIO_SPEED_HIGH) /* PA9 */
+#define GPIO_USART1_RX     (GPIO_USART1_RX_2|GPIO_SPEED_HIGH) /* PA10 */
 
-/* USART 2 */
+/* USART 2 - St-Link VCOM */
 
-#define GPIO_USART2_TX           GPIO_USART2_TX_3 /* PA2  St-Link VCOM */
-#define GPIO_USART2_RX           GPIO_USART2_RX_3 /* PA3  St-Link VCOM */
+#define GPIO_USART2_TX     (GPIO_USART2_TX_3|GPIO_SPEED_HIGH) /* PA2 */
+#define GPIO_USART2_RX     (GPIO_USART2_RX_3|GPIO_SPEED_HIGH) /* PA3 */
 
-/* I2C1 */
+/* I2C1
+ *   PB8 - CN5 pin 10, D15
+ *   PB9 - CN5 pin 9, D14
+ */
 
-#define GPIO_I2C1_SCL            GPIO_I2C1_SCL_2  /* PB8  CN5 pin 10, D15 */
-#define GPIO_I2C1_SDA            GPIO_I2C1_SDA_2  /* PB9  CN5 pin 9, D14 */
+#define GPIO_I2C1_SCL      (GPIO_I2C1_SCL_2|GPIO_SPEED_LOW)  /* PB8 */
+#define GPIO_I2C1_SDA      (GPIO_I2C1_SDA_2|GPIO_SPEED_LOW)  /* PB9 */
 
 /* I2C2 */
 

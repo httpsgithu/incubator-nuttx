@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/avr/src/at90usb/at90usb.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -18,8 +20,8 @@
  *
  ****************************************************************************/
 
-#ifndef __ARCH_AVR_SRC_ATMEGA_ATMEGA_H
-#define __ARCH_AVR_SRC_ATMEGA_ATMEGA_H
+#ifndef __ARCH_AVR_SRC_AT90USB_AT90USB_H
+#define __ARCH_AVR_SRC_AT90USB_AT90USB_H
 
 /****************************************************************************
  * Included Files
@@ -193,4 +195,4 @@ void gpio_irqdisable(int irq);
 #endif
 
 #endif /* __ASSEMBLY__ */
-#endif /* __ARCH_AVR_SRC_ATMEGA_ATMEGA_H */
+#endif /* __ARCH_AVR_SRC_AT90USB_AT90USB_H */

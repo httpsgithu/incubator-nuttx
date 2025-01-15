@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/stm32/common/src/stm32_l3gd20.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -43,7 +45,7 @@
  * Private Function Prototypes
  ****************************************************************************/
 
-static int l3gd20_attach(FAR struct l3gd20_config_s * cfg, xcpt_t irq);
+static int l3gd20_attach(struct l3gd20_config_s * cfg, xcpt_t irq);
 
 /****************************************************************************
  * Private Data
@@ -69,7 +71,7 @@ static struct l3gd20_config_s g_l3gd20_config =
  *
  ****************************************************************************/
 
-static int l3gd20_attach(FAR struct l3gd20_config_s *cfg, xcpt_t irq)
+static int l3gd20_attach(struct l3gd20_config_s *cfg, xcpt_t irq)
 {
   return stm32_gpiosetevent(BOARD_L3GD20_GPIO_DREADY, true, false,
                             true, irq, NULL);

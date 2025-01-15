@@ -1,6 +1,8 @@
 /****************************************************************************
  * fs/nxffs/nxffs_write.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -27,11 +29,11 @@
 #include <stdint.h>
 #include <string.h>
 #include <fcntl.h>
-#include <crc32.h>
 #include <assert.h>
 #include <errno.h>
 #include <debug.h>
 
+#include <nuttx/crc32.h>
 #include <nuttx/fs/fs.h>
 #include <nuttx/mtd/mtd.h>
 
@@ -519,7 +521,7 @@ ssize_t nxffs_write(FAR struct file *filep, FAR const char *buffer,
 
   /* Sanity checks */
 
-  DEBUGASSERT(filep->f_priv != NULL && filep->f_inode != NULL);
+  DEBUGASSERT(filep->f_priv != NULL);
 
   /* Recover the open file state from the struct file instance */
 
@@ -527,17 +529,17 @@ ssize_t nxffs_write(FAR struct file *filep, FAR const char *buffer,
 
   /* Recover the volume state from the open file */
 
-  volume = (FAR struct nxffs_volume_s *)filep->f_inode->i_private;
+  volume = filep->f_inode->i_private;
   DEBUGASSERT(volume != NULL);
 
-  /* Get exclusive access to the volume.  Note that the volume exclsem
+  /* Get exclusive access to the volume.  Note that the volume lock
    * protects the open file list.
    */
 
-  ret = nxsem_wait(&volume->exclsem);
+  ret = nxmutex_lock(&volume->lock);
   if (ret < 0)
     {
-      ferr("ERROR: nxsem_wait failed: %d\n", ret);
+      ferr("ERROR: nxmutex_lock failed: %d\n", ret);
       goto errout;
     }
 
@@ -547,7 +549,7 @@ ssize_t nxffs_write(FAR struct file *filep, FAR const char *buffer,
     {
       ferr("ERROR: File not open for write access\n");
       ret = -EACCES;
-      goto errout_with_semaphore;
+      goto errout_with_lock;
     }
 
   /* Loop until we successfully appended all of the data to the file (or an
@@ -569,7 +571,7 @@ ssize_t nxffs_write(FAR struct file *filep, FAR const char *buffer,
           if (ret < 0)
             {
               ferr("ERROR: Failed to allocate a data block: %d\n", -ret);
-              goto errout_with_semaphore;
+              goto errout_with_lock;
             }
         }
 
@@ -585,7 +587,7 @@ ssize_t nxffs_write(FAR struct file *filep, FAR const char *buffer,
       if (ret < 0)
         {
           ferr("ERROR: Failed to verify FLASH data block: %d\n", -ret);
-          goto errout_with_semaphore;
+          goto errout_with_lock;
         }
 
       /* Append the data to the end of the data block and write the updated
@@ -597,7 +599,7 @@ ssize_t nxffs_write(FAR struct file *filep, FAR const char *buffer,
         {
           ferr("ERROR: Failed to append to FLASH to a data block: %d\n",
                -ret);
-          goto errout_with_semaphore;
+          goto errout_with_lock;
         }
 
       /* Decrement the number of bytes remaining to be written */
@@ -607,11 +609,11 @@ ssize_t nxffs_write(FAR struct file *filep, FAR const char *buffer,
 
   /* Success.. return the number of bytes written */
 
-  ret           = total;
-  filep->f_pos  = wrfile->datlen;
+  ret          = total;
+  filep->f_pos = wrfile->datlen;
 
-errout_with_semaphore:
-  nxsem_post(&volume->exclsem);
+errout_with_lock:
+  nxmutex_unlock(&volume->lock);
 errout:
   return ret;
 }

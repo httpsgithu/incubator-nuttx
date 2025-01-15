@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/misoc/src/common/misoc_serial.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -141,7 +143,7 @@ static int  misoc_setup(struct uart_dev_s *dev);
 static void misoc_shutdown(struct uart_dev_s *dev);
 static int  misoc_attach(struct uart_dev_s *dev);
 static void misoc_detach(struct uart_dev_s *dev);
-static int  misoc_uart_interrupt(int irq, void *context, FAR void *arg);
+static int  misoc_uart_interrupt(int irq, void *context, void *arg);
 static int  misoc_ioctl(struct file *filep, int cmd, unsigned long arg);
 static int  misoc_receive(struct uart_dev_s *dev, uint32_t *status);
 static void misoc_rxint(struct uart_dev_s *dev, bool enable);
@@ -185,7 +187,7 @@ static char g_uart1txbuffer[CONFIG_UART1_TXBUFSIZE];
 
 #ifdef CONFIG_MISOC_UART1
 #ifndef CONFIG_MISOC_UART1PRIO
-# define CONFIG_MISOC_UART1PRIO 4
+#  define CONFIG_MISOC_UART1PRIO 4
 #endif
 
 static struct misoc_dev_s g_uart1priv =
@@ -328,14 +330,14 @@ static void misoc_detach(struct uart_dev_s *dev)
  *
  * Description:
  *   This is the UART interrupt handler.  It will be invoked when an
- *   interrupt received on the 'irq'  It should call uart_transmitchars or
- *   uart_receivechar to perform the appropriate data transfers.  The
- *   interrupt handling logic must be able to map the 'irq' number into the
+ *   interrupt is received on the 'irq'.  It should call uart_xmitchars or
+ *   uart_recvchars to perform the appropriate data transfers.  The
+ *   interrupt handling logic must be able to map the 'arg' to the
  *   appropriate uart_dev_s structure in order to call these functions.
  *
  ****************************************************************************/
 
-static int misoc_uart_interrupt(int irq, void *context, FAR void *arg)
+static int misoc_uart_interrupt(int irq, void *context, void *arg)
 {
   struct uart_dev_s *dev = (struct uart_dev_s *)arg;
   uint32_t stat;
@@ -541,27 +543,16 @@ void misoc_earlyserialinit(void)
  *
  ****************************************************************************/
 
-int up_putc(int ch)
+void up_putc(int ch)
 {
 #ifdef HAVE_SERIAL_CONSOLE
   struct uart_dev_s *dev = (struct uart_dev_s *)&CONSOLE_DEV;
   uint8_t imr;
 
   misoc_disableuartint(dev, &imr);
-
-  /* Check for LF */
-
-  if (ch == '\n')
-    {
-      /* Add CR */
-
-      misoc_lowputc('\r');
-    }
-
   misoc_lowputc(ch);
   misoc_restoreuartint(dev, imr);
 #endif
-  return ch;
 }
 
 /****************************************************************************
@@ -584,9 +575,8 @@ void misoc_serial_initialize(void)
 {
 }
 
-int up_putc(int ch)
+void up_putc(int ch)
 {
-  return ch;
 }
 
 #endif /* HAVE_UART_DEVICE */
@@ -600,22 +590,11 @@ int up_putc(int ch)
  *
  ****************************************************************************/
 
-int up_putc(int ch)
+void up_putc(int ch)
 {
 #ifdef HAVE_SERIAL_CONSOLE
-  /* Check for LF */
-
-  if (ch == '\n')
-    {
-      /* Add CR */
-
-      misoc_lowputc('\r');
-    }
-
   misoc_lowputc(ch);
 #endif
-
-  return ch;
 }
 
 #endif /* USE_SERIALDRIVER */

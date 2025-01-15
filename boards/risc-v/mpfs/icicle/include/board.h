@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/risc-v/mpfs/icicle/include/board.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -18,8 +20,8 @@
  *
  ****************************************************************************/
 
-#ifndef __BOARDS_RISCV_ICICLE_MPFS_INCLUDE_BOARD_H
-#define __BOARDS_RISCV_ICICLE_MPFS_INCLUDE_BOARD_H
+#ifndef __BOARDS_RISCV_MPFS_ICICLE_INCLUDE_BOARD_H
+#define __BOARDS_RISCV_MPFS_ICICLE_INCLUDE_BOARD_H
 
 /****************************************************************************
  * Included Files
@@ -28,14 +30,20 @@
 #include <nuttx/config.h>
 
 #ifndef __ASSEMBLY__
-# include <stdint.h>
+#  include <stdint.h>
 #endif
-
-#include "mpfs_gpio.h"
 
 /****************************************************************************
  * Pre-processor Definitions
  ****************************************************************************/
+
+#ifdef CONFIG_MMCSD_MMCSUPPORT
+#  define MPFS_EMMC_CLK_MODE MPFS_EMMCSD_MODE_HS200
+#endif
+
+#ifdef CONFIG_MMCSD_SDIO
+#  define MPFS_SD_CLOCK_4BIT MPFS_MMC_CLOCK_25MHZ
+#endif
 
 /* Clocking TODO: */
 
@@ -45,6 +53,7 @@
 #define MPFS_MSS_RTC_TOGGLE_CLK      (1000000UL)
 #define MPFS_MSS_AXI_CLK           (300000000UL)
 #define MPFS_MSS_APB_AHB_CLK       (150000000UL)
+#define MPFS_FPGA_PERIPHERAL_CLK    (62500000UL)
 #define MPFS_FPGA_BCLK               (3000000UL)
 
 /* LED definitions **********************************************************/
@@ -109,4 +118,4 @@ void mpfs_boardinitialize(void);
 }
 #endif
 #endif /* __ASSEMBLY__ */
-#endif /* __BOARDS_RISCV_ICICLE_MPFS_INCLUDE_BOARD_H  */
+#endif /* __BOARDS_RISCV_MPFS_ICICLE_INCLUDE_BOARD_H  */

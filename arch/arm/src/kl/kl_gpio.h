@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/kl/kl_gpio.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -18,8 +20,8 @@
  *
  ****************************************************************************/
 
-#ifndef __ARCH_ARM_SRC_KL_KINETIS_GPIO_H
-#define __ARCH_ARM_SRC_KL_KINETIS_GPIO_H
+#ifndef __ARCH_ARM_SRC_KL_KL_GPIO_H
+#define __ARCH_ARM_SRC_KL_KL_GPIO_H
 
 /****************************************************************************
  * Included Files
@@ -402,4 +404,4 @@ void kl_gpioirqdisable(uint32_t pinset);
 }
 #endif
 #endif /* __ASSEMBLY__ */
-#endif /* __ARCH_ARM_SRC_KL_KINETIS_GPIO_H */
+#endif /* __ARCH_ARM_SRC_KL_KL_GPIO_H */

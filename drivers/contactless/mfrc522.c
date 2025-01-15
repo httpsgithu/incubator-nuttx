@@ -1,6 +1,8 @@
 /****************************************************************************
  * drivers/contactless/mfrc522.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -39,6 +41,7 @@
 
 #include <nuttx/kmalloc.h>
 #include <nuttx/signal.h>
+#include <nuttx/power/pm.h>
 #include <nuttx/contactless/mfrc522.h>
 
 #include "mfrc522.h"
@@ -97,7 +100,7 @@ int mfrc522_picc_select(FAR struct mfrc522_dev_s *dev,
 #if 0 /* TODO */
 /* IRQ Handling */
 
-static int mfrc522_irqhandler(FAR int irq, FAR void *context, FAR void *dev);
+static int mfrc522_irqhandler(int irq, FAR void *context, FAR void *dev);
 static inline int mfrc522_attachirq(FAR struct mfrc522_dev_s *dev,
                                     xcpt_t isr);
 #endif
@@ -108,16 +111,12 @@ static inline int mfrc522_attachirq(FAR struct mfrc522_dev_s *dev,
 
 static const struct file_operations g_mfrc522fops =
 {
-  mfrc522_open,
-  mfrc522_close,
-  mfrc522_read,
-  mfrc522_write,
-  NULL,
-  mfrc522_ioctl,
-  NULL
-#ifndef CONFIG_DISABLE_PSEUDOFS_OPERATIONS
-  , NULL
-#endif
+  mfrc522_open,   /* open */
+  mfrc522_close,  /* close */
+  mfrc522_read,   /* read */
+  mfrc522_write,  /* write */
+  NULL,           /* seek */
+  mfrc522_ioctl,  /* ioctl */
 };
 
 /****************************************************************************
@@ -355,7 +354,7 @@ int mfrc522_calc_crc(FAR struct mfrc522_dev_s *dev, uint8_t *buffer,
 
   /* Wait for CRC completion or 200ms time-out */
 
-  clock_gettime(CLOCK_REALTIME, &tstart);
+  clock_systime_timespec(&tstart);
   tstart.tv_nsec += 200000;
   if (tstart.tv_nsec >= 1000 * 1000 * 1000)
     {
@@ -375,7 +374,7 @@ int mfrc522_calc_crc(FAR struct mfrc522_dev_s *dev, uint8_t *buffer,
 
       /* Get time now */
 
-      clock_gettime(CLOCK_REALTIME, &tend);
+      clock_systime_timespec(&tend);
 
       if ((tend.tv_sec > tstart.tv_sec) && (tend.tv_nsec > tstart.tv_nsec))
         {
@@ -454,7 +453,7 @@ int mfrc522_comm_picc(FAR struct mfrc522_dev_s *dev, uint8_t command,
    * hardware fault, let us to use a NuttX timeout as well.
    */
 
-  clock_gettime(CLOCK_REALTIME, &tstart);
+  clock_systime_timespec(&tstart);
   tstart.tv_nsec += 200000;
   if (tstart.tv_nsec >= 1000 * 1000 * 1000)
     {
@@ -495,7 +494,7 @@ int mfrc522_comm_picc(FAR struct mfrc522_dev_s *dev, uint8_t command,
 
       /* Get time now */
 
-      clock_gettime(CLOCK_REALTIME, &tend);
+      clock_systime_timespec(&tend);
 
       if ((tend.tv_sec > tstart.tv_sec) &&
           (tend.tv_nsec > tstart.tv_nsec))
@@ -1395,7 +1394,7 @@ int mfrc522_selftest(FAR struct mfrc522_dev_s *dev)
     {
       for (j = 0, k = 0; j < 8; j++, k += 3)
         {
-          sprintf(&outbuf[k], " %02x", result[i + j]);
+          snprintf(&outbuf[k], sizeof(outbuf) - k, " %02x", result[i + j]);
         }
 
       ctlsinfo("  %02x:%s\n", i, outbuf);
@@ -1418,10 +1417,9 @@ static int mfrc522_open(FAR struct file *filep)
   FAR struct inode *inode;
   FAR struct mfrc522_dev_s *dev;
 
-  DEBUGASSERT(filep);
   inode = filep->f_inode;
 
-  DEBUGASSERT(inode && inode->i_private);
+  DEBUGASSERT(inode->i_private);
   dev = inode->i_private;
 
   mfrc522_configspi(dev->spi);
@@ -1447,10 +1445,9 @@ static int mfrc522_close(FAR struct file *filep)
   FAR struct inode *inode;
   FAR struct mfrc522_dev_s *dev;
 
-  DEBUGASSERT(filep);
   inode = filep->f_inode;
 
-  DEBUGASSERT(inode && inode->i_private);
+  DEBUGASSERT(inode->i_private);
   dev = inode->i_private;
 
   dev->state = MFRC522_STATE_NOT_INIT;
@@ -1476,10 +1473,9 @@ static ssize_t mfrc522_read(FAR struct file *filep, FAR char *buffer,
   FAR struct mfrc522_dev_s *dev;
   FAR struct picc_uid_s uid;
 
-  DEBUGASSERT(filep);
   inode = filep->f_inode;
 
-  DEBUGASSERT(inode && inode->i_private);
+  DEBUGASSERT(inode->i_private);
   dev = inode->i_private;
 
   /* Is a card near? */
@@ -1520,10 +1516,9 @@ static ssize_t mfrc522_write(FAR struct file *filep, FAR const char *buffer,
   FAR struct inode *inode;
   FAR struct mfrc522_dev_s *dev;
 
-  DEBUGASSERT(filep);
   inode = filep->f_inode;
 
-  DEBUGASSERT(inode && inode->i_private);
+  DEBUGASSERT(inode->i_private);
   dev = inode->i_private;
 
   UNUSED(dev);
@@ -1541,10 +1536,9 @@ static int mfrc522_ioctl(FAR struct file *filep, int cmd, unsigned long arg)
   FAR struct mfrc522_dev_s *dev;
   int ret = OK;
 
-  DEBUGASSERT(filep);
   inode = filep->f_inode;
 
-  DEBUGASSERT(inode && inode->i_private);
+  DEBUGASSERT(inode->i_private);
   dev = inode->i_private;
 
   switch (cmd)
@@ -1637,7 +1631,7 @@ int mfrc522_register(FAR const char *devpath, FAR struct spi_dev_s *spi)
 
   /* Initialize the MFRC522 device structure */
 
-  dev = (FAR struct mfrc522_dev_s *)kmm_malloc(sizeof(struct mfrc522_dev_s));
+  dev = kmm_malloc(sizeof(struct mfrc522_dev_s));
   if (!dev)
     {
       ctlserr("ERROR: Failed to allocate instance\n");

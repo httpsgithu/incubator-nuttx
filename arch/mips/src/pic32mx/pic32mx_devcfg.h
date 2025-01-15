@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/mips/src/pic32mx/pic32mx_devcfg.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -51,7 +53,7 @@
 
 /* Device configuration word 3 */
 
-#define DEVCFG3_USERID_SHIFT        (0)        /* Bits 0-15: User-defined, readable via ICSP™ and JTAG */
+#define DEVCFG3_USERID_SHIFT        (0)        /* Bits 0-15: User-defined, readable via ICSPâ„¢ and JTAG */
 #define DEVCFG3_USERID_MASK         (0xffff << DEVCFG3_USERID_SHIFT)
 
 #if defined(CHIP_PIC32MX1) || defined(CHIP_PIC32MX2)

@@ -1,6 +1,8 @@
 /****************************************************************************
  * drivers/lcd/max7219.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -35,6 +37,7 @@
 #include <debug.h>
 
 #include <nuttx/arch.h>
+#include <nuttx/bits.h>
 #include <nuttx/spi/spi.h>
 #include <nuttx/lcd/lcd.h>
 #include <nuttx/lcd/max7219.h>
@@ -119,11 +122,6 @@
 #define LS_BIT               (1 << 0)
 #define MS_BIT               (1 << 7)
 
-#define BIT(nr)              (1 << (nr))
-#define BITS_PER_BYTE         8
-#define BIT_MASK(nr)         (1 << ((nr) % BITS_PER_BYTE))
-#define BIT_BYTE(nr)         ((nr) / BITS_PER_BYTE)
-
 /****************************************************************************
  * Private Type Definition
  ****************************************************************************/
@@ -161,10 +159,12 @@ static void max7219_deselect(FAR struct spi_dev_s *spi);
 
 /* LCD Data Transfer Methods */
 
-static int max7219_putrun(fb_coord_t row, fb_coord_t col,
-             FAR const uint8_t *buffer, size_t npixels);
-static int max7219_getrun(fb_coord_t row, fb_coord_t col,
-             FAR uint8_t *buffer, size_t npixels);
+static int max7219_putrun(FAR struct lcd_dev_s *dev, fb_coord_t row,
+                          fb_coord_t col, FAR const uint8_t *buffer,
+                          size_t npixels);
+static int max7219_getrun(FAR struct lcd_dev_s *dev, fb_coord_t row,
+                          fb_coord_t col, FAR uint8_t *buffer,
+                          size_t npixels);
 
 /* LCD Configuration */
 
@@ -274,37 +274,6 @@ static struct max7219_dev_s g_max7219dev =
  ****************************************************************************/
 
 /****************************************************************************
- * __set_bit - Set a bit in memory
- *
- *   nr   - The bit to set
- *   addr - The address to start counting from
- *
- * Unlike set_bit(), this function is non-atomic and may be reordered.
- * If it's called on the same region of memory simultaneously, the effect
- * may be that only one operation succeeds.
- *
- ****************************************************************************/
-
-static inline void __set_bit(int nr, uint8_t * addr)
-{
-  uint8_t mask = BIT_MASK(nr);
-  uint8_t *p = ((uint8_t *) addr) + BIT_BYTE(nr);
-  *p |= mask;
-}
-
-static inline void __clear_bit(int nr, uint8_t * addr)
-{
-  uint8_t mask = BIT_MASK(nr);
-  uint8_t *p = ((uint8_t *) addr) + BIT_BYTE(nr);
-  *p &= ~mask;
-}
-
-static inline int __test_bit(int nr, const volatile uint8_t * addr)
-{
-  return 1 & (addr[BIT_BYTE(nr)] >> (nr & (BITS_PER_BYTE - 1)));
-}
-
-/****************************************************************************
  * Name:  max7219_powerstring
  *
  * Description:
@@ -389,6 +358,7 @@ static void max7219_deselect(FAR struct spi_dev_s *spi)
  * Description:
  *   This method can be used to write a partial raster line to the LCD:
  *
+ *   dev     - The lcd device
  *   row     - Starting row to write to (range: 0 <= row < yres)
  *   col     - Starting column to write to (range: 0 <= col <= xres-npixels)
  *   buffer  - The buffer containing the run to be written to the LCD
@@ -397,14 +367,15 @@ static void max7219_deselect(FAR struct spi_dev_s *spi)
  *
  ****************************************************************************/
 
-static int max7219_putrun(fb_coord_t row, fb_coord_t col,
-                          FAR const uint8_t *buffer, size_t npixels)
+static int max7219_putrun(FAR struct lcd_dev_s *dev, fb_coord_t row,
+                          fb_coord_t col, FAR const uint8_t *buffer,
+                          size_t npixels)
 {
   /* Because of this line of code, we will only be able to support a single
    * MAX7219 device .
    */
 
-  FAR struct max7219_dev_s *priv = &g_max7219dev;
+  FAR struct max7219_dev_s *priv = (FAR struct max7219_dev_s *)dev;
   FAR uint8_t *fbptr;
   FAR uint8_t *ptr;
   uint16_t data;
@@ -462,11 +433,11 @@ static int max7219_putrun(fb_coord_t row, fb_coord_t col,
     {
       if ((*buffer & usrmask) != 0)
         {
-          __set_bit(col % 8 + i, ptr);
+          set_bit(col % 8 + i, ptr);
         }
       else
         {
-          __clear_bit(col % 8 + i, ptr);
+          clear_bit(col % 8 + i, ptr);
         }
 
 #ifdef CONFIG_LCD_PACKEDMSFIRST
@@ -522,6 +493,7 @@ static int max7219_putrun(fb_coord_t row, fb_coord_t col,
  * Description:
  *   This method can be used to read a partial raster line from the LCD:
  *
+ *  dev     - The lcd device
  *  row     - Starting row to read from (range: 0 <= row < yres)
  *  col     - Starting column to read read (range: 0 <= col <= xres-npixels)
  *  buffer  - The buffer in which to return the run read from the LCD
@@ -530,14 +502,15 @@ static int max7219_putrun(fb_coord_t row, fb_coord_t col,
  *
  ****************************************************************************/
 
-static int max7219_getrun(fb_coord_t row, fb_coord_t col,
-                          FAR uint8_t *buffer, size_t npixels)
+static int max7219_getrun(FAR struct lcd_dev_s *dev, fb_coord_t row,
+                          fb_coord_t col, FAR uint8_t *buffer,
+                          size_t npixels)
 {
   /* Because of this line of code, we will only be able to support a single
    * MAX7219 device.
    */
 
-  FAR struct max7219_dev_s *priv = &g_max7219dev;
+  FAR struct max7219_dev_s *priv = (FAR struct max7219_dev_s *)dev;
   FAR uint8_t *fbptr;
   FAR uint8_t *ptr;
   uint8_t usrmask;
@@ -573,7 +546,7 @@ static int max7219_getrun(fb_coord_t row, fb_coord_t col,
 
   for (i = 0; i < pixlen; i++)
     {
-      if (__test_bit(col % 8 + i, ptr))
+      if (test_bit(col % 8 + i, ptr))
         {
           *buffer |= usrmask;
         }
@@ -646,6 +619,8 @@ static int max7219_getplaneinfo(FAR struct lcd_dev_s *dev,
   ginfo("planeno: %d bpp: %d\n", planeno, g_planeinfo.bpp);
 
   memcpy(pinfo, &g_planeinfo, sizeof(struct lcd_planeinfo_s));
+  pinfo->dev = dev;
+
   return OK;
 }
 

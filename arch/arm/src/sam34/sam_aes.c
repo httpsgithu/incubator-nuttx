@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/sam34/sam_aes.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -33,12 +35,10 @@
 
 #include <nuttx/crypto/crypto.h>
 #include <nuttx/arch.h>
-#include <nuttx/semaphore.h>
+#include <nuttx/mutex.h>
 #include <arch/board/board.h>
 
 #include "arm_internal.h"
-#include "arm_arch.h"
-
 #include "chip.h"
 #include "sam_periphclks.h"
 #include "sam_aes.h"
@@ -61,8 +61,8 @@
  * Private Data
  ****************************************************************************/
 
-static sem_t g_samaes_lock;
-static bool  g_samaes_initdone = false;
+static mutex_t g_samaes_lock = NXMUTEX_INITIALIZER;
+static bool    g_samaes_initdone = false;
 
 /****************************************************************************
  * Public Data
@@ -72,29 +72,19 @@ static bool  g_samaes_initdone = false;
  * Private Functions
  ****************************************************************************/
 
-static void samaes_lock(void)
-{
-  nxsem_wait(&g_samaes_lock);
-}
-
-static void samaes_unlock(void)
-{
-  nxsem_post(&g_samaes_lock);
-}
-
-static void samaes_memcpy(FAR void *out, FAR const void *in, size_t size)
+static void samaes_memcpy(void *out, const void *in, size_t size)
 {
   size_t i;
   size_t wcount = size / 4;
 
   for (i = 0; i < wcount;
-       i++, out = (FAR uint8_t *)out + 4, in = (FAR uint8_t *)in + 4)
+       i++, out = (uint8_t *)out + 4, in = (uint8_t *)in + 4)
     {
-      *(FAR uint32_t *)out = *(FAR uint32_t *)in;
+      *(uint32_t *)out = *(uint32_t *)in;
     }
 }
 
-static void samaes_encryptblock(FAR void *out, FAR const void *in)
+static void samaes_encryptblock(void *out, const void *in)
 {
   samaes_memcpy((void *)SAM_AES_IDATAR, in, AES_BLOCK_SIZE);
 
@@ -171,14 +161,13 @@ static int samaes_setup_mr(uint32_t keysize, int mode, int encrypt)
 
 static int samaes_initialize(void)
 {
-  nxsem_init(&g_samaes_lock, 0, 1);
   sam_aes_enableclk();
   putreg32(AES_CR_SWRST, SAM_AES_CR);
   return OK;
 }
 
-int aes_cypher(FAR void *out, FAR const void *in, uint32_t size,
-               FAR const void *iv, FAR const void *key, uint32_t keysize,
+int aes_cypher(void *out, const void *in, size_t size,
+               const void *iv, const void *key, size_t keysize,
                int mode, int encrypt)
 {
   int ret = OK;
@@ -199,19 +188,19 @@ int aes_cypher(FAR void *out, FAR const void *in, uint32_t size,
       return -EINVAL;
     }
 
-  samaes_lock();
+  nxmutex_lock(&g_samaes_lock);
 
   ret = samaes_setup_mr(keysize, mode & AES_MODE_MASK, encrypt);
   if (ret < 0)
     {
-      samaes_unlock();
+      nxmutex_unlock(&g_samaes_lock);
       return ret;
     }
 
-  samaes_memcpy((FAR void *)SAM_AES_KEYWR, key, keysize);
+  samaes_memcpy((void *)SAM_AES_KEYWR, key, keysize);
   if (iv != NULL)
     {
-      samaes_memcpy((FAR void *)SAM_AES_IVR, iv, AES_BLOCK_SIZE);
+      samaes_memcpy((void *)SAM_AES_IVR, iv, AES_BLOCK_SIZE);
     }
 
   while (size)
@@ -219,7 +208,7 @@ int aes_cypher(FAR void *out, FAR const void *in, uint32_t size,
       if ((mode & AES_MODE_MAC) == 0)
         {
           samaes_encryptblock(out, in);
-          out = (FAR char *)out + AES_BLOCK_SIZE;
+          out = (char *)out + AES_BLOCK_SIZE;
         }
       else if (size == AES_BLOCK_SIZE)
         {
@@ -230,10 +219,10 @@ int aes_cypher(FAR void *out, FAR const void *in, uint32_t size,
           samaes_encryptblock(NULL, in);
         }
 
-      in    = (FAR char *)in + AES_BLOCK_SIZE;
+      in    = (char *)in + AES_BLOCK_SIZE;
       size -= AES_BLOCK_SIZE;
     }
 
-  samaes_unlock();
+  nxmutex_unlock(&g_samaes_lock);
   return ret;
 }

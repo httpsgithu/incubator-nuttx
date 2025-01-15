@@ -1,6 +1,8 @@
 ############################################################################
 # arch/arm/src/armv7-r/Toolchain.defs
 #
+# SPDX-License-Identifier: Apache-2.0
+#
 # Licensed to the Apache Software Foundation (ASF) under one or more
 # contributor license agreements.  See the NOTICE file distributed with
 # this work for additional information regarding copyright ownership.  The
@@ -18,94 +20,54 @@
 #
 ############################################################################
 
-# Setup for the selected toolchain
-
-#
-# Select and allow the selected toolchain to be overridden by a command-line
-#selection.
-#
-
-ifeq ($(filter y, \
-      $(CONFIG_ARMV7R_TOOLCHAIN_BUILDROOT) \
-    ),y)
-  CONFIG_ARMV7R_TOOLCHAIN ?= BUILDROOT
+ifeq ($(CONFIG_ARCH_CORTEXR4),y)
+  ARCHCPUFLAGS += -mcpu=cortex-r4
+  LLVM_CPUTYPE := cortex-r4
+else ifeq ($(CONFIG_ARCH_CORTEXR5),y)
+  ARCHCPUFLAGS += -mcpu=cortex-r5
+  LLVM_CPUTYPE := cortex-r5
+else ifeq ($(CONFIG_ARCH_CORTEXR7),y)
+  ARCHCPUFLAGS += -mcpu=cortex-r7
+  LLVM_CPUTYPE := cortex-r7
 endif
 
-ifeq ($(filter y, \
-      $(CONFIG_ARMV7R_TOOLCHAIN_GNU_EABIL) \
-    ),y)
-  CONFIG_ARMV7R_TOOLCHAIN ?= GNU_EABI
-endif
-
-ifeq ($(filter y, \
-      $(CONFIG_ARMV7R_TOOLCHAIN_GNU_EABIW) \
-    ),y)
-  CONFIG_ARMV7R_TOOLCHAIN ?= GNU_EABI
-endif
-
-#
-# Supported toolchains
-#
-# Each toolchain definition should set:
-#
-#  CROSSDEV         The GNU toolchain triple (command prefix)
-#  ARCHCPUFLAGS     CPU-specific flags selecting the instruction set
-#                   FPU options, etc.
-#  MAXOPTIMIZATION  The maximum optimization level that results in
-#                   reliable code generation.
-#
-
-ifeq ($(CONFIG_DEBUG_CUSTOMOPT),y)
-  MAXOPTIMIZATION := $(CONFIG_DEBUG_OPTLEVEL)
+ifeq ($(CONFIG_ARCH_FPU),y)
+  LLVM_ABITYPE := eabihf
+  ARCHCPUFLAGS += -mfpu=vfpv3-d16
+  ifeq ($(CONFIG_ARM_FPU_ABI_SOFT),y)
+    ARCHCPUFLAGS += -mfloat-abi=softfp
+  else
+    ARCHCPUFLAGS += -mfloat-abi=hard
+  endif
 else
-  MAXOPTIMIZATION ?= -Os
+  LLVM_ABITYPE := eabi
+  ARCHCPUFLAGS += -mfloat-abi=soft
 endif
 
-ifeq ($(CONFIG_ENDIAN_BIG),y)
-  TARGET_ARCH := armeb
+ifeq ($(CONFIG_ARM_THUMB),y)
+  LLVM_ARCHTYPE := thumbv7r
 else
-  TARGET_ARCH := arm
+  LLVM_ARCHTYPE := armv7r
 endif
 
-# NuttX buildroot under Linux or Cygwin
+ifeq ($(CONFIG_ARM_TOOLCHAIN_ARMCLANG),y)
 
-ifeq ($(CONFIG_ARMV7R_TOOLCHAIN),BUILDROOT)
-ifeq ($(CONFIG_ARMV7R_OABI_TOOLCHAIN),y)
-  CROSSDEV ?= $(TARGET_ARCH)-nuttx-elf-
-else
-  CROSSDEV ?= $(TARGET_ARCH)-nuttx-eabi-
-endif
-endif
+  ifeq ($(CONFIG_ARCH_CORTEXR4),y)
+    LDFLAGS += --cpu=Cortex-R4
+  else ifeq ($(CONFIG_ARCH_CORTEXR5),y)
+    ifeq ($(CONFIG_ARCH_FPU),y)
+      LDFLAGS += --cpu=Cortex-R5
+    else
+      LDFLAGS += --cpu=Cortex-R5.no_vfp
+    endif
+  else ifeq ($(CONFIG_ARCH_CORTEXR7),y)
+    ifeq ($(CONFIG_ARCH_FPU),y)
+      LDFLAGS += --cpu=Cortex-R7
+    else
+      LDFLAGS += --cpu=Cortex-R7.no_vfp
+    endif
+  endif
 
-# Generic GNU EABI toolchain
-
-ifeq ($(CONFIG_ARMV7R_TOOLCHAIN),GNU_EABI)
-  CROSSDEV ?= $(TARGET_ARCH)-none-eabi-
-endif
-
-# Default toolchain
-
-CC = $(CROSSDEV)gcc
-CXX = $(CROSSDEV)g++
-CPP = $(CROSSDEV)gcc -E -P -x c
-LD = $(CROSSDEV)ld
-STRIP = $(CROSSDEV)strip --strip-unneeded
-AR = $(CROSSDEV)ar rcs
-NM = $(CROSSDEV)nm
-OBJCOPY = $(CROSSDEV)objcopy
-OBJDUMP = $(CROSSDEV)objdump
-
-# Add the builtin library
-
-EXTRA_LIBS += -lgcc
-EXTRA_LIBPATHS += -L "${shell dirname "`$(CC) $(ARCHCPUFLAGS) --print-libgcc-file-name`"}"
-
-ifneq ($(CONFIG_LIBM),y)
-  EXTRA_LIBS += -lm
-  EXTRA_LIBPATHS += -L "${shell dirname "`$(CC) $(ARCHCPUFLAGS) --print-file-name=libm.a`"}"
 endif
 
-ifeq ($(CONFIG_LIBSUPCXX),y)
-  EXTRA_LIBS += -lsupc++
-  EXTRA_LIBPATHS += -L "${shell dirname "`$(CC) $(ARCHCPUFLAGS) --print-file-name=libsupc++.a`"}"
-endif
+include $(TOPDIR)/arch/arm/src/common/Toolchain.defs

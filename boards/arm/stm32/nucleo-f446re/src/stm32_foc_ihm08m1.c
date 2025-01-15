@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/stm32/nucleo-f446re/src/stm32_foc_ihm08m1.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -67,7 +69,7 @@
  * Private Data
  ****************************************************************************/
 
-/* FOC ADC configration:
+/* FOC ADC configuration:
  *    - Current Phase V    -> ADC1 INJ1 -> ADC1_IN0  (PA0)
  *    - Current Phase U    -> ADC1 INJ2 -> ADC1_IN11 (PC1)
  *    - Current Phase W    -> ADC1 INJ3 -> ADC1_IN10 (PC0)

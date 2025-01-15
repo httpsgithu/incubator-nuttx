@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/samd5e5/sam_sercom.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -28,8 +30,7 @@
 #include <stdbool.h>
 #include <assert.h>
 
-#include "arm_arch.h"
-
+#include "arm_internal.h"
 #include "sam_config.h"
 
 #include "chip.h"

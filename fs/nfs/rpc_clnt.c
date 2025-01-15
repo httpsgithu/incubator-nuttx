@@ -1,10 +1,11 @@
 /****************************************************************************
  * fs/nfs/rpc_clnt.c
  *
- *   Copyright (C) 2012-2013, 2018 Gregory Nutt. All rights reserved.
- *   Copyright (C) 2012 Jose Pablo Rojas Vargas. All rights reserved.
- *   Author: Jose Pablo Rojas Vargas <jrojas@nx-engineering.com>
- *           Gregory Nutt <gnutt@nuttx.org>
+ * SPDX-License-Identifier: BSD-3-Clause
+ * SPDX-FileCopyrightText: 2012-2018 Gregory Nutt. All rights reserved.
+ * SPDX-FileCopyrightText: 2012 Jose Pablo Rojas Vargas. All rights reserved.
+ * SPDX-FileContributor: Jose Pablo Rojas Vargas <jrojas@nx-engineering.com>
+ * SPDX-FileContributor: Gregory Nutt <gnutt@nuttx.org>
  *
  * Leveraged from OpenBSD:
  *
@@ -80,7 +81,6 @@
 
 #include <sys/socket.h>
 #include <sys/time.h>
-#include <queue.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <errno.h>
@@ -185,8 +185,8 @@ static int rpcclnt_socket(FAR struct rpcclnt *rpc, in_port_t rport)
 
   memcpy(&raddr, rpc->rc_name, sizeof(raddr));
 
+  memset(&laddr, 0, sizeof(laddr));
   laddr.ss_family = raddr.ss_family;
-  memset(laddr.ss_data, 0, sizeof(laddr.ss_data));
 
   if (raddr.ss_family == AF_INET6)
     {
@@ -196,7 +196,7 @@ static int rpcclnt_socket(FAR struct rpcclnt *rpc, in_port_t rport)
       if (rport != 0)
         {
           sin = (FAR struct sockaddr_in6 *)&raddr;
-          sin->sin6_port = htons(rport);
+          sin->sin6_port = HTONS(rport);
         }
 
       sin = (FAR struct sockaddr_in6 *)&laddr;
@@ -210,7 +210,7 @@ static int rpcclnt_socket(FAR struct rpcclnt *rpc, in_port_t rport)
       if (rport != 0)
         {
           sin = (FAR struct sockaddr_in *)&raddr;
-          sin->sin_port = htons(rport);
+          sin->sin_port = HTONS(rport);
         }
 
       sin = (FAR struct sockaddr_in *)&laddr;
@@ -241,31 +241,39 @@ static int rpcclnt_socket(FAR struct rpcclnt *rpc, in_port_t rport)
       goto bad;
     }
 
-  if (rpc->rc_sotype == SOCK_DGRAM)
+#ifdef CONFIG_NFS_DONT_BIND_TCP_SOCKET
+  if (rpc->rc_sotype == SOCK_STREAM)
     {
-      /* Some servers require that the client port be a reserved port
-       * number. We always allocate a reserved port, as this prevents
-       * filehandle disclosure through UDP port capture.
-       */
+      goto connect;
+    }
+#endif
 
-      do
-        {
-          *lport = htons(--port);
-          error = psock_bind(&rpc->rc_so, (FAR struct sockaddr *)&laddr,
-                             addrlen);
-          if (error < 0)
-            {
-              ferr("ERROR: psock_bind failed: %d\n", error);
-            }
-        }
-      while (error == -EADDRINUSE && port >= 512);
+  /* Some servers require that the client port be a reserved port
+   * number. We always allocate a reserved port, as this prevents
+   * filehandle disclosure through UDP port capture.
+   */
 
-      if (error)
+  do
+    {
+      *lport = htons(--port);
+      error = psock_bind(&rpc->rc_so, (FAR struct sockaddr *)&laddr,
+                         addrlen);
+      if (error < 0)
         {
           ferr("ERROR: psock_bind failed: %d\n", error);
-          goto bad;
         }
     }
+  while (error == -EADDRINUSE && port >= 512);
+
+  if (error)
+    {
+      ferr("ERROR: psock_bind failed: %d\n", error);
+      goto bad;
+    }
+
+#ifdef CONFIG_NFS_DONT_BIND_TCP_SOCKET
+connect:
+#endif
 
   /* Protocols that do not require connections could be optionally left
    * unconnected.  That would allow servers to reply from a port other than
@@ -588,7 +596,8 @@ int rpcclnt_connect(FAR struct rpcclnt *rpc)
 
   /* Do RPC to mountd. */
 
-  strncpy(request.mountd.mount.rpath, rpc->rc_path, 90);
+  strlcpy(request.mountd.mount.rpath, rpc->rc_path,
+          sizeof(request.mountd.mount.rpath));
   request.mountd.mount.len =
     txdr_unsigned(sizeof(request.mountd.mount.rpath));
 
@@ -716,7 +725,8 @@ void rpcclnt_disconnect(FAR struct rpcclnt *rpc)
 
   /* Do RPC to umountd. */
 
-  strncpy(request.mountd.umount.rpath, rpc->rc_path, 90);
+  strlcpy(request.mountd.umount.rpath, rpc->rc_path,
+          sizeof(request.mountd.umount.rpath));
   request.mountd.umount.len =
     txdr_unsigned(sizeof(request.mountd.umount.rpath));
 

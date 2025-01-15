@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/stm32/fire-stm32v2/src/stm32_selectlcd.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -32,8 +34,7 @@
 #include <arch/board/board.h>
 
 #include "chip.h"
-#include "arm_arch.h"
-
+#include "arm_internal.h"
 #include "stm32_gpio.h"
 #include "stm32.h"
 #include "fire-stm32v2.h"
@@ -164,9 +165,9 @@ void stm32_selectlcd(void)
 
   /* Bank1 NOR/SRAM timing register configuration */
 
-  putreg32(FSMC_BTR_ADDSET(1) | FSMC_BTR_ADDHLD(0) |
-           FSMC_BTR_DATAST(2) | FSMC_BTR_BUSTURN(0) |
-           FSMC_BTR_CLKDIV(0) | FSMC_BTR_DATLAT(0) |
+  putreg32(FSMC_BTR_ADDSET(1) | FSMC_BTR_ADDHLD(1) |
+           FSMC_BTR_DATAST(2) | FSMC_BTR_BUSTURN(1) |
+           FSMC_BTR_CLKDIV(1) | FSMC_BTR_DATLAT(2) |
            FSMC_BTR_ACCMODA, STM32_FSMC_BTR1);
 
   putreg32(0xffffffff, STM32_FSMC_BWTR4);

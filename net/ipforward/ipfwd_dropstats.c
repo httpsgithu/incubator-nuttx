@@ -1,6 +1,8 @@
 /****************************************************************************
  * net/ipforward/ipfwd_dropstats.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -167,7 +169,7 @@ void ipfwd_dropstats(FAR struct forward_s *fwd)
   if (fwd->f_domain == PF_INET)
 #endif
     {
-      ipv4_dropstats((FAR struct ipv4_hdr_s *)fwd->f_iob->io_data);
+      ipv4_dropstats((FAR struct ipv4_hdr_s *)IOB_DATA(fwd->f_iob));
     }
 #endif
 #ifdef CONFIG_NET_IPv6
@@ -175,7 +177,7 @@ void ipfwd_dropstats(FAR struct forward_s *fwd)
   else
 #endif
     {
-      ipv6_dropstats((FAR struct ipv6_hdr_s *)fwd->f_iob->io_data);
+      ipv6_dropstats((FAR struct ipv6_hdr_s *)IOB_DATA(fwd->f_iob));
     }
 #endif
 }

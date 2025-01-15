@@ -1,6 +1,8 @@
 /****************************************************************************
  * tools/cfgdefine.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -54,12 +56,16 @@ static const char *dequote_list[] =
   "CONFIG_INIT_ARGS",                     /* Argument list of entry point */
   "CONFIG_INIT_SYMTAB",                   /* Global symbol table */
   "CONFIG_INIT_NEXPORTS",                 /* Global symbol table size */
+  "CONFIG_INIT_ENTRYPOINT",               /* Name of entry point function */
   "CONFIG_MODLIB_SYMTAB_ARRAY",           /* Symbol table array used by modlib functions */
   "CONFIG_MODLIB_NSYMBOLS_VAR",           /* Variable holding number of symbols in the table */
   "CONFIG_PASS1_BUILDIR",                 /* Pass1 build directory */
   "CONFIG_PASS1_TARGET",                  /* Pass1 build target */
   "CONFIG_PASS1_OBJECT",                  /* Pass1 build object */
-  "CONFIG_USER_ENTRYPOINT",               /* Name of entry point function */
+  "CONFIG_TTY_LAUNCH_ENTRYPOINT",         /* Name of entry point from tty launch */
+  "CONFIG_TTY_LAUNCH_ARGS",               /* Argument list of entry point from tty launch */
+  "CONFIG_BOARD_MEMORY_RANGE",            /* Memory range for board */
+  "CONFIG_FAKE_AUDIO_DEVICE_PARAMS",      /* Arguments for the fake audio device */
 
   /* NxWidgets/NxWM */
 
@@ -73,8 +79,8 @@ static const char *dequote_list[] =
 
   /* apps/ definitions */
 
-  "CONFIG_SYSTEM_NSH_SYMTAB_ARRAYNAME",   /* Symbol table array name */
-  "CONFIG_SYSTEM_NSH_SYMTAB_COUNTNAME",   /* Name of the variable holding the number of symbols */
+  "CONFIG_NSH_SYMTAB_ARRAYNAME",          /* Symbol table array name */
+  "CONFIG_NSH_SYMTAB_COUNTNAME",          /* Name of the variable holding the number of symbols */
   NULL                                    /* Marks the end of the list */
 };
 
@@ -86,7 +92,7 @@ static const char *dequote_list[] =
 
 static char *skip_space(char *ptr)
 {
-  while (*ptr && isspace(*ptr)) ptr++;
+  while (*ptr && isspace((int)*ptr)) ptr++;
   return ptr;
 }
 
@@ -94,7 +100,7 @@ static char *skip_space(char *ptr)
 
 static char *find_name_end(char *ptr)
 {
-  while (*ptr && (isalnum(*ptr) || *ptr == '_')) ptr++;
+  while (*ptr && (isalnum((int)*ptr) || *ptr == '_')) ptr++;
   return ptr;
 }
 
@@ -102,7 +108,7 @@ static char *find_name_end(char *ptr)
 
 static char *find_value_end(char *ptr)
 {
-  while (*ptr && !isspace(*ptr))
+  while (*ptr && !isspace((int)*ptr))
     {
       if (*ptr == '"')
         {
@@ -111,7 +117,7 @@ static char *find_value_end(char *ptr)
         }
       else
         {
-          do ptr++; while (*ptr && !isspace(*ptr) && *ptr != '"');
+          do ptr++; while (*ptr && !isspace((int)*ptr) && *ptr != '"');
         }
     }
 

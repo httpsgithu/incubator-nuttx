@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/lc823450/lc823450_spifi2.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -28,8 +30,7 @@
 #include <errno.h>
 
 #include "chip.h"
-#include "arm_arch.h"
-
+#include "arm_internal.h"
 #include "lc823450_syscontrol.h"
 #include "lc823450_spifi2.h"
 
@@ -159,7 +160,6 @@ static void spiflash_quad_enable_winbond(void)
   putreg32(SF_CTL_ACT, SF_CTL);
 
   wait_txfifo_empty();
-  return;
 }
 
 /****************************************************************************
@@ -211,7 +211,6 @@ static void spiflash_quad_enable_macronix(void)
   putreg32(SF_CTL_ACT, SF_CTL);
 
   wait_txfifo_empty();
-  return;
 }
 
 /****************************************************************************

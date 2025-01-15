@@ -1,6 +1,8 @@
 /****************************************************************************
  * net/socket/socket.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -82,63 +84,82 @@ int psock_socket(int domain, int type, int protocol,
   FAR const struct sock_intf_s *sockif = NULL;
   int ret;
 
+  if (type & ~(SOCK_CLOEXEC | SOCK_NONBLOCK | SOCK_TYPE_MASK))
+    {
+      return -EINVAL;
+    }
+
   /* Initialize the socket structure */
 
   psock->s_domain = domain;
   psock->s_proto  = protocol;
   psock->s_conn   = NULL;
-#if defined(CONFIG_NET_TCP_WRITE_BUFFERS) || defined(CONFIG_NET_UDP_WRITE_BUFFERS)
-  psock->s_sndcb  = NULL;
-#endif
-
-  if (type & SOCK_NONBLOCK)
-    {
-      psock->s_flags |= _SF_NONBLOCK;
-    }
-
-  type            &= SOCK_TYPE_MASK;
-  psock->s_type   = type;
+  psock->s_type   = type & SOCK_TYPE_MASK;
 
 #ifdef CONFIG_NET_USRSOCK
-  if (domain != PF_LOCAL && domain != PF_UNSPEC && domain != PF_RPMSG)
+  /* Get the usrsock interface */
+
+  sockif = &g_usrsock_sockif;
+  psock->s_sockif = sockif;
+
+  ret = sockif->si_setup(psock);
+
+  /* When usrsock daemon returns -ENOSYS or -ENOTSUP, it means to use
+   * kernel's network stack, so fallback to kernel socket.
+   * When -ENETDOWN is returned, it means the usrsock daemon was never
+   * launched or is no longer running, so fallback to kernel socket.
+   */
+
+  if (ret == 0 || (ret != -ENOSYS && ret != -ENOTSUP && ret != -ENETDOWN))
     {
-      /* Handle special setup for USRSOCK sockets (user-space networking
-       * stack).
+      return ret;
+    }
+
+#endif
+
+  /* Get the socket interface */
+
+  sockif = net_sockif(domain, psock->s_type, psock->s_proto);
+  if (sockif == NULL)
+    {
+      nerr("ERROR: socket address family unsupported: %d\n", domain);
+#ifdef CONFIG_NET_USRSOCK
+
+      /* We tried to fallback to kernel socket, but one is not available,
+       * so use the return code from usrsock.
        */
 
-      ret = g_usrsock_sockif.si_setup(psock, protocol);
-      psock->s_sockif = &g_usrsock_sockif;
+      return ret;
+#endif
+      return -EAFNOSUPPORT;
+    }
+
+  /* The remaining of the socket initialization depends on the address
+   * family.
+   */
+
+  DEBUGASSERT(sockif->si_setup != NULL);
+  psock->s_sockif = sockif;
+
+  ret = sockif->si_setup(psock);
+  if (ret >= 0)
+    {
+      FAR struct socket_conn_s *conn = psock->s_conn;
+
+      if (type & SOCK_NONBLOCK)
+        {
+          conn->s_flags |= _SF_NONBLOCK;
+        }
+
+      /* The socket has been successfully initialized */
+
+      conn->s_flags |= _SF_INITD;
     }
   else
-#endif /* CONFIG_NET_USRSOCK */
     {
-      /* Get the socket interface */
-
-      sockif = net_sockif(domain, type, protocol);
-      if (sockif == NULL)
-        {
-          nerr("ERROR: socket address family unsupported: %d\n", domain);
-          return -EAFNOSUPPORT;
-        }
-
-      /* The remaining of the socket initialization depends on the address
-       * family.
-       */
-
-      DEBUGASSERT(sockif->si_setup != NULL);
-      psock->s_sockif = sockif;
-
-      ret = sockif->si_setup(psock, protocol);
-      if (ret < 0)
-        {
-          nerr("ERROR: socket si_setup() failed: %d\n", ret);
-          return ret;
-        }
+      nerr("ERROR: socket si_setup() failed: %d\n", ret);
     }
 
-  /* The socket has been successfully initialized */
-
-  psock->s_flags |= _SF_INITD;
   return ret;
 }
 

@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/samv7/hardware/sam_chipid.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -49,7 +51,7 @@
 #define CHIPID_CIDR_VERSION_MASK        (0x1f << CHIPID_CIDR_VERSION_SHIFT)
 #define CHIPID_CIDR_EPROC_SHIFT         (5)      /* Bits 5-7:  Embedded Processor */
 #define CHIPID_CIDR_EPROC_MASK          (7 << CHIPID_CIDR_EPROC_SHIFT)
-#  define CHIPID_CIDR_EPROC_CORTEXM7    (0 << CHIPID_CIDR_EPROC_SHIFT) /* Cortex-M7*/
+#  define CHIPID_CIDR_EPROC_CORTEXM7    (0 << CHIPID_CIDR_EPROC_SHIFT) /* Cortex-M7 */
 #  define CHIPID_CIDR_EPROC_ARM946ES    (1 << CHIPID_CIDR_EPROC_SHIFT) /* ARM946E-S */
 #  define CHIPID_CIDR_EPROC_ARM7TDMI    (2 << CHIPID_CIDR_EPROC_SHIFT) /* ARM7TDMI */
 #  define CHIPID_CIDR_EPROC_CORTEXM3    (3 << CHIPID_CIDR_EPROC_SHIFT) /* Cortex-M3 */

@@ -1,6 +1,8 @@
 /****************************************************************************
  * drivers/input/button_lower.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -60,9 +62,10 @@ static uint32_t g_btnnum;
 
 static const struct btn_lowerhalf_s g_btnlower =
 {
-  .bl_supported  = btn_supported,
-  .bl_buttons    = btn_buttons,
-  .bl_enable     = btn_enable,
+  btn_supported,        /* bl_supported */
+  btn_buttons,          /* bl_buttons */
+  btn_enable,           /* bl_enable */
+  NULL                  /* bl_write */
 };
 
 /* Current interrupt handler and argument */

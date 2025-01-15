@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/xtensa/esp32/common/include/esp32_board_wlan.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -18,8 +20,8 @@
  *
  ****************************************************************************/
 
-#ifndef __BOARDS_XTENSA_ESP32_COMMON_INCLUDE_BOARD_WLAN_H
-#define __BOARDS_XTENSA_ESP32_COMMON_INCLUDE_BOARD_WLAN_H
+#ifndef __BOARDS_XTENSA_ESP32_COMMON_INCLUDE_ESP32_BOARD_WLAN_H
+#define __BOARDS_XTENSA_ESP32_COMMON_INCLUDE_ESP32_BOARD_WLAN_H
 
 /****************************************************************************
  * Included Files
@@ -46,7 +48,7 @@ extern "C"
  * Public Function Prototypes
  ****************************************************************************/
 
-#ifdef CONFIG_ESP32_WIRELESS
+#ifdef CONFIG_ESP32_WIFI
 
 /****************************************************************************
  * Name: board_wlan_init
@@ -62,7 +64,7 @@ extern "C"
 
 int board_wlan_init(void);
 
-#endif /* CONFIG_ESP32_WIRELESS */
+#endif /* CONFIG_ESP32_WIFI */
 
 #undef EXTERN
 #if defined(__cplusplus)
@@ -70,4 +72,4 @@ int board_wlan_init(void);
 #endif
 
 #endif /* __ASSEMBLY__ */
-#endif /* __BOARDS_XTENSA_ESP32_COMMON_INCLUDE_BOARD_WLAN_H */
+#endif /* __BOARDS_XTENSA_ESP32_COMMON_INCLUDE_ESP32_BOARD_WLAN_H */

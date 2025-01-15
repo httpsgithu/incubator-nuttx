@@ -1,6 +1,8 @@
 /****************************************************************************
  * libs/libc/modlib/modlib_unload.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -27,6 +29,7 @@
 #include <stdlib.h>
 #include <debug.h>
 
+#include <nuttx/arch.h>
 #include <nuttx/lib/modlib.h>
 
 #include "libc.h"
@@ -50,26 +53,75 @@
  *
  ****************************************************************************/
 
-int modlib_unload(struct mod_loadinfo_s *loadinfo)
+int modlib_unload(FAR struct mod_loadinfo_s *loadinfo)
 {
   /* Free all working buffers */
 
   modlib_freebuffers(loadinfo);
 
+#ifdef CONFIG_ARCH_ADDRENV
+  if (loadinfo->addrenv != NULL)
+    {
+      modlib_addrenv_free(loadinfo);
+    }
+  else
+#endif
   /* Release memory holding the relocated ELF image */
 
-  if (loadinfo->textalloc != 0)
+  /* ET_DYN has a single allocation so we only free textalloc */
+
+  if (loadinfo->ehdr.e_type != ET_DYN)
     {
-#if defined(CONFIG_ARCH_USE_TEXT_HEAP)
-      up_textheap_free((FAR void *)loadinfo->textalloc);
+#ifdef CONFIG_ARCH_USE_SEPARATED_SECTION
+      int i;
+
+      for (i = 0; loadinfo->sectalloc[i] != 0 &&
+                  i < loadinfo->ehdr.e_shnum; i++)
+        {
+#  ifdef CONFIG_ARCH_USE_TEXT_HEAP
+          if (up_textheap_heapmember((FAR void *)loadinfo->sectalloc[i]))
+            {
+              up_textheap_free((FAR void *)loadinfo->sectalloc[i]);
+            }
+          else
+#  endif
+
+#  ifdef CONFIG_ARCH_USE_DATA_HEAP
+          if (up_dataheap_heapmember((FAR void *)loadinfo->sectalloc[i]))
+            {
+              up_dataheap_free((FAR void *)loadinfo->sectalloc[i]);
+            }
+          else
+#  endif
+            {
+              lib_free((FAR void *)loadinfo->sectalloc[i]);
+            }
+        }
+
+      lib_free(loadinfo->sectalloc);
 #else
-      lib_free((FAR void *)loadinfo->textalloc);
+      if (loadinfo->textalloc != 0 && loadinfo->xipbase == 0)
+        {
+#  if defined(CONFIG_ARCH_USE_TEXT_HEAP)
+          up_textheap_free((FAR void *)loadinfo->textalloc);
+#  else
+          lib_free((FAR void *)loadinfo->textalloc);
+#  endif
+        }
+
+      if (loadinfo->datastart != 0)
+        {
+#  if defined(CONFIG_ARCH_USE_DATA_HEAP)
+          up_dataheap_free((FAR void *)loadinfo->datastart);
+#  else
+          lib_free((FAR void *)loadinfo->datastart);
+#  endif
+        }
 #endif
     }
-
-  if (loadinfo->datastart != 0)
+  else
     {
-      lib_free((FAR void *)loadinfo->datastart);
+      lib_free((FAR void *)loadinfo->textalloc);
     }
 
   /* Clear out all indications of the allocated address environment */

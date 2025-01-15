@@ -1,14 +1,10 @@
 /****************************************************************************
  * arch/arm/src/tiva/hardware/cc13x0/cc13x0_ioc.h
  *
- *   Copyright (C) 2018 Gregory Nutt. All rights reserved.
- *   Author: Gregory Nutt <gnutt@nuttx.org>
- *
- * Technical content derives from a TI header file that has a compatible
- * BSD license:
- *
- *   Copyright (c) 2015-2017, Texas Instruments Incorporated
- *   All rights reserved.
+ * SPDX-License-Identifier: BSD-3-Clause
+ * SPDX-FileCopyrightText: 2018 Gregory Nutt. All rights reserved.
+ * SPDX-FileCopyrightText: 2015-2017, Texas Instruments Incorporated
+ * SPDX-FileContributor: Gregory Nutt <gnutt@nuttx.org>
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -39,8 +35,8 @@
  *
  ****************************************************************************/
 
-#ifndef __ARCH_ARM_SRC_TIVA_HARDWARE_CC13X20_CC26X2CC13X20_CC26X2IOC_H
-#define __ARCH_ARM_SRC_TIVA_HARDWARE_CC13X20_CC26X2CC13X20_CC26X2IOC_H
+#ifndef __ARCH_ARM_SRC_TIVA_HARDWARE_CC13X0_CC13X0_IOC_H
+#define __ARCH_ARM_SRC_TIVA_HARDWARE_CC13X0_CC13X0_IOC_H
 
 /****************************************************************************
  * Included Files
@@ -239,4 +235,4 @@
  * Public Functions Prototypes
  ****************************************************************************/
 
-#endif /* __ARCH_ARM_SRC_TIVA_HARDWARE_CC13X20_CC26X2CC13X20_CC26X2IOC_H */
+#endif /* __ARCH_ARM_SRC_TIVA_HARDWARE_CC13X0_CC13X0_IOC_H */

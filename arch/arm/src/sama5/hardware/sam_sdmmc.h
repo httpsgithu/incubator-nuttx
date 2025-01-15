@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/sama5/hardware/sam_sdmmc.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  *  Licensed to the Apache Software Foundation (ASF) under one or more
  *  contributor license agreements.  See the NOTICE file distributed with
  *  this work for additional information regarding copyright ownership.  The
@@ -18,8 +20,8 @@
  *
  ****************************************************************************/
 
-#ifndef __ARCH_ARM_SRC_SAMA5_HARDWARE_SAMA5_SDMMC_H
-#define __ARCH_ARM_SRC_SAMA5_HARDWARE_SAMA5_SDMMC_H
+#ifndef __ARCH_ARM_SRC_SAMA5_HARDWARE_SAM_SDMMC_H
+#define __ARCH_ARM_SRC_SAMA5_HARDWARE_SAM_SDMMC_H
 
 /****************************************************************************
  * Included Files
@@ -513,9 +515,9 @@
 #define SDMMC_MAX_DIV_SPEC_3    2046
 
 /* Software Reset Register */
-#define  SDMMC_RESET_ALL	0x01
-#define  SDMMC_RESET_CMD	0x02
-#define  SDMMC_RESET_DATA	0x04
+#define  SDMMC_RESET_ALL    0x01
+#define  SDMMC_RESET_CMD    0x02
+#define  SDMMC_RESET_DATA   0x04
 
 /* Host Control 2 Register */
 #define SDMMC_UHSMS_MASK                    (7)         /* Bits 0-2: UHS Mode Select */
@@ -591,16 +593,16 @@ enum bus_mode
  */
 
 #ifdef CONFIG_SAMA5_SDMMC_50MHZ
-# define SAMA5_SDMMC_BUS_SPEED 50000000
+#  define SAMA5_SDMMC_BUS_SPEED 50000000
 #else
-# define SAMA5_SDMMC_BUS_SPEED 25000000
+#  define SAMA5_SDMMC_BUS_SPEED 25000000
 #endif
 
 /* SDMA default buffer size - needed to reset the start address after an SDMA
  * Buffer Boundary pause event.
  */
 
-#define SDMMC_DEFAULT_BOUNDARY_SIZE	(512 * 1024)
+#define SDMMC_DEFAULT_BOUNDARY_SIZE (512 * 1024)
 
 /****************************************************************************
  * Public Types
@@ -610,4 +612,4 @@ enum bus_mode
  * Public Data
  ****************************************************************************/
 
-#endif /* __ARCH_ARM_SRC_SAMA5_HARDWARE_SAMA5_SDMMC_H */
+#endif /* __ARCH_ARM_SRC_SAMA5_HARDWARE_SAM_SDMMC_H */

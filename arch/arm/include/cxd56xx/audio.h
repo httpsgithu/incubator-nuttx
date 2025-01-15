@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/include/cxd56xx/audio.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -232,6 +234,14 @@ enum cxd56_audio_dma_path_e
 
   CXD56_AUDIO_DMA_PATH_MIC_TO_MEM = 0,
 
+  /* I2S0 to memory */
+
+  CXD56_AUDIO_DMA_PATH_I2S0_TO_MEM,
+
+  /* I2S1 to memory */
+
+  CXD56_AUDIO_DMA_PATH_I2S1_TO_MEM,
+
   /* Memory to BUS I/F1 */
 
   CXD56_AUDIO_DMA_PATH_MEM_TO_BUSIF1,
@@ -294,11 +304,19 @@ enum cxd56_audio_dma_e
 
   CXD56_AUDIO_DMAC_MIC = 0,
 
-  /* I2S_OUT */
+  /* I2S1 Input */
+
+  CXD56_AUDIO_DMAC_I2S0_UP,
+
+  /* I2S1 Output */
 
   CXD56_AUDIO_DMAC_I2S0_DOWN,
 
-  /* I2S2_OUT */
+  /* I2S2 Input */
+
+  CXD56_AUDIO_DMAC_I2S1_UP,
+
+  /* I2S2 Output */
 
   CXD56_AUDIO_DMAC_I2S1_DOWN
 };
@@ -539,7 +557,7 @@ CXD56_AUDIO_ECODE cxd56_audio_poweroff_dnc(void);
  */
 
 CXD56_AUDIO_ECODE cxd56_audio_en_dnc(cxd56_audio_dnc_id_t id,
-                                     FAR cxd56_audio_dnc_bin_t *bin);
+                                     cxd56_audio_dnc_bin_t *bin);
 
 /* Disable DNC
  *
@@ -557,7 +575,7 @@ CXD56_AUDIO_ECODE cxd56_audio_dis_dnc(cxd56_audio_dnc_id_t id);
  * CXD56_AUDIO_ECODE return code
  */
 
-CXD56_AUDIO_ECODE cxd56_audio_en_deq(FAR cxd56_audio_deq_coef_t *coef);
+CXD56_AUDIO_ECODE cxd56_audio_en_deq(cxd56_audio_deq_coef_t *coef);
 
 /* Disable DEQ
  *
@@ -692,7 +710,7 @@ CXD56_AUDIO_ECODE cxd56_audio_stop_beep(void);
  * CXD56_AUDIO_ECODE return code
  */
 
-CXD56_AUDIO_ECODE cxd56_audio_set_micgain(FAR cxd56_audio_mic_gain_t *gain);
+CXD56_AUDIO_ECODE cxd56_audio_set_micgain(cxd56_audio_mic_gain_t *gain);
 
 /* Set DEQ table
  *
@@ -703,7 +721,7 @@ CXD56_AUDIO_ECODE cxd56_audio_set_micgain(FAR cxd56_audio_mic_gain_t *gain);
  */
 
 CXD56_AUDIO_ECODE cxd56_audio_set_deq(bool en,
-                                      FAR cxd56_audio_deq_coef_t *deq);
+                                      cxd56_audio_deq_coef_t *deq);
 
 /* Get dma handle
  *
@@ -714,7 +732,7 @@ CXD56_AUDIO_ECODE cxd56_audio_set_deq(bool en,
  */
 
 CXD56_AUDIO_ECODE cxd56_audio_get_dmahandle(cxd56_audio_dma_path_t path,
-                                            FAR cxd56_audio_dma_t *handle);
+                                            cxd56_audio_dma_t *handle);
 
 /* Free dma handle
  *
@@ -723,7 +741,7 @@ CXD56_AUDIO_ECODE cxd56_audio_get_dmahandle(cxd56_audio_dma_path_t path,
  * CXD56_AUDIO_ECODE return code
  */
 
-CXD56_AUDIO_ECODE cxd56_audio_free_dmahandle(FAR cxd56_audio_dma_t handle);
+CXD56_AUDIO_ECODE cxd56_audio_free_dmahandle(cxd56_audio_dma_t handle);
 
 /* Set internal data path
  *
@@ -747,7 +765,7 @@ CXD56_AUDIO_ECODE cxd56_audio_set_datapath(cxd56_audio_signal_t sig,
 
 CXD56_AUDIO_ECODE cxd56_audio_init_dma(cxd56_audio_dma_t handle,
                                        cxd56_audio_samp_fmt_t fmt,
-                                       FAR uint8_t *ch_num);
+                                       uint8_t *ch_num);
 
 /* Initialize dma transfer function
  *
@@ -758,7 +776,7 @@ CXD56_AUDIO_ECODE cxd56_audio_init_dma(cxd56_audio_dma_t handle,
  */
 
 CXD56_AUDIO_ECODE cxd56_audio_set_dmacb(cxd56_audio_dma_t handle,
-                                        FAR cxd56_audio_dma_cb_t cb);
+                                        cxd56_audio_dma_cb_t cb);
 
 /* Enable dma interrupt
  *

@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/stm32/hymini-stm32v/src/stm32_r61505u.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -37,7 +39,7 @@
 #include <nuttx/spi/spi.h>
 #include <nuttx/lcd/lcd.h>
 
-#include "arm_arch.h"
+#include "arm_internal.h"
 #include "stm32.h"
 #include "hymini-stm32v.h"
 
@@ -118,18 +120,18 @@ static void lcd_clear(uint16_t color);
 
 /* LCD Data Transfer Methods */
 
-static int lcd_putrun(fb_coord_t row, fb_coord_t col,
-                      FAR const uint8_t *buffer, size_t npixels);
-static int lcd_getrun(fb_coord_t row, fb_coord_t col,
-                      FAR uint8_t *buffer, size_t npixels);
+static int lcd_putrun(struct lcd_dev_s *dev, fb_coord_t row, fb_coord_t col,
+                      const uint8_t *buffer, size_t npixels);
+static int lcd_getrun(struct lcd_dev_s *dev, fb_coord_t row, fb_coord_t col,
+                      uint8_t *buffer, size_t npixels);
 
 /* LCD Configuration */
 
-static int lcd_getvideoinfo(FAR struct lcd_dev_s *dev,
-                            FAR struct fb_videoinfo_s *vinfo);
-static int lcd_getplaneinfo(FAR struct lcd_dev_s *dev,
+static int lcd_getvideoinfo(struct lcd_dev_s *dev,
+                            struct fb_videoinfo_s *vinfo);
+static int lcd_getplaneinfo(struct lcd_dev_s *dev,
                             unsigned int planeno,
-                            FAR struct lcd_planeinfo_s *pinfo);
+                            struct lcd_planeinfo_s *pinfo);
 
 /* LCD RGB Mapping */
 
@@ -295,8 +297,8 @@ static void stm32_selectlcd(void)
 
   /* Bank1 NOR/SRAM timing register configuration */
 
-  putreg32(FSMC_BTR_ADDSET(2)  | FSMC_BTR_ADDHLD(0) | FSMC_BTR_DATAST(2) |
-           FSMC_BTR_BUSTURN(0) | FSMC_BTR_CLKDIV(0) | FSMC_BTR_DATLAT(0) |
+  putreg32(FSMC_BTR_ADDSET(2)  | FSMC_BTR_ADDHLD(1) | FSMC_BTR_DATAST(2) |
+           FSMC_BTR_BUSTURN(1) | FSMC_BTR_CLKDIV(1) | FSMC_BTR_DATLAT(2) |
            FSMC_BTR_ACCMODA,
            STM32_FSMC_BTR1);
 
@@ -398,10 +400,10 @@ static inline void lcd_gramselect(void)
 static void lcd_setcursor(unsigned int x, unsigned int y)
 {
 #if defined(CONFIG_LCD_PORTRAIT) || defined (CONFIG_LCD_RPORTRAIT)
-# if defined (CONFIG_LCD_RPORTRAIT)
+#  if defined (CONFIG_LCD_RPORTRAIT)
   x = (LCD_XRES - 1) - x;
   y = (LCD_YRES - 1) - y;
-# endif
+#  endif
   write_reg(0x20, x); /* Row */
   write_reg(0x21, y); /* Line */
 #endif
@@ -428,12 +430,11 @@ static void lcd_setcursor(unsigned int x, unsigned int y)
  *
  ****************************************************************************/
 
-static int lcd_putrun(fb_coord_t row, fb_coord_t col,
-                      FAR const uint8_t *buffer,
-                      size_t npixels)
+static int lcd_putrun(struct lcd_dev_s *dev, fb_coord_t row, fb_coord_t col,
+                      const uint8_t *buffer, size_t npixels)
 {
   int i;
-  FAR const uint16_t *src = (FAR const uint16_t *) buffer;
+  const uint16_t *src = (const uint16_t *) buffer;
 
   /* Buffer must be provided and aligned to a 16-bit address boundary */
 
@@ -466,10 +467,10 @@ static int lcd_putrun(fb_coord_t row, fb_coord_t col,
  *
  ****************************************************************************/
 
-static int lcd_getrun(fb_coord_t row, fb_coord_t col, FAR uint8_t *buffer,
-                      size_t npixels)
+static int lcd_getrun(struct lcd_dev_s *dev, fb_coord_t row, fb_coord_t col,
+                      uint8_t *buffer, size_t npixels)
 {
-  FAR uint16_t *dest = (FAR uint16_t *) buffer;
+  uint16_t *dest = (uint16_t *) buffer;
   int i;
 
   /* Buffer must be provided and aligned to a 16-bit address boundary */
@@ -501,8 +502,8 @@ static int lcd_getrun(fb_coord_t row, fb_coord_t col, FAR uint8_t *buffer,
  *
  ****************************************************************************/
 
-static int lcd_getvideoinfo(FAR struct lcd_dev_s *dev,
-                            FAR struct fb_videoinfo_s *vinfo)
+static int lcd_getvideoinfo(struct lcd_dev_s *dev,
+                            struct fb_videoinfo_s *vinfo)
 {
   DEBUGASSERT(dev && vinfo);
   ginfo("fmt: %d xres: %d yres: %d nplanes: %d\n",
@@ -521,13 +522,14 @@ static int lcd_getvideoinfo(FAR struct lcd_dev_s *dev,
  *
  ****************************************************************************/
 
-static int lcd_getplaneinfo(FAR struct lcd_dev_s *dev, unsigned int planeno,
-                            FAR struct lcd_planeinfo_s *pinfo)
+static int lcd_getplaneinfo(struct lcd_dev_s *dev, unsigned int planeno,
+                            struct lcd_planeinfo_s *pinfo)
 {
   DEBUGASSERT(dev && pinfo && planeno == 0);
   ginfo("planeno: %d bpp: %d\n", planeno, g_planeinfo.bpp);
 
   memcpy(pinfo, &g_planeinfo, sizeof(struct lcd_planeinfo_s));
+  pinfo->dev = dev;
   return OK;
 }
 
@@ -809,7 +811,7 @@ static void lcd_backlight(void)
 
   /* Select the output polarity level == HIGH */
 
-  ccer &= !ATIM_CCER_CC2P;
+  ccer &= ~ATIM_CCER_CC2P;
 
   /* Enable channel 2 */
 
@@ -915,7 +917,7 @@ int board_lcd_initialize(void)
  *
  ****************************************************************************/
 
-FAR struct lcd_dev_s *board_lcd_getdev(int lcddev)
+struct lcd_dev_s *board_lcd_getdev(int lcddev)
 {
   DEBUGASSERT(lcddev == 0);
   return &g_lcddev.dev;

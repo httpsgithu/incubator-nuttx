@@ -1,6 +1,8 @@
 /****************************************************************************
  * libs/libc/termios/lib_cfmakeraw.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -30,7 +32,7 @@
  ****************************************************************************/
 
 /****************************************************************************
- * Name: cfgetspeed
+ * Name: cfmakeraw
  *
  * Description:
  *   The cfmakeraw() function is a non-POSIX function that sets the terminal
@@ -50,6 +52,8 @@ void cfmakeraw(FAR struct termios *termiosp)
                          | INLCR | IGNCR | ICRNL | IXON);
   termiosp->c_oflag &= ~OPOST;
   termiosp->c_lflag &= ~(ECHO | ECHONL | ICANON | ISIG | IEXTEN);
+#ifdef CONFIG_SERIAL_TERMIOS
   termiosp->c_cflag &= ~(CSIZE | PARENB);
   termiosp->c_cflag |= CS8;
+#endif
 }

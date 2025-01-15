@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/risc-v/src/common/riscv_idle.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -25,6 +27,8 @@
 #include <nuttx/config.h>
 #include <nuttx/irq.h>
 #include <nuttx/arch.h>
+#include <nuttx/board.h>
+#include <arch/board/board.h>
 
 #include "riscv_internal.h"
 
@@ -53,4 +57,21 @@ void up_idle(void)
    */
 
   nxsched_process_timer();
+#else
+
+  /* Does the board support an IDLE LED to indicate that the board is in the
+   * IDLE state?
+   */
+
+#ifdef CONFIG_ARCH_LEDS_CPU_ACTIVITY
+  board_autoled_off(LED_CPU);
+#endif
+
+  /* This would be an appropriate place to put some MCU-specific logic to
+   * sleep in a reduced power mode until an interrupt occurs to save power
+   */
+
+  asm("WFI");
+
+#endif
 }

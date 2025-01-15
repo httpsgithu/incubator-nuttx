@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/include/armv6-m/irq.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -43,6 +45,10 @@
  * Pre-processor Prototypes
  ****************************************************************************/
 
+#ifdef __ghs__
+#  define __ARM_ARCH 6
+#endif
+
 /* Configuration ************************************************************/
 
 /* If this is a kernel build,
@@ -69,17 +75,9 @@
 #define REG_R9              (7)  /* R9 */
 #define REG_R10             (8)  /* R10 */
 #define REG_R11             (9)  /* R11 */
-
-/* In the kernel build, we may return to either privileged or unprivileged
- * modes.
- */
-
-#ifdef CONFIG_BUILD_PROTECTED
-#  define REG_EXC_RETURN    (10) /* EXC_RETURN */
-#  define SW_XCPT_REGS      (11)
-#else
-#  define SW_XCPT_REGS      (10)
-#endif
+#define REG_CONTROL         (10) /* CONTROL */
+#define REG_EXC_RETURN      (11) /* EXC_RETURN */
+#define SW_XCPT_REGS        (12)
 
 /* The total number of registers saved by software */
 
@@ -150,6 +148,7 @@ struct xcpt_syscall_s
 {
   uint32_t excreturn;   /* The EXC_RETURN value */
   uint32_t sysreturn;   /* The return PC */
+  uint32_t ctrlreturn;  /* The return CONTROL value */
 };
 #endif
 
@@ -159,27 +158,13 @@ struct xcpt_syscall_s
 
 struct xcptcontext
 {
-  /* The following function pointer is non-zero if there
-   * are pending signals to be processed.
-   */
-
-  void *sigdeliver; /* Actual type is sig_deliver_t */
-
-  /* These are saved copies of LR, PRIMASK, and xPSR used during
+  /* These are saved copies of the context used during
    * signal processing.
-   *
-   * REVISIT:  Because there is only one copy of these save areas,
-   * only a single signal handler can be active.  This precludes
-   * queuing of signal actions.  As a result, signals received while
-   * another signal handler is executing will be ignored!
    */
 
-  uint32_t saved_pc;
-  uint32_t saved_primask;
-  uint32_t saved_xpsr;
-#ifdef CONFIG_BUILD_PROTECTED
-  uint32_t saved_lr;
+  uint32_t *saved_regs;
 
+#ifdef CONFIG_BUILD_PROTECTED
   /* This is the saved address to use when returning from a user-space
    * signal handler.
    */
@@ -196,17 +181,22 @@ struct xcptcontext
   struct xcpt_syscall_s syscall[CONFIG_SYS_NNEST];
 #endif
 
-  /* Register save area */
+  /* Register save area with XCPTCONTEXT_SIZE, only valid when:
+   * 1.The task isn't running or
+   * 2.The task is interrupted
+   * otherwise task is running, and regs contain the stale value.
+   */
 
-  uint32_t regs[XCPTCONTEXT_REGS];
+  uint32_t *regs;
 };
-#endif
+
+/****************************************************************************
+ * Public Data
+ ****************************************************************************/
 
 /****************************************************************************
  * Inline functions
  ****************************************************************************/
-
-#ifndef __ASSEMBLY__
 
 /* Name: up_irq_save, up_irq_restore, and friends.
  *
@@ -219,8 +209,7 @@ struct xcptcontext
 
 /* Get/set the PRIMASK register */
 
-static inline uint8_t getprimask(void) inline_function;
-static inline uint8_t getprimask(void)
+static always_inline_function uint8_t getprimask(void)
 {
   uint32_t primask;
   __asm__ __volatile__
@@ -233,8 +222,7 @@ static inline uint8_t getprimask(void)
   return (uint8_t)primask;
 }
 
-static inline void setprimask(uint32_t primask) inline_function;
-static inline void setprimask(uint32_t primask)
+static always_inline_function void setprimask(uint32_t primask)
 {
   __asm__ __volatile__
     (
@@ -246,16 +234,14 @@ static inline void setprimask(uint32_t primask)
 
 /* Disable IRQs */
 
-static inline void up_irq_disable(void) inline_function;
-static inline void up_irq_disable(void)
+static always_inline_function void up_irq_disable(void)
 {
   __asm__ __volatile__ ("\tcpsid  i\n");
 }
 
 /* Save the current primask state & disable IRQs */
 
-static inline irqstate_t up_irq_save(void) inline_function;
-static inline irqstate_t up_irq_save(void)
+static always_inline_function irqstate_t up_irq_save(void)
 {
   unsigned short primask;
 
@@ -276,16 +262,14 @@ static inline irqstate_t up_irq_save(void)
 
 /* Enable IRQs */
 
-static inline void up_irq_enable(void) inline_function;
-static inline void up_irq_enable(void)
+static always_inline_function void up_irq_enable(void)
 {
   __asm__ __volatile__ ("\tcpsie  i\n");
 }
 
 /* Restore saved primask state */
 
-static inline void up_irq_restore(irqstate_t flags) inline_function;
-static inline void up_irq_restore(irqstate_t flags)
+static always_inline_function void up_irq_restore(irqstate_t flags)
 {
   /* If bit 0 of the primask is 0, then we need to restore
    * interrupts.
@@ -301,8 +285,7 @@ static inline void up_irq_restore(irqstate_t flags)
 
 /* Get/set IPSR */
 
-static inline uint32_t getipsr(void) inline_function;
-static inline uint32_t getipsr(void)
+static always_inline_function uint32_t getipsr(void)
 {
   uint32_t ipsr;
   __asm__ __volatile__
@@ -317,8 +300,7 @@ static inline uint32_t getipsr(void)
 
 /* Get/set CONTROL */
 
-static inline uint32_t getcontrol(void) inline_function;
-static inline uint32_t getcontrol(void)
+static always_inline_function uint32_t getcontrol(void)
 {
   uint32_t control;
   __asm__ __volatile__
@@ -331,8 +313,7 @@ static inline uint32_t getcontrol(void)
   return control;
 }
 
-static inline void setcontrol(uint32_t control) inline_function;
-static inline void setcontrol(uint32_t control)
+static always_inline_function void setcontrol(uint32_t control)
 {
   __asm__ __volatile__
     (
@@ -342,17 +323,60 @@ static inline void setcontrol(uint32_t control)
       : "memory");
 }
 
-#endif /* __ASSEMBLY__ */
+static always_inline_function uint32_t getpsp(void)
+{
+  uint32_t psp;
+
+  __asm__ __volatile__
+    (
+     "\tmrs  %0, psp\n"
+     : "=r" (psp)
+     :
+     : "memory");
+
+  return psp;
+}
 
 /****************************************************************************
- * Public Data
+ * Name: up_cpu_index
+ *
+ * Description:
+ *   Return the real core number regardless CONFIG_SMP setting
+ *
  ****************************************************************************/
+
+#ifdef CONFIG_ARCH_HAVE_MULTICPU
+int up_cpu_index(void) noinstrument_function;
+#endif /* CONFIG_ARCH_HAVE_MULTICPU */
+
+static always_inline_function uint32_t up_getsp(void)
+{
+  register uint32_t sp;
+
+  __asm__ __volatile__
+  (
+    "mov %0, sp\n"
+    : "=r" (sp)
+  );
+
+  return sp;
+}
+
+static always_inline_function uintptr_t up_getusrsp(void *regs)
+{
+  uint32_t *ptr = (uint32_t *)regs;
+  return ptr[REG_SP];
+}
+
+static always_inline_function bool up_interrupt_context(void)
+{
+  return getipsr() != 0;
+}
 
 /****************************************************************************
  * Public Function Prototypes
  ****************************************************************************/
 
-#ifndef __ASSEMBLY__
 #ifdef __cplusplus
 #define EXTERN extern "C"
 extern "C"
@@ -365,6 +389,6 @@ extern "C"
 #ifdef __cplusplus
 }
 #endif
-#endif
+#endif /* __ASSEMBLY__ */
 
 #endif /* __ARCH_ARM_INCLUDE_ARMV6_M_IRQ_H */

@@ -25,20 +25,32 @@
 #
 # Possible kernel-mode builds
 
+libs$(DELIM)libbuiltin$(DELIM)libkbuiltin$(LIBEXT): pass2dep
+	$(Q) $(MAKE) -C libs$(DELIM)libbuiltin libkbuiltin$(LIBEXT) BINDIR=kbin EXTRAFLAGS="$(KDEFINE) $(EXTRAFLAGS)"
+
+staging$(DELIM)libkbuiltin$(LIBEXT): libs$(DELIM)libbuiltin$(DELIM)libkbuiltin$(LIBEXT)
+	$(Q) $(call INSTALL_LIB,$<,$@)
+
 libs$(DELIM)libc$(DELIM)libkc$(LIBEXT): pass2dep
-	$(Q) $(MAKE) -C libs$(DELIM)libc libkc$(LIBEXT) EXTRAFLAGS="$(KDEFINE) $(EXTRAFLAGS)"
+	$(Q) $(MAKE) -C libs$(DELIM)libc libkc$(LIBEXT) BINDIR=kbin EXTRAFLAGS="$(KDEFINE) $(EXTRAFLAGS)"
 
 staging$(DELIM)libkc$(LIBEXT): libs$(DELIM)libc$(DELIM)libkc$(LIBEXT)
 	$(Q) $(call INSTALL_LIB,$<,$@)
 
+libs$(DELIM)libm$(DELIM)libkm$(LIBEXT): pass2dep
+	$(Q) $(MAKE) -C libs$(DELIM)libm libkm$(LIBEXT) BINDIR=kbin EXTRAFLAGS="$(KDEFINE) $(EXTRAFLAGS)"
+
+staging$(DELIM)libkm$(LIBEXT): libs$(DELIM)libm$(DELIM)libkm$(LIBEXT)
+	$(Q) $(call INSTALL_LIB,$<,$@)
+
 libs$(DELIM)libnx$(DELIM)libknx$(LIBEXT): pass2dep
-	$(Q) $(MAKE) -C libs$(DELIM)libnx libknx$(LIBEXT) EXTRAFLAGS="$(KDEFINE) $(EXTRAFLAGS)"
+	$(Q) $(MAKE) -C libs$(DELIM)libnx libknx$(LIBEXT) BINDIR=kbin EXTRAFLAGS="$(KDEFINE) $(EXTRAFLAGS)"
 
 staging$(DELIM)libknx$(LIBEXT): libs$(DELIM)libnx$(DELIM)libknx$(LIBEXT)
 	$(Q) $(call INSTALL_LIB,$<,$@)
 
 mm$(DELIM)libkmm$(LIBEXT): pass2dep
-	$(Q) $(MAKE) -C mm libkmm$(LIBEXT) EXTRAFLAGS="$(KDEFINE) $(EXTRAFLAGS)"
+	$(Q) $(MAKE) -C mm libkmm$(LIBEXT) BINDIR=kbin EXTRAFLAGS="$(KDEFINE) $(EXTRAFLAGS)"
 
 staging$(DELIM)libkmm$(LIBEXT): mm$(DELIM)libkmm$(LIBEXT)
 	$(Q) $(call INSTALL_LIB,$<,$@)
@@ -71,6 +83,12 @@ boards$(DELIM)libboards$(LIBEXT): pass2dep
 	$(Q) $(MAKE) -C boards libboards$(LIBEXT) EXTRAFLAGS="$(KDEFINE) $(EXTRAFLAGS)"
 
 staging$(DELIM)libboards$(LIBEXT): boards$(DELIM)libboards$(LIBEXT)
+	$(Q) $(call INSTALL_LIB,$<,$@)
+
+$(ARCH_SRC)$(DELIM)board$(DELIM)libboard$(LIBEXT): pass2dep
+	$(Q) $(MAKE) -C $(ARCH_SRC)/board libboard$(LIBEXT) EXTRAFLAGS="$(KDEFINE) $(EXTRAFLAGS)"
+
+staging$(DELIM)libboard$(LIBEXT): $(ARCH_SRC)$(DELIM)board$(DELIM)libboard$(LIBEXT)
 	$(Q) $(call INSTALL_LIB,$<,$@)
 
 crypto$(DELIM)libcrypto$(LIBEXT): pass2dep
@@ -158,6 +176,16 @@ endif
 staging$(DELIM)libarch$(LIBEXT): $(ARCH_SRC)$(DELIM)libarch$(LIBEXT)
 	$(Q) $(call INSTALL_LIB,$<,$@)
 
+ifeq ($(CONFIG_BUILD_FLAT),y)
+libs$(DELIM)libbuiltin$(DELIM)libbuiltin$(LIBEXT): pass2dep
+else
+libs$(DELIM)libbuiltin$(DELIM)libbuiltin$(LIBEXT): pass1dep
+endif
+	$(Q) $(MAKE) -C libs$(DELIM)libbuiltin libbuiltin$(LIBEXT) EXTRAFLAGS="$(EXTRAFLAGS)"
+
+staging$(DELIM)libbuiltin$(LIBEXT): libs$(DELIM)libbuiltin$(DELIM)libbuiltin$(LIBEXT)
+	$(Q) $(call INSTALL_LIB,$<,$@)
+
 # Possible user-mode builds
 
 ifeq ($(CONFIG_BUILD_FLAT),y)
@@ -168,6 +196,16 @@ endif
 	$(Q) $(MAKE) -C libs$(DELIM)libc libc$(LIBEXT) EXTRAFLAGS="$(EXTRAFLAGS)"
 
 staging$(DELIM)libc$(LIBEXT): libs$(DELIM)libc$(DELIM)libc$(LIBEXT)
+	$(Q) $(call INSTALL_LIB,$<,$@)
+
+ifeq ($(CONFIG_BUILD_FLAT),y)
+libs$(DELIM)libm$(DELIM)libm$(LIBEXT): pass2dep
+else
+libs$(DELIM)libm$(DELIM)libm$(LIBEXT): pass1dep
+endif
+	$(Q) $(MAKE) -C libs$(DELIM)libm libm$(LIBEXT) EXTRAFLAGS="$(EXTRAFLAGS)"
+
+staging$(DELIM)libm$(LIBEXT): libs$(DELIM)libm$(DELIM)libm$(LIBEXT)
 	$(Q) $(call INSTALL_LIB,$<,$@)
 
 ifeq ($(CONFIG_BUILD_FLAT),y)

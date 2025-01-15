@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/risc-v/src/c906/c906_start.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -28,7 +30,7 @@
 #include <nuttx/arch.h>
 #include <arch/board/board.h>
 
-#include "riscv_arch.h"
+#include "riscv_internal.h"
 #include "c906_clockconfig.h"
 #include "c906_userspace.h"
 #include "c906.h"
@@ -48,21 +50,6 @@
  * Public Data
  ****************************************************************************/
 
-/* g_idle_topstack: _sbss is the start of the BSS region as defined by the
- * linker script. _ebss lies at the end of the BSS region. The idle task
- * stack starts at the end of BSS and is of size CONFIG_IDLETHREAD_STACKSIZE.
- * The IDLE thread is the thread that the system boots on and, eventually,
- * becomes the IDLE, do nothing task that runs only when there is nothing
- * else to run.  The heap continues from there until the end of memory.
- * g_idle_topstack is a read-only variable the provides this computed
- * address.
- */
-
-uintptr_t g_idle_topstack = C906_IDLESTACK_TOP;
-volatile bool g_serial_ok = false;
-
-extern void c906_cpu_boot(uint32_t);
-
 /****************************************************************************
  * Public Functions
  ****************************************************************************/
@@ -76,6 +63,10 @@ void __c906_start(uint32_t mhartid)
   const uint32_t *src;
   uint32_t *dest;
 
+  /* Configure FPU */
+
+  riscv_fpuconfig();
+
   if (0 != mhartid)
     {
       while (true);
@@ -85,7 +76,7 @@ void __c906_start(uint32_t mhartid)
    * certain that there are no issues with the state of global variables.
    */
 
-  for (dest = &_sbss; dest < &_ebss; )
+  for (dest = (uint32_t *)_sbss; dest < (uint32_t *)_ebss; )
     {
       *dest++ = 0;
     }
@@ -96,7 +87,9 @@ void __c906_start(uint32_t mhartid)
    * end of all of the other read-only data (.text, .rodata) at _eronly.
    */
 
-  for (src = &_eronly, dest = &_sdata; dest < &_edata; )
+  for (src = (const uint32_t *)_eronly,
+       dest = (uint32_t *)_sdata; dest < (uint32_t *)_edata;
+      )
     {
       *dest++ = *src++;
     }
@@ -116,8 +109,6 @@ void __c906_start(uint32_t mhartid)
 #endif
 
   showprogress('B');
-
-  g_serial_ok = true;
 
   /* Do board initialization */
 

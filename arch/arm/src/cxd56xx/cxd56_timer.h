@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/cxd56xx/cxd56_timer.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -70,7 +72,7 @@ extern "C"
  *
  ****************************************************************************/
 
-void cxd56_timer_initialize(FAR const char *devpath, int timer);
+void cxd56_timer_initialize(const char *devpath, int timer);
 
 #undef EXTERN
 #if defined(__cplusplus)

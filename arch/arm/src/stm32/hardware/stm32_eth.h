@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/stm32/hardware/stm32_eth.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -784,9 +786,9 @@
 
 #define ETH_RDES4_IPPT_SHIFT         (0)       /* Bits 0-2: IP payload type */
 #define ETH_RDES4_IPPT_MASK          (7 << ETH_RDES4_IPPT_SHIFT)
-# define ETH_RDES4_IPPT_UDP          (1 << ETH_RDES4_IPPT_SHIFT) /* UDP payload in IP datagram */
-# define ETH_RDES4_IPPT_TCP          (2 << ETH_RDES4_IPPT_SHIFT) /* TCP payload in IP datagram */
-# define ETH_RDES4_IPPT_ICMP         (3 << ETH_RDES4_IPPT_SHIFT) /* ICMP payload in IP datagram */
+#  define ETH_RDES4_IPPT_UDP         (1 << ETH_RDES4_IPPT_SHIFT) /* UDP payload in IP datagram */
+#  define ETH_RDES4_IPPT_TCP         (2 << ETH_RDES4_IPPT_SHIFT) /* TCP payload in IP datagram */
+#  define ETH_RDES4_IPPT_ICMP        (3 << ETH_RDES4_IPPT_SHIFT) /* ICMP payload in IP datagram */
 
 #define ETH_RDES4_IPHE               (1 << 3)  /* Bit 3:  IP header error */
 #define ETH_RDES4_IPPE               (1 << 4)  /* Bit 4:  IP payload error */

@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/misoc/lm32/misoc/include/board.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -18,8 +20,8 @@
  *
  ****************************************************************************/
 
-#ifndef __BOARDS_MISOC_AMBER_INCLUDE_BOARD_H
-#define __BOARDS_MISOC_AMBER_INCLUDE_BOARD_H
+#ifndef __BOARDS_MISOC_LM32_MICOS_INCLUDE_BOARD_H
+#define __BOARDS_MISOC_LM32_MICOS_INCLUDE_BOARD_H
 
 /****************************************************************************
  * Included Files
@@ -83,4 +85,4 @@ extern "C"
 #endif
 
 #endif /* __ASSEMBLY__ */
-#endif /* __BOARDS_MISOC_AMBER_INCLUDE_BOARD_H */
+#endif /* __BOARDS_MISOC_LM32_MICOS_INCLUDE_BOARD_H */

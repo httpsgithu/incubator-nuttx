@@ -1,15 +1,10 @@
 /****************************************************************************
  * arch/arm/src/tiva/common/tiva_adclib.c
  *
- *   Copyright (C) 2015 TRD2 Inc. All rights reserved.
- *   Author: Calvin Maguranis <calvin.maguranis@trd2inc.com>
- *
- * The Tivaware sample code has a BSD compatible license that requires this
- * copyright notice:
- *
- * Copyright (c) 2005-2014 Texas Instruments Incorporated.
- * All rights reserved.
- * Software License Agreement
+ * SPDX-License-Identifier: BSD-3-Clause
+ * SPDX-FileCopyrightText: 2015 TRD2 Inc. All rights reserved.
+ * SPDX-FileCopyrightText: 2005-2014 Texas Instruments Incorporated.
+ * SPDX-FileContributor: Calvin Maguranis <calvin.maguranis@trd2inc.com>
  *
  *   Redistribution and use in source and binary forms, with or without
  *   modification, are permitted provided that the following conditions
@@ -69,7 +64,6 @@
 #include <nuttx/analog/adc.h>
 #include <arch/board/board.h>
 
-#include "arm_arch.h"
 #include "arm_internal.h"
 #include "tiva_gpio.h"
 #include "tiva_adc.h"
@@ -398,7 +392,7 @@ void tiva_adc_irq_attach(uint8_t adc, uint8_t sse, xcpt_t isr)
   int irq = sse2irq[SSE_IDX(adc, sse)];
 
 #ifdef CONFIG_DEBUG_ANALOG
-  ainfo("assigning ISR=0x%p to ADC%d SSE%d IRQ=0x%02x...\n",
+  ainfo("assigning ISR=%p to ADC%d SSE%d IRQ=0x%02x...\n",
         isr, adc, sse, irq);
 #endif
 

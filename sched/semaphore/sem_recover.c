@@ -1,6 +1,8 @@
 /****************************************************************************
  * sched/semaphore/sem_recover.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -72,18 +74,18 @@ void nxsem_recover(FAR struct tcb_s *tcb)
    * restart the exiting task.
    *
    * NOTE:  In the case that the task is waiting we can assume: (1) That the
-   * task state is TSTATE_WAIT_SEM and (2) that the 'waitsem' in the TCB is
+   * task state is TSTATE_WAIT_SEM and (2) that the 'waitobj' in the TCB is
    * non-null.  If we get here via pthread_cancel() or via task_delete(),
    * then the task state should be preserved; it will be altered in other
-   * cases but in those cases waitsem should be NULL anyway (but we do not
+   * cases but in those cases waitobj should be NULL anyway (but we do not
    * enforce that here).
    */
 
   flags = enter_critical_section();
   if (tcb->task_state == TSTATE_WAIT_SEM)
     {
-      sem_t *sem = tcb->waitsem;
-      DEBUGASSERT(sem != NULL && sem->semcount < 0);
+      FAR sem_t *sem = tcb->waitobj;
+      DEBUGASSERT(sem != NULL && atomic_read(NXSEM_COUNT(sem)) < 0);
 
       /* Restore the correct priority of all threads that hold references
        * to this semaphore.
@@ -97,16 +99,12 @@ void nxsem_recover(FAR struct tcb_s *tcb)
        * place.
        */
 
-      sem->semcount++;
-
-      /* Clear the semaphore to assure that it is not reused.  But leave the
-       * state as TSTATE_WAIT_SEM.  This is necessary because this is a
-       * necessary indication that the TCB still resides in the waiting-for-
-       * semaphore list.
-       */
-
-      tcb->waitsem = NULL;
+      atomic_fetch_add(NXSEM_COUNT(sem), 1);
     }
+
+  /* Release all semphore holders for the task */
+
+  nxsem_release_all(tcb);
 
   leave_critical_section(flags);
 }

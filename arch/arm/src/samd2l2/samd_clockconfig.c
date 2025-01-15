@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/samd2l2/samd_clockconfig.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -20,9 +22,9 @@
 
 /* References:
  *   1. "Atmel SAM D20J / SAM D20G / SAM D20E ARM-Based Microcontroller
- *      Datasheet", 42129J–SAM–12/2013
+ *      Datasheet", 42129J-SAM-12/2013
  *   2. "Atmel SAM D21E / SAM D21G / SAM D21J SMART ARM-Based Microcontroller
- *      Datasheet", Atmel-42181E–SAM-D21_Datasheet–02/2015
+ *      Datasheet", Atmel-42181E-SAM-D21_Datasheet-02/2015
  *   3. Atmel sample code for the SAMD20.  This code has an ASF license
  *      with is compatible with the NuttX BSD license, but includes the
  *      provision that this code not be used in non-Atmel products.  That
@@ -40,8 +42,7 @@
 #include <stdbool.h>
 #include <assert.h>
 
-#include "arm_arch.h"
-
+#include "arm_internal.h"
 #include "hardware/samd_pm.h"
 #include "hardware/samd_sysctrl.h"
 #include "hardware/samd_gclk.h"
@@ -884,15 +885,15 @@ static inline void sam_config_gclks(void)
  *   Setup PM main clock dividers to generate CPU, AHB, and APB clocks.
  *   Depends on:
  *
- *  BOARD_CPU_DIVIDER   - See PM_CPUSEL_CPUDIV_* definitions
- *  BOARD_CPU_FRQUENCY  - In Hz
- *  BOARD_CPU_FAILDECT  - Boolean (defined / not defined)
- *  BOARD_APBA_DIVIDER  - See M_APBASEL_APBADIV_* definitions
- *  BOARD_APBA_FRQUENCY - In Hz
- *  BOARD_APBB_DIVIDER  - See M_APBBSEL_APBBDIV_* definitions
- *  BOARD_APBB_FRQUENCY - In Hz
- *  BOARD_APBC_DIVIDER  - See M_APBCSEL_APBCDIV_* definitions
- *  BOARD_APBC_FRQUENCY - In Hz
+ *  BOARD_CPU_DIVIDER    - See PM_CPUSEL_CPUDIV_* definitions
+ *  BOARD_CPU_FREQUENCY  - In Hz
+ *  BOARD_CPU_FAILDECT   - Boolean (defined / not defined)
+ *  BOARD_APBA_DIVIDER   - See M_APBASEL_APBADIV_* definitions
+ *  BOARD_APBA_FREQUENCY - In Hz
+ *  BOARD_APBB_DIVIDER   - See M_APBBSEL_APBBDIV_* definitions
+ *  BOARD_APBB_FREQUENCY - In Hz
+ *  BOARD_APBC_DIVIDER   - See M_APBCSEL_APBCDIV_* definitions
+ *  BOARD_APBC_FREQUENCY - In Hz
  *
  * Input Parameters:
  *   None

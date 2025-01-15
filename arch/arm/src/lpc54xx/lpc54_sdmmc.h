@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/lpc54xx/lpc54_sdmmc.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -63,7 +65,7 @@ extern "C"
  ****************************************************************************/
 
 struct lpc54_sdmmc_dev_s; /* See include/nuttx/sdio.h */
-FAR struct sdio_dev_s *lpc54_sdmmc_initialize(int slotno);
+struct sdio_dev_s *lpc54_sdmmc_initialize(int slotno);
 
 #undef EXTERN
 #if defined(__cplusplus)

@@ -1,6 +1,8 @@
 /****************************************************************************
  * wireless/bluetooth/bt_hcicore.h
  *
+ * SPDX-License-Identifier: BSD-3-Clause
+ *
  *   Copyright (c) 2016, Intel Corporation
  *   All rights reserved.
  *
@@ -99,6 +101,10 @@ struct bt_dev_s
   uint16_t le_mtu;
   sem_t le_pkts_sem;
 #endif
+
+  /* TX thread status */
+
+  int tx_status;
 
   /* Number of commands controller can accept */
 
@@ -256,10 +262,23 @@ struct bt_eir_s; /* Forward reference */
 int bt_initialize(void);
 
 /****************************************************************************
- * Name: bt_driver_register
+ * Name: bt_deinitialize
  *
  * Description:
- *   Register the Bluetooth low-level driver with the Bluetooth stack.
+ *   Deinitialize Bluetooth.
+ *
+ * Returned Value:
+ *    Zero on success or (negative) error code otherwise.
+ *
+ ****************************************************************************/
+
+int bt_deinitialize(void);
+
+/****************************************************************************
+ * Name: bt_driver_set
+ *
+ * Description:
+ *   Set the Bluetooth low-level driver with the Bluetooth stack.
  *   This is called from the low-level driver and is part of the driver
  *   interface prototyped in include/nuttx/wireless/bluetooth/bt_driver.h
  *
@@ -274,16 +293,15 @@ int bt_initialize(void);
  *
  ****************************************************************************/
 
-int bt_driver_register(FAR struct bt_driver_s *btdev);
+int bt_driver_set(FAR struct bt_driver_s *btdev);
 
 /****************************************************************************
- * Name: bt_driver_unregister
+ * Name: bt_driver_unset
  *
  * Description:
- *   Unregister a Bluetooth low-level driver previously registered with
- *   bt_driver_register.  This may be called from the low-level driver and
- *   is part of the driver interface prototyped in
- *   include/nuttx/wireless/bluetooth/bt_driver.h
+ *   Unset a Bluetooth low-level driver previously set with bt_driver_set.
+ *   This may be called from the low-level driver and is part of the driver
+ *   interface prototyped in include/nuttx/wireless/bluetooth/bt_driver.h
  *
  * Input Parameters:
  *   btdev - An instance of the low-level drivers interface structure.
@@ -293,7 +311,7 @@ int bt_driver_register(FAR struct bt_driver_s *btdev);
  *
  ****************************************************************************/
 
-void bt_driver_unregister(FAR struct bt_driver_s *btdev);
+void bt_driver_unset(FAR struct bt_driver_s *btdev);
 
 /****************************************************************************
  * Name: bt_send

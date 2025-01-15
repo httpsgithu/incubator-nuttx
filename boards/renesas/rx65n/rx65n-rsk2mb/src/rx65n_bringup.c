@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/renesas/rx65n/rx65n-rsk2mb/src/rx65n_bringup.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -21,8 +23,6 @@
 /****************************************************************************
  * Included Files
  ****************************************************************************/
-
-#include <nuttx/config.h>
 
 #include <nuttx/config.h>
 
@@ -146,7 +146,6 @@ static int nsh_waiter(int argc, char *argv[])
 #ifdef NSH_HAVE_USBHOST
 static int nsh_usbhostinitialize(void)
 {
-  int pid;
   int ret;
 
   /* First, register all of the class drivers needed to support the drivers
@@ -170,7 +169,7 @@ static int nsh_usbhostinitialize(void)
 #ifdef CONFIG_USBHOST_CDCACM
   /* Register the CDC/ACM serial class */
 
-  printf ("USB Host CDCACM \n");
+  printf ("USB Host CDCACM\n");
   ret = usbhost_kbdinit();
   if (ret != OK)
     {
@@ -209,11 +208,11 @@ static int nsh_usbhostinitialize(void)
 
       syslog(LOG_INFO, "Start nsh_waiter\n");
 
-      pid = kthread_create("usbhost", CONFIG_USBHOST_DEFPRIO,
+      ret = kthread_create("usbhost", CONFIG_USBHOST_DEFPRIO,
                            CONFIG_USBHOST_STACKSIZE,
-                           (main_t)nsh_waiter, (FAR char * const *)NULL);
-      syslog(LOG_INFO, "USBHost: Created pid = %d\n", pid);
-      return pid < 0 ? -ENOEXEC : OK;
+                           nsh_waiter, NULL);
+      syslog(LOG_INFO, "USBHost: Created pid = %d\n", ret);
+      return ret < 0 ? -ENOEXEC : OK;
     }
 
   return -ENODEV;
@@ -307,7 +306,7 @@ static void rx65n_rspi_initialize(void)
 #ifdef HAVE_RTC_DRIVER
 static int rtc_driver_initialize(void)
 {
-  FAR struct rtc_lowerhalf_s *lower;
+  struct rtc_lowerhalf_s *lower;
   int ret;
 
   /* Instantiate the rx65n lower-half RTC driver */
@@ -378,17 +377,17 @@ int rx65n_bringup(void)
 #ifdef CONFIG_RX65N_SBRAM
   /* Initialize standby RAM */
 
-  (void)rx65n_sbram_int();
+  rx65n_sbram_int();
 #endif
 
 #ifdef HAVE_DTC_DRIVER
   /* Initialize DTC */
 
-  (void)rx65n_dtc_initialize();
+  rx65n_dtc_initialize();
 #endif
 
 #ifdef CONFIG_RX65N_RSPI
-  (void)rx65n_rspi_initialize();
+  rx65n_rspi_initialize();
 #endif
 
 #if defined(CONFIG_USBHOST)
@@ -409,7 +408,7 @@ int rx65n_bringup(void)
 #endif /* CONFIG_CDCACM & !CONFIG_CDCACM_CONSOLE */
 
 #ifdef HAVE_RIIC_DRIVER
-  FAR struct i2c_master_s *i2c;
+  struct i2c_master_s *i2c;
 
   /* Get the I2C lower half instance */
 

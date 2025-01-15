@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/cxd56xx/spresense/src/cxd56_leds.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -40,6 +42,7 @@
  * Private Functions
  ****************************************************************************/
 
+#ifndef CONFIG_ARCH_LEDS_CPU_ACTIVITY
 static inline void led_clrbits(unsigned int clrbits)
 {
   if ((clrbits & BOARD_LED1_BIT) != 0)
@@ -85,6 +88,7 @@ static inline void led_setbits(unsigned int setbits)
       cxd56_gpio_write(GPIO_LED4, true);
     }
 }
+#endif
 
 /****************************************************************************
  * Public Functions

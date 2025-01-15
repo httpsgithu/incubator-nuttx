@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/stm32l5/hardware/stm32l5_pinmap.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -29,7 +31,11 @@
 #include "chip.h"
 
 #if defined(CONFIG_STM32L5_STM32L562XX)
-#  include "hardware/stm32l562xx_pinmap.h"
+#  if defined(CONFIG_STM32L5_USE_LEGACY_PINMAP)
+#    include "hardware/stm32l562xx_pinmap_legacy.h"
+#  else
+#    include "hardware/stm32l562xx_pinmap.h"
+#  endif
 #else
 #  error "Unsupported STM32 L5 pin map"
 #endif

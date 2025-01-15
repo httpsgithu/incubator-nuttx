@@ -1,6 +1,8 @@
 /****************************************************************************
  * sched/signal/sig_kill.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -28,6 +30,8 @@
 #include <sched.h>
 #include <errno.h>
 #include <debug.h>
+
+#include <nuttx/signal.h>
 
 #include "sched/sched.h"
 #include "signal/signal.h"
@@ -77,7 +81,6 @@ int nxsig_kill(pid_t pid, int signo)
   FAR struct tcb_s *rtcb = this_task();
 #endif
   siginfo_t info;
-  int ret;
 
   /* We do not support sending signals to process groups */
 
@@ -93,10 +96,6 @@ int nxsig_kill(pid_t pid, int signo)
       return -EINVAL;
     }
 
-  /* Keep things stationary through the following */
-
-  sched_lock();
-
   /* Create the siginfo structure */
 
   info.si_signo           = signo;
@@ -110,10 +109,7 @@ int nxsig_kill(pid_t pid, int signo)
 
   /* Send the signal */
 
-  ret = nxsig_dispatch(pid, &info);
-
-  sched_unlock();
-  return ret;
+  return nxsig_dispatch(pid, &info, false);
 }
 
 /****************************************************************************

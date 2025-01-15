@@ -1,6 +1,8 @@
 /****************************************************************************
  * net/netdev/netdev_carrier.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -35,8 +37,10 @@
 #include <net/ethernet.h>
 #include <nuttx/net/netdev.h>
 
+#include "ipfrag/ipfrag.h"
 #include "netdev/netdev.h"
 #include "netlink/netlink.h"
+#include "arp/arp.h"
 
 /****************************************************************************
  * Public Functions
@@ -52,21 +56,15 @@
  * Input Parameters:
  *   dev - The device driver structure
  *
- * Returned Value:
- *   0:Success; negated errno on failure
- *
  ****************************************************************************/
 
-int netdev_carrier_on(FAR struct net_driver_s *dev)
+void netdev_carrier_on(FAR struct net_driver_s *dev)
 {
-  if (dev)
+  if (dev && !IFF_IS_RUNNING(dev->d_flags))
     {
       dev->d_flags |= IFF_RUNNING;
       netlink_device_notify(dev);
-      return OK;
     }
-
-  return -EINVAL;
 }
 
 /****************************************************************************
@@ -79,24 +77,24 @@ int netdev_carrier_on(FAR struct net_driver_s *dev)
  * Input Parameters:
  *   dev - The device driver structure
  *
- * Returned Value:
- *   0:Success; negated errno on failure
- *
  ****************************************************************************/
 
-int netdev_carrier_off(FAR struct net_driver_s *dev)
+void netdev_carrier_off(FAR struct net_driver_s *dev)
 {
-  if (dev)
+  if (dev && IFF_IS_RUNNING(dev->d_flags))
     {
       dev->d_flags &= ~IFF_RUNNING;
       netlink_device_notify(dev);
 
+#ifdef CONFIG_NET_IPFRAG
+      /* Clean up fragment data for this NIC (if any) */
+
+      ip_frag_stop(dev);
+#endif
+
       /* Notify clients that the network has been taken down */
 
-      devif_dev_event(dev, NULL, NETDEV_DOWN);
-
-      return OK;
+      devif_dev_event(dev, NETDEV_DOWN);
+      arp_cleanup(dev);
     }
-
-  return -EINVAL;
 }

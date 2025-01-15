@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/cxd56xx/spresense/include/cxd56_isx012.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -28,6 +30,7 @@
 #include <nuttx/config.h>
 #include <nuttx/video/isx012.h>
 #include <nuttx/video/video.h>
+#include <nuttx/i2c/i2c_master.h>
 
 /****************************************************************************
  * Public Types
@@ -120,7 +123,7 @@ void board_isx012_release_sleep(void);
  *
  ****************************************************************************/
 
-int board_isx012_initialize(int i2c_bus_num);
+struct i2c_master_s *board_isx012_initialize(void);
 
 /****************************************************************************
  * Name: board_isx012_uninitialize
@@ -130,7 +133,7 @@ int board_isx012_initialize(int i2c_bus_num);
  *
  ****************************************************************************/
 
-int board_isx012_uninitialize(void);
+int board_isx012_uninitialize(struct i2c_master_s *i2c);
 
 #undef EXTERN
 #if defined(__cplusplus)

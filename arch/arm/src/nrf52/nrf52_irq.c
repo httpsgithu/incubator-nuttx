@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/nrf52/nrf52_irq.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -36,9 +38,7 @@
 #include "chip.h"
 #include "nvic.h"
 #include "ram_vectors.h"
-#include "arm_arch.h"
 #include "arm_internal.h"
-
 #include "nrf52_irq.h"
 #ifdef CONFIG_NRF52_GPIOTE
 #  include "nrf52_gpiote.h"
@@ -60,24 +60,6 @@
 
 #define NVIC_ENA_OFFSET    (0)
 #define NVIC_CLRENA_OFFSET (NVIC_IRQ0_31_CLEAR - NVIC_IRQ0_31_ENABLE)
-
-/****************************************************************************
- * Public Data
- ****************************************************************************/
-
-/* g_current_regs[] holds a references to the current interrupt level
- * register storage structure.  If is non-NULL only during interrupt
- * processing.  Access to g_current_regs[] must be through the macro
- * CURRENT_REGS for portability.
- */
-
-volatile uint32_t *g_current_regs[1];
-
-/* This is the address of the  exception vector table (determined by the
- * linker script).
- */
-
-extern uint32_t _vectors[];
 
 /****************************************************************************
  * Private Functions
@@ -102,7 +84,7 @@ static void nrf52_dumpnvic(const char *msg, int irq)
   irqinfo("  INTCTRL:    %08x VECTAB: %08x\n",
           getreg32(NVIC_INTCTRL), getreg32(NVIC_VECTAB));
 #if 0
-  irqinfo("  SYSH ENABLE MEMFAULT: %08x BUSFAULT: %08x \n",
+  irqinfo("  SYSH ENABLE MEMFAULT: %08x BUSFAULT: %08x\n",
           getreg32(NVIC_SYSHCON_MEMFAULTENA),
           getreg32(NVIC_SYSHCON_BUSFAULTENA));
   irqinfo("  USGFAULT: %08x SYSTICK: %08x\n",
@@ -143,8 +125,7 @@ static void nrf52_dumpnvic(const char *msg, int irq)
 #endif
 
 /****************************************************************************
- * Name: nrf52_nmi, nrf52_busfault, nrf52_usagefault, nrf52_pendsv,
- *       nrf52_dbgmonitor, nrf52_pendsv, nrf52_reserved
+ * Name: nrf52_nmi, nrf52_pendsv, nrf52_pendsv, nrf52_reserved
  *
  * Description:
  *   Handlers for various exceptions.  None are handled and all are fatal
@@ -154,7 +135,7 @@ static void nrf52_dumpnvic(const char *msg, int irq)
  ****************************************************************************/
 
 #ifdef CONFIG_DEBUG_FEATURES
-static int nrf52_nmi(int irq, FAR void *context, FAR void *arg)
+static int nrf52_nmi(int irq, void *context, void *arg)
 {
   up_irq_save();
   _err("PANIC!!! NMI received\n");
@@ -162,39 +143,17 @@ static int nrf52_nmi(int irq, FAR void *context, FAR void *arg)
   return 0;
 }
 
-static int nrf52_busfault(int irq, FAR void *context, FAR void *arg)
+static int nrf52_pendsv(int irq, void *context, void *arg)
 {
-  up_irq_save();
-  _err("PANIC!!! Bus fault received\n");
-  PANIC();
-  return 0;
-}
-
-static int nrf52_usagefault(int irq, FAR void *context, FAR void *arg)
-{
-  up_irq_save();
-  _err("PANIC!!! Usage fault received\n");
-  PANIC();
-  return 0;
-}
-
-static int nrf52_pendsv(int irq, FAR void *context, FAR void *arg)
-{
+#ifndef CONFIG_ARCH_HIPRI_INTERRUPT
   up_irq_save();
   _err("PANIC!!! PendSV received\n");
   PANIC();
+#endif
   return 0;
 }
 
-static int nrf52_dbgmonitor(int irq, FAR void *context, FAR void *arg)
-{
-  up_irq_save();
-  _err("PANIC!!! Debug Monitor received\n");
-  PANIC();
-  return 0;
-}
-
-static int nrf52_reserved(int irq, FAR void *context, FAR void *arg)
+static int nrf52_reserved(int irq, void *context, void *arg)
 {
   up_irq_save();
   _err("PANIC!!! Reserved interrupt\n");
@@ -212,7 +171,6 @@ static int nrf52_reserved(int irq, FAR void *context, FAR void *arg)
  *
  ****************************************************************************/
 
-#ifdef CONFIG_ARMV7M_USEBASEPRI
 static inline void nrf52_prioritize_syscall(int priority)
 {
   uint32_t regval;
@@ -224,7 +182,6 @@ static inline void nrf52_prioritize_syscall(int priority)
   regval |= (priority << NVIC_SYSH_PRIORITY_PR11_SHIFT);
   putreg32(regval, NVIC_SYSH8_11_PRIORITY);
 }
-#endif
 
 /****************************************************************************
  * Name: nrf52_irqinfo
@@ -298,9 +255,6 @@ static int nrf52_irqinfo(int irq, uintptr_t *regaddr, uint32_t *bit,
 void up_irqinitialize(void)
 {
   uint32_t regaddr;
-#if defined(CONFIG_DEBUG_FEATURES) && !defined(CONFIG_ARMV7M_USEBASEPRI)
-  uint32_t regval;
-#endif
   int num_priority_registers;
   int i;
 
@@ -354,10 +308,6 @@ void up_irqinitialize(void)
       regaddr += 4;
     }
 
-  /* currents_regs is non-NULL only while processing an interrupt */
-
-  CURRENT_REGS = NULL;
-
   /* Attach the SVCall and Hard Fault exception handlers.  The SVCall
    * exception is used for performing context switches; The Hard Fault
    * must also be caught because a SVCall may show up as a Hard Fault
@@ -375,9 +325,7 @@ void up_irqinitialize(void)
 #  endif
 #endif
 
-#ifdef CONFIG_ARMV7M_USEBASEPRI
   nrf52_prioritize_syscall(NVIC_SYSH_SVCALL_PRIORITY);
-#endif
 
 #ifdef CONFIG_ARM_MPU
   /* If the MPU is enabled, then attach and enable the Memory Management
@@ -395,25 +343,15 @@ void up_irqinitialize(void)
 #ifndef CONFIG_ARM_MPU
   irq_attach(NRF52_IRQ_MEMFAULT, arm_memfault, NULL);
 #endif
-  irq_attach(NRF52_IRQ_BUSFAULT, nrf52_busfault, NULL);
-  irq_attach(NRF52_IRQ_USAGEFAULT, nrf52_usagefault, NULL);
+  irq_attach(NRF52_IRQ_BUSFAULT, arm_busfault, NULL);
+  irq_attach(NRF52_IRQ_USAGEFAULT, arm_usagefault, NULL);
   irq_attach(NRF52_IRQ_PENDSV, nrf52_pendsv, NULL);
-  irq_attach(NRF52_IRQ_DBGMONITOR, nrf52_dbgmonitor, NULL);
+  arm_enable_dbgmonitor();
+  irq_attach(NRF52_IRQ_DBGMONITOR, arm_dbgmonitor, NULL);
   irq_attach(NRF52_IRQ_RESERVED, nrf52_reserved, NULL);
 #endif
 
   nrf52_dumpnvic("initial", NRF52_IRQ_NIRQS);
-
-#if defined(CONFIG_DEBUG_FEATURES) && !defined(CONFIG_ARMV7M_USEBASEPRI)
-  /* If a debugger is connected, try to prevent it from catching hardfaults.
-   * If CONFIG_ARMV7M_USEBASEPRI, no hardfaults are expected in normal
-   * operation.
-   */
-
-  regval  = getreg32(NVIC_DEMCR);
-  regval &= ~NVIC_DEMCR_VCHARDERR;
-  putreg32(regval, NVIC_DEMCR);
-#endif
 
 #ifdef CONFIG_NRF52_GPIOTE
   /* Initialize GPIOTE */

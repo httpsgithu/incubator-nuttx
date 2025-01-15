@@ -1,6 +1,8 @@
 /****************************************************************************
  * include/nuttx/fs/smart.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -18,8 +20,8 @@
  *
  ****************************************************************************/
 
-#ifndef __INCLUDE_NUTTX_SMART_H
-#define __INCLUDE_NUTTX_SMART_H
+#ifndef __INCLUDE_NUTTX_FS_SMART_H
+#define __INCLUDE_NUTTX_FS_SMART_H
 
 /****************************************************************************
  * Included Files
@@ -114,6 +116,8 @@ struct smart_procfs_data_s
 #ifdef CONFIG_MTD_SMART_ERASE_DEBUG
   const uint16_t  *erasecounts;   /* Pointer to the erase counts array */
   uint16_t        erasesize;      /* Number of entries in the erase counts array */
+#else
+  uint8_t         __pad;
 #endif
 };
 #endif
@@ -152,10 +156,14 @@ extern "C"
  * Public Function Prototypes
  ****************************************************************************/
 
+#ifdef CONFIG_SMART_DEV_LOOP
+int smart_loop_register_driver(void);
+#endif
+
 #undef EXTERN
 #ifdef __cplusplus
 }
 #endif
 
 #endif /* __ASSEMBLY__ */
-#endif /* __INCLUDE_NUTTX_SMART_H */
+#endif /* __INCLUDE_NUTTX_FS_SMART_H */

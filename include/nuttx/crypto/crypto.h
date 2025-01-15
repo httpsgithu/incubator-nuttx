@@ -1,6 +1,8 @@
 /****************************************************************************
  * include/nuttx/crypto/crypto.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -26,6 +28,8 @@
  ****************************************************************************/
 
 #include <nuttx/config.h>
+
+#include <sys/types.h>
 
 /****************************************************************************
  * Pre-processor Definitions
@@ -71,8 +75,8 @@ extern "C"
 int up_cryptoinitialize(void);
 
 #if defined(CONFIG_CRYPTO_AES)
-int aes_cypher(FAR void *out, FAR const void *in, uint32_t size,
-               FAR const void *iv, FAR const void *key, uint32_t keysize,
+int aes_cypher(FAR void *out, FAR const void *in, size_t size,
+               FAR const void *iv, FAR const void *key, size_t keysize,
                int mode, int encrypt);
 #endif
 

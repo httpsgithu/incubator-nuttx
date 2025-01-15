@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/mips/pic32mz/pic32mz-starterkit/src/pic32mz_bringup.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -53,7 +55,7 @@
 #ifdef PIC32MZ_HAVE_MMCSD
 static int nsh_sdinitialize(void)
 {
-  FAR struct spi_dev_s *spi;
+  struct spi_dev_s *spi;
   int ret;
 
   /* Get the SPI port */

@@ -1,10 +1,11 @@
 /****************************************************************************
  * arch/arm/src/stm32/stm32_tim_lowerhalf.c
  *
- *   Copyright (C) 2015 Wail Khemir. All rights reserved.
- *   Copyright (C) 2015 Omni Hoverboards Inc. All rights reserved.
- *   Authors: Wail Khemir <khemirwail@gmail.com>
- *            Paul Alexander Patience <paul-a.patience@polymtl.ca>
+ * SPDX-License-Identifier: BSD-3-Clause
+ * SPDX-FileCopyrightText: 2015 Wail Khemir. All rights reserved.
+ * SPDX-FileCopyrightText: 2015 Omni Hoverboards Inc. All rights reserved.
+ * SPDX-FileContributor: Wail Khemir <khemirwail@gmail.com>
+ * SPDX-FileContributor: Paul Alexander Patience <paul-a.patience@polymtl.ca>
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -101,12 +102,12 @@
 
 struct stm32_lowerhalf_s
 {
-  FAR const struct timer_ops_s *ops;        /* Lower half operations */
-  FAR struct stm32_tim_dev_s   *tim;        /* stm32 timer driver */
-  tccb_t                        callback;   /* Current user interrupt callback */
-  FAR void                     *arg;        /* Argument passed to upper half callback */
-  bool                          started;    /* True: Timer has been started */
-  const uint8_t                 resolution; /* Number of bits in the timer (16 or 32 bits) */
+  const struct timer_ops_s *ops;        /* Lower half operations */
+  struct stm32_tim_dev_s   *tim;        /* stm32 timer driver */
+  tccb_t                    callback;   /* Current user interrupt callback */
+  void                     *arg;        /* Argument passed to upper half callback */
+  bool                      started;    /* True: Timer has been started */
+  const uint8_t             resolution; /* Number of bits in the timer (16 or 32 bits) */
 };
 
 /****************************************************************************
@@ -117,12 +118,12 @@ static int stm32_timer_handler(int irq, void * context, void * arg);
 
 /* "Lower half" driver methods **********************************************/
 
-static int stm32_start(FAR struct timer_lowerhalf_s *lower);
-static int stm32_stop(FAR struct timer_lowerhalf_s *lower);
-static int stm32_settimeout(FAR struct timer_lowerhalf_s *lower,
+static int stm32_start(struct timer_lowerhalf_s *lower);
+static int stm32_stop(struct timer_lowerhalf_s *lower);
+static int stm32_settimeout(struct timer_lowerhalf_s *lower,
                             uint32_t timeout);
-static void stm32_setcallback(FAR struct timer_lowerhalf_s *lower,
-                              tccb_t callback, FAR void *arg);
+static void stm32_setcallback(struct timer_lowerhalf_s *lower,
+                              tccb_t callback, void *arg);
 
 /****************************************************************************
  * Private Data
@@ -270,7 +271,7 @@ static struct stm32_lowerhalf_s g_tim14_lowerhalf =
 
 static int stm32_timer_handler(int irq, void * context, void * arg)
 {
-  FAR struct stm32_lowerhalf_s *lower = (struct stm32_lowerhalf_s *) arg;
+  struct stm32_lowerhalf_s *lower = (struct stm32_lowerhalf_s *) arg;
   uint32_t next_interval_us = 0;
 
   STM32_TIM_ACKINT(lower->tim, ATIM_DIER_UIE);
@@ -305,9 +306,9 @@ static int stm32_timer_handler(int irq, void * context, void * arg)
  *
  ****************************************************************************/
 
-static int stm32_start(FAR struct timer_lowerhalf_s *lower)
+static int stm32_start(struct timer_lowerhalf_s *lower)
 {
-  FAR struct stm32_lowerhalf_s *priv = (FAR struct stm32_lowerhalf_s *)lower;
+  struct stm32_lowerhalf_s *priv = (struct stm32_lowerhalf_s *)lower;
 
   if (!priv->started)
     {
@@ -377,10 +378,10 @@ static int stm32_stop(struct timer_lowerhalf_s *lower)
  *
  ****************************************************************************/
 
-static int stm32_settimeout(FAR struct timer_lowerhalf_s *lower,
+static int stm32_settimeout(struct timer_lowerhalf_s *lower,
                             uint32_t timeout)
 {
-  FAR struct stm32_lowerhalf_s *priv = (FAR struct stm32_lowerhalf_s *)lower;
+  struct stm32_lowerhalf_s *priv = (struct stm32_lowerhalf_s *)lower;
   uint64_t maxtimeout;
 
   if (priv->started)
@@ -424,10 +425,10 @@ static int stm32_settimeout(FAR struct timer_lowerhalf_s *lower,
  *
  ****************************************************************************/
 
-static void stm32_setcallback(FAR struct timer_lowerhalf_s *lower,
-                              tccb_t callback, FAR void *arg)
+static void stm32_setcallback(struct timer_lowerhalf_s *lower,
+                              tccb_t callback, void *arg)
 {
-  FAR struct stm32_lowerhalf_s *priv = (FAR struct stm32_lowerhalf_s *)lower;
+  struct stm32_lowerhalf_s *priv = (struct stm32_lowerhalf_s *)lower;
 
   irqstate_t flags = enter_critical_section();
 
@@ -472,9 +473,9 @@ static void stm32_setcallback(FAR struct timer_lowerhalf_s *lower,
  *
  ****************************************************************************/
 
-int stm32_timer_initialize(FAR const char *devpath, int timer)
+int stm32_timer_initialize(const char *devpath, int timer)
 {
-  FAR struct stm32_lowerhalf_s *lower;
+  struct stm32_lowerhalf_s *lower;
 
   switch (timer)
     {
@@ -568,8 +569,8 @@ int stm32_timer_initialize(FAR const char *devpath, int timer)
    * REVISIT: The returned handle is discard here.
    */
 
-  FAR void *drvr = timer_register(devpath,
-                                  (FAR struct timer_lowerhalf_s *)lower);
+  void *drvr = timer_register(devpath,
+                              (struct timer_lowerhalf_s *)lower);
   if (drvr == NULL)
     {
       /* The actual cause of the failure may have been a failure to allocate

@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/tiva/lm3s6965-ek/src/lm_bringup.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -94,7 +96,7 @@ int lm_bringup(void)
   int ret = 0;
 
 #ifdef NSH_HAVEMMCSD
-  FAR struct spi_dev_s *spi;
+  struct spi_dev_s *spi;
 
   /* Get the SPI port */
 

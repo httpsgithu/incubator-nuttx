@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/hc/m9s12/demo9s12ne64/include/board.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -18,8 +20,8 @@
  *
  ****************************************************************************/
 
-#ifndef __BOARDS_HC_MCS92S12NE64_DEMO9S12NE64_INCLUDE_BOARD_H
-#define __BOARDS_HC_MCS92S12NE64_DEMO9S12NE64_INCLUDE_BOARD_H
+#ifndef __BOARDS_HC_M9S12_DEMO9S12NE64_INCLUDE_BOARD_H
+#define __BOARDS_HC_M9S12_DEMO9S12NE64_INCLUDE_BOARD_H
 
 /****************************************************************************
  * Included Files
@@ -27,7 +29,7 @@
 
 #include <nuttx/config.h>
 #ifndef __ASSEMBLY__
-# include <stdint.h>
+#  include <stdint.h>
 #endif
 
 /****************************************************************************
@@ -77,4 +79,4 @@
 
 /* Button definitions *******************************************************/
 
-#endif /* __BOARDS_HC_MCS92S12NE64_DEMO9S12NE64_INCLUDE_BOARD_H */
+#endif /* __BOARDS_HC_M9S12_DEMO9S12NE64_INCLUDE_BOARD_H */

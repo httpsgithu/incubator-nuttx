@@ -1,6 +1,8 @@
 /********************************************************************************
  * tools/nxstyle.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -127,6 +129,7 @@ static int g_rangenumber        = 0;
 static int g_rangestart[RANGE_NUMBER];
 static int g_rangecount[RANGE_NUMBER];
 static char g_file_name[PATH_MAX];
+static bool g_skipmixedcase;
 
 static const struct file_section_s g_section_info[] =
 {
@@ -182,6 +185,8 @@ static const struct file_section_s g_section_info[] =
 
 static const char *g_white_prefix[] =
 {
+  "ASCII_",  /* Ref:  include/nuttx/ascii.h */
+  "Dl_info", /* Ref:  include/dlfcn.h */
   "Elf",     /* Ref:  include/elf.h, include/elf32.h, include/elf64.h */
   "PRId",    /* Ref:  inttypes.h */
   "PRIi",    /* Ref:  inttypes.h */
@@ -195,20 +200,44 @@ static const char *g_white_prefix[] =
   "SCNx",    /* Ref:  inttypes.h */
   "SYS_",    /* Ref:  include/sys/syscall.h */
   "STUB_",   /* Ref:  syscall/syscall_lookup.h, syscall/sycall_stublookup.c */
+  "XK_",     /* Ref:  include/input/X11_keysymdef.h */
   "b8",      /* Ref:  include/fixedmath.h */
   "b16",     /* Ref:  include/fixedmath.h */
   "b32",     /* Ref:  include/fixedmath.h */
+  "cJSON",   /* Ref:  apps/wireless/wapi/src */
   "ub8",     /* Ref:  include/fixedmath.h */
   "ub16",    /* Ref:  include/fixedmath.h */
   "ub32",    /* Ref:  include/fixedmath.h */
-  "ASCII_",  /* Ref:  include/nuttx/ascii.h */
-  "XK_",     /* Ref:  include/input/X11_keysymdef.h */
-
+  "lua_",    /* Ref:  apps/interpreters/lua/lua-5.x.x/src/lua.h */
+  "luaL_",   /* Ref:  apps/interpreters/lua/lua-5.x.x/src/lauxlib.h */
+  "V4L2_",   /* Ref:  include/sys/video_controls.h */
+  "Ifx",     /* Ref:  arch/tricore/src */
   NULL
 };
 
-static const char *g_white_list[] =
+static const char *g_white_suffix[] =
 {
+  /* Ref:  include/nuttx/wireless/nrf24l01.h */
+
+  "Mbps",
+  "kHz",
+  "kbps",
+  "us",
+  NULL
+};
+
+static const char *g_white_content_list[] =
+{
+  /* Ref:
+   * nuttx-apps/examples/wamr_module/module_hello.c
+   * nuttx-apps/interpreters/wamr/wamr_custom_init.c
+   *
+   * They are from the WAMR project.
+   */
+
+  "NativeSymbol",
+  "RuntimeInitArgs",
+
   /* Ref:  gnu_unwind_find_exidx.c */
 
   "__EIT_entry",
@@ -217,6 +246,10 @@ static const char *g_white_list[] =
 
   "__gnu_Unwind_Find_exidx",
 
+  /* Ref:  lib_impure.c */
+
+  "__sFILE_fake",
+
   /* Ref:  stdlib.h */
 
   "_Exit",
@@ -224,6 +257,10 @@ static const char *g_white_list[] =
   /* Ref:  stdatomic.h */
 
   "_Atomic",
+
+  /* Ref:  https://en.cppreference.com/w/c/keyword/_Thread_local */
+
+  "_Thread_local",
 
   /* Ref:  unwind-arm-common.h */
 
@@ -249,8 +286,50 @@ static const char *g_white_list[] =
   "_Erom",
 
   /* Ref:
+   * arch/sim/src/sim/up_wpcap.c
+   */
+
+  "Address",
+  "Description",
+  "FirstUnicastAddress",
+  "GetAdaptersAddresses",
+  "GetProcAddress",
+  "LoadLibrary",
+  "lpSockaddr",
+  "Next",
+  "PhysicalAddressLength",
+  "PhysicalAddress",
+  "WideCharToMultiByte",
+
+  /* Ref:
+   * drivers/segger/note_sysview.c
+   */
+
+  "DataType",
+  "Offset",
+  "Prio",
+  "pU32_Value",
+  "RangeMax",
+  "RangeMin",
+  "SEGGER_SYSVIEW",
+  "ScalingFactor",
+  "sName",
+  "sUnit",
+  "StackBase",
+  "StackSize",
+  "TaskID",
+
+  /* Ref:
+   * drivers/segger/syslog_rtt.c
+   */
+
+  "SEGGER_RTT",
+
+  /* Ref:
    * fs/nfs/rpc.h
    * fs/nfs/nfs_proto.h
+   * fs/nfs/nfs_mount.h
+   * fs/nfs/nfs_vfsops.c
    */
 
   "CREATE3args",
@@ -275,6 +354,10 @@ static const char *g_white_list[] =
   "SETATTR3args",
   "SETATTR3resok",
   "FS3args",
+  "SIZEOF_rpc_reply_read",
+  "SIZEOF_rpc_call_write",
+  "SIZEOF_rpc_reply_readdir",
+  "SIZEOF_nfsmount",
 
   /* Ref:
    * mm/kasan/kasan.c
@@ -284,7 +367,305 @@ static const char *g_white_list[] =
   "__asan_storeN",
   "__asan_loadN_noabort",
   "__asan_storeN_noabort",
+  "__hwasan_loadN_noabort",
+  "__hwasan_storeN_noabort",
 
+  /* Ref:
+   * tools/jlink-nuttx.c
+   */
+
+  "RTOS_Init",
+  "RTOS_GetVersion",
+  "RTOS_GetSymbols",
+  "RTOS_GetNumThreads",
+  "RTOS_GetCurrentThreadId",
+  "RTOS_GetThreadId",
+  "RTOS_GetThreadDisplay",
+  "RTOS_GetThreadReg",
+  "RTOS_GetThreadRegList",
+  "RTOS_GetThreadRegList",
+  "RTOS_SetThreadReg",
+  "RTOS_SetThreadRegList",
+  "RTOS_UpdateThreads",
+
+  /* Ref:
+   * sim/posix/sim_x11eventloop.c
+   */
+
+  "Display",
+  "Button1Mask",
+  "Button2Mask",
+  "Button3Mask",
+  "Button1",
+  "Button2",
+  "Button3",
+  "XEvent",
+  "XPending",
+  "XNextEvent",
+  "KeyPress",
+  "KeyRelease",
+  "MotionNotify",
+  "ButtonPress",
+  "ButtonRelease",
+  "XLookupKeysym",
+
+  /* Ref:
+   * sim/posix/sim_x11framebuffer.c
+   */
+
+  "Window",
+  "XShmSegmentInfo",
+  "XImage",
+  "XGCValues",
+  "XTextProperty",
+  "XSizeHints",
+  "XOpenDisplay",
+  "XCreateSimpleWindow",
+  "DefaultRootWindow",
+  "XStringListToTextProperty",
+  "XSetWMProperties",
+  "XMapWindow",
+  "XSelectInput",
+  "XAllowEvents",
+  "XGrabButton",
+  "XCreateGC",
+  "XSetErrorHandler",
+  "XSync",
+  "XShmDetach",
+  "XDestroyImage",
+  "XUngrabButton",
+  "XCloseDisplay",
+  "XShmQueryExtension",
+  "XShmCreateImage",
+  "XShmAttach",
+  "DefaultVisual",
+  "XCreateImage",
+  "XGetWindowAttributes",
+  "DefaultColormap",
+  "XAllocColor",
+  "XShmPutImage",
+  "XPutImage",
+  "Colormap",
+  "DefaultScreen",
+  "BlackPixel",
+  "PSize",
+  "PMinSize",
+  "PMaxSize",
+  "ButtonPressMask",
+  "ButtonReleaseMask",
+  "PointerMotionMask",
+  "KeyPressMask",
+  "KeyReleaseMask",
+  "ButtonMotionMask",
+  "GrabModeAsync",
+  "GCGraphicsExposures",
+  "XErrorEvent",
+  "AnyModifier",
+  "None",
+  "Status",
+  "DoGreen",
+  "DoRed",
+  "DoBlue",
+  "ZPixmap",
+  "readOnly",
+  "XWindowAttributes",
+  "XColor",
+  "AsyncBoth",
+  "CurrentTime",
+  "XUnmapWindow",
+  "XFree",
+
+  /* Ref:
+   * nuttx/arch/sim/src/sim_hostdecoder.*
+   */
+
+  "ISVCDecoder",
+  "SBufferInfo",
+  "SDecodingParam",
+  "eEcActiveIdc",
+  "sVideoProperty",
+  "eVideoBsType",
+  "cmResultSuccess",
+  "uiInBsTimeStamp",
+  "dsErrorFree",
+  "iBufferStatus",
+  "UsrData",
+  "sSystemBuffer",
+  "iWidth",
+  "iHeight",
+  "iStride",
+  "uiOutYuvTimeStamp",
+  "WelsCreateDecoder",
+  "WelsDestroyDecoder",
+  "Initialize",
+  "Uninitialize",
+  "DecodeFrame2",
+  "FlushFrame",
+  "SetOption",
+  "GetOption",
+
+  /* Ref:
+   * sim/posix/sim_deviceimage.c
+   */
+
+  "inflateInit",
+  "inflateEnd",
+  "Bytef",
+
+  /* Ref:
+   * sim/posix/sim_hostmemory.c
+   */
+
+  "CreateFileMapping",
+  "MapViewOfFile",
+  "CloseHandle",
+  "UnmapViewOfFile",
+
+  /* Ref:
+   * sim/posix/sim_hostmisc.c
+   */
+
+  "CaptureStackBackTrace",
+
+  /* Ref:
+   * sim/posix/sim_hosttime.c
+   */
+
+  "GetSystemTimeAsFileTime",
+  "QueryPerformanceFrequency",
+  "QueryPerformanceCounter",
+  "CreateWaitableTimer",
+  "SetWaitableTimer",
+  "WaitForSingleObject",
+  "dwHighDateTime",
+  "dwLowDateTime",
+  "QuadPart",
+
+  /* Ref:
+   * sim/posix/sim_hostuart.c
+   */
+
+  "GetStdHandle",
+  "GetConsoleMode",
+  "SetConsoleMode",
+  "WriteConsole",
+  "ReadConsole",
+  "FlushConsoleInputBuffer",
+  "GetNumberOfConsoleInputEvents",
+
+  /* Ref:
+   * apps/testing/drivertest/drivertest_xxx.c
+   */
+
+  "CMUnitTest",
+
+  /* Ref:
+   * apps/examples/hello_nim/hello_nim_main.c
+   */
+
+  "NimMain",
+
+  /* Ref:
+   * sim/posix/sim_rawgadget.c
+   */
+
+  "bRequestType",
+  "bRequest",
+  "wValue",
+  "wIndex",
+  "wLength",
+  "bLength",
+  "bDescriptorType",
+  "bEndpointAddress",
+  "bmAttributes",
+  "wMaxPacketSize",
+  "bInterval",
+
+  /* Ref:
+   * sim/posix/sim_libusb.c
+   */
+
+  "bNumConfigurations",
+  "bDeviceClass",
+  "idVendor",
+  "idProduct",
+
+  /* Ref:
+   * sim/posix/sim_hostmisc.c
+   */
+
+  "_NSGetExecutablePath",
+
+  /* Ref:
+   * arch/arm/src/nrf52/sdc/nrf.h
+   * arch/arm/src/nrf53/sdc/nrf.h
+   */
+
+  "IRQn_Type",
+
+  /* Ref:
+   * fs/zipfs/zip_vfs.c
+   */
+
+  "unzFile",
+  "uLong",
+  "unzOpen2_64",
+  "unzLocateFile",
+  "unzOpenCurrentFile",
+  "unzClose",
+  "unzReadCurrentFile",
+  "unzGetCurrentFileInfo64",
+  "unzGoToNextFile",
+  "unzGoToFirstFile",
+
+  /* Ref:
+   * apps/netutils/telnetc/telnetc.c
+   */
+
+  "deflateInit",
+  "deflateEnd",
+  "inflateInit",
+  "inflateEnd",
+  "zError",
+
+  NULL
+};
+
+static const char *g_white_headers[] =
+{
+  "windows.h",
+
+  /* Ref:
+   * arch/tricore/src/common/tricore_serial.c
+   */
+
+  "IfxAsclin_Asc.h",
+  NULL
+};
+
+static const char *g_white_files[] =
+{
+  /* Skip assembler file headers
+   * Ref:
+   * libs/libc/machine/arm/arm-acle-compat.h
+   * libs/libc/machine/arm/arm_asm.h
+   */
+
+  "arm-acle-compat.h",
+  "arm_asm.h",
+
+  /* Skip Mixed case
+   * Ref:
+   * libs/libbuiltin/
+   */
+
+  "InstrProfilingPlatform.c",
+
+  /* Skip Mixed case
+   * arch/arm/src/phy62xx/uart.c:1229:13: error: Mixed case identifier found
+   */
+
+  "phy62xx/uart.c",
   NULL
 };
 
@@ -641,34 +1022,89 @@ static bool check_section_header(const char *line, int lineno)
 }
 
 /********************************************************************************
- * Name:  white_prefix
+ * Name: white_file_list
+ *
+ * Description:
+ *   Return true if the filename string with a white-listed name
+ *
+ ********************************************************************************/
+
+static bool white_file_list(const char *filename)
+{
+  const char **pptr;
+  const char *str;
+
+  for (pptr = g_white_files;
+       (str = *pptr) != NULL;
+       pptr++)
+    {
+      if (strstr(filename, str) != NULL)
+        {
+          return true;
+        }
+    }
+
+  return false;
+}
+
+/********************************************************************************
+ * Name:  white_content_list
  *
  * Description:
  *   Return true if the identifier string begins with a white-listed prefix
  *
  ********************************************************************************/
 
-static bool white_list(const char *ident, int lineno)
+static bool white_content_list(const char *ident, int lineno)
 {
   const char **pptr;
   const char *str;
+  size_t len2;
+  size_t len;
 
   for (pptr = g_white_prefix;
        (str = *pptr) != NULL;
        pptr++)
     {
-      if (strncmp(ident, str, strlen(str)) == 0)
+      len = strlen(str);
+      if (strncmp(ident, str, len) == 0)
         {
           return true;
         }
     }
 
-  for (pptr = g_white_list;
+  for (pptr = g_white_headers;
        (str = *pptr) != NULL;
        pptr++)
     {
-      size_t len = strlen(str);
+      if (strstr(ident, str) != NULL)
+        {
+          return true;
+        }
+    }
 
+  len2 = strlen(ident);
+  while (!isalnum(ident[len2 - 1]))
+    {
+      len2--;
+    }
+
+  for (pptr = g_white_suffix;
+       (str = *pptr) != NULL;
+       pptr++)
+    {
+      len = strlen(str);
+      if (len2 >= len && strncmp(ident + len2 - len, str, len) == 0)
+        {
+          return true;
+        }
+    }
+
+  for (pptr = g_white_content_list;
+       (str = *pptr) != NULL;
+       pptr++)
+    {
+      len = strlen(str);
       if (strncmp(ident, str, len) == 0 &&
           isalnum(ident[len]) == 0)
         {
@@ -695,6 +1131,7 @@ int main(int argc, char **argv, char **envp)
   bool bfunctions;      /* True: In private or public functions */
   bool bstatm;          /* True: This line is beginning of a statement */
   bool bfor;            /* True: This line is beginning of a 'for' statement */
+  bool bif;             /* True: This line is beginning of a 'if' statement */
   bool bswitch;         /* True: Within a switch statement */
   bool bstring;         /* True: Within a string */
   bool bquote;          /* True: Backslash quoted character next */
@@ -810,6 +1247,11 @@ int main(int argc, char **argv, char **envp)
       return 0;
     }
 
+  if (white_file_list(g_file_name))
+    {
+      return 0;
+    }
+
   instream = fopen(g_file_name, "r");
 
   if (!instream)
@@ -829,6 +1271,7 @@ int main(int argc, char **argv, char **envp)
   bswitch        = false;       /* True: Within a switch statement */
   bstring        = false;       /* True: Within a string */
   bexternc       = false;       /* True: Within 'extern "C"' */
+  bif            = false;       /* True: This line is beginning of a 'if' statement */
   ppline         = PPLINE_NONE; /* > 0: The next line the continuation of a
                                  * pre-processor command */
   rhcomment      = 0;           /* Indentation of Comment to the right of code
@@ -1216,6 +1659,10 @@ int main(int argc, char **argv, char **envp)
                                "section",
                                lineno, ii);
                         }
+                      else if (white_content_list(&line[ii], lineno))
+                        {
+                          g_skipmixedcase = true;
+                        }
                     }
                   else if (strncmp(&line[ii], "if", 2) == 0)
                     {
@@ -1374,7 +1821,10 @@ int main(int argc, char **argv, char **envp)
       /* Check for a single line comment */
 
       linelen = strlen(line);
-      if (linelen >= 5)      /* Minimum is slash, star, star, slash, newline */
+
+      /* Minimum is slash, star, star, slash, newline */
+
+      if (linelen >= 5)
         {
           lptr = strstr(line, "*/");
           if (line[indent] == '/' && line[indent + 1] == '*' &&
@@ -1499,6 +1949,7 @@ int main(int argc, char **argv, char **envp)
               if (pnest == 0)
                 {
                   int tmppnest;
+                  bool tmpbstring;
 
                   /* Note, we have not yet parsed each character on the line so
                    * a comma have have been be preceded by '(' on the same line.
@@ -1506,11 +1957,11 @@ int main(int argc, char **argv, char **envp)
                    * case.
                    */
 
-                  for (i = indent, tmppnest = 0;
+                  for (i = indent, tmppnest = 0, tmpbstring = false;
                        line[i] != '\n' && line[i] != '\0';
                        i++)
                     {
-                      if (tmppnest == 0 && line[i] == ',')
+                      if (tmppnest == 0 && !tmpbstring && line[i] == ',')
                         {
                            ERROR("Multiple data definitions", lineno, i + 1);
                           break;
@@ -1529,6 +1980,10 @@ int main(int argc, char **argv, char **envp)
                             }
 
                           tmppnest--;
+                        }
+                      else if (line[i] == '"')
+                        {
+                          tmpbstring = !tmpbstring;
                         }
                       else if (line[i] == ';')
                         {
@@ -1561,13 +2016,18 @@ int main(int argc, char **argv, char **envp)
                    strncmp(&line[indent], "do ", 3) == 0 ||
                    strncmp(&line[indent], "else ", 5) == 0 ||
                    strncmp(&line[indent], "goto ", 5) == 0 ||
-                   strncmp(&line[indent], "if ", 3) == 0 ||
                    strncmp(&line[indent], "return ", 7) == 0 ||
-    #if 0 /*  Doesn't follow pattern */
+    #if 0 /* Doesn't follow pattern */
                    strncmp(&line[indent], "switch ", 7) == 0 ||
     #endif
                    strncmp(&line[indent], "while ", 6) == 0)
             {
+              bstatm = true;
+            }
+
+          else if(strncmp(&line[indent], "if ", 3) == 0)
+            {
+              bif    = true;
               bstatm = true;
             }
 
@@ -1586,10 +2046,15 @@ int main(int argc, char **argv, char **envp)
           /* Also check for C keywords with missing white space */
 
           else if (strncmp(&line[indent], "do(", 3) == 0 ||
-                   strncmp(&line[indent], "if(", 3) == 0 ||
                    strncmp(&line[indent], "while(", 6) == 0)
             {
               ERROR("Missing whitespace after keyword", lineno, n);
+              bstatm = true;
+            }
+          else if (strncmp(&line[indent], "if(", 3) == 0)
+            {
+              ERROR("Missing whitespace after keyword", lineno, n);
+              bif   = true;
               bstatm = true;
             }
           else if (strncmp(&line[indent], "for(", 4) == 0)
@@ -1752,7 +2217,8 @@ int main(int argc, char **argv, char **envp)
                 {
                   /* Ignore symbols that begin with white-listed prefixes */
 
-                  if (white_list(&line[ident_index], lineno))
+                  if (g_skipmixedcase ||
+                      white_content_list(&line[ident_index], lineno))
                     {
                       /* No error */
                     }
@@ -1840,6 +2306,13 @@ int main(int argc, char **argv, char **envp)
                         }
                     }
 
+                  /* Allow comments on the same line as the if statement */
+
+                  if (bif == true)
+                    {
+                      bif = false;
+                    }
+
                   n++;
                   continue;
                 }
@@ -1913,7 +2386,7 @@ int main(int argc, char **argv, char **envp)
                        */
 
                       ncomment = 0;
-                       ERROR("Closing without opening comment", lineno, n);
+                      ERROR("Closing without opening comment", lineno, n);
                     }
 
                   n++;
@@ -1926,7 +2399,8 @@ int main(int argc, char **argv, char **envp)
                 {
                   /* Check for URI schemes, e.g. "http://" or "https://" */
 
-                  if (n == 0 || strncmp(&line[n - 1], "://", 3) != 0)
+                  if ((ncomment == 0) &&
+                      (n == 0 || strncmp(&line[n - 1], "://", 3) != 0))
                     {
                       ERROR("C++ style comment", lineno, n);
                       n++;
@@ -2179,7 +2653,7 @@ int main(int argc, char **argv, char **envp)
 
                    /* Check for inappropriate space around parentheses */
 
-                    if (line[n + 1] == ' ')  /* && !bfor */
+                    if (line[n + 1] == ' ')
                       {
                          ERROR("Space follows left parenthesis", lineno, n);
                       }
@@ -2191,11 +2665,11 @@ int main(int argc, char **argv, char **envp)
                     /* Decrease the parenthetical nesting level */
 
                     if (pnest < 1)
-                     {
-                       ERROR("Unmatched right parentheses", lineno, n);
-                       pnest = 0;
-                     }
-                   else
+                      {
+                        ERROR("Unmatched right parentheses", lineno, n);
+                        pnest = 0;
+                      }
+                    else
                      {
                        pnest--;
                      }
@@ -2206,7 +2680,14 @@ int main(int argc, char **argv, char **envp)
 
                     if (n > 0 && n != indent && line[n - 1] == ' ' && !bfor)
                       {
-                         ERROR("Space precedes right parenthesis", lineno, n);
+                        ERROR("Space precedes right parenthesis", lineno, n);
+                      }
+
+                    /* Unset bif if last parenthesis is closed */
+
+                    if (bif == true && pnest == 0)
+                      {
+                        bif = false;
                       }
                   }
                   break;
@@ -2304,7 +2785,7 @@ int main(int argc, char **argv, char **envp)
                     {
                       /* "--" should be next to its operand. If there are
                        * whitespaces or non-operand characters on both left
-                       * and right (e.g. "a -- "， “a[i --]”, "(-- i)"),
+                       * and right (e.g. "a -- ", "a[i --]", "(-- i)"),
                        * there's an error.
                        */
 
@@ -2351,7 +2832,7 @@ int main(int argc, char **argv, char **envp)
                     {
                       /* "++" should be next to its operand. If there are
                        * whitespaces or non-operand characters on both left
-                       * and right (e.g. "a ++ "， “a[i ++]”, "(++ i)"),
+                       * and right (e.g. "a ++ ", "a[i ++]", "(++ i)"),
                        * there's an error.
                        */
 
@@ -2469,7 +2950,7 @@ int main(int argc, char **argv, char **envp)
                     {
                       /* REVISIT: This gives false alarms on syntax like *--ptr */
 
-                      if (line[n - 1] != ' ')
+                      if (line[n - 1] != ' ' && line[n - 1] != '(')
                         {
                            ERROR("Operator/assignment must be preceded "
                                   "with whitespace", lineno, n);
@@ -2679,7 +3160,16 @@ int main(int argc, char **argv, char **envp)
           if (m > 1 && isspace((int)line[m - 1]) &&
               line[m - 1] != '\n' && line[m - 1] != '\r')
             {
-               ERROR("Dangling whitespace at the end of line", lineno, m);
+              /* Report warning on if statement only is pnest is 0
+               * This takes into consideration the multiline if statement.
+               */
+
+              if (bif == true && pnest == 0)
+                {
+                  WARN("If statement followed by garbage", lineno, n);
+                }
+
+              ERROR("Dangling whitespace at the end of line", lineno, m);
             }
 
           /* The line width is determined by the location of the final
@@ -2718,7 +3208,16 @@ int main(int argc, char **argv, char **envp)
 
           if (m > g_maxline && !rhcomment)
             {
-              ERROR("Long line found", lineno, m);
+              /* Ignore the line 2 (file path) */
+
+              if (lineno == 2)
+                {
+                  INFO("Skipping checking line 2: path file\n", 2, m);
+                }
+              else
+                {
+                  ERROR("Long line found", lineno, m);
+                }
             }
         }
 

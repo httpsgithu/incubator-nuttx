@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/stm32/viewtool-stm32f107/src/stm32_highpri.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -87,7 +89,7 @@
 
 struct highpri_s
 {
-  FAR struct stm32_tim_dev_s *dev;  /* TIM6 driver instance */
+  struct stm32_tim_dev_s *dev;  /* TIM6 driver instance */
   volatile uint64_t basepri[16];
   volatile uint64_t handler;
   volatile uint64_t thread;
@@ -102,6 +104,11 @@ static struct highpri_s g_highpri;
 /****************************************************************************
  * Private Functions
  ****************************************************************************/
+
+static inline_function bool is_nesting_interrupt(void)
+{
+  return up_interrupt_context();
+}
 
 /****************************************************************************
  * Name: tim6_handler
@@ -128,7 +135,7 @@ void tim6_handler(void)
 
   /* Check if we are in an interrupt handle */
 
-  if (up_interrupt_context())
+  if (is_nesting_interrupt())
     {
       g_highpri.handler++;
     }
@@ -152,7 +159,7 @@ void tim6_handler(void)
 
 int highpri_main(int argc, char *argv[])
 {
-  FAR struct stm32_tim_dev_s *dev;
+  struct stm32_tim_dev_s *dev;
   uint64_t basepri[16];
   uint64_t handler;
   uint64_t thread;
@@ -181,7 +188,7 @@ int highpri_main(int argc, char *argv[])
          prescaler);
 
   STM32_TIM_SETPERIOD(dev, CONFIG_VIEWTOOL_TIM6_PERIOD);
-  printf("TIM6 period=%d cyles; interrupt rate=%d Hz\n",
+  printf("TIM6 period=%d cycles; interrupt rate=%d Hz\n",
          CONFIG_VIEWTOOL_TIM6_PERIOD,
          CONFIG_VIEWTOOL_TIM6_FREQUENCY / CONFIG_VIEWTOOL_TIM6_PERIOD);
 

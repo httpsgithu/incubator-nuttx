@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/risc-v/src/rv32m1/rv32m1_uart.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -18,8 +20,8 @@
  *
  ****************************************************************************/
 
-#ifndef _ARCH_RISCV_SRC_RV32M1_RV32M1_UART_H
-#define _ARCH_RISCV_SRC_RV32M1_RV32M1_UART_H
+#ifndef __ARCH_RISCV_SRC_RV32M1_RV32M1_UART_H
+#define __ARCH_RISCV_SRC_RV32M1_RV32M1_UART_H
 
 /****************************************************************************
  * Included Files
@@ -102,4 +104,4 @@ EXTERN void rv32m1_console_uart_putc(char);
 #endif
 
 #endif /* __ASSEMBLY__ */
-#endif /* _ARCH_RISCV_SRC_RV32M1_RV32M1_UART_H */
+#endif /* __ARCH_RISCV_SRC_RV32M1_RV32M1_UART_H */

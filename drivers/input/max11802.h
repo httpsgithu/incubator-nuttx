@@ -1,6 +1,8 @@
 /****************************************************************************
  * drivers/input/max11802.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -38,6 +40,7 @@
 
 #include <nuttx/wdog.h>
 #include <nuttx/clock.h>
+#include <nuttx/mutex.h>
 #include <nuttx/semaphore.h>
 #include <nuttx/spi/spi.h>
 #include <nuttx/input/max11802.h>
@@ -120,7 +123,7 @@ struct max11802_dev_s
   volatile bool penchange;              /* An unreported event is buffered */
   uint16_t threshx;                     /* Thresholding X value */
   uint16_t threshy;                     /* Thresholding Y value */
-  sem_t devsem;                         /* Manages exclusive access to this structure */
+  mutex_t devlock;                      /* Manages exclusive access to this structure */
   sem_t waitsem;                        /* Used to wait for the availability of data */
 
   FAR struct max11802_config_s *config; /* Board configuration data */
@@ -134,7 +137,7 @@ struct max11802_dev_s
    * retained in the f_priv field of the 'struct file'.
    */
 
-  struct pollfd *fds[CONFIG_MAX11802_NPOLLWAITERS];
+  FAR struct pollfd *fds[CONFIG_MAX11802_NPOLLWAITERS];
 };
 
 /****************************************************************************

@@ -1,6 +1,8 @@
 /****************************************************************************
  * include/nuttx/lib/math.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -26,6 +28,7 @@
  ****************************************************************************/
 
 #include <nuttx/config.h>
+#include <nuttx/compiler.h>
 
 /* If CONFIG_ARCH_MATH_H is defined, then the top-level Makefile will copy
  * this header file to include/math.h where it will become the system math.h
@@ -62,30 +65,39 @@
  ****************************************************************************/
 
 /****************************************************************************
- * Included Files
- ****************************************************************************/
-
-#include <nuttx/config.h>
-#include <nuttx/compiler.h>
-
-/****************************************************************************
  * Pre-processor Definitions
  ****************************************************************************/
 
 /* General Constants ********************************************************/
 
-#define INFINITY    (1.0/0.0)
-#define NAN         (0.0/0.0)
-#define HUGE_VAL    INFINITY
+#ifndef _HUGE_ENUF
+#  define _HUGE_ENUF (1e+300)  /* _HUGE_ENUF*_HUGE_ENUF must overflow */
+#endif
 
-#define INFINITY_F  (1.0F/0.0F)
-#define NAN_F       (0.0F/0.0F)
+#define INFINITY   ((double)(_HUGE_ENUF * _HUGE_ENUF))
+#define NAN        ((double)(INFINITY * 0.0F))
+#define HUGE_VAL   INFINITY
 
-#define isnan(x)    ((x) != (x))
-#define isinf(x)    (((x) == INFINITY) || ((x) == -INFINITY))
-#define isfinite(x) (!(isinf(x) || isnan(x)))
+#define INFINITY_F ((float)INFINITY)
+#define NAN_F      ((float)(INFINITY * 0.0F))
 
-#define isinf_f(x)  (((x) == INFINITY_F) || ((x) == -INFINITY_F))
+#define INFINITY_L ((long double)INFINITY)
+#define NAN_L      ((long double)(INFINITY * 0.0F))
+
+#define isnan(x)   ((x) != (x))
+#define isnanf(x)  ((x) != (x))
+#define isnanl(x)  ((x) != (x))
+#define isinf(x)   (((x) == INFINITY) || ((x) == -INFINITY))
+#define isinff(x)  (((x) == INFINITY_F) || ((x) == -INFINITY_F))
+#define isinfl(x)  (((x) == INFINITY_L) || ((x) == -INFINITY_L))
+
+#define finite(x)  (!(isinf(x) || isnan(x)))
+#define finitef(x) (!(isinff(x) || isnanf(x)))
+#define finitel(x) (!(isinfl(x) || isnanl(x)))
+
+#define isfinite(x) \
+  (sizeof(x) == sizeof(float) ? finitef(x) : \
+   sizeof(x) == sizeof(double) ? finite(x) : finitel(x))
 
 /* Exponential and Logarithmic constants ************************************/
 
@@ -209,12 +221,12 @@ double      fabs  (double x);
 long double fabsl (long double x);
 #endif
 
-float       modff (float x, float *iptr);
+float       modff (float x, FAR float *iptr);
 #ifdef CONFIG_HAVE_DOUBLE
-double      modf  (double x, double *iptr);
+double      modf  (double x, FAR double *iptr);
 #endif
 #ifdef CONFIG_HAVE_LONG_DOUBLE
-long double modfl (long double x, long double *iptr);
+long double modfl (long double x, FAR long double *iptr);
 #endif
 
 float       fmodf (float x, float div);
@@ -372,15 +384,23 @@ double      ldexp (double x, int n);
 long double ldexpl(long double x, int n);
 #endif
 
-float       frexpf(float x, int *exp);
+float       frexpf(float x, FAR int *exp);
 #ifdef CONFIG_HAVE_DOUBLE
-double      frexp (double x, int *exp);
+double      frexp (double x, FAR int *exp);
 #endif
 #ifdef CONFIG_HAVE_LONG_DOUBLE
-long double frexpl(long double x, int *exp);
+long double frexpl(long double x, FAR int *exp);
 #endif
 
 /* Trigonometric Functions **************************************************/
+
+void        sincosf(float, FAR float *, FAR float *);
+#ifdef CONFIG_HAVE_DOUBLE
+void        sincos(double, FAR double *, FAR double *);
+#endif
+#ifdef CONFIG_HAVE_LONG_DOUBLE
+void        sincosl(long double, FAR long double *, FAR long double *);
+#endif
 
 float       sinf  (float x);
 #ifdef CONFIG_HAVE_DOUBLE
@@ -521,12 +541,12 @@ double      trunc (double x);
 long double truncl (long double x);
 #endif
 
-float       nanf(const char *tagp);
+float       nanf(FAR const char *tagp);
 #ifdef CONFIG_HAVE_DOUBLE
-double      nan(const char *tagp);
+double      nan(FAR const char *tagp);
 #endif
 #ifdef CONFIG_HAVE_LONG_DOUBLE
-long double nanl(const char *tagp);
+long double nanl(FAR const char *tagp);
 #endif
 
 float       nearbyintf(float x);

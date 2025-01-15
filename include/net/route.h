@@ -1,6 +1,8 @@
 /****************************************************************************
  * include/net/route.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -28,12 +30,17 @@
 #include <nuttx/config.h>
 
 #include <sys/socket.h>
+#include <netinet/in.h>
 
 #include <nuttx/net/ioctl.h>
 
 /****************************************************************************
  * Pre-processor Definitions
  ****************************************************************************/
+
+#define RTF_UP          0x0001   /* Route usable. */
+#define RTF_GATEWAY     0x0002   /* Destination is a gateway. */
+#define RTF_HOST        0x0004   /* Host entry (net otherwise). */
 
 /****************************************************************************
  * Public Types
@@ -50,6 +57,21 @@ struct rtentry
                                        * the hop */
   struct sockaddr_storage rt_genmask; /* Network mask defining the sub-net */
   uint16_t rt_flags;
+  FAR char *rt_dev;                   /* Forcing the device at add. */
+};
+
+struct in6_rtmsg
+{
+  struct in6_addr rtmsg_dst;
+  struct in6_addr rtmsg_src;
+  struct in6_addr rtmsg_gateway;
+  uint32_t rtmsg_type;
+  uint16_t rtmsg_dst_len;
+  uint16_t rtmsg_src_len;
+  uint32_t rtmsg_metric;
+  unsigned long int rtmsg_info;
+  uint32_t rtmsg_flags;
+  int rtmsg_ifindex;
 };
 
 /****************************************************************************
@@ -81,15 +103,15 @@ extern "C"
  *   netmask  - Network mask defining the external network (required)
  *   router   - Router address that on our network that can forward to the
  *              external network.
+ *   len      - The address struct length.
  *
  * Returned Value:
  *   OK on success; -1 on failure with the errno variable set appropriately.
  *
  ****************************************************************************/
 
-int addroute(int sockfd, FAR struct sockaddr_storage *target,
-             FAR struct sockaddr_storage *netmask,
-             FAR struct sockaddr_storage *router);
+int addroute(int sockfd, FAR void *target, FAR void *netmask,
+             FAR void *router, socklen_t len);
 
 /****************************************************************************
  * Name: net_delroute
@@ -102,14 +124,14 @@ int addroute(int sockfd, FAR struct sockaddr_storage *target,
  *   sockfd   - Any socket descriptor
  *   target   - Target address on the remote network (required)
  *   netmask  - Network mask defining the external network (required)
+ *   len      - The address struct length.
  *
  * Returned Value:
  *   OK on success; -1 on failure with the errno variable set appropriately.
  *
  ****************************************************************************/
 
-int delroute(int sockfd, FAR struct sockaddr_storage *target,
-             FAR struct sockaddr_storage *netmask);
+int delroute(int sockfd, FAR void *target, FAR void *netmask, socklen_t len);
 
 #undef EXTERN
 #ifdef __cplusplus

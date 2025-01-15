@@ -1,6 +1,8 @@
 /****************************************************************************
  * net/tcp/tcp_getsockopt.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -82,17 +84,11 @@
 int tcp_getsockopt(FAR struct socket *psock, int option,
                    FAR void *value, FAR socklen_t *value_len)
 {
-#ifdef CONFIG_NET_TCP_KEEPALIVE
-  /* Keep alive options are the only TCP protocol socket option currently
-   * supported.
-   */
-
   FAR struct tcp_conn_s *conn;
   int ret;
 
-  DEBUGASSERT(psock != NULL && value != NULL && value_len != NULL &&
-              psock->s_conn != NULL);
-  conn = (FAR struct tcp_conn_s *)psock->s_conn;
+  DEBUGASSERT(value != NULL && value_len != NULL);
+  conn = psock->s_conn;
 
   /* All of the TCP protocol options apply only TCP sockets.  The sockets
    * do not have to be connected.. that might occur later with the KeepAlive
@@ -118,6 +114,7 @@ int tcp_getsockopt(FAR struct socket *psock, int option,
        * all of the clones that may use the underlying connection.
        */
 
+#ifdef CONFIG_NET_TCP_KEEPALIVE
       case SO_KEEPALIVE:  /* Verifies TCP connections active by enabling the
                            * periodic transmission of probes */
         if (*value_len < sizeof(int))
@@ -132,24 +129,7 @@ int tcp_getsockopt(FAR struct socket *psock, int option,
         else
           {
             FAR int *keepalive = (FAR int *)value;
-            *keepalive         = (int)conn->keepalive;
-            *value_len         = sizeof(int);
-            ret                = OK;
-          }
-        break;
-
-      case TCP_NODELAY:  /* Avoid coalescing of small segments. */
-        if (*value_len < sizeof(int))
-          {
-            ret                = -EINVAL;
-          }
-        else
-          {
-            FAR int *nodelay   = (FAR int *)value;
-
-            /* Always true here since we do not support Nagle. */
-
-            *nodelay           = 1;
+            *keepalive         = conn->keepalive;
             *value_len         = sizeof(int);
             ret                = OK;
           }
@@ -216,9 +196,46 @@ int tcp_getsockopt(FAR struct socket *psock, int option,
         else
           {
             FAR int *keepcnt = (FAR int *)value;
-            *keepcnt         = (int)conn->keepcnt;
+            *keepcnt         = conn->keepcnt;
             *value_len       = sizeof(int);
             ret              = OK;
+          }
+        break;
+#endif /* CONFIG_NET_TCP_KEEPALIVE */
+
+      case TCP_NODELAY:  /* Avoid coalescing of small segments. */
+        if (*value_len < sizeof(int))
+          {
+            ret                = -EINVAL;
+          }
+        else
+          {
+            FAR int *nodelay   = (FAR int *)value;
+
+            /* Always true here since we do not support Nagle. */
+
+            *nodelay           = 1;
+            *value_len         = sizeof(int);
+            ret                = OK;
+          }
+        break;
+
+      case TCP_MAXSEG:   /* The maximum segment size */
+        if (*value_len < sizeof(int))
+          {
+            /* REVISIT: POSIX says that we should truncate the value if it
+             * is larger than value_len.   That just doesn't make sense
+             * to me in this case.
+             */
+
+            ret          = -EINVAL;
+          }
+        else
+          {
+            FAR int *mss = (FAR int *)value;
+            *mss         = conn->mss;
+            *value_len   = sizeof(int);
+            ret          = OK;
           }
         break;
 
@@ -229,9 +246,6 @@ int tcp_getsockopt(FAR struct socket *psock, int option,
     }
 
   return ret;
-#else
-  return -ENOPROTOOPT;
-#endif /* CONFIG_NET_TCP_KEEPALIVE */
 }
 
 #endif /* CONFIG_NET_TCPPROTO_OPTIONS */

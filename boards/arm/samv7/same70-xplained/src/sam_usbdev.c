@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/samv7/same70-xplained/src/sam_usbdev.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -32,7 +34,7 @@
 #include <nuttx/usb/usbdev.h>
 #include <nuttx/usb/usbdev_trace.h>
 
-#include "arm_arch.h"
+#include "arm_internal.h"
 #include "sam_gpio.h"
 #include "same70-xplained.h"
 
@@ -52,7 +54,7 @@
  * Name:  sam_usbinitialize
  *
  * Description:
- *   Called from stm32_boardinitialize very early in initialization to setup
+ *   Called from sam_boardinitialize very early in initialization to setup
  *   USB-related GPIO pins for the SAME70-XPLD board.
  *
  ****************************************************************************/
@@ -78,7 +80,7 @@ void sam_usbinitialize(void)
  *
  ****************************************************************************/
 
-void sam_usbsuspend(FAR struct usbdev_s *dev, bool resume)
+void sam_usbsuspend(struct usbdev_s *dev, bool resume)
 {
   uinfo("resume: %d\n", resume);
 }

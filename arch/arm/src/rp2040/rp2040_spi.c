@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/rp2040/rp2040_spi.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -36,12 +38,10 @@
 #include <arch/board/board.h>
 #include <nuttx/irq.h>
 #include <nuttx/arch.h>
-#include <nuttx/semaphore.h>
+#include <nuttx/mutex.h>
 #include <nuttx/spi/spi.h>
 
 #include "arm_internal.h"
-#include "arm_arch.h"
-
 #include "chip.h"
 
 #include "rp2040_spi.h"
@@ -75,7 +75,7 @@ struct rp2040_spidev_s
 #ifdef CONFIG_RP2040_SPI_INTERRUPTS
   uint8_t          spiirq;      /* SPI IRQ number */
 #endif
-  sem_t            exclsem;     /* Held while chip is selected for mutual exclusion */
+  mutex_t          lock;        /* Held while chip is selected for mutual exclusion */
   uint32_t         frequency;   /* Requested clock frequency */
   uint32_t         actual;      /* Actual clock frequency */
   uint8_t          nbits;       /* Width of word in bits (4 to 16) */
@@ -98,48 +98,48 @@ struct rp2040_spidev_s
 
 /* Helpers */
 
-static inline uint32_t spi_getreg(FAR struct rp2040_spidev_s *priv,
+static inline uint32_t spi_getreg(struct rp2040_spidev_s *priv,
                                   uint8_t offset);
-static inline void spi_putreg(FAR struct rp2040_spidev_s *priv,
+static inline void spi_putreg(struct rp2040_spidev_s *priv,
                               uint8_t offset, uint32_t value);
 
 /* DMA support */
 
 #ifdef CONFIG_RP2040_SPI_DMA
-static void unused_code spi_dmaexchange(FAR struct spi_dev_s *dev,
-                                        FAR const void *txbuffer,
-                                        FAR void *rxbuffer, size_t nwords);
+static void unused_code spi_dmaexchange(struct spi_dev_s *dev,
+                                        const void *txbuffer,
+                                        void *rxbuffer, size_t nwords);
 static void spi_dmatxcallback(DMA_HANDLE handle, uint8_t status, void *data);
 static void spi_dmarxcallback(DMA_HANDLE handle, uint8_t status, void *data);
-static void spi_dmatxsetup(FAR struct rp2040_spidev_s *priv,
-                           FAR const void *txbuffer, size_t nwords);
-static void spi_dmarxsetup(FAR struct rp2040_spidev_s *priv,
-                           FAR const void *rxbuffer, size_t nwords);
-static void spi_dmatrxwait(FAR struct rp2040_spidev_s *priv);
+static void spi_dmatxsetup(struct rp2040_spidev_s *priv,
+                           const void *txbuffer, size_t nwords);
+static void spi_dmarxsetup(struct rp2040_spidev_s *priv,
+                           const void *rxbuffer, size_t nwords);
+static void spi_dmatrxwait(struct rp2040_spidev_s *priv);
 #ifndef CONFIG_SPI_EXCHANGE
-static void spi_dmasndblock(FAR struct spi_dev_s *dev,
-                            FAR const void *buffer, size_t nwords);
-static void spi_dmarecvblock(FAR struct spi_dev_s *dev,
-                             FAR const void *buffer, size_t nwords);
+static void spi_dmasndblock(struct spi_dev_s *dev,
+                            const void *buffer, size_t nwords);
+static void spi_dmarecvblock(struct spi_dev_s *dev,
+                             const void *buffer, size_t nwords);
 #endif
 #endif
 
 /* SPI methods */
 
-static int spi_lock(FAR struct spi_dev_s *dev, bool lock);
-static uint32_t spi_setfrequency(FAR struct spi_dev_s *dev,
+static int spi_lock(struct spi_dev_s *dev, bool lock);
+static uint32_t spi_setfrequency(struct spi_dev_s *dev,
                                  uint32_t frequency);
-static void spi_setmode(FAR struct spi_dev_s *dev, enum spi_mode_e mode);
-static void spi_setbits(FAR struct spi_dev_s *dev, int nbits);
-static uint32_t spi_send(FAR struct spi_dev_s *dev, uint32_t wd);
-static void unused_code spi_exchange(FAR struct spi_dev_s *dev,
-                                     FAR const void *txbuffer,
-                                     FAR void *rxbuffer,
+static void spi_setmode(struct spi_dev_s *dev, enum spi_mode_e mode);
+static void spi_setbits(struct spi_dev_s *dev, int nbits);
+static uint32_t spi_send(struct spi_dev_s *dev, uint32_t wd);
+static void unused_code spi_exchange(struct spi_dev_s *dev,
+                                     const void *txbuffer,
+                                     void *rxbuffer,
                                      size_t nwords);
 #ifndef CONFIG_SPI_EXCHANGE
-static void spi_sndblock(FAR struct spi_dev_s *dev, FAR const void *buffer,
+static void spi_sndblock(struct spi_dev_s *dev, const void *buffer,
                          size_t nwords);
-static void spi_recvblock(FAR struct spi_dev_s *dev, FAR void *buffer,
+static void spi_recvblock(struct spi_dev_s *dev, void *buffer,
                           size_t nwords);
 #endif
 
@@ -179,15 +179,19 @@ static const struct spi_ops_s g_spi0ops =
 static struct rp2040_spidev_s g_spi0dev =
 {
   .spidev            =
-                        {
-                          &g_spi0ops
-                        },
+  {
+    .ops             = &g_spi0ops,
+  },
   .spibase           = RP2040_SPI0_BASE,
   .spibasefreq       = 0,
   .port              = 0,
   .initialized       = 0,
 #ifdef CONFIG_RP2040_SPI_INTERRUPTS
   .spiirq            = RP2040_SPI0_IRQ,
+#endif
+  .lock              = NXMUTEX_INITIALIZER,
+#ifdef CONFIG_RP2040_SPI_DMA
+  .dmasem            = SEM_INITIALIZER(0),
 #endif
 };
 #endif
@@ -224,15 +228,19 @@ static const struct spi_ops_s g_spi1ops =
 static struct rp2040_spidev_s g_spi1dev =
 {
   .spidev            =
-                        {
-                          &g_spi1ops
-                        },
+  {
+    .ops             = &g_spi1ops,
+  },
   .spibase           = RP2040_SPI1_BASE,
   .spibasefreq       = 0,
   .port              = 1,
   .initialized       = 0,
 #ifdef CONFIG_RP2040_SPI_INTERRUPTS
   .spiirq            = RP2040_SPI1_IRQ,
+#endif
+  .lock              = NXMUTEX_INITIALIZER,
+#ifdef CONFIG_RP2040_SPI_DMA
+  .dmasem            = SEM_INITIALIZER(0),
 #endif
 };
 #endif
@@ -267,7 +275,7 @@ uint32_t g_spirxdmadummy = 0;
  *
  ****************************************************************************/
 
-static inline uint32_t spi_getreg(FAR struct rp2040_spidev_s *priv,
+static inline uint32_t spi_getreg(struct rp2040_spidev_s *priv,
                                   uint8_t offset)
 {
   return getreg32(priv->spibase + (uint32_t)offset);
@@ -289,7 +297,7 @@ static inline uint32_t spi_getreg(FAR struct rp2040_spidev_s *priv,
  *
  ****************************************************************************/
 
-static inline void spi_putreg(FAR struct rp2040_spidev_s *priv,
+static inline void spi_putreg(struct rp2040_spidev_s *priv,
                               uint8_t offset, uint32_t value)
 {
   putreg32(value, priv->spibase + (uint32_t)offset);
@@ -316,19 +324,19 @@ static inline void spi_putreg(FAR struct rp2040_spidev_s *priv,
  *
  ****************************************************************************/
 
-static int spi_lock(FAR struct spi_dev_s *dev, bool lock)
+static int spi_lock(struct spi_dev_s *dev, bool lock)
 {
-  FAR struct rp2040_spidev_s *priv = (FAR struct rp2040_spidev_s *)dev;
+  struct rp2040_spidev_s *priv = (struct rp2040_spidev_s *)dev;
 
   if (lock)
     {
-      /* Take the semaphore (perhaps waiting) */
+      /* Take the mutex (perhaps waiting) */
 
-      return nxsem_wait_uninterruptible(&priv->exclsem);
+      return nxmutex_lock(&priv->lock);
     }
   else
     {
-      return nxsem_post(&priv->exclsem);
+      return nxmutex_unlock(&priv->lock);
     }
 }
 
@@ -347,10 +355,10 @@ static int spi_lock(FAR struct spi_dev_s *dev, bool lock)
  *
  ****************************************************************************/
 
-static uint32_t spi_setfrequency(FAR struct spi_dev_s *dev,
+static uint32_t spi_setfrequency(struct spi_dev_s *dev,
                                  uint32_t frequency)
 {
-  FAR struct rp2040_spidev_s *priv = (FAR struct rp2040_spidev_s *)dev;
+  struct rp2040_spidev_s *priv = (struct rp2040_spidev_s *)dev;
   uint32_t divisor;
   uint32_t actual;
 
@@ -406,9 +414,9 @@ static uint32_t spi_setfrequency(FAR struct spi_dev_s *dev,
  *
  ****************************************************************************/
 
-static void spi_setmode(FAR struct spi_dev_s *dev, enum spi_mode_e mode)
+static void spi_setmode(struct spi_dev_s *dev, enum spi_mode_e mode)
 {
-  FAR struct rp2040_spidev_s *priv = (FAR struct rp2040_spidev_s *)dev;
+  struct rp2040_spidev_s *priv = (struct rp2040_spidev_s *)dev;
   uint32_t regval;
 
   /* Has the mode changed? */
@@ -467,9 +475,9 @@ static void spi_setmode(FAR struct spi_dev_s *dev, enum spi_mode_e mode)
  *
  ****************************************************************************/
 
-static void spi_setbits(FAR struct spi_dev_s *dev, int nbits)
+static void spi_setbits(struct spi_dev_s *dev, int nbits)
 {
-  FAR struct rp2040_spidev_s *priv = (FAR struct rp2040_spidev_s *)dev;
+  struct rp2040_spidev_s *priv = (struct rp2040_spidev_s *)dev;
   uint32_t regval;
 
   /* Has the number of bits changed? */
@@ -520,9 +528,9 @@ static void spi_setbits(FAR struct spi_dev_s *dev, int nbits)
  *
  ****************************************************************************/
 
-static uint32_t spi_send(FAR struct spi_dev_s *dev, uint32_t wd)
+static uint32_t spi_send(struct spi_dev_s *dev, uint32_t wd)
 {
-  FAR struct rp2040_spidev_s *priv = (FAR struct rp2040_spidev_s *)dev;
+  struct rp2040_spidev_s *priv = (struct rp2040_spidev_s *)dev;
   register uint32_t regval;
 
   /* Wait while the TX FIFO is full */
@@ -568,24 +576,24 @@ static uint32_t spi_send(FAR struct spi_dev_s *dev, uint32_t wd)
  *
  ****************************************************************************/
 
-static void spi_do_exchange(FAR struct spi_dev_s *dev,
-                            FAR const void *txbuffer, FAR void *rxbuffer,
+static void spi_do_exchange(struct spi_dev_s *dev,
+                            const void *txbuffer, void *rxbuffer,
                             size_t nwords)
 {
-  FAR struct rp2040_spidev_s *priv = (FAR struct rp2040_spidev_s *)dev;
+  struct rp2040_spidev_s *priv = (struct rp2040_spidev_s *)dev;
 
   union
   {
-    FAR const uint8_t *p8;
-    FAR const uint16_t *p16;
-    FAR const void *pv;
+    const uint8_t *p8;
+    const uint16_t *p16;
+    const void *pv;
   } tx;
 
   union
   {
-    FAR uint8_t *p8;
-    FAR uint16_t *p16;
-    FAR void *pv;
+    uint8_t *p8;
+    uint16_t *p16;
+    void *pv;
   } rx;
 
   uint32_t data;
@@ -674,11 +682,11 @@ static void spi_do_exchange(FAR struct spi_dev_s *dev,
  *
  ****************************************************************************/
 
-static void spi_exchange(FAR struct spi_dev_s *dev, FAR const void *txbuffer,
-                         FAR void *rxbuffer, size_t nwords)
+static void spi_exchange(struct spi_dev_s *dev, const void *txbuffer,
+                         void *rxbuffer, size_t nwords)
 {
 #ifdef CONFIG_RP2040_SPI_DMA
-  FAR struct rp2040_spidev_s *priv = (FAR struct rp2040_spidev_s *)dev;
+  struct rp2040_spidev_s *priv = (struct rp2040_spidev_s *)dev;
 
 #ifdef CONFIG_RP2040_SPI_DMATHRESHOLD
   size_t dmath = CONFIG_RP2040_SPI_DMATHRESHOLD;
@@ -718,7 +726,7 @@ static void spi_exchange(FAR struct spi_dev_s *dev, FAR const void *txbuffer,
  ****************************************************************************/
 
 #ifndef CONFIG_SPI_EXCHANGE
-static void spi_sndblock(FAR struct spi_dev_s *dev, FAR const void *buffer,
+static void spi_sndblock(struct spi_dev_s *dev, const void *buffer,
                          size_t nwords)
 {
   return spi_exchange(dev, buffer, NULL, nwords);
@@ -744,7 +752,7 @@ static void spi_sndblock(FAR struct spi_dev_s *dev, FAR const void *buffer,
  *
  ****************************************************************************/
 
-static void spi_recvblock(FAR struct spi_dev_s *dev, FAR void *buffer,
+static void spi_recvblock(struct spi_dev_s *dev, void *buffer,
                           size_t nwords)
 {
   return spi_exchange(dev, NULL, buffer, nwords);
@@ -769,9 +777,9 @@ static void spi_recvblock(FAR struct spi_dev_s *dev, FAR void *buffer,
  *
  ****************************************************************************/
 
-FAR struct spi_dev_s *rp2040_spibus_initialize(int port)
+struct spi_dev_s *rp2040_spibus_initialize(int port)
 {
-  FAR struct rp2040_spidev_s *priv;
+  struct rp2040_spidev_s *priv;
   uint32_t regval;
   int i;
 #ifdef CONFIG_RP2040_SPI_DMA
@@ -819,9 +827,6 @@ FAR struct spi_dev_s *rp2040_spibus_initialize(int port)
   /* DMA settings */
 
 #ifdef CONFIG_RP2040_SPI_DMA
-  nxsem_init(&priv->dmasem, 0, 0);
-  nxsem_set_protocol(&priv->dmasem, SEM_PRIO_NONE);
-
   priv->txdmach = rp2040_dmachannel();
   txconf.size = RP2040_DMA_SIZE_BYTE;
   txconf.noincr = false;
@@ -858,11 +863,7 @@ FAR struct spi_dev_s *rp2040_spibus_initialize(int port)
 
   /* Select a default frequency of approx. 400KHz */
 
-  spi_setfrequency((FAR struct spi_dev_s *)priv, 400000);
-
-  /* Initialize the SPI semaphore that enforces mutually exclusive access */
-
-  nxsem_init(&priv->exclsem, 0, 1);
+  spi_setfrequency((struct spi_dev_s *)priv, 400000);
 
   regval = spi_getreg(priv, RP2040_SPI_SSPCR1_OFFSET);
   spi_putreg(priv, RP2040_SPI_SSPCR1_OFFSET, regval | RP2040_SPI_SSPCR1_SSE);
@@ -875,7 +876,6 @@ FAR struct spi_dev_s *rp2040_spibus_initialize(int port)
   /* Set a initialized flag */
 
   priv->initialized = 1;
-
   return &priv->spidev;
 }
 
@@ -894,9 +894,9 @@ FAR struct spi_dev_s *rp2040_spibus_initialize(int port)
  *
  ****************************************************************************/
 
-void spi_flush(FAR struct spi_dev_s *dev)
+void spi_flush(struct spi_dev_s *dev)
 {
-  FAR struct rp2040_spidev_s *priv = (FAR struct rp2040_spidev_s *)dev;
+  struct rp2040_spidev_s *priv = (struct rp2040_spidev_s *)dev;
 
   /* Wait for the TX FIFO not full indication */
 
@@ -932,11 +932,11 @@ void spi_flush(FAR struct spi_dev_s *dev)
  *
  ****************************************************************************/
 
-static void spi_dmaexchange(FAR struct spi_dev_s *dev,
-                            FAR const void *txbuffer,
-                            FAR void *rxbuffer, size_t nwords)
+static void spi_dmaexchange(struct spi_dev_s *dev,
+                            const void *txbuffer,
+                            void *rxbuffer, size_t nwords)
 {
-  FAR struct rp2040_spidev_s *priv = (FAR struct rp2040_spidev_s *)dev;
+  struct rp2040_spidev_s *priv = (struct rp2040_spidev_s *)dev;
 
   DEBUGASSERT(priv && priv->spibase);
 
@@ -965,8 +965,8 @@ static void spi_dmaexchange(FAR struct spi_dev_s *dev,
  *
  ****************************************************************************/
 
-static void spi_dmasndblock(FAR struct spi_dev_s *dev,
-                            FAR const void *buffer, size_t nwords)
+static void spi_dmasndblock(struct spi_dev_s *dev,
+                            const void *buffer, size_t nwords)
 {
   spi_dmaexchange(dev, buffer, NULL, nwords);
 }
@@ -979,8 +979,8 @@ static void spi_dmasndblock(FAR struct spi_dev_s *dev,
  *
  ****************************************************************************/
 
-static void spi_dmarecvblock(FAR struct spi_dev_s *dev,
-                             FAR const void *buffer, size_t nwords)
+static void spi_dmarecvblock(struct spi_dev_s *dev,
+                             const void *buffer, size_t nwords)
 {
   spi_dmaexchange(dev, NULL, buffer, nwords);
 }
@@ -996,7 +996,7 @@ static void spi_dmarecvblock(FAR struct spi_dev_s *dev,
 
 static void spi_dmatxcallback(DMA_HANDLE handle, uint8_t status, void *data)
 {
-  FAR struct rp2040_spidev_s *priv = (FAR struct rp2040_spidev_s *)data;
+  struct rp2040_spidev_s *priv = (struct rp2040_spidev_s *)data;
 
   /* Wake-up the SPI driver */
 
@@ -1018,7 +1018,7 @@ static void spi_dmatxcallback(DMA_HANDLE handle, uint8_t status, void *data)
 
 static void spi_dmarxcallback(DMA_HANDLE handle, uint8_t status, void *data)
 {
-  FAR struct rp2040_spidev_s *priv = (FAR struct rp2040_spidev_s *)data;
+  struct rp2040_spidev_s *priv = (struct rp2040_spidev_s *)data;
 
   /* Wake-up the SPI driver */
 
@@ -1038,8 +1038,8 @@ static void spi_dmarxcallback(DMA_HANDLE handle, uint8_t status, void *data)
  *
  ****************************************************************************/
 
-static void spi_dmatxsetup(FAR struct rp2040_spidev_s *priv,
-                           FAR const void *txbuffer, size_t nwords)
+static void spi_dmatxsetup(struct rp2040_spidev_s *priv,
+                           const void *txbuffer, size_t nwords)
 {
   uint32_t dst;
   uint32_t val;
@@ -1056,7 +1056,7 @@ static void spi_dmatxsetup(FAR struct rp2040_spidev_s *priv,
        * the txconfig so that no address increment is performed.
        */
 
-      txbuffer = (FAR const void *)&g_spitxdmadummy;
+      txbuffer = (const void *)&g_spitxdmadummy;
       priv->txconfig.noincr = true;
     }
   else
@@ -1078,8 +1078,8 @@ static void spi_dmatxsetup(FAR struct rp2040_spidev_s *priv,
  *
  ****************************************************************************/
 
-static void spi_dmarxsetup(FAR struct rp2040_spidev_s *priv,
-                           FAR const void *rxbuffer, size_t nwords)
+static void spi_dmarxsetup(struct rp2040_spidev_s *priv,
+                           const void *rxbuffer, size_t nwords)
 {
   uint32_t src;
   uint32_t val;
@@ -1096,7 +1096,7 @@ static void spi_dmarxsetup(FAR struct rp2040_spidev_s *priv,
        * the rxconfig so that no address increment is performed.
        */
 
-      rxbuffer = (FAR const void *)&g_spirxdmadummy;
+      rxbuffer = (const void *)&g_spirxdmadummy;
       priv->rxconfig.noincr = true;
     }
   else
@@ -1118,7 +1118,7 @@ static void spi_dmarxsetup(FAR struct rp2040_spidev_s *priv,
  *
  ****************************************************************************/
 
-static void spi_dmatrxwait(FAR struct rp2040_spidev_s *priv)
+static void spi_dmatrxwait(struct rp2040_spidev_s *priv)
 {
   uint32_t val;
 

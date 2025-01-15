@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/samd5e5/metro-m4/src/sam_bringup.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -95,7 +97,7 @@ int sam_bringup(void)
 #endif
 
 #if defined(CONFIG_SAMD5E5_WDT) && defined(CONFIG_WATCHDOG)
-  (void)sam_wdt_initialize(CONFIG_WATCHDOG_DEVPATH);
+  sam_wdt_initialize(CONFIG_WATCHDOG_DEVPATH);
 #endif
 
 #ifdef CONFIG_SAMD5E5_SERCOM5_ISI2C

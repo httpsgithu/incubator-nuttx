@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/cxd56xx/cxd56_start.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -57,7 +59,6 @@
 #include <arch/irq.h>
 
 #include "chip.h"
-#include "arm_arch.h"
 #include "arm_internal.h"
 #include "nvic.h"
 #include "sched/sched.h"
@@ -98,112 +99,11 @@ void weak_function up_cpuctxload(void);
    CXD56M4_SYSH_PRIORITY_DEFAULT << 8 | CXD56M4_SYSH_PRIORITY_DEFAULT)
 
 /****************************************************************************
- * Public Data
- ****************************************************************************/
-
-extern uint32_t _vectors[];
-
-/****************************************************************************
- * Private Functions
- ****************************************************************************/
-
-/****************************************************************************
  * Public Functions
  ****************************************************************************/
 
 /****************************************************************************
- * Name: fpuconfig
- *
- * Description:
- *   Configure the FPU.  Relative bit settings:
- *
- *     CPACR:  Enables access to CP10 and CP11
- *     CONTROL.FPCA: Determines whether the FP extension is active in the
- *       current context:
- *     FPCCR.ASPEN:  Enables automatic FP state preservation, then the
- *       processor sets this bit to 1 on successful completion of any FP
- *       instruction.
- *     FPCCR.LSPEN:  Enables lazy context save of FP state. When this is
- *       done, the processor reserves space on the stack for the FP state,
- *       but does not save that state information to the stack.
- *
- *  Software must not change the value of the ASPEN bit or LSPEN bit while
- *  either:
- *   - the CPACR permits access to CP10 and CP11, that give access to the FP
- *     extension, or
- *   - the CONTROL.FPCA bit is set to 1
- *
- ****************************************************************************/
-
-#ifdef CONFIG_ARCH_FPU
-#  ifndef CONFIG_ARMV7M_LAZYFPU
-
-void fpuconfig(void)
-{
-  uint32_t regval;
-
-  /* Set CONTROL.FPCA so that we always get the extended context frame
-   * with the volatile FP registers stacked above the basic context.
-   */
-
-  regval  = getcontrol();
-  regval |= CONTROL_FPCA;
-  setcontrol(regval);
-
-  /* Ensure that FPCCR.LSPEN is disabled, so that we don't have to contend
-   * with the lazy FP context save behaviour.  Clear FPCCR.ASPEN since we
-   * are going to turn on CONTROL.FPCA for all contexts.
-   */
-
-  regval  = getreg32(NVIC_FPCCR);
-  regval &= ~(NVIC_FPCCR_ASPEN | NVIC_FPCCR_LSPEN);
-  putreg32(regval, NVIC_FPCCR);
-
-  /* Enable full access to CP10 and CP11 */
-
-  regval  = getreg32(NVIC_CPACR);
-  regval |= NVIC_CPACR_CP_FULL(10) | NVIC_CPACR_CP_FULL(11);
-  putreg32(regval, NVIC_CPACR);
-}
-
-#  else
-
-void fpuconfig(void)
-{
-  uint32_t regval;
-
-  /* Clear CONTROL.FPCA so that we do not get the extended context frame
-   * with the volatile FP registers stacked in the saved context.
-   */
-
-  regval  = getcontrol();
-  regval &= ~CONTROL_FPCA;
-  setcontrol(regval);
-
-  /* Ensure that FPCCR.LSPEN is disabled, so that we don't have to contend
-   * with the lazy FP context save behaviour.  Clear FPCCR.ASPEN since we
-   * are going to keep CONTROL.FPCA off for all contexts.
-   */
-
-  regval  = getreg32(NVIC_FPCCR);
-  regval &= ~(NVIC_FPCCR_ASPEN | NVIC_FPCCR_LSPEN);
-  putreg32(regval, NVIC_FPCCR);
-
-  /* Enable full access to CP10 and CP11 */
-
-  regval  = getreg32(NVIC_CPACR);
-  regval |= NVIC_CPACR_CP_FULL(10) | NVIC_CPACR_CP_FULL(11);
-  putreg32(regval, NVIC_CPACR);
-}
-
-#  endif
-
-#else
-#  define fpuconfig()
-#endif
-
-/****************************************************************************
- * Name: _start
+ * Name: __start
  *
  * Description:
  *   This is the reset entry point.
@@ -221,11 +121,9 @@ void __start(void)
   /* Set MSP/PSP to IDLE stack */
 
   __asm__ __volatile__("\tmsr msp, %0\n" :
-                       : "r" ((uint32_t)&_ebss +
-                              CONFIG_IDLETHREAD_STACKSIZE));
+                       : "r" (_ebss + CONFIG_IDLETHREAD_STACKSIZE));
   __asm__ __volatile__("\tmsr psp, %0\n" :
-                       : "r" ((uint32_t)&_ebss +
-                              CONFIG_IDLETHREAD_STACKSIZE));
+                       : "r" (_ebss + CONFIG_IDLETHREAD_STACKSIZE));
 
 #ifndef CONFIG_CXD56_SUBCORE
   cpuid = getreg32(CPU_ID);
@@ -263,14 +161,26 @@ void __start(void)
    * certain that there are no issues with the state of global variables.
    */
 
-  for (dest = &_sbss; dest < &_ebss; )
+  for (dest = (uint32_t *)_sbss; dest < (uint32_t *)_ebss; )
     {
       *dest++ = 0;
     }
 
+#ifdef CONFIG_CXD56_GNSS_RAM
+  /* Clear .gnssram.bss section. */
+
+  extern uint8_t _gnssramsbss[];
+  extern uint8_t _gnssramebss[];
+
+  for (dest = (uint32_t *)_gnssramsbss; dest < (uint32_t *)_gnssramebss; )
+    {
+      *dest++ = 0;
+    }
+#endif
+
   /* Initialize the FPU (if configured) */
 
-  fpuconfig();
+  arm_fpuconfig();
 
 #ifdef CONFIG_ARMV7M_ITMSYSLOG
   /* Perform ARMv7-M ITM SYSLOG initialization */

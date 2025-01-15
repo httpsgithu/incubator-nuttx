@@ -1,6 +1,8 @@
 /****************************************************************************
  * graphics/nxterm/nxterm_driver.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -43,7 +45,7 @@
 static int     nxterm_open(FAR struct file *filep);
 static int     nxterm_close(FAR struct file *filep);
 static ssize_t nxterm_write(FAR struct file *filep, FAR const char *buffer,
-                 size_t buflen);
+                            size_t buflen);
 static int     nxterm_ioctl(FAR struct file *filep, int cmd,
                             unsigned long arg);
 #ifndef CONFIG_DISABLE_PSEUDOFS_OPERATIONS
@@ -60,16 +62,19 @@ static int     nxterm_unlink(FAR struct inode *inode);
 
 const struct file_operations g_nxterm_drvrops =
 {
-  nxterm_open,  /* open */
-  nxterm_close, /* close */
-  nxterm_read,  /* read */
-  nxterm_write, /* write */
-  NULL,         /* seek */
-  nxterm_ioctl, /* ioctl */
-  nxterm_poll   /* poll */
+  nxterm_open,    /* open */
+  nxterm_close,   /* close */
+  nxterm_read,    /* read */
+  nxterm_write,   /* write */
+  NULL,           /* seek */
+  nxterm_ioctl,   /* ioctl */
+  NULL,           /* mmap */
+  NULL,           /* truncate */
+  nxterm_poll,    /* poll */
+  NULL,           /* readv */
+  NULL            /* writev */
 #ifndef CONFIG_DISABLE_PSEUDOFS_OPERATIONS
-  ,
-  nxterm_unlink /* unlink */
+  , nxterm_unlink /* unlink */
 #endif
 };
 
@@ -77,16 +82,19 @@ const struct file_operations g_nxterm_drvrops =
 
 const struct file_operations g_nxterm_drvrops =
 {
-  nxterm_open,  /* open */
-  nxterm_close, /* close */
-  NULL,         /* read */
-  nxterm_write, /* write */
-  NULL,         /* seek */
-  nxterm_ioctl, /* ioctl */
-  NULL          /* poll */
+  nxterm_open,    /* open */
+  nxterm_close,   /* close */
+  NULL,           /* read */
+  nxterm_write,   /* write */
+  NULL,           /* seek */
+  nxterm_ioctl,   /* ioctl */
+  NULL,           /* mmap */
+  NULL,           /* truncate */
+  NULL,           /* poll */
+  NULL,           /* readv */
+  NULL            /* writev */
 #ifndef CONFIG_DISABLE_PSEUDOFS_OPERATIONS
-  ,
-  nxterm_unlink /* unlink */
+  , nxterm_unlink /* unlink */
 #endif
 };
 
@@ -103,14 +111,12 @@ const struct file_operations g_nxterm_drvrops =
 static int nxterm_open(FAR struct file *filep)
 {
   FAR struct inode         *inode = filep->f_inode;
-  FAR struct nxterm_state_s *priv  = inode->i_private;
-
-  DEBUGASSERT(filep && filep->f_inode);
+  FAR struct nxterm_state_s *priv = inode->i_private;
 
   /* Get the driver structure from the inode */
 
   inode = filep->f_inode;
-  priv  = (FAR struct nxterm_state_s *)inode->i_private;
+  priv  = inode->i_private;
   DEBUGASSERT(priv);
 
   /* Verify that the driver is opened for write-only access */
@@ -148,12 +154,12 @@ static int nxterm_close(FAR struct file *filep)
 
   /* Recover our private state structure */
 
-  DEBUGASSERT(filep != NULL && filep->f_priv != NULL);
+  DEBUGASSERT(filep->f_priv != NULL);
   priv = (FAR struct nxterm_state_s *)filep->f_priv;
 
   /* Get exclusive access */
 
-  ret = nxterm_semwait(priv);
+  ret = nxmutex_lock(&priv->lock);
   if (ret < 0)
     {
       return ret;
@@ -168,7 +174,9 @@ static int nxterm_close(FAR struct file *filep)
     {
       /* Yes.. Unregister the terminal device */
 
+      nxmutex_unlock(&priv->lock);
       nxterm_unregister(priv);
+      return OK;
     }
   else
     {
@@ -177,7 +185,7 @@ static int nxterm_close(FAR struct file *filep)
       priv->orefs--;
     }
 
-  nxterm_sempost(priv);
+  nxmutex_unlock(&priv->lock);
 #endif
 
   return OK;
@@ -198,12 +206,12 @@ static ssize_t nxterm_write(FAR struct file *filep, FAR const char *buffer,
 
   /* Recover our private state structure */
 
-  DEBUGASSERT(filep != NULL && filep->f_priv != NULL);
+  DEBUGASSERT(filep->f_priv != NULL);
   priv = (FAR struct nxterm_state_s *)filep->f_priv;
 
   /* Get exclusive access */
 
-  ret = nxterm_semwait(priv);
+  ret = nxmutex_lock(&priv->lock);
   if (ret < 0)
     {
       return ret;
@@ -292,7 +300,7 @@ static ssize_t nxterm_write(FAR struct file *filep, FAR const char *buffer,
   /* Show the cursor at its new position */
 
   nxterm_showcursor(priv);
-  nxterm_sempost(priv);
+  nxmutex_unlock(&priv->lock);
   return (ssize_t)buflen;
 }
 
@@ -323,12 +331,12 @@ static int nxterm_unlink(FAR struct inode *inode)
   FAR struct nxterm_state_s *priv;
   int ret;
 
-  DEBUGASSERT(inode != NULL && inode->i_private != NULL);
+  DEBUGASSERT(inode->i_private != NULL);
   priv = inode->i_private;
 
   /* Get exclusive access */
 
-  ret = nxterm_semwait(priv);
+  ret = nxmutex_lock(&priv->lock);
   if (ret < 0)
     {
       return ret;
@@ -348,10 +356,12 @@ static int nxterm_unlink(FAR struct inode *inode)
     {
       /* No.. Unregister the terminal device now */
 
+      nxmutex_unlock(&priv->lock);
       nxterm_unregister(priv);
+      return OK;
     }
 
-  nxterm_sempost(priv);
+  nxmutex_unlock(&priv->lock);
   return OK;
 }
 #endif

@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/stm32/viewtool-stm32f107/include/board-stm32f103vct6.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -28,10 +30,8 @@
 #include <nuttx/config.h>
 
 #ifndef __ASSEMBLY__
-# include <stdint.h>
+#  include <stdint.h>
 #endif
-
-#include "stm32_rcc.h"
 
 /****************************************************************************
  * Pre-processor Definitions

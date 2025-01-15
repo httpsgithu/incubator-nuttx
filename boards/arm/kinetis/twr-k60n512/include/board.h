@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/kinetis/twr-k60n512/include/board.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -18,8 +20,8 @@
  *
  ****************************************************************************/
 
-#ifndef __BOARDS_ARM_KINETIS_TWR-K60N512_INCLUDE_BOARD_H
-#define __BOARDS_ARM_KINETIS_TWR-K60N512_INCLUDE_BOARD_H
+#ifndef __BOARDS_ARM_KINETIS_TWR_K60N512_INCLUDE_BOARD_H
+#define __BOARDS_ARM_KINETIS_TWR_K60N512_INCLUDE_BOARD_H
 
 /****************************************************************************
  * Included Files
@@ -27,7 +29,7 @@
 
 #include <nuttx/config.h>
 #ifndef __ASSEMBLY__
-# include <stdint.h>
+#  include <stdint.h>
 #endif
 
 /****************************************************************************
@@ -362,4 +364,4 @@
  * B80 EBI_D0               PTC15
  */
 
-#endif /* __BOARDS_ARM_KINETIS_TWR-K60N512_INCLUDE_BOARD_H */
+#endif /* __BOARDS_ARM_KINETIS_TWR_K60N512_INCLUDE_BOARD_H */

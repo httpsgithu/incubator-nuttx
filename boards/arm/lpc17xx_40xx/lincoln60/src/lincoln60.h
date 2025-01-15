@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/lpc17xx_40xx/lincoln60/src/lincoln60.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -18,8 +20,8 @@
  *
  ****************************************************************************/
 
-#ifndef _BOARDS_ARM_LPC17XX_40XX_LINCOLN60_SRC_LINCOLN60_H
-#define _BOARDS_ARM_LPC17XX_40XX_LINCOLN60_SRC_LINCOLN60_H
+#ifndef __BOARDS_ARM_LPC17XX_40XX_LINCOLN60_SRC_LINCOLN60_H
+#define __BOARDS_ARM_LPC17XX_40XX_LINCOLN60_SRC_LINCOLN60_H
 
 /****************************************************************************
  * Included Files
@@ -98,4 +100,4 @@
 void weak_function lincoln60_sspdev_initialize(void);
 
 #endif /* __ASSEMBLY__ */
-#endif /* _BOARDS_ARM_LPC17XX_40XX_LINCOLN60_SRC_LINCOLN60_H */
+#endif /* __BOARDS_ARM_LPC17XX_40XX_LINCOLN60_SRC_LINCOLN60_H */

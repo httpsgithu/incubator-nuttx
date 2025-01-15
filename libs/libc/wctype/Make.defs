@@ -1,6 +1,8 @@
 ############################################################################
 # libs/libc/wctype/Make.defs
 #
+# SPDX-License-Identifier: Apache-2.0
+#
 # Licensed to the Apache Software Foundation (ASF) under one or more
 # contributor license agreements.  See the NOTICE file distributed with
 # this work for additional information regarding copyright ownership.  The
@@ -18,8 +20,6 @@
 #
 ############################################################################
 
-ifeq ($(CONFIG_LIBC_WCHAR),y)
-
 # Add the internal C files to the build
 
 CSRCS += lib_wctype.c lib_iswctype.c lib_towlower.c lib_towupper.c
@@ -28,5 +28,3 @@ CSRCS += lib_wctype.c lib_iswctype.c lib_towlower.c lib_towupper.c
 
 DEPPATH += --dep-path wctype
 VPATH += :wctype
-
-endif

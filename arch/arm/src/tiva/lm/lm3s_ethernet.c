@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/tiva/lm/lm3s_ethernet.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -40,18 +42,17 @@
 #include <nuttx/wdog.h>
 #include <nuttx/irq.h>
 #include <nuttx/wqueue.h>
-
-#include <arch/board/board.h>
-#include <nuttx/net/arp.h>
+#include <nuttx/net/ip.h>
 #include <nuttx/net/netdev.h>
 
 #ifdef CONFIG_NET_PKT
 #  include <nuttx/net/pkt.h>
 #endif
 
-#include "chip.h"
-#include "arm_arch.h"
+#include <arch/board/board.h>
 
+#include "chip.h"
+#include "arm_internal.h"
 #include "tiva_gpio.h"
 #include "tiva_ethernet.h"
 #include "hardware/tiva_pinmap.h"
@@ -155,21 +156,17 @@
 #  define tiva_dumppacket(m,a,n)
 #endif
 
-/* TX poll deley = 1 seconds.
- * CLK_TCK is the number of clock ticks per second
- */
-
-#define TIVA_WDDELAY   (1*CLK_TCK)
-
 /* TX timeout = 1 minute */
 
 #define TIVA_TXTIMEOUT (60*CLK_TCK)
 
-/* This is a helper pointer for accessing the contents of Ethernet header */
-
-#define ETHBUF ((struct eth_hdr_s *)priv->ld_dev.d_buf)
-
 #define TIVA_MAX_MDCCLK 2500000
+
+/* This is a helper pointer for accessing the contents of the Ethernet
+ * header
+ */
+
+#define BUF ((struct eth_hdr_s *)&dev->d_buf[0])
 
 /****************************************************************************
  * Private Types
@@ -191,7 +188,6 @@ struct tiva_driver_s
 #endif
 
   bool     ld_bifup;           /* true:ifup false:ifdown */
-  struct wdog_s ld_txpoll;     /* TX poll timer */
   struct wdog_s ld_txtimeout;  /* TX timeout timer */
   struct work_s ld_irqwork;    /* For deferring interrupt work to the work queue */
   struct work_s ld_pollwork;   /* For deferring poll work to the work queue */
@@ -207,7 +203,8 @@ struct tiva_driver_s
 
 /* A single packet buffer is used */
 
-static uint8_t g_pktbuf[MAX_NETDEV_PKTSIZE + CONFIG_NET_GUARDSIZE];
+static uint8_t g_pktbuf[TIVA_NETHCONTROLLERS]
+                       [MAX_NETDEV_PKTSIZE + CONFIG_NET_GUARDSIZE];
 
 /* Ethernet peripheral state */
 
@@ -248,15 +245,12 @@ static void tiva_receive(struct tiva_driver_s *priv);
 static void tiva_txdone(struct tiva_driver_s *priv);
 
 static void tiva_interrupt_work(void *arg);
-static int  tiva_interrupt(int irq, void *context, FAR void *arg);
+static int  tiva_interrupt(int irq, void *context, void *arg);
 
 /* Watchdog timer expirations */
 
 static void tiva_txtimeout_work(void *arg);
 static void tiva_txtimeout_expiry(wdparm_t arg);
-
-static void tiva_poll_work(void *arg);
-static void tiva_poll_expiry(wdparm_t arg);
 
 /* NuttX callback functions */
 
@@ -617,54 +611,12 @@ static int tiva_transmit(struct tiva_driver_s *priv)
 static int tiva_txpoll(struct net_driver_s *dev)
 {
   struct tiva_driver_s *priv = (struct tiva_driver_s *)dev->d_private;
-  int ret = OK;
 
-  /* If the polling resulted in data that should be sent out on the network,
-   * the field d_len is set to a value > 0.
+  /* Send the packet.  tiva_transmit() will return zero if the
+   * packet was successfully handled.
    */
 
-  ninfo("Poll result: d_len=%d\n", priv->ld_dev.d_len);
-  if (priv->ld_dev.d_len > 0)
-    {
-      DEBUGASSERT(!(tiva_ethin(priv, TIVA_MAC_TR_OFFSET) & MAC_TR_NEWTX));
-
-      /* Look up the destination MAC address and add it to the Ethernet
-       * header.
-       */
-
-#ifdef CONFIG_NET_IPv4
-#ifdef CONFIG_NET_IPv6
-      if (IFF_IS_IPv4(priv->ld_dev.d_flags))
-#endif
-        {
-          arp_out(&priv->ld_dev);
-        }
-#endif /* CONFIG_NET_IPv4 */
-
-#ifdef CONFIG_NET_IPv6
-#ifdef CONFIG_NET_IPv4
-      else
-#endif
-        {
-          neighbor_out(&priv->ld_dev);
-        }
-#endif /* CONFIG_NET_IPv6 */
-
-      if (!devif_loopback(&priv->ld_dev))
-        {
-          /* Send the packet.  tiva_transmit() will return zero if the
-           * packet was successfully handled.
-           */
-
-          ret = tiva_transmit(priv);
-        }
-    }
-
-  /* If zero is returned, the polling will continue until all connections
-   * have been examined.
-   */
-
-  return ret;
+  return tiva_transmit(priv);
 }
 
 /****************************************************************************
@@ -685,10 +637,11 @@ static int tiva_txpoll(struct net_driver_s *dev)
 
 static void tiva_receive(struct tiva_driver_s *priv)
 {
+  struct net_driver_s *dev = &priv->ld_dev;
   uint32_t regval;
   uint8_t *dbuf;
-  int      pktlen;
-  int      bytesleft;
+  int bytesleft;
+  int pktlen;
 
   /* Loop while there are incoming packets to be processed */
 
@@ -696,13 +649,13 @@ static void tiva_receive(struct tiva_driver_s *priv)
     {
       /* Update statistics */
 
-      NETDEV_RXPACKETS(&priv->ld_dev);
+      NETDEV_RXPACKETS(dev);
 
-      /* Copy the data data from the hardware to priv->ld_dev.d_buf.  Set
-       * amount of data in priv->ld_dev.d_len
+      /* Copy the data data from the hardware to dev->d_buf.  Set
+       * amount of data in dev->d_len
        */
 
-      dbuf = priv->ld_dev.d_buf;
+      dbuf = dev->d_buf;
 
       /* The packet frame length begins in the LS 16-bits of the first
        * word from the FIFO followed by the Ethernet header beginning
@@ -729,7 +682,7 @@ static void tiva_receive(struct tiva_driver_s *priv)
           /* We will have to drop this packet */
 
           nwarn("WARNING: Bad packet size dropped (%d)\n", pktlen);
-          NETDEV_RXERRORS(&priv->ld_dev);
+          NETDEV_RXERRORS(dev);
 
           /* The number of bytes and words left to read is pktlen - 4
            * (including, the final, possibly partial word) because we've
@@ -799,52 +752,34 @@ static void tiva_receive(struct tiva_driver_s *priv)
        * and 4 bytes for the FCS.
        */
 
-      priv->ld_dev.d_len = pktlen - 6;
+      dev->d_len = pktlen - 6;
       tiva_dumppacket("Received packet",
-                      priv->ld_dev.d_buf, priv->ld_dev.d_len);
+                      dev->d_buf, dev->d_len);
 
 #ifdef CONFIG_NET_PKT
       /* When packet sockets are enabled, feed the frame into the tap */
 
-       pkt_input(&priv->ld_dev);
+       pkt_input(dev);
 #endif
 
       /* We only accept IP packets of the configured type and ARP packets */
 
 #ifdef CONFIG_NET_IPv4
-      if (ETHBUF->type == HTONS(ETHTYPE_IP))
+      if (BUF->type == HTONS(ETHTYPE_IP))
         {
           ninfo("IPv4 frame\n");
-          NETDEV_RXIPV4(&priv->ld_dev);
+          NETDEV_RXIPV4(dev);
 
-          /* Handle ARP on input then give the IPv4 packet to the network
-           * layer
-           */
+          /* Receive an IPv4 packet from the network device */
 
-          arp_ipin(&priv->ld_dev);
-          ipv4_input(&priv->ld_dev);
+          ipv4_input(dev);
 
           /* If the above function invocation resulted in data that should be
            * sent out on the network, d_len field will set to a value > 0.
            */
 
-          if (priv->ld_dev.d_len > 0)
+          if (dev->d_len > 0)
             {
-              /* Update the Ethernet header with the correct MAC address */
-
-#ifdef CONFIG_NET_IPv6
-              if (IFF_IS_IPv4(priv->ld_dev.d_flags))
-#endif
-                {
-                  arp_out(&priv->ld_dev);
-                }
-#ifdef CONFIG_NET_IPv6
-              else
-                {
-                  neighbor_out(&priv->ld_dev);
-                }
-#endif
-
               /* And send the packet */
 
               tiva_transmit(priv);
@@ -853,37 +788,21 @@ static void tiva_receive(struct tiva_driver_s *priv)
       else
 #endif
 #ifdef CONFIG_NET_IPv6
-      if (ETHBUF->type == HTONS(ETHTYPE_IP6))
+      if (BUF->type == HTONS(ETHTYPE_IP6))
         {
           ninfo("IPv6 frame\n");
-          NETDEV_RXIPV6(&priv->ld_dev);
+          NETDEV_RXIPV6(dev);
 
           /* Give the IPv6 packet to the network layer */
 
-          arp_ipin(&priv->ld_dev);
-          ipv6_input(&priv->ld_dev);
+          ipv6_input(dev);
 
           /* If the above function invocation resulted in data that should be
            * sent out on the network, d_len field will set to a value > 0.
            */
 
           if (priv->dev.d_len > 0)
-           {
-              /* Update the Ethernet header with the correct MAC address */
-
-#ifdef CONFIG_NET_IPv4
-              if (IFF_IS_IPv4(priv->ld_dev.d_flags))
-                {
-                  arp_out(&priv->ld_dev);
-                }
-              else
-#endif
-#ifdef CONFIG_NET_IPv6
-                {
-                  neighbor_out(&priv->ld_dev);
-                }
-#endif
-
+            {
               /* And send the packet */
 
               tiva_transmit(priv);
@@ -892,18 +811,18 @@ static void tiva_receive(struct tiva_driver_s *priv)
       else
 #endif
 #ifdef CONFIG_NET_ARP
-      if (ETHBUF->type == htons(ETHTYPE_ARP))
+      if (BUF->type == HTONS(ETHTYPE_ARP))
         {
-          ninfo("ARP packet received (%02x)\n", ETHBUF->type);
-          NETDEV_RXARP(&priv->ld_dev);
+          ninfo("ARP packet received (%02x)\n", BUF->type);
+          NETDEV_RXARP(dev);
 
-          arp_arpin(&priv->ld_dev);
+          arp_input(dev);
 
           /* If the above function invocation resulted in data that should be
            * sent out on the network, d_len field will set to a value > 0.
            */
 
-           if (priv->ld_dev.d_len > 0)
+           if (dev->d_len > 0)
              {
                tiva_transmit(priv);
              }
@@ -912,8 +831,8 @@ static void tiva_receive(struct tiva_driver_s *priv)
 #endif
         {
           nwarn("WARNING: Unsupported packet type dropped (%02x)\n",
-                  htons(ETHBUF->type));
-          NETDEV_RXDROPPED(&priv->ld_dev);
+                HTONS(BUF->type));
+          NETDEV_RXDROPPED(dev);
         }
     }
 }
@@ -1064,7 +983,7 @@ static void tiva_interrupt_work(void *arg)
  *
  ****************************************************************************/
 
-static int tiva_interrupt(int irq, void *context, FAR void *arg)
+static int tiva_interrupt(int irq, void *context, void *arg)
 {
   struct tiva_driver_s *priv;
   uint32_t ris;
@@ -1189,79 +1108,6 @@ static void tiva_txtimeout_expiry(wdparm_t arg)
 }
 
 /****************************************************************************
- * Function: tiva_poll_work
- *
- * Description:
- *   Perform periodic polling from the worker thread
- *
- * Input Parameters:
- *   arg - The argument passed when work_queue() as called.
- *
- * Returned Value:
- *   OK on success
- *
- * Assumptions:
- *   The network is locked.
- *
- ****************************************************************************/
-
-static void tiva_poll_work(void *arg)
-{
-  struct tiva_driver_s *priv = (struct tiva_driver_s *)arg;
-
-  /* Check if we can send another Tx packet now.  The NEWTX bit initiates an
-   * Ethernet transmission once the packet has been placed in the TX FIFO.
-   * This bit is cleared once the transmission has been completed.
-   *
-   * NOTE: This can cause missing poll cycles and, hence, some timing
-   * inaccuracies.
-   */
-
-  net_lock();
-  if ((tiva_ethin(priv, TIVA_MAC_TR_OFFSET) & MAC_TR_NEWTX) == 0)
-    {
-      /* If so, update TCP timing states and poll the network for new XMIT
-       * data.
-       */
-
-      devif_timer(&priv->ld_dev, TIVA_WDDELAY, tiva_txpoll);
-
-      /* Setup the watchdog poll timer again */
-
-      wd_start(&priv->ld_txpoll, TIVA_WDDELAY,
-               tiva_poll_expiry, (wdparm_t)priv);
-    }
-
-  net_unlock();
-}
-
-/****************************************************************************
- * Function: tiva_poll_expiry
- *
- * Description:
- *   Periodic timer handler.  Called from the timer interrupt handler.
- *
- * Input Parameters:
- *   arg  - The argument
- *
- * Returned Value:
- *   None
- *
- * Assumptions:
- *   Global interrupts are disabled by the watchdog logic.
- *
- ****************************************************************************/
-
-static void tiva_poll_expiry(wdparm_t arg)
-{
-  struct tiva_driver_s *priv = (struct tiva_driver_s *)arg;
-
-  /* Schedule to perform the interrupt processing on the worker thread. */
-
-  work_queue(ETHWORK, &priv->ld_pollwork, tiva_poll_work, priv, 0);
-}
-
-/****************************************************************************
  * Function: tiva_ifup
  *
  * Description:
@@ -1288,11 +1134,9 @@ static int tiva_ifup(struct net_driver_s *dev)
   uint16_t phyreg;
 #endif
 
-  ninfo("Bringing up: %d.%d.%d.%d\n",
-        (int)(dev->d_ipaddr & 0xff),
-        (int)((dev->d_ipaddr >> 8) & 0xff),
-        (int)((dev->d_ipaddr >> 16) & 0xff),
-        (int)(dev->d_ipaddr >> 24));
+  ninfo("Bringing up: %u.%u.%u.%u\n",
+        ip4_addr1(dev->d_ipaddr), ip4_addr2(dev->d_ipaddr),
+        ip4_addr3(dev->d_ipaddr), ip4_addr4(dev->d_ipaddr));
 
   /* Enable and reset the Ethernet controller */
 
@@ -1414,11 +1258,6 @@ static int tiva_ifup(struct net_driver_s *dev)
            (uint32_t)priv->ld_dev.d_mac.ether.ether_addr_octet[4];
   tiva_ethout(priv, TIVA_MAC_IA1_OFFSET, regval);
 
-  /* Set and activate a timer process */
-
-  wd_start(&priv->ld_txpoll, TIVA_WDDELAY,
-           tiva_poll_expiry, (wdparm_t)priv);
-
   priv->ld_bifup = true;
   leave_critical_section(flags);
   return OK;
@@ -1447,16 +1286,13 @@ static int tiva_ifdown(struct net_driver_s *dev)
   irqstate_t flags;
   uint32_t regval;
 
-  ninfo("Taking down: %d.%d.%d.%d\n",
-        (int)(dev->d_ipaddr & 0xff),
-        (int)((dev->d_ipaddr >> 8) & 0xff),
-        (int)((dev->d_ipaddr >> 16) & 0xff),
-        (int)(dev->d_ipaddr >> 24));
+  ninfo("Taking down: %u.%u.%u.%u\n",
+        ip4_addr1(dev->d_ipaddr), ip4_addr2(dev->d_ipaddr),
+        ip4_addr3(dev->d_ipaddr), ip4_addr4(dev->d_ipaddr));
 
-  /* Cancel the TX poll timer and TX timeout timers */
+  /* Cancel the TX timeout timers */
 
   flags = enter_critical_section();
-  wd_cancel(&priv->ld_txpoll);
   wd_cancel(&priv->ld_txtimeout);
 
   /* Disable the Ethernet interrupt */
@@ -1546,7 +1382,7 @@ static void tiva_txavail_work(void *arg)
        * network for new Tx data
        */
 
-      devif_timer(&priv->ld_dev, 0, tiva_txpoll);
+      devif_poll(&priv->ld_dev, tiva_txpoll);
     }
 
   net_unlock();
@@ -1695,20 +1531,20 @@ static inline int tiva_ethinitialize(int intf)
   /* Initialize the driver structure */
 
   memset(priv, 0, sizeof(struct tiva_driver_s));
-  priv->ld_dev.d_buf     = g_pktbuf;      /* Single packet buffer */
-  priv->ld_dev.d_ifup    = tiva_ifup;     /* I/F down callback */
-  priv->ld_dev.d_ifdown  = tiva_ifdown;   /* I/F up (new IP address) callback */
-  priv->ld_dev.d_txavail = tiva_txavail;  /* New TX data callback */
+  priv->ld_dev.d_buf     = g_pktbuf[intf]; /* Single packet buffer */
+  priv->ld_dev.d_ifup    = tiva_ifup;      /* I/F down callback */
+  priv->ld_dev.d_ifdown  = tiva_ifdown;    /* I/F up (new IP address) callback */
+  priv->ld_dev.d_txavail = tiva_txavail;   /* New TX data callback */
 #ifdef CONFIG_NET_MCASTGROUP
-  priv->ld_dev.d_addmac  = tiva_addmac;   /* Add multicast MAC address */
-  priv->ld_dev.d_rmmac   = tiva_rmmac;    /* Remove multicast MAC address */
+  priv->ld_dev.d_addmac  = tiva_addmac;    /* Add multicast MAC address */
+  priv->ld_dev.d_rmmac   = tiva_rmmac;     /* Remove multicast MAC address */
 #endif
-  priv->ld_dev.d_private = priv;          /* Used to recover private state from dev */
+  priv->ld_dev.d_private = priv;           /* Used to recover private state from dev */
 
 #if TIVA_NETHCONTROLLERS > 1
 # error "A mechanism to associate base address an IRQ with an interface is needed"
-  priv->ld_base          = ??;            /* Ethernet controller base address */
-  priv->ld_irq           = ??;            /* Ethernet controller IRQ number */
+  priv->ld_base          = ??;             /* Ethernet controller base address */
+  priv->ld_irq           = ??;             /* Ethernet controller IRQ number */
 #endif
 
 #ifdef CONFIG_TIVA_BOARDMAC

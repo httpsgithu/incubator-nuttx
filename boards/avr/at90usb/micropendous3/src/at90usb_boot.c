@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/avr/at90usb/micropendous3/src/at90usb_boot.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -28,9 +30,7 @@
 
 #include <arch/board/board.h>
 
-#include "up_arch.h"
-#include "up_internal.h"
-
+#include "avr_internal.h"
 #include "at90usb.h"
 #include "micropendous3.h"
 

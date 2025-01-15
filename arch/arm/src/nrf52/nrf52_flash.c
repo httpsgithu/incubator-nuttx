@@ -1,15 +1,11 @@
 /****************************************************************************
  * arch/arm/src/nrf52/nrf52_flash.c
- * Standard Flash access functions needed by the flash mtd driver.
  *
- *   Copyright (C) 2018 Zglue Inc. All rights reserved.
- *   Author: Levin Li <zhiqiang@zglue.com>
- *   Author: Alan Carvalho de Assis <acassis@gmail.com>
- *
- * Ported from the Nordic SDK, this is the original license:
- *
- * Copyright (c) 2012 - 2018, Nordic Semiconductor ASA
- * All rights reserved.
+ * SPDX-License-Identifier: BSD-3-Clause
+ * SPDX-FileCopyrightText: 2018 Zglue Inc. All rights reserved.
+ * SPDX-FileCopyrightText: 2012 - 2018, Nordic Semiconductor ASA
+ * SPDX-FileContributor: Levin Li <zhiqiang@zglue.com>
+ * SPDX-FileContributor: Alan Carvalho de Assis <acassis@gmail.com>
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -47,14 +43,12 @@
 #include <nuttx/config.h>
 #include <nuttx/arch.h>
 #include <errno.h>
+#include <debug.h>
 
-#include <nuttx/config.h>
 #include <nuttx/progmem.h>
 
 #include "chip.h"
-
-#include "arm_arch.h"
-
+#include "arm_internal.h"
 #include "hardware/nrf52_ficr.h"
 #include "hardware/nrf52_nvmc.h"
 #include "nrf52_nvmc.h"
@@ -63,7 +57,13 @@
  * Pre-processor Definitions
  ****************************************************************************/
 
+#ifndef CONFIG_ALLOW_BSD_COMPONENTS
+#  error "This file requires Kconfig ALLOW_BSD_COMPONENTS"
+#endif
+
 #define NRF52_FLASH_PAGE_SIZE  (4*1024)
+
+#define NRF52_FLASH_ERASEDVAL  (0xffu)
 
 /****************************************************************************
  * Public Functions
@@ -215,7 +215,7 @@ ssize_t up_progmem_eraseblock(size_t block)
 
   if (block >= up_progmem_neraseblocks())
     {
-      _err("Wrong Page number %d.\n", page);
+      _err("Wrong block number %d.\n", block);
       return -EFAULT;
     }
 
@@ -271,7 +271,7 @@ ssize_t up_progmem_ispageerased(size_t page)
   for (addr = up_progmem_getaddress(page), count = up_progmem_pagesize(page);
        count; count--, addr++)
     {
-      if (getreg8(addr) != 0xff)
+      if (getreg8(addr) != NRF52_FLASH_ERASEDVAL)
         {
           bwritten++;
         }
@@ -343,4 +343,17 @@ ssize_t up_progmem_write(size_t addr, const void *buf, size_t count)
     }
 
   return written;
+}
+
+/****************************************************************************
+ * Name: up_progmem_erasestate
+ *
+ * Description:
+ *   Return value of erase state.
+ *
+ ****************************************************************************/
+
+uint8_t up_progmem_erasestate(void)
+{
+  return NRF52_FLASH_ERASEDVAL;
 }

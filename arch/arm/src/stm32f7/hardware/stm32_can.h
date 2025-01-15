@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/stm32f7/hardware/stm32_can.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -18,8 +20,8 @@
  *
  ****************************************************************************/
 
-#ifndef __ARCH_ARM_SRC_STM32F7_HARDWARE_STM32F7_CAN_H
-#define __ARCH_ARM_SRC_STM32F7_HARDWARE_STM32F7_CAN_H
+#ifndef __ARCH_ARM_SRC_STM32F7_HARDWARE_STM32_CAN_H
+#define __ARCH_ARM_SRC_STM32F7_HARDWARE_STM32_CAN_H
 
 /****************************************************************************
  * Included Files

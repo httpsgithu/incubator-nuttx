@@ -1,6 +1,8 @@
 /****************************************************************************
  * libs/libc/machine/xtensa/arch_strlen.S
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -27,6 +29,10 @@
 #include <arch/chip/core-isa.h>
 #include <arch/xtensa/xtensa_abi.h>
 
+#include "libc.h"
+
+#ifdef LIBC_BUILD_STRLEN
+
 /****************************************************************************
  * Public Functions
  ****************************************************************************/
@@ -35,9 +41,9 @@
   .begin schedule
   .align  4
   .literal_position
-  .global strlen
-  .type strlen, @function
-strlen:
+  .global ARCH_LIBCFUN(strlen)
+  .type ARCH_LIBCFUN(strlen), @function
+ARCH_LIBCFUN(strlen):
   ENTRY(16)
   /* a2 = s */
 
@@ -66,7 +72,6 @@ strlen:
   addi  a3, a3, 3 # point to zero byte
   sub a2, a3, a2  # subtract to get length
   RET(16)
-
 
 /* String is word-aligned.  */
 
@@ -120,4 +125,6 @@ strlen:
 
   .end schedule
 
-  .size strlen, . - strlen
+  .size ARCH_LIBCFUN(strlen), . - ARCH_LIBCFUN(strlen)
+
+#endif

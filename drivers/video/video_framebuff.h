@@ -1,6 +1,8 @@
 /****************************************************************************
  * drivers/video/video_framebuff.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -18,15 +20,17 @@
  *
  ****************************************************************************/
 
-#ifndef __VIDEO_VIDEO_FRAMEBUFF_H__
-#define __VIDEO_VIDEO_FRAMEBUFF_H__
+#ifndef __DRIVERS_VIDEO_VIDEO_FRAMEBUFF_H
+#define __DRIVERS_VIDEO_VIDEO_FRAMEBUFF_H
 
 /****************************************************************************
  * Included Files
  ****************************************************************************/
 
-#include <nuttx/video/video.h>
-#include <nuttx/semaphore.h>
+#include <sys/videoio.h>
+
+#include <nuttx/mutex.h>
+#include <nuttx/spinlock.h>
 
 /****************************************************************************
  * Public Types
@@ -35,21 +39,21 @@
 struct vbuf_container_s
 {
   struct v4l2_buffer       buf;   /* Buffer information */
-  struct vbuf_container_s *next;  /* pointer to next buffer */
+  struct vbuf_container_s *next;  /* Pointer to next buffer */
 };
 
 typedef struct vbuf_container_s vbuf_container_t;
 
 struct video_framebuff_s
 {
-  enum v4l2_buf_mode  mode;
-  sem_t lock_empty;
+  enum v4l2_buf_mode mode;
+  spinlock_t lock_queue;
+  mutex_t lock_empty;
   int container_size;
   vbuf_container_t *vbuf_alloced;
   vbuf_container_t *vbuf_empty;
   vbuf_container_t *vbuf_top;
   vbuf_container_t *vbuf_tail;
-  vbuf_container_t *vbuf_curr;
   vbuf_container_t *vbuf_next;
 };
 
@@ -71,6 +75,8 @@ vbuf_container_t *video_framebuff_get_container
                        (video_framebuff_t *fbuf);
 void              video_framebuff_free_container
                        (video_framebuff_t *fbuf, vbuf_container_t *cnt);
+int               video_framebuff_is_empty
+                       (video_framebuff_t *fbuf);
 void              video_framebuff_queue_container
                        (video_framebuff_t *fbuf, vbuf_container_t *tgt);
 vbuf_container_t *video_framebuff_dq_valid_container
@@ -84,4 +90,4 @@ void              video_framebuff_capture_done
 void              video_framebuff_change_mode
                        (video_framebuff_t *fbuf, enum v4l2_buf_mode mode);
 
-#endif  // __VIDEO_VIDEO_FRAMEBUFF_H__
+#endif  /* __DRIVERS_VIDEO_VIDEO_FRAMEBUFF_H */

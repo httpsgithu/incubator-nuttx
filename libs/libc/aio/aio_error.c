@@ -1,6 +1,8 @@
 /****************************************************************************
  * libs/libc/aio/aio_error.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -88,6 +90,13 @@
 int aio_error(FAR const struct aiocb *aiocbp)
 {
   DEBUGASSERT(aiocbp);
+
+  /* the aio_reqprio field must be large or equal than 0 */
+
+  if (aiocbp->aio_reqprio < 0)
+    {
+      return EINVAL;
+    }
 
   if (aiocbp->aio_result < 0)
     {

@@ -1,6 +1,8 @@
 /****************************************************************************
  * include/nuttx/usb/hid_parser.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -25,7 +27,6 @@
  * Included Files
  ****************************************************************************/
 
-#include <string.h>
 #include <stdbool.h>
 
 /****************************************************************************
@@ -234,11 +235,11 @@ typedef CODE bool (*hid_rptfilter_t)(FAR struct hid_rptitem_s *item);
 
 #undef EXTERN
 #if defined(__cplusplus)
-# define EXTERN extern "C"
+#  define EXTERN extern "C"
 extern "C"
 {
 #else
-# define EXTERN extern
+#  define EXTERN extern
 #endif
 
 /****************************************************************************

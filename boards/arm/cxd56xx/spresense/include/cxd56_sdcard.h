@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/cxd56xx/spresense/include/cxd56_sdcard.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -26,6 +28,7 @@
  ****************************************************************************/
 
 #include <nuttx/config.h>
+#include <stdint.h>
 
 /****************************************************************************
  * Public Types
@@ -129,6 +132,20 @@ void board_sdcard_set_high_voltage(void);
  ****************************************************************************/
 
 void board_sdcard_set_low_voltage(void);
+
+/****************************************************************************
+ * Name: board_sdcard_inserted
+ *
+ * Description:
+ *   Check if a card is inserted into the selected SD Card slot
+ *
+ ****************************************************************************/
+
+#ifdef CONFIG_MMCSD_HAVE_CARDDETECT
+bool board_sdcard_inserted(int slotno);
+#else
+#  define board_sdcard_inserted(slotno) true
+#endif
 
 #undef EXTERN
 #if defined(__cplusplus)

@@ -29,16 +29,21 @@
 #include <nuttx/arch.h>
 #include <nuttx/spinlock.h>
 
-#include "esp32_rtc.h"
+#include "clock/clock.h"
+
 #include "esp32_clockconfig.h"
 #include "esp32_rt_timer.h"
 
+#include "hardware/esp32_apb_ctrl.h"
 #include "hardware/esp32_rtccntl.h"
+#include "hardware/esp32_rtc_io.h"
 #include "hardware/esp32_dport.h"
 #include "hardware/esp32_i2s.h"
 
 #include "xtensa.h"
 #include "xtensa_attr.h"
+
+#include "esp32_rtc.h"
 
 /****************************************************************************
  * Pre-processor Definitions
@@ -154,13 +159,11 @@
   .fe_pd = (val), \
 }
 
-#ifdef CONFIG_RTC_DRIVER
 /* The magic data for the struct esp32_rtc_backup_s that is in RTC slow
  * memory.
  */
 
-#  define MAGIC_RTC_SAVE (UINT64_C(0x11223344556677))
-#endif
+#define MAGIC_RTC_SAVE UINT64_C(0x11223344556677)
 
 /* RTC Memory & Store Register usage */
 
@@ -225,8 +228,6 @@ struct esp32_rtc_sleep_pd_config_s
   uint32_t fe_pd : 1;     /* Set to 1 to power down Wi-Fi in sleep */
 };
 
-#ifdef CONFIG_RTC_DRIVER
-
 #ifdef CONFIG_RTC_ALARM
 struct alm_cbinfo_s
 {
@@ -245,8 +246,6 @@ struct esp32_rtc_backup_s
   int64_t  reserved0;
 };
 
-#endif
-
 /****************************************************************************
  * Private Function Prototypes
  ****************************************************************************/
@@ -263,9 +262,8 @@ static void IRAM_ATTR esp32_rtc_clk_slow_freq_set(
 static void esp32_select_rtc_slow_clk(enum esp32_slow_clk_sel_e slow_clk);
 static void esp32_rtc_clk_32k_enable(int ac, int res, int bias);
 static void IRAM_ATTR esp32_rtc_clk_8m_enable(bool clk_8m_en, bool d256_en);
-static uint32_t IRAM_ATTR esp32_rtc_clk_slow_freq_get_hz(void);
 
-#ifdef CONFIG_RTC_DRIVER
+#ifdef CONFIG_RTC_ALARM
 static void IRAM_ATTR esp32_rt_cb_handler(void *arg);
 #endif
 
@@ -283,8 +281,6 @@ static struct esp32_rtc_priv_s esp32_rtc_priv =
   .rtc_dboost_fpd = 1
 };
 
-#ifdef CONFIG_RTC_DRIVER
-
 /* Callback to use when the alarm expires */
 
 #ifdef CONFIG_RTC_ALARM
@@ -297,16 +293,13 @@ static RTC_DATA_ATTR struct esp32_rtc_backup_s rtc_saved_data;
 
 static struct esp32_rtc_backup_s *g_rtc_save;
 static bool g_rt_timer_enabled = false;
-
-#endif
+static spinlock_t g_rtc_lock = SP_UNLOCKED;
 
 /****************************************************************************
  * Public Data
  ****************************************************************************/
 
-#ifdef CONFIG_RTC_DRIVER
 volatile bool g_rtc_enabled = false;
-#endif
 
 /****************************************************************************
  * Private Functions
@@ -620,39 +613,6 @@ static void IRAM_ATTR esp32_rtc_clk_8m_enable(bool clk_8m_en, bool d256_en)
 }
 
 /****************************************************************************
- * Name: esp32_rtc_clk_slow_freq_get_hz
- *
- * Description:
- *   Get the approximate frequency of RTC_SLOW_CLK, in Hz
- *
- * Input Parameters:
- *   None
- *
- * Returned Value:
- *   slow_clk_freq - RTC_SLOW_CLK frequency, in Hz
- *
- ****************************************************************************/
-
-static uint32_t IRAM_ATTR esp32_rtc_clk_slow_freq_get_hz(void)
-{
-  enum esp32_rtc_slow_freq_e slow_clk_freq =
-              REG_GET_FIELD(RTC_CNTL_CLK_CONF_REG, RTC_CNTL_ANA_CLK_RTC_SEL);
-  switch (slow_clk_freq)
-    {
-      case RTC_SLOW_FREQ_RTC:
-        return RTC_SLOW_CLK_FREQ_150K;
-
-      case RTC_SLOW_FREQ_32K_XTAL:
-        return RTC_SLOW_CLK_FREQ_32K;
-
-      case RTC_SLOW_FREQ_8MD256:
-        return RTC_SLOW_CLK_FREQ_8MD256;
-    }
-
-  return OK;
-}
-
-/****************************************************************************
  * Name: esp32_select_rtc_slow_clk
  *
  * Description:
@@ -744,7 +704,7 @@ static void esp32_select_rtc_slow_clk(enum esp32_slow_clk_sel_e slow_clk)
   putreg32((uint32_t)cal_val, RTC_SLOW_CLK_CAL_REG);
 }
 
-#ifdef CONFIG_RTC_DRIVER
+#ifdef CONFIG_RTC_ALARM
 
 /****************************************************************************
  * Name: esp32_rt_cb_handler
@@ -785,11 +745,63 @@ static void IRAM_ATTR esp32_rt_cb_handler(void *arg)
     }
 }
 
-#endif /* CONFIG_RTC_DRIVER */
+#endif /* CONFIG_RTC_ALARM */
 
 /****************************************************************************
  * Public Functions
  ****************************************************************************/
+
+/****************************************************************************
+ * Name: esp32_rtc_clk_slow_freq_get_hz
+ *
+ * Description:
+ *   Get the approximate frequency of RTC_SLOW_CLK, in Hz
+ *
+ * Input Parameters:
+ *   None
+ *
+ * Returned Value:
+ *   slow_clk_freq - RTC_SLOW_CLK frequency, in Hz
+ *
+ ****************************************************************************/
+
+uint32_t IRAM_ATTR esp32_rtc_clk_slow_freq_get_hz(void)
+{
+  enum esp32_rtc_slow_freq_e slow_clk_freq =
+              REG_GET_FIELD(RTC_CNTL_CLK_CONF_REG, RTC_CNTL_ANA_CLK_RTC_SEL);
+  switch (slow_clk_freq)
+    {
+      case RTC_SLOW_FREQ_RTC:
+        return RTC_SLOW_CLK_FREQ_150K;
+
+      case RTC_SLOW_FREQ_32K_XTAL:
+        return RTC_SLOW_CLK_FREQ_32K;
+
+      case RTC_SLOW_FREQ_8MD256:
+        return RTC_SLOW_CLK_FREQ_8MD256;
+    }
+
+  return OK;
+}
+
+/****************************************************************************
+ * Name: esp32_rtc_clk_fast_freq_get_hz
+ *
+ * Description:
+ *   Get fast_clk_rtc source in Hz.
+ *
+ * Input Parameters:
+ *   None
+ *
+ * Returned Value:
+ *   The clock source in Hz.
+ *
+ ****************************************************************************/
+
+uint32_t IRAM_ATTR esp32_rtc_clk_fast_freq_get_hz(void)
+{
+  return RTC_FAST_CLK_FREQ_APPROX;
+}
 
 /****************************************************************************
  * Name: esp32_rtc_get_slow_clk_rtc
@@ -853,9 +865,6 @@ uint32_t IRAM_ATTR esp32_rtc_clk_cal(enum esp32_rtc_cal_sel_e cal_clk,
 
   return period;
 }
-
-enum esp32_rtc_xtal_freq_e rtc_get_xtal(void)
-                __attribute__((alias("esp32_rtc_clk_xtal_freq_get")));
 
 /****************************************************************************
  * Name: esp32_rtc_clk_xtal_freq_get
@@ -1143,7 +1152,7 @@ void esp32_rtc_clk_set(void)
   enum esp32_rtc_fast_freq_e fast_freq = RTC_FAST_FREQ_8M;
   enum esp32_slow_clk_sel_e slow_clk = SLOW_CLK_150K;
 
-#if defined(CONFIG_ESP32_RTC_CLK_SRC_EXT_CRYS)
+#if defined(CONFIG_ESP32_RTC_CLK_SRC_EXT_XTAL)
   slow_clk = SLOW_CLK_32K_XTAL;
 #elif defined(CONFIG_ESP32_RTC_CLK_SRC_EXT_OSC)
   slow_clk = SLOW_CLK_32K_EXT_OSC;
@@ -1545,7 +1554,7 @@ int IRAM_ATTR esp_rtc_clk_get_cpu_freq(void)
             }
           else
             {
-              DEBUGASSERT(0);
+              DEBUGPANIC();
             }
         }
         break;
@@ -1558,7 +1567,7 @@ int IRAM_ATTR esp_rtc_clk_get_cpu_freq(void)
 
       case RTC_CNTL_SOC_CLK_SEL_APLL:
         default:
-          DEBUGASSERT(0);
+          DEBUGPANIC();
     }
 
   return freq_mhz;
@@ -1881,8 +1890,6 @@ uint64_t IRAM_ATTR esp32_rtc_get_boot_time(void)
         + (((uint64_t)getreg32(RTC_BOOT_TIME_HIGH_REG)) << 32);
 }
 
-#ifdef CONFIG_RTC_DRIVER
-
 /****************************************************************************
  * Name: up_rtc_time
  *
@@ -1907,7 +1914,7 @@ time_t up_rtc_time(void)
   uint64_t time_us;
   irqstate_t flags;
 
-  flags = spin_lock_irqsave(NULL);
+  flags = spin_lock_irqsave(&g_rtc_lock);
 
   /* NOTE: RT-Timer starts to work after the board is initialized, and the
    * RTC controller starts works after up_rtc_initialize is initialized.
@@ -1936,7 +1943,7 @@ time_t up_rtc_time(void)
                   esp32_rtc_get_boot_time();
     }
 
-  spin_unlock_irqrestore(NULL, flags);
+  spin_unlock_irqrestore(&g_rtc_lock, flags);
 
   return (time_t)(time_us / USEC_PER_SEC);
 }
@@ -1964,7 +1971,7 @@ int up_rtc_settime(const struct timespec *ts)
   uint64_t rtc_offset_us;
 
   DEBUGASSERT(ts != NULL && ts->tv_nsec < NSEC_PER_SEC);
-  flags = spin_lock_irqsave(NULL);
+  flags = spin_lock_irqsave(&g_rtc_lock);
 
   now_us = ((uint64_t) ts->tv_sec) * USEC_PER_SEC +
           ts->tv_nsec / NSEC_PER_USEC;
@@ -1984,7 +1991,7 @@ int up_rtc_settime(const struct timespec *ts)
   g_rtc_save->offset = 0;
   esp32_rtc_set_boot_time(rtc_offset_us);
 
-  spin_unlock_irqrestore(NULL, flags);
+  spin_unlock_irqrestore(&g_rtc_lock, flags);
 
   return OK;
 }
@@ -2057,7 +2064,7 @@ int up_rtc_gettime(struct timespec *tp)
   irqstate_t flags;
   uint64_t time_us;
 
-  flags = spin_lock_irqsave(NULL);
+  flags = spin_lock_irqsave(&g_rtc_lock);
 
   if (g_rt_timer_enabled == true)
     {
@@ -2066,14 +2073,13 @@ int up_rtc_gettime(struct timespec *tp)
     }
   else
     {
-      time_us = = esp32_rtc_get_time_us() +
-                    esp32_rtc_get_boot_time();
+      time_us = esp32_rtc_get_time_us() + esp32_rtc_get_boot_time();
     }
 
   tp->tv_sec  = time_us / USEC_PER_SEC;
   tp->tv_nsec = (time_us % USEC_PER_SEC) * NSEC_PER_USEC;
 
-  spin_unlock_irqrestore(NULL, flags);
+  spin_unlock_irqrestore(&g_rtc_lock, flags);
 
   return OK;
 }
@@ -2116,7 +2122,7 @@ int up_rtc_setalarm(struct alm_setalarm_s *alminfo)
     {
       /* Create the RT-Timer alarm */
 
-      flags = spin_lock_irqsave(NULL);
+      flags = spin_lock_irqsave(&g_rtc_lock);
 
       if (cbinfo->alarm_hdl == NULL)
         {
@@ -2127,7 +2133,7 @@ int up_rtc_setalarm(struct alm_setalarm_s *alminfo)
           if (ret < 0)
             {
               rtcerr("ERROR: Failed to create rt_timer error=%d\n", ret);
-              spin_unlock_irqrestore(NULL, flags);
+              spin_unlock_irqrestore(&g_rtc_lock, flags);
               return ret;
             }
         }
@@ -2148,7 +2154,7 @@ int up_rtc_setalarm(struct alm_setalarm_s *alminfo)
           ret = OK;
         }
 
-      spin_unlock_irqrestore(NULL, flags);
+      spin_unlock_irqrestore(&g_rtc_lock, flags);
     }
 
   return ret;
@@ -2183,7 +2189,8 @@ int up_rtc_cancelalarm(enum alm_id_e alarmid)
 
   if (cbinfo->ac_cb != NULL)
     {
-      flags = spin_lock_irqsave(NULL);
+      sched_lock();
+      flags = spin_lock_irqsave(&g_rtc_lock);
 
       /* Stop and delete the alarm */
 
@@ -2194,7 +2201,8 @@ int up_rtc_cancelalarm(enum alm_id_e alarmid)
       cbinfo->deadline_us = 0;
       cbinfo->alarm_hdl = NULL;
 
-      spin_unlock_irqrestore(NULL, flags);
+      spin_unlock_irqrestore(&g_rtc_lock, flags);
+      sched_unlock();
 
       ret = OK;
     }
@@ -2225,7 +2233,7 @@ int up_rtc_rdalarm(struct timespec *tp, uint32_t alarmid)
   DEBUGASSERT((RTC_ALARM0 <= alarmid) &&
               (alarmid < RTC_ALARM_LAST));
 
-  flags = spin_lock_irqsave(NULL);
+  flags = spin_lock_irqsave(&g_rtc_lock);
 
   /* Get the alarm according to the alarmid */
 
@@ -2236,7 +2244,7 @@ int up_rtc_rdalarm(struct timespec *tp, uint32_t alarmid)
   tp->tv_nsec = ((rt_timer_time_us() + g_rtc_save->offset +
               cbinfo->deadline_us) % USEC_PER_SEC) * NSEC_PER_USEC;
 
-  spin_unlock_irqrestore(NULL, flags);
+  spin_unlock_irqrestore(&g_rtc_lock, flags);
 
   return OK;
 }
@@ -2269,5 +2277,3 @@ int up_rtc_timer_init(void)
 
   return OK;
 }
-
-#endif /* CONFIG_RTC_DRIVER */

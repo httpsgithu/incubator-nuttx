@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/samd5e5/sam_serial.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -37,12 +39,11 @@
 #include <nuttx/arch.h>
 #include <nuttx/fs/ioctl.h>
 #include <nuttx/serial/serial.h>
+#include <nuttx/spinlock.h>
 
 #include <arch/board/board.h>
 
-#include "arm_arch.h"
 #include "arm_internal.h"
-
 #include "sam_config.h"
 #include "sam_usart.h"
 #include "sam_lowputc.h"
@@ -306,7 +307,7 @@ static inline void
             sam_serialout16(struct sam_dev_s *priv, int offset,
               uint16_t regval);
 static void sam_disableallints(struct sam_dev_s *priv);
-static int  sam_interrupt(int irq, void *context, FAR void *arg);
+static int  sam_interrupt(int irq, void *context, void *arg);
 
 /* UART methods */
 
@@ -325,6 +326,10 @@ static bool sam_txempty(struct uart_dev_s *dev);
 /****************************************************************************
  * Private Data
  ****************************************************************************/
+
+#ifdef HAVE_SERIAL_CONSOLE
+static spinlock_t g_sam_serial_lock = SP_UNLOCKED;
+#endif
 
 static const struct uart_ops_s g_uart_ops =
 {
@@ -638,14 +643,14 @@ static void sam_disableallints(struct sam_dev_s *priv)
  *
  * Description:
  *   This is the USART interrupt handler.  It will be invoked when an
- *   interrupt received on the 'irq'  It should call uart_transmitchars or
- *   uart_receivechar to perform the appropriate data transfers.  The
- *   interrupt handling logic must be able to map the 'irq' number into the
+ *   interrupt is received on the 'irq'.  It should call uart_xmitchars or
+ *   uart_recvchars to perform the appropriate data transfers.  The
+ *   interrupt handling logic must be able to map the 'arg' to the
  *   appropriate uart_dev_s structure in order to call these functions.
  *
  ****************************************************************************/
 
-static int sam_interrupt(int irq, void *context, FAR void *arg)
+static int sam_interrupt(int irq, void *context, void *arg)
 {
   struct uart_dev_s *dev = (struct uart_dev_s *)arg;
   struct sam_dev_s *priv;
@@ -1097,7 +1102,7 @@ void arm_serialinit(void)
  *
  ****************************************************************************/
 
-int up_putc(int ch)
+void up_putc(int ch)
 {
 #ifdef HAVE_SERIAL_CONSOLE
   irqstate_t flags;
@@ -1106,21 +1111,10 @@ int up_putc(int ch)
    * interrupts from firing in the serial driver code.
    */
 
-  flags = enter_critical_section();
-
-  /* Check for LF */
-
-  if (ch == '\n')
-    {
-      /* Add CR */
-
-      sam_lowputc('\r');
-    }
-
+  flags = spin_lock_irqsave(&g_sam_serial_lock);
   sam_lowputc(ch);
-  leave_critical_section(flags);
+  spin_unlock_irqrestore(&g_sam_serial_lock, flags);
 #endif
-  return ch;
 }
 
 #else /* USE_SERIALDRIVER */
@@ -1133,21 +1127,11 @@ int up_putc(int ch)
  *
  ****************************************************************************/
 
-int up_putc(int ch)
+void up_putc(int ch)
 {
 #ifdef HAVE_SERIAL_CONSOLE
-  /* Check for LF */
-
-  if (ch == '\n')
-    {
-      /* Add CR */
-
-      sam_lowputc('\r');
-    }
-
   sam_lowputc(ch);
 #endif
-  return ch;
 }
 
 #endif /* USE_SERIALDRIVER */

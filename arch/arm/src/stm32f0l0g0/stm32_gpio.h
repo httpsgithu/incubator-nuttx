@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/stm32f0l0g0/stm32_gpio.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -186,8 +188,16 @@
 #  define GPIO_PORTB                  (1 << GPIO_PORT_SHIFT)     /*   GPIOB */
 #  define GPIO_PORTC                  (2 << GPIO_PORT_SHIFT)     /*   GPIOC */
 #  define GPIO_PORTD                  (3 << GPIO_PORT_SHIFT)     /*   GPIOD */
+#if defined (CONFIG_STM32F0L0G0_STM32F03X)
+#  define GPIO_PORTF                  (4 << GPIO_PORT_SHIFT)     /*   GPIOF */
+#else
 #  define GPIO_PORTE                  (4 << GPIO_PORT_SHIFT)     /*   GPIOE */
+#if defined (CONFIG_ARCH_CHIP_STM32L0)
+#  define GPIO_PORTH                  (5 << GPIO_PORT_SHIFT)     /*   GPIOH */
+#else
 #  define GPIO_PORTF                  (5 << GPIO_PORT_SHIFT)     /*   GPIOF */
+#endif
+#endif
 
 /* This identifies the bit in the port:
  *

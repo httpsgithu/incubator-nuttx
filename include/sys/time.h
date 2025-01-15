@@ -1,6 +1,8 @@
 /****************************************************************************
  * include/sys/time.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -212,7 +214,8 @@ int gettimeofday(FAR struct timeval *tv, FAR struct timezone *tz);
  *
  ****************************************************************************/
 
-int settimeofday(FAR const struct timeval *tv, FAR struct timezone *tz);
+int settimeofday(FAR const struct timeval *tv,
+                 FAR const struct timezone *tz);
 
 /****************************************************************************
  * Name: adjtime
@@ -250,7 +253,7 @@ int settimeofday(FAR const struct timeval *tv, FAR struct timezone *tz);
  *
  ****************************************************************************/
 
-#ifdef CONFIG_CLOCK_TIMEKEEPING
+#if defined(CONFIG_CLOCK_TIMEKEEPING) || defined(CONFIG_CLOCK_ADJTIME)
 int adjtime(FAR const struct timeval *delta, FAR struct timeval *olddelta);
 #endif
 
@@ -373,6 +376,8 @@ int setitimer(int which, FAR const struct itimerval *value,
 
 int utimes(FAR const char *path, const struct timeval times[2]);
 int lutimes(FAR const char *path, const struct timeval times[2]);
+int futimesat(int dirfd, FAR const char *path,
+              const struct timeval times[2]);
 
 /****************************************************************************
  * Name: futimes

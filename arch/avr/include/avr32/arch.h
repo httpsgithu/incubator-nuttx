@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/avr/include/avr32/arch.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -38,27 +40,6 @@
  ****************************************************************************/
 
 #ifndef __ASSEMBLY__
-
-/****************************************************************************
- * Inline functions
- ****************************************************************************/
-
-/****************************************************************************
- * Name: up_getsp
- ****************************************************************************/
-
-static inline uint32_t up_getsp(void)
-{
-  uint32_t retval;
-  __asm__ __volatile__
-    (
-      "mov\t%0,sp\n\t"
-      : "=r" (retval)
-      :
-    );
-
-  return retval;
-}
 
 /****************************************************************************
  * Public Variables

@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/max326xx/max326_wdt.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -65,7 +67,7 @@ extern "C"
  ****************************************************************************/
 
 #ifdef CONFIG_MAX326XX_WDOG
-int max326_wdt_initialize(FAR const char *devpath);
+int max326_wdt_initialize(const char *devpath);
 #endif
 
 #undef EXTERN

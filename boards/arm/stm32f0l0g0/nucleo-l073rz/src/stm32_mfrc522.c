@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/stm32f0l0g0/nucleo-l073rz/src/stm32_mfrc522.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -60,9 +62,9 @@
  *
  ****************************************************************************/
 
-int stm32_mfrc522initialize(FAR const char *devpath)
+int stm32_mfrc522initialize(const char *devpath)
 {
-  FAR struct spi_dev_s *spi;
+  struct spi_dev_s *spi;
   int ret;
 
   /* Configure MFRC522 reset */

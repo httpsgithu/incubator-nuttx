@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/stm32/stm32f411-minimum/src/stm32f411-minimum.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -27,8 +29,13 @@
 
 #include <nuttx/config.h>
 #include <nuttx/compiler.h>
+#include <arch/chip/chip.h>
 
 #include <stdint.h>
+
+#ifdef CONFIG_STM32F411MINIMUM_GPIO
+#include "stm32f411-minimum-gpio.h"
+#endif
 
 /****************************************************************************
  * Pre-processor Definitions
@@ -54,42 +61,25 @@
  */
 
 #define MIN_IRQBUTTON   BUTTON_USER
-#define MAX_IRQBUTTON   BUTTON_USER
-#define NUM_IRQBUTTONS  1
+#define MAX_IRQBUTTON   BUTTON_EXTERNAL
+#define NUM_IRQBUTTONS  (BUTTON_USER - BUTTON_EXTERNAL + 1)
 
 #define GPIO_BTN_USER \
-  (GPIO_INPUT |GPIO_FLOAT |GPIO_EXTI | GPIO_PORTA | GPIO_PIN0)
+  (GPIO_INPUT |GPIO_PULLUP |GPIO_EXTI | GPIO_PORTA | GPIO_PIN0)
 
-/* SPI1 off */
+#define GPIO_BTN_EXTERNAL \
+  (GPIO_INPUT |GPIO_FLOAT |GPIO_EXTI | GPIO_PORTA | GPIO_PIN1)
 
-#define GPIO_SPI1_MOSI_OFF (GPIO_INPUT | GPIO_PULLDOWN | \
-                            GPIO_PORTA | GPIO_PIN7)
-#define GPIO_SPI1_MISO_OFF (GPIO_INPUT | GPIO_PULLDOWN | \
-                            GPIO_PORTA | GPIO_PIN6)
-#define GPIO_SPI1_SCK_OFF  (GPIO_INPUT | GPIO_PULLDOWN | \
-                            GPIO_PORTA | GPIO_PIN5)
+/* PWM Configuration */
 
-/* USB OTG FS
- *
- * PA9  OTG_FS_VBUS VBUS sensing (also connected to the green LED)
- * PC0  OTG_FS_PowerSwitchOn
- * PD5  OTG_FS_Overcurrent
- */
+#define STM32F411MINIMUM_PWMTIMER   3
+#define STM32F411MINIMUM_PWMCHANNEL 3
 
-#define GPIO_OTGFS_VBUS   (GPIO_INPUT|GPIO_FLOAT|GPIO_SPEED_100MHz|\
-                           GPIO_OPENDRAIN|GPIO_PORTA|GPIO_PIN9)
-#define GPIO_OTGFS_PWRON  (GPIO_OUTPUT|GPIO_FLOAT|GPIO_SPEED_100MHz|\
-                           GPIO_PUSHPULL|GPIO_PORTC|GPIO_PIN0)
+/* SPI chip selects */
 
-#ifdef CONFIG_USBHOST
-#  define GPIO_OTGFS_OVER (GPIO_INPUT|GPIO_EXTI|GPIO_FLOAT|\
-                           GPIO_SPEED_100MHz|GPIO_PUSHPULL|\
-                           GPIO_PORTD|GPIO_PIN5)
-
-#else
-#  define GPIO_OTGFS_OVER (GPIO_INPUT|GPIO_FLOAT|GPIO_SPEED_100MHz|\
-                           GPIO_PUSHPULL|GPIO_PORTD|GPIO_PIN5)
-#endif
+#define FLASH_SPI1_CS \
+  (GPIO_PORTA | GPIO_PIN4 | GPIO_OUTPUT_SET | GPIO_OUTPUT | GPIO_FLOAT | \
+   GPIO_SPEED_50MHz)
 
 /* procfs File System */
 
@@ -100,6 +90,29 @@
 #    define STM32_PROCFS_MOUNTPOINT "/proc"
 #  endif
 #endif
+
+/* HX711 pins */
+
+#ifdef CONFIG_ADC_HX711
+#  ifdef CONFIG_STM32F411MINIMUM_HX711_CLK_PORTB
+#    define HX711_CLK_PORT GPIO_PORTB
+#  else
+#    define HX711_CLK_PORT GPIO_PORTA
+#  endif
+
+#  ifdef CONFIG_STM32F411MINIMUM_HX711_DATA_PORTB
+#    define HX711_DATA_PORT GPIO_PORTB
+#  else
+#    define HX711_DATA_PORT GPIO_PORTA
+#  endif
+
+#define HX711_CLK_PIN  (GPIO_OUTPUT|GPIO_PUSHPULL|GPIO_OUTPUT_SET|\
+                        GPIO_SPEED_2MHz|GPIO_PULLUP|\
+                        HX711_CLK_PORT|CONFIG_STM32F411MINIMUM_HX711_CLK_PIN)
+#define HX711_DATA_PIN (GPIO_INPUT|GPIO_SPEED_2MHz|GPIO_PULLUP|GPIO_EXTI|\
+                        HX711_DATA_PORT|CONFIG_STM32F411MINIMUM_HX711_DATA_PIN)
+
+#endif /* CONFIG_HX711 */
 
 /****************************************************************************
  * Public Data
@@ -125,11 +138,45 @@ extern struct spi_dev_s *g_spi2;
 void stm32_spidev_initialize(void);
 
 /****************************************************************************
+ * Name: stm32_hx711_initialize
+ *
+ * Description:
+ *   Initialize hx711 chip
+ *
+ ****************************************************************************/
+
+#ifdef CONFIG_ADC_HX711
+int stm32_hx711_initialize(void);
+#endif
+
+/****************************************************************************
+ * Name: stm32_mmcsd_initialize
+ *
+ * Description:
+ *   Initializes SPI-based SD card
+ *
+ ****************************************************************************/
+
+#ifdef CONFIG_MMCSD
+int stm32_mmcsd_initialize(int minor);
+#endif
+
+/****************************************************************************
+ * Name: stm32_w25initialize
+ *
+ * Description:
+ *   Called to initialize Winbond W25 memory
+ *
+ ****************************************************************************/
+
+int stm32_w25initialize(int minor);
+
+/****************************************************************************
  * Name: stm32_usbinitialize
  *
  * Description:
  *   Called from stm32_boardinitialize very early in initialization to setup
- *   USB-related GPIO pins for the STM32F4Discovery board.
+ *   USB-related GPIO pins for the WeAct Studio MiniF4 board.
  *
  ****************************************************************************/
 
@@ -149,6 +196,50 @@ void stm32_usbinitialize(void);
 
 #if defined(CONFIG_STM32_OTGFS) && defined(CONFIG_USBHOST)
 int stm32_usbhost_initialize(void);
+#endif
+
+/****************************************************************************
+ * Name: stm32_gpio_initialize
+ *
+ * Description:
+ *   Initialize GPIO drivers
+ *
+ ****************************************************************************/
+
+#ifdef CONFIG_STM32F411MINIMUM_GPIO
+int stm32_gpio_initialize(void);
+#endif
+
+/****************************************************************************
+ * Name: stm32_pwm_setup
+ *
+ * Description:
+ *   Initialize PWM and register the PWM device.
+ *
+ ****************************************************************************/
+
+#ifdef CONFIG_PWM
+int stm32_pwm_setup(void);
+#endif
+
+/****************************************************************************
+ * Name: stm32_rgbled_setup
+ *
+ * Description:
+ *   This function is called by board initialization logic to configure the
+ *   RGB LED driver.  This function will register the driver as /dev/rgbled0.
+ *
+ * Input Parameters:
+ *   None
+ *
+ * Returned Value:
+ *   Zero is returned on success.  Otherwise, a negated errno value is
+ *   returned to indicate the nature of the failure.
+ *
+ ****************************************************************************/
+
+#ifdef CONFIG_RGBLED
+int stm32_rgbled_setup(void);
 #endif
 
 /****************************************************************************

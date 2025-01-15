@@ -1,6 +1,8 @@
 /****************************************************************************
  * fs/fat/fs_fat32attrib.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -46,11 +48,11 @@
 static int fat_attrib(const char *path, fat_attrib_t *retattrib,
                       fat_attrib_t setbits, fat_attrib_t clearbits)
 {
-  struct fat_mountpt_s *fs;
+  FAR struct fat_mountpt_s *fs;
   struct fat_dirinfo_s dirinfo;
   struct inode_search_s desc;
   FAR struct inode *inode;
-  uint8_t *direntry;
+  FAR uint8_t *direntry;
   uint8_t oldattributes;
   uint8_t newattributes;
   int ret;
@@ -70,7 +72,6 @@ static int fat_attrib(const char *path, fat_attrib_t *retattrib,
   /* Get the search results */
 
   inode = desc.node;
-  DEBUGASSERT(inode != NULL);
 
   /* Verify that the inode is a valid mountpoint. */
 
@@ -86,7 +87,7 @@ static int fat_attrib(const char *path, fat_attrib_t *retattrib,
 
   /* Check if the mount is still healthy */
 
-  ret = fat_semtake(fs);
+  ret = nxmutex_lock(&fs->fs_lock);
   if (ret < 0)
     {
       goto errout_with_inode;
@@ -95,7 +96,7 @@ static int fat_attrib(const char *path, fat_attrib_t *retattrib,
   ret = fat_checkmount(fs);
   if (ret != OK)
     {
-      goto errout_with_semaphore;
+      goto errout_with_lock;
     }
 
   /* Find the file/directory entry for the relpath */
@@ -105,7 +106,7 @@ static int fat_attrib(const char *path, fat_attrib_t *retattrib,
     {
       /* Some error occurred -- probably -ENOENT */
 
-      goto errout_with_semaphore;
+      goto errout_with_lock;
     }
 
   /* Make sure that we found some valid file or directory */
@@ -115,7 +116,7 @@ static int fat_attrib(const char *path, fat_attrib_t *retattrib,
       /* Ooops.. we found the root directory */
 
       ret = -EACCES;
-      goto errout_with_semaphore;
+      goto errout_with_lock;
     }
 
   /* Get the current attributes */
@@ -140,7 +141,7 @@ static int fat_attrib(const char *path, fat_attrib_t *retattrib,
       ret = fat_updatefsinfo(fs);
       if (ret != OK)
         {
-          goto errout_with_semaphore;
+          goto errout_with_lock;
         }
     }
 
@@ -151,13 +152,13 @@ static int fat_attrib(const char *path, fat_attrib_t *retattrib,
       *retattrib = newattributes;
     }
 
-  fat_semgive(fs);
+  nxmutex_unlock(&fs->fs_lock);
   inode_release(inode);
   RELEASE_SEARCH(&desc);
   return OK;
 
-errout_with_semaphore:
-  fat_semgive(fs);
+errout_with_lock:
+  nxmutex_unlock(&fs->fs_lock);
 
 errout_with_inode:
   inode_release(inode);
@@ -175,7 +176,7 @@ errout:
  * Name: fat_getattrib
  ****************************************************************************/
 
-int fat_getattrib(const char *path, fat_attrib_t *attrib)
+int fat_getattrib(FAR const char *path, FAR fat_attrib_t *attrib)
 {
   return fat_attrib(path, attrib, 0, 0);
 }
@@ -184,7 +185,7 @@ int fat_getattrib(const char *path, fat_attrib_t *attrib)
  * Name: fat_setattrib
  ****************************************************************************/
 
-int fat_setattrib(const char *path, fat_attrib_t setbits,
+int fat_setattrib(FAR const char *path, fat_attrib_t setbits,
                   fat_attrib_t clearbits)
 {
   return fat_attrib(path, NULL, setbits, clearbits);

@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/rp2040/rp2040_gpio.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -55,12 +57,19 @@
 #define RP2040_GPIO_FUNC_USB        RP2040_IO_BANK0_GPIO_CTRL_FUNCSEL_USB
 #define RP2040_GPIO_FUNC_NULL       RP2040_IO_BANK0_GPIO_CTRL_FUNCSEL_NULL
 
+/* GPIO function pins *******************************************************/
+
+#define RP2040_GPIO_PIN_CLK_GPOUT0  (21)
+#define RP2040_GPIO_PIN_CLK_GPOUT1  (23)
+#define RP2040_GPIO_PIN_CLK_GPOUT2  (24)
+#define RP2040_GPIO_PIN_CLK_GPOUT3  (25)
+
 /* GPIO interrupt modes *****************************************************/
 
-#define RP2040_GPIO_INTR_LEVEL_LOW    0
-#define RP2040_GPIO_INTR_LEVEL_HIGH   1
-#define RP2040_GPIO_INTR_EDGE_LOW     2
-#define RP2040_GPIO_INTR_EDGE_HIGH    3
+#define RP2040_GPIO_INTR_LEVEL_LOW  0
+#define RP2040_GPIO_INTR_LEVEL_HIGH 1
+#define RP2040_GPIO_INTR_EDGE_LOW   2
+#define RP2040_GPIO_INTR_EDGE_HIGH  3
 
 /****************************************************************************
  * Public Types
@@ -127,6 +136,60 @@ static inline void rp2040_gpio_setdir(uint32_t gpio, int out)
 }
 
 /****************************************************************************
+ * Name: rp2040_gpio_set_input_hysteresis_enabled
+ *
+ * Description:
+ *   Set whether the pin's input hysteresis will be enabled.
+ *
+ ****************************************************************************/
+
+static inline void rp2040_gpio_set_input_hysteresis_enabled(uint32_t gpio,
+                                                            bool enabled)
+{
+  DEBUGASSERT(gpio < RP2040_GPIO_NUM);
+
+  modbits_reg32(enabled ? RP2040_PADS_BANK0_GPIO_SCHMITT : 0,
+                RP2040_PADS_BANK0_GPIO_SCHMITT,
+                RP2040_PADS_BANK0_GPIO(gpio));
+}
+
+/****************************************************************************
+ * Name: rp2040_gpio_set_slew_fast
+ *
+ * Description:
+ *   Set whether the pin's fast slew rate will be enabled.
+ *
+ ****************************************************************************/
+
+static inline void rp2040_gpio_set_slew_fast(uint32_t gpio,
+                                             bool enabled)
+{
+  DEBUGASSERT(gpio < RP2040_GPIO_NUM);
+
+  modbits_reg32(enabled ? RP2040_PADS_BANK0_GPIO_SLEWFAST : 0,
+                RP2040_PADS_BANK0_GPIO_SLEWFAST,
+                RP2040_PADS_BANK0_GPIO(gpio));
+}
+
+/****************************************************************************
+ * Name: rp2040_gpio_set_drive_strength
+ *
+ * Description:
+ *   Set the pin's drive strength.
+ *
+ ****************************************************************************/
+
+static inline void rp2040_gpio_set_drive_strength(uint32_t gpio,
+                                                  uint32_t drive_strength)
+{
+  DEBUGASSERT(gpio < RP2040_GPIO_NUM);
+
+  modbits_reg32(drive_strength,
+                RP2040_PADS_BANK0_GPIO_DRIVE_MASK,
+                RP2040_PADS_BANK0_GPIO(gpio));
+}
+
+/****************************************************************************
  * Public Function Prototypes
  ****************************************************************************/
 
@@ -179,7 +242,7 @@ void rp2040_gpio_init(uint32_t gpio);
  ****************************************************************************/
 
 int rp2040_gpio_irq_attach(uint32_t gpio, uint32_t intrmode,
-                           xcpt_t isr, FAR void *arg);
+                           xcpt_t isr, void *arg);
 
 /****************************************************************************
  * Name: rp2040_gpio_enable_irq
@@ -200,6 +263,18 @@ void rp2040_gpio_enable_irq(uint32_t gpio);
  ****************************************************************************/
 
 void rp2040_gpio_disable_irq(uint32_t gpio);
+
+/****************************************************************************
+ * Name: rp2040_gpio_clear_interrupt
+ *
+ * Description:
+ *   Clear the interrupt flags for a gpio pin.
+ *
+ ****************************************************************************/
+
+void rp2040_gpio_clear_interrupt(uint32_t gpio,
+                                 bool     edge_low,
+                                 bool     edge_high);
 
 /****************************************************************************
  * Name: r2040_gpio_initialize

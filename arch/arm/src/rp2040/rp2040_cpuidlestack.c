@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/rp2040/rp2040_cpuidlestack.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -80,7 +82,7 @@
  *
  ****************************************************************************/
 
-int up_cpu_idlestack(int cpu, FAR struct tcb_s *tcb, size_t stack_size)
+int up_cpu_idlestack(int cpu, struct tcb_s *tcb, size_t stack_size)
 {
 #if CONFIG_SMP_NCPUS > 1
   up_create_stack(tcb, stack_size, TCB_FLAG_TTYPE_KERNEL);

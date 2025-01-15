@@ -1,6 +1,8 @@
 /****************************************************************************
  * include/nuttx/wireless/pktradio.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -26,8 +28,8 @@
  ****************************************************************************/
 
 #include <nuttx/config.h>
+#include <nuttx/fs/ioctl.h>
 #include <nuttx/net/netdev.h>
-#include <nuttx/wireless/wireless.h>
 
 #ifdef CONFIG_WIRELESS_PKTRADIO
 
@@ -37,17 +39,13 @@
 
 /* Packet radio network device IOCTL commands. */
 
-#ifndef WL_NPKTRADIOCMDS != 3
-#  error Incorrect setting for number of PktRadio IOCTL commands
-#endif
-
 /* SIOCPKTRADIOGGPROPS
  *   Description:   Get the radio properties
  *   Input:         Pointer to read-write instance of struct pktradio_ifreq_s
  *   Output:        Properties returned in struct pktradio_ifreq_s instance
  */
 
-#define SIOCPKTRADIOGGPROPS  _WLIOC(WL_PKTRADIOFIRST)
+#define SIOCPKTRADIOGGPROPS  _PKRADIOIOC(0)
 
 /* SIOCPKTRADIOGSNODE
  *   Description:   Set the radio node address
@@ -55,7 +53,7 @@
  *   Output:        None
  */
 
-#define SIOCPKTRADIOSNODE    _WLIOC(WL_PKTRADIOFIRST + 1)
+#define SIOCPKTRADIOSNODE    _PKRADIOIOC(1)
 
 /* SIOCPKTRADIOGGNODE
  *   Description:   Get the radio node address
@@ -63,7 +61,7 @@
  *   Output:        Node address return in struct pktradio_ifreq_s instance
  */
 
-#define SIOCPKTRADIOGNODE    _WLIOC(WL_PKTRADIOFIRST + 2)
+#define SIOCPKTRADIOGNODE    _PKRADIOIOC(2)
 
 /* Memory Pools */
 

@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/stm32h7/stm32_irq.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -36,7 +38,6 @@
 
 #include "nvic.h"
 #include "ram_vectors.h"
-#include "arm_arch.h"
 #include "arm_internal.h"
 
 #ifdef CONFIG_STM32H7_GPIO_IRQ
@@ -61,24 +62,6 @@
 
 #define NVIC_ENA_OFFSET    (0)
 #define NVIC_CLRENA_OFFSET (NVIC_IRQ0_31_CLEAR - NVIC_IRQ0_31_ENABLE)
-
-/****************************************************************************
- * Public Data
- ****************************************************************************/
-
-/* g_current_regs[] holds a references to the current interrupt level
- * register storage structure.  If is non-NULL only during interrupt
- * processing.  Access to g_current_regs[] must be through the macro
- * CURRENT_REGS for portability.
- */
-
-volatile uint32_t *g_current_regs[1];
-
-/* This is the address of the  exception vector table (determined by the
- * linker script).
- */
-
-extern uint32_t _vectors[];
 
 /****************************************************************************
  * Private Functions
@@ -178,8 +161,7 @@ static void stm32_dumpnvic(const char *msg, int irq)
 #endif
 
 /****************************************************************************
- * Name: stm32_nmi, stm32_busfault, stm32_usagefault, stm32_pendsv,
- *       stm32_dbgmonitor, stm32_pendsv, stm32_reserved
+ * Name: stm32_nmi, stm32_pendsv, stm32_pendsv, stm32_reserved
  *
  * Description:
  *   Handlers for various exceptions.  None are handled and all are fatal
@@ -189,7 +171,7 @@ static void stm32_dumpnvic(const char *msg, int irq)
  ****************************************************************************/
 
 #ifdef CONFIG_DEBUG_FEATURES
-static int stm32_nmi(int irq, FAR void *context, FAR void *arg)
+static int stm32_nmi(int irq, void *context, void *arg)
 {
   up_irq_save();
   _err("PANIC!!! NMI received\n");
@@ -197,23 +179,7 @@ static int stm32_nmi(int irq, FAR void *context, FAR void *arg)
   return 0;
 }
 
-static int stm32_busfault(int irq, FAR void *context, FAR void *arg)
-{
-  up_irq_save();
-  _err("PANIC!!! Bus fault received: %08x\n", getreg32(NVIC_CFAULTS));
-  PANIC();
-  return 0;
-}
-
-static int stm32_usagefault(int irq, FAR void *context, FAR void *arg)
-{
-  up_irq_save();
-  _err("PANIC!!! Usage fault received: %08x\n", getreg32(NVIC_CFAULTS));
-  PANIC();
-  return 0;
-}
-
-static int stm32_pendsv(int irq, FAR void *context, FAR void *arg)
+static int stm32_pendsv(int irq, void *context, void *arg)
 {
   up_irq_save();
   _err("PANIC!!! PendSV received\n");
@@ -221,15 +187,7 @@ static int stm32_pendsv(int irq, FAR void *context, FAR void *arg)
   return 0;
 }
 
-static int stm32_dbgmonitor(int irq, FAR void *context, FAR void *arg)
-{
-  up_irq_save();
-  _err("PANIC!!! Debug Monitor received\n");
-  PANIC();
-  return 0;
-}
-
-static int stm32_reserved(int irq, FAR void *context, FAR void *arg)
+static int stm32_reserved(int irq, void *context, void *arg)
 {
   up_irq_save();
   _err("PANIC!!! Reserved interrupt\n");
@@ -247,7 +205,6 @@ static int stm32_reserved(int irq, FAR void *context, FAR void *arg)
  *
  ****************************************************************************/
 
-#ifdef CONFIG_ARMV7M_USEBASEPRI
 static inline void stm32_prioritize_syscall(int priority)
 {
   uint32_t regval;
@@ -259,7 +216,6 @@ static inline void stm32_prioritize_syscall(int priority)
   regval |= (priority << NVIC_SYSH_PRIORITY_PR11_SHIFT);
   putreg32(regval, NVIC_SYSH8_11_PRIORITY);
 }
-#endif
 
 /****************************************************************************
  * Name: stm32_irqinfo
@@ -416,9 +372,6 @@ static int stm32_irqinfo(int irq, uintptr_t *regaddr, uint32_t *bit,
 void up_irqinitialize(void)
 {
   uintptr_t regaddr;
-#if defined(CONFIG_DEBUG_SYMBOLS) && !defined(CONFIG_ARMV7M_USEBASEPRI)
-  uint32_t regval;
-#endif
   int nintlines;
   int i;
 
@@ -479,10 +432,6 @@ void up_irqinitialize(void)
       putreg32(DEFPRIORITY32, regaddr);
     }
 
-  /* currents_regs is non-NULL only while processing an interrupt */
-
-  CURRENT_REGS = NULL;
-
   /* Attach the SVCall and Hard Fault exception handlers.  The SVCall
    * exception is used for performing context switches; The Hard Fault
    * must also be caught because a SVCall may show up as a Hard Fault
@@ -497,9 +446,8 @@ void up_irqinitialize(void)
 #ifdef CONFIG_ARCH_IRQPRIO
   /* up_prioritize_irq(STM32_IRQ_PENDSV, NVIC_SYSH_PRIORITY_MIN); */
 #endif
-#ifdef CONFIG_ARMV7M_USEBASEPRI
+
   stm32_prioritize_syscall(NVIC_SYSH_SVCALL_PRIORITY);
-#endif
 
   /* If the MPU is enabled, then attach and enable the Memory Management
    * Fault handler.
@@ -517,25 +465,15 @@ void up_irqinitialize(void)
 #ifndef CONFIG_ARM_MPU
   irq_attach(STM32_IRQ_MEMFAULT, arm_memfault, NULL);
 #endif
-  irq_attach(STM32_IRQ_BUSFAULT, stm32_busfault, NULL);
-  irq_attach(STM32_IRQ_USAGEFAULT, stm32_usagefault, NULL);
+  irq_attach(STM32_IRQ_BUSFAULT, arm_busfault, NULL);
+  irq_attach(STM32_IRQ_USAGEFAULT, arm_usagefault, NULL);
   irq_attach(STM32_IRQ_PENDSV, stm32_pendsv, NULL);
-  irq_attach(STM32_IRQ_DBGMONITOR, stm32_dbgmonitor, NULL);
+  arm_enable_dbgmonitor();
+  irq_attach(STM32_IRQ_DBGMONITOR, arm_dbgmonitor, NULL);
   irq_attach(STM32_IRQ_RESERVED, stm32_reserved, NULL);
 #endif
 
   stm32_dumpnvic("initial", NR_IRQS);
-
-  /* If a debugger is connected, try to prevent it from catching hardfaults.
-   * If CONFIG_ARMV7M_USEBASEPRI, no hardfaults are expected in normal
-   * operation.
-   */
-
-#if defined(CONFIG_DEBUG_SYMBOLS) && !defined(CONFIG_ARMV7M_USEBASEPRI)
-  regval  = getreg32(NVIC_DEMCR);
-  regval &= ~NVIC_DEMCR_VCHARDERR;
-  putreg32(regval, NVIC_DEMCR);
-#endif
 
 #ifndef CONFIG_SUPPRESS_INTERRUPTS
   /* Initialize logic to support a second level of interrupt decoding for

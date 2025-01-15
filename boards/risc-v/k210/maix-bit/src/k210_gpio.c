@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/risc-v/k210/maix-bit/src/k210_gpio.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -66,8 +68,8 @@ struct k210gpio_dev_s
  ****************************************************************************/
 
 #if BOARD_NGPIOOUT > 0
-static int gpout_read(FAR struct gpio_dev_s *dev, FAR bool *value);
-static int gpout_write(FAR struct gpio_dev_s *dev, bool value);
+static int gpout_read(struct gpio_dev_s *dev, bool *value);
+static int gpout_write(struct gpio_dev_s *dev, bool value);
 #endif
 
 /****************************************************************************
@@ -102,10 +104,10 @@ static struct k210gpio_dev_s g_gpout[BOARD_NGPIOOUT];
  ****************************************************************************/
 
 #if BOARD_NGPIOOUT > 0
-static int gpout_read(FAR struct gpio_dev_s *dev, FAR bool *value)
+static int gpout_read(struct gpio_dev_s *dev, bool *value)
 {
-  FAR struct k210gpio_dev_s *k210gpio =
-    (FAR struct k210gpio_dev_s *)dev;
+  struct k210gpio_dev_s *k210gpio =
+    (struct k210gpio_dev_s *)dev;
 
   DEBUGASSERT(k210gpio != NULL && value != NULL);
   DEBUGASSERT(k210gpio->id < BOARD_NGPIOOUT);
@@ -119,10 +121,10 @@ static int gpout_read(FAR struct gpio_dev_s *dev, FAR bool *value)
  * Name: gpout_write
  ****************************************************************************/
 
-static int gpout_write(FAR struct gpio_dev_s *dev, bool value)
+static int gpout_write(struct gpio_dev_s *dev, bool value)
 {
-  FAR struct k210gpio_dev_s *k210gpio =
-    (FAR struct k210gpio_dev_s *)dev;
+  struct k210gpio_dev_s *k210gpio =
+    (struct k210gpio_dev_s *)dev;
 
   DEBUGASSERT(k210gpio != NULL);
   DEBUGASSERT(k210gpio->id < BOARD_NGPIOOUT);

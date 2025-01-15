@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/mips/src/pic32mx/pic32mx_timerisr.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -33,8 +35,6 @@
 
 #include "clock/clock.h"
 #include "mips_internal.h"
-#include "mips_arch.h"
-
 #include "pic32mx_config.h"
 #include "pic32mx_timer.h"
 #include "pic32mx_int.h"
@@ -163,7 +163,7 @@ void up_timer_initialize(void)
 
   /* Configure the timer interrupt */
 
-  up_clrpend_irq(PIC32MX_IRQSRC_T1);
+  mips_clrpend_irq(PIC32MX_IRQSRC_T1);
 #ifdef CONFIG_ARCH_IRQPRIO
   up_prioritize_irq(PIC32MX_IRQ_T1, CONFIG_PIC32MX_T1PRIO);
 #endif

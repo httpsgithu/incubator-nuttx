@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/stm32/photon/src/stm32_composite.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -65,7 +67,7 @@
  *
  ****************************************************************************/
 
-static FAR void *board_composite0_connect(int port)
+static void *board_composite0_connect(int port)
 {
   /* Here we are composing the configuration of the usb composite device.
    *
@@ -113,7 +115,7 @@ static FAR void *board_composite0_connect(int port)
 
   /* Add other composite devices here */
 
-  return composite_initialize(dev_idx, dev);
+  return composite_initialize(composite_getdevdescs(), dev, dev_idx);
 }
 
 /****************************************************************************
@@ -151,7 +153,7 @@ int board_composite_initialize(int port)
  *
  ****************************************************************************/
 
-FAR void *board_composite_connect(int port, int configid)
+void *board_composite_connect(int port, int configid)
 {
   if (configid == 0)
     {

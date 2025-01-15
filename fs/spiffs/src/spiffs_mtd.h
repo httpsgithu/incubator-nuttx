@@ -1,6 +1,8 @@
 /****************************************************************************
  * fs/spiffs/src/spiffs_mtd.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -32,6 +34,8 @@ extern "C"
 
 #include <nuttx/config.h>
 
+#include <sys/param.h>
+
 #include <nuttx/mtd/mtd.h>
 
 /****************************************************************************
@@ -57,16 +61,6 @@ extern "C"
 #  define spiffs_mtdinfo                _info
 #else
 #  define spiffs_mtdinfo                _none
-#endif
-
-/* Commonly used Macros */
-
-#ifndef MIN
-#  define MIN(a,b) ((a) < (b) ? (a) : (b))
-#endif
-
-#ifndef MAX
-#  define MAX(a,b) ((a) > (b) ? (a) : (b))
 #endif
 
 /****************************************************************************

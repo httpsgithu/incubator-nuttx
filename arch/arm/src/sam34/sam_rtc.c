@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/sam34/sam_rtc.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -32,10 +34,11 @@
 #include <nuttx/arch.h>
 #include <nuttx/irq.h>
 #include <nuttx/wqueue.h>
+#include <nuttx/spinlock.h>
 
 #include <arch/board/board.h>
 
-#include "arm_arch.h"
+#include "arm_internal.h"
 #include "sam_rtc.h"
 
 #if defined(CONFIG_RTC_HIRES) && defined (CONFIG_SAM34_RTT)
@@ -52,12 +55,12 @@
 /* Configuration ************************************************************/
 
 #ifdef CONFIG_RTC_HIRES
-# if !defined(CONFIG_SAM34_RTT)
-#  error RTT is required to emulate high resolution RTC
-# endif
-# if (CONFIG_RTC_FREQUENCY > 32768) || ((32768 % CONFIG_RTC_FREQUENCY) != 0)
-#  error CONFIG_RTC_FREQUENCY must be an integer division of 32768
-# endif
+#  if !defined(CONFIG_SAM34_RTT)
+#    error RTT is required to emulate high resolution RTC
+#  endif
+#  if (CONFIG_RTC_FREQUENCY > 32768) || ((32768 % CONFIG_RTC_FREQUENCY) != 0)
+#    error CONFIG_RTC_FREQUENCY must be an integer division of 32768
+#   endif
 #endif
 
 #if defined(CONFIG_RTC_ALARM) && !defined(CONFIG_SCHED_WORKQUEUE)
@@ -69,6 +72,8 @@
 /****************************************************************************
  * Private Data
  ****************************************************************************/
+
+static spinlock_t g_rtc_lock = SP_UNLOCKED;
 
 /* Callback to use when the alarm expires */
 
@@ -110,7 +115,7 @@ uint32_t g_rtt_offset = 0;
  ****************************************************************************/
 
 #ifdef CONFIG_DEBUG_RTC_INFO
-static void rtc_dumpregs(FAR const char *msg)
+static void rtc_dumpregs(const char *msg)
 {
   rtcinfo("%s:\n", msg);
   rtcinfo("      CR: %08x\n", getreg32(SAM_RTC_CR));
@@ -142,7 +147,7 @@ static void rtc_dumpregs(FAR const char *msg)
  ****************************************************************************/
 
 #ifdef CONFIG_DEBUG_RTC_INFO
-static void rtc_dumptime(FAR struct tm *tp, FAR const char *msg)
+static void rtc_dumptime(struct tm *tp, const char *msg)
 {
   rtcinfo("%s:\n", msg);
   rtcinfo("  tm_sec: %08x\n", tp->tm_sec);
@@ -218,7 +223,7 @@ static int rtc_bcd2bin(uint32_t value)
  ****************************************************************************/
 
 #ifdef CONFIG_RTC_ALARM
-static void rtc_worker(FAR void *arg)
+static void rtc_worker(void *arg)
 {
   /* Sample once (atomically) */
 
@@ -251,7 +256,7 @@ static void rtc_worker(FAR void *arg)
  ****************************************************************************/
 
 #ifdef CONFIG_RTC_ALARM
-static int rtc_interrupt(int irq, void *context, FAR void *arg)
+static int rtc_interrupt(int irq, void *context, void *arg)
 {
   int ret;
 
@@ -432,7 +437,7 @@ int up_rtc_initialize(void)
  *
  ****************************************************************************/
 
-int up_rtc_getdatetime(FAR struct tm *tp)
+int up_rtc_getdatetime(struct tm *tp)
 {
   uint32_t timr;
   uint32_t calr;
@@ -518,9 +523,9 @@ int up_rtc_getdatetime(FAR struct tm *tp)
  *
  ****************************************************************************/
 
-int up_rtc_settime(FAR const struct timespec *tp)
+int up_rtc_settime(const struct timespec *tp)
 {
-  FAR struct tm newtime;
+  struct tm newtime;
   uint32_t regval;
   uint32_t timr;
   uint32_t calr;
@@ -642,9 +647,9 @@ int up_rtc_settime(FAR const struct timespec *tp)
  ****************************************************************************/
 
 #ifdef CONFIG_RTC_ALARM
-int sam_rtc_setalarm(FAR const struct timespec *tp, alarmcb_t callback)
+int sam_rtc_setalarm(const struct timespec *tp, alarmcb_t callback)
 {
-  FAR struct tm newalarm;
+  struct tm newalarm;
   irqstate_t flags;
   uint32_t timalr;
   uint32_t calalr;
@@ -652,7 +657,8 @@ int sam_rtc_setalarm(FAR const struct timespec *tp, alarmcb_t callback)
 
   /* Is there already something waiting on the ALARM? */
 
-  flags = enter_critical_section();
+  flags = spin_lock_irqsave(&g_rtc_lock);
+  sched_lock();
   if (g_alarmcb == NULL)
     {
       /* No.. Save the callback function pointer */
@@ -730,7 +736,8 @@ int sam_rtc_setalarm(FAR const struct timespec *tp, alarmcb_t callback)
       ret = OK;
     }
 
-  leave_critical_section(flags);
+  spin_unlock_irqrestore(&g_rtc_lock, flags);
+  sched_unlock();
   return ret;
 }
 #endif
@@ -753,15 +760,17 @@ int sam_rtc_setalarm(FAR const struct timespec *tp, alarmcb_t callback)
  ****************************************************************************/
 
 #if defined(CONFIG_RTC_HIRES) && defined (CONFIG_SAM34_RTT)
-int up_rtc_gettime(FAR struct timespec *tp)
+int up_rtc_gettime(struct timespec *tp)
 {
   /* This is a hack to emulate a high resolution rtc using the rtt */
 
+  irqstate_t flags;
   uint32_t rtc_cal;
   uint32_t rtc_tim;
   uint32_t rtt_val;
   struct tm t;
 
+  flags = spin_lock_irqsave(&g_rtc_lock);
   do
     {
       rtc_cal = getreg32(SAM_RTC_CALR);
@@ -772,6 +781,7 @@ int up_rtc_gettime(FAR struct timespec *tp)
          rtc_tim != getreg32(SAM_RTC_TIMR) ||
          rtt_val != getreg32(SAM_RTT_VR));
 
+  spin_unlock_irqrestore(&g_rtc_lock, flags);
   t.tm_sec  = rtc_bcd2bin((rtc_tim & RTC_TIMR_SEC_MASK)   >>
                            RTC_TIMR_SEC_SHIFT);
   t.tm_min  = rtc_bcd2bin((rtc_tim & RTC_TIMR_MIN_MASK)   >>

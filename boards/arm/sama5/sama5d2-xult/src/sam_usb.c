@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/sama5/sama5d2-xult/src/sam_usb.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  *  Licensed to the Apache Software Foundation (ASF) under one or more
  *  contributor license agreements.  See the NOTICE file distributed with
  *  this work for additional information regarding copyright ownership.  The
@@ -38,7 +40,7 @@
 #include <nuttx/usb/usbhost.h>
 #include <nuttx/usb/usbdev_trace.h>
 
-#include "arm_arch.h"
+#include "arm_internal.h"
 #include "sam_pio.h"
 #include "sam_usbhost.h"
 #include "hardware/sam_ohci.h"
@@ -278,7 +280,6 @@ void weak_function sam_usbinitialize(void)
 #ifdef HAVE_USBHOST
 int sam_usbhost_initialize(void)
 {
-  pid_t pid;
   int ret;
 
   /* First, register all of the class drivers needed to support the drivers
@@ -339,10 +340,10 @@ int sam_usbhost_initialize(void)
 
   /* Start a thread to handle device connection. */
 
-  pid = kthread_create("OHCI Monitor", CONFIG_SAMA5D2XULT_USBHOST_PRIO,
+  ret = kthread_create("OHCI Monitor", CONFIG_SAMA5D2XULT_USBHOST_PRIO,
                        CONFIG_SAMA5D2XULT_USBHOST_STACKSIZE,
-                       (main_t)ohci_waiter, (FAR char * const *)NULL);
-  if (pid < 0)
+                       ohci_waiter, NULL);
+  if (ret < 0)
     {
       uerr("ERROR: Failed to create ohci_waiter task: %d\n", ret);
       return -ENODEV;
@@ -361,10 +362,10 @@ int sam_usbhost_initialize(void)
 
   /* Start a thread to handle device connection. */
 
-  pid = kthread_create("EHCI Monitor", CONFIG_SAMA5D2XULT_USBHOST_PRIO,
+  ret = kthread_create("EHCI Monitor", CONFIG_SAMA5D2XULT_USBHOST_PRIO,
                        CONFIG_SAMA5D2XULT_USBHOST_STACKSIZE,
-                       (main_t)ehci_waiter, (FAR char * const *)NULL);
-  if (pid < 0)
+                       ehci_waiter, NULL);
+  if (ret < 0)
     {
       uerr("ERROR: Failed to create ehci_waiter task: %d\n", ret);
       return -ENODEV;
@@ -519,7 +520,7 @@ xcpt_t sam_setup_overcurrent(xcpt_t handler)
  ****************************************************************************/
 
 #ifdef CONFIG_USBDEV
-void sam_usbsuspend(FAR struct usbdev_s *dev, bool resume)
+void sam_usbsuspend(struct usbdev_s *dev, bool resume)
 {
   uinfo("resume: %d\n", resume);
 }

@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/cxd56xx/common/src/cxd56_i2cdev_bitbang.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -53,7 +55,7 @@
 int board_i2cdev_bitbang_initialize(uint32_t sda_pin, uint32_t scl_pin)
 {
   int ret = 0;
-  FAR struct i2c_master_s *i2c;
+  struct i2c_master_s *i2c;
   int port;
 
   /* Use a sda pin number as port number */

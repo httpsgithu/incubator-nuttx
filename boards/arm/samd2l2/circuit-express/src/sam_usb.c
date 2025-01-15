@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/samd2l2/circuit-express/src/sam_usb.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -78,7 +80,7 @@ void weak_function sam_usbinitialize(void)
  ****************************************************************************/
 
 #ifdef CONFIG_USBDEV
-void sam_usb_suspend(FAR struct usbdev_s *dev, bool resume)
+void sam_usb_suspend(struct usbdev_s *dev, bool resume)
 {
   uinfo("board: resume: %d\n", resume);
 }

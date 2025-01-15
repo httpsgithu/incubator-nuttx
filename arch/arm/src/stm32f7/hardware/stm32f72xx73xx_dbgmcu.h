@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/stm32f7/hardware/stm32f72xx73xx_dbgmcu.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -18,8 +20,8 @@
  *
  ****************************************************************************/
 
-#ifndef __ARCH_ARM_SRC_STM32F7_HARDWARE_STM32F72XX73XXDBGMCU_H
-#define __ARCH_ARM_SRC_STM32F7_HARDWARE_STM32F72XX73XXDBGMCU_H
+#ifndef __ARCH_ARM_SRC_STM32F7_HARDWARE_STM32F72XX73XX_DBGMCU_H
+#define __ARCH_ARM_SRC_STM32F7_HARDWARE_STM32F72XX73XX_DBGMCU_H
 
 /****************************************************************************
  * Included Files
@@ -88,4 +90,4 @@
 #define DBGMCU_APB2_TIM10STOP     (1 << 17)  /* Bit 17: TIM10 stopped when core is halted */
 #define DBGMCU_APB2_TIM11STOP     (1 << 18)  /* Bit 18: TIM11 stopped when core is halted */
 
-#endif /* __ARCH_ARM_SRC_STM32F7_HARDWARE_STM32F72XX74XXDBGMCU_H */
+#endif /* __ARCH_ARM_SRC_STM32F7_HARDWARE_STM32F72XX74XX_DBGMCU_H */

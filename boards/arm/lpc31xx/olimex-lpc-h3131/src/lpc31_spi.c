@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/lpc31xx/olimex-lpc-h3131/src/lpc31_spi.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -31,7 +33,7 @@
 #include <nuttx/spi/spi.h>
 #include <arch/board/board.h>
 
-#include "arm_arch.h"
+#include "arm_internal.h"
 #include "chip.h"
 #include "lpc31.h"
 #include "lpc_h3131.h"
@@ -90,7 +92,7 @@ void weak_function lpc31_spidev_initialize(void)
  *
  ****************************************************************************/
 
-void lpc31_spiselect(FAR struct spi_dev_s *dev, uint32_t devid,
+void lpc31_spiselect(struct spi_dev_s *dev, uint32_t devid,
                      bool selected)
 {
   spiinfo("devid: %d CS: %s\n", (int)devid,
@@ -98,7 +100,7 @@ void lpc31_spiselect(FAR struct spi_dev_s *dev, uint32_t devid,
 #warning "Missing logic"
 }
 
-uint8_t lpc31_spistatus(FAR struct spi_dev_s *dev, uint32_t devid)
+uint8_t lpc31_spistatus(struct spi_dev_s *dev, uint32_t devid)
 {
   return SPI_STATUS_PRESENT;
 }

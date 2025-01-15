@@ -1,6 +1,8 @@
 /****************************************************************************
  * graphics/nxglib/lcd/nxglib_moverectangle.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -72,8 +74,10 @@ void NXGL_FUNCNAME(nxgl_moverectangle, NXGLIB_SUFFIX)
            srcrow <= rect->pt2.y;
            srcrow++, destrow++)
         {
-          pinfo->getrun(srcrow, rect->pt1.x, pinfo->buffer, ncols);
-          pinfo->putrun(destrow, offset->x, pinfo->buffer, ncols);
+          pinfo->getrun(pinfo->dev, srcrow, rect->pt1.x, pinfo->buffer,
+                        ncols);
+          pinfo->putrun(pinfo->dev, destrow, offset->x, pinfo->buffer,
+                        ncols);
         }
     }
 
@@ -91,8 +95,10 @@ void NXGL_FUNCNAME(nxgl_moverectangle, NXGLIB_SUFFIX)
            srcrow >= rect->pt1.y;
            srcrow--, destrow--)
         {
-          pinfo->getrun(srcrow, rect->pt1.x, pinfo->buffer, ncols);
-          pinfo->putrun(destrow, offset->x, pinfo->buffer, ncols);
+          pinfo->getrun(pinfo->dev, srcrow, rect->pt1.x, pinfo->buffer,
+                        ncols);
+          pinfo->putrun(pinfo->dev, destrow, offset->x, pinfo->buffer,
+                        ncols);
         }
     }
 }

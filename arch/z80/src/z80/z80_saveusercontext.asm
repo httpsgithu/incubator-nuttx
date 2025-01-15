@@ -1,6 +1,8 @@
 ;*************************************************************************
 ; arch/z80/src/z80/z80_saveusercontext.asm
 ;
+; SPDX-License-Identifier: Apache-2.0
+;
 ; Licensed to the Apache Software Foundation (ASF) under one or more
 ; contributor license agreements.  See the NOTICE file distributed with
 ; this work for additional information regarding copyright ownership.  The
@@ -44,11 +46,11 @@
 	SP_OFFSET	==  6
 
 ;*************************************************************************
-; Name: z80_saveusercontext
+; Name: up_saveusercontext
 ;*************************************************************************
 
 	.area	_CODE
-_z80_saveusercontext:
+_up_saveusercontext:
 	; Set up a stack frame
 
 	push	ix			; Save IX and IY

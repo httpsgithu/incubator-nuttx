@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/risc-v/src/bl602/bl602_spiflash.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -296,6 +298,8 @@ int bl602_ioctl(struct mtd_dev_s *dev, int cmd,
           struct mtd_geometry_s *geo = (struct mtd_geometry_s *)arg;
           if (geo)
             {
+              memset(geo, 0, sizeof(*geo));
+
               geo->blocksize    = SPIFLASH_BLOCKSIZE;
               geo->erasesize    = SPIFLASH_BLOCKSIZE;
               geo->neraseblocks = (priv->config->flash_size) / \

@@ -1,6 +1,8 @@
 /****************************************************************************
  * libs/libnx/nxfonts/nxfonts_x11-misc-fixed-5x8.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -18,8 +20,8 @@
  *
  ****************************************************************************/
 
-#ifndef __LIBNX_NXFONTS_NXFONTS_X11_MISC_FIXED_5X8_H
-#define __LIBNX_NXFONTS_NXFONTS_X11_MISC_FIXED_5X8_H
+#ifndef __LIBS_LIBNX_NXFONTS_NXFONTS_X11_MISC_FIXED_5X8_H
+#define __LIBS_LIBNX_NXFONTS_NXFONTS_X11_MISC_FIXED_5X8_H
 
 /****************************************************************************
  * Included Files
@@ -832,4 +834,4 @@ extern "C"
 }
 #endif
 
-#endif /* __LIBNX_NXFONTS_NXFONTS_X11_MISC_FIXED_5X8_H */
+#endif /* __LIBS_LIBNX_NXFONTS_NXFONTS_X11_MISC_FIXED_5X8_H */

@@ -1,6 +1,8 @@
 /****************************************************************************
  * net/local/local_bind.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -23,7 +25,6 @@
  ****************************************************************************/
 
 #include <nuttx/config.h>
-#if defined(CONFIG_NET) && defined(CONFIG_NET_LOCAL)
 
 #include <sys/socket.h>
 #include <string.h>
@@ -38,7 +39,7 @@
  ****************************************************************************/
 
 /****************************************************************************
- * Name: local_bind
+ * Name: psock_local_bind
  *
  * Description:
  *   This function implements the low-level parts of the standard local
@@ -49,57 +50,56 @@
 int psock_local_bind(FAR struct socket *psock,
                      FAR const struct sockaddr *addr, socklen_t addrlen)
 {
-  FAR struct local_conn_s *conn;
+  FAR struct local_conn_s *conn = psock->s_conn;
   FAR const struct sockaddr_un *unaddr =
     (FAR const struct sockaddr_un *)addr;
-  int namelen;
+  int index;
 
-  DEBUGASSERT(psock != NULL && psock->s_conn != NULL &&
-              unaddr != NULL && unaddr->sun_family == AF_LOCAL &&
-              addrlen >= sizeof(sa_family_t));
+  DEBUGASSERT(unaddr->sun_family == AF_LOCAL);
 
-  conn = (FAR struct local_conn_s *)psock->s_conn;
+  if (addrlen <= sizeof(sa_family_t) + 1)
+    {
+      return -EINVAL;
+    }
+
+  conn = psock->s_conn;
+
+  /* Check if local address is already in use */
+
+  net_lock();
+  if (local_findconn(conn, unaddr) != NULL)
+    {
+      net_unlock();
+      return -EADDRINUSE;
+    }
+
+  net_unlock();
 
   /* Save the address family */
 
-  conn->lc_proto = psock->s_type;
+  conn->lc_instance_id = -1;
 
   /* Now determine the type of the Unix domain socket by comparing the size
    * of the address description.
    */
 
-  if (addrlen == sizeof(sa_family_t))
+  if (unaddr->sun_path[0] == '\0')
     {
-      /* No sun_path... This is an un-named Unix domain socket */
+      /* Zero-length sun_path... This is an abstract Unix domain socket */
 
-      conn->lc_type = LOCAL_TYPE_UNNAMED;
+      conn->lc_type = LOCAL_TYPE_ABSTRACT;
+      index = 1;
     }
   else
     {
-      namelen = strnlen(unaddr->sun_path, UNIX_PATH_MAX - 1);
-      if (namelen <= 0)
-        {
-          /* Zero-length sun_path... This is an abstract Unix domain socket */
+      /* This is an normal, pathname Unix domain socket */
 
-          conn->lc_type    = LOCAL_TYPE_ABSTRACT;
-          conn->lc_path[0] = '\0';
-        }
-      else
-        {
-          /* This is an normal, pathname Unix domain socket */
-
-          conn->lc_type = LOCAL_TYPE_PATHNAME;
-
-          /* Copy the path into the connection structure */
-
-          strncpy(conn->lc_path, unaddr->sun_path, UNIX_PATH_MAX - 1);
-          conn->lc_path[UNIX_PATH_MAX - 1] = '\0';
-          conn->lc_instance_id = -1;
-        }
+      conn->lc_type = LOCAL_TYPE_PATHNAME;
+      index = 0;
     }
+
+  strlcpy(conn->lc_path, &unaddr->sun_path[index], sizeof(conn->lc_path));
 
   conn->lc_state = LOCAL_STATE_BOUND;
   return OK;
 }
-
-#endif /* CONFIG_NET && CONFIG_NET_LOCAL */

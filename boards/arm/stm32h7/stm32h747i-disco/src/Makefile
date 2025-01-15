@@ -1,6 +1,8 @@
 ############################################################################
 # boards/arm/stm32h7/stm32h747i-disco/src/Makefile
 #
+# SPDX-License-Identifier: Apache-2.0
+#
 # Licensed to the Apache Software Foundation (ASF) under one or more
 # contributor license agreements.  See the NOTICE file distributed with
 # this work for additional information regarding copyright ownership.  The
@@ -52,11 +54,11 @@ ifeq ($(CONFIG_BOARDCTL),y)
 CSRCS += stm32_appinitialize.c
 endif
 
-ifeq ($(CONFIG_STM32H7_SDMMC), y)
+ifeq ($(CONFIG_STM32H7_SDMMC),y)
 CSRCS += stm32_sdmmc.c
 endif
 
-ifeq ($(CONFIG_FAT_DMAMEMORY), y)
+ifeq ($(CONFIG_FAT_DMAMEMORY),y)
 CSRCS += stm32_dma_alloc.c
 endif
 

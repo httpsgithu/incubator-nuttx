@@ -1,6 +1,8 @@
 /****************************************************************************
  * include/netpacket/packet.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -29,14 +31,32 @@
 #include <stdint.h>
 
 /****************************************************************************
+ * Pre-processor Definitions
+ ****************************************************************************/
+
+/* Valid packet types for sll_pkttype */
+
+#define PACKET_HOST       0   /* To us.  */
+#define PACKET_BROADCAST  1   /* To all.  */
+#define PACKET_MULTICAST  2   /* To group.  */
+#define PACKET_OTHERHOST  3   /* To someone else.  */
+#define PACKET_OUTGOING   4   /* Originated by us . */
+#define PACKET_LOOPBACK   5
+#define PACKET_FASTROUTE  6
+
+/****************************************************************************
  * Public Types
  ****************************************************************************/
 
 struct sockaddr_ll
 {
-  uint16_t sll_family;
-  uint16_t sll_protocol;
-  int16_t  sll_ifindex;
+  unsigned short sll_family;
+  unsigned short sll_protocol;
+  int            sll_ifindex;
+  unsigned short sll_hatype;
+  unsigned char  sll_pkttype;
+  unsigned char  sll_halen;
+  unsigned char  sll_addr[8];
 };
 
 #endif /* __INCLUDE_NETPACKET_PACKET_H */

@@ -1,6 +1,8 @@
 /****************************************************************************
  * libs/libc/modlib/modlib_sections.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -29,13 +31,11 @@
 #include <errno.h>
 #include <debug.h>
 
-#include <nuttx/lib/modlib.h>
-
 #include "libc.h"
 #include "modlib/modlib.h"
 
 /****************************************************************************
- * Private Functions
+ * Public Functions
  ****************************************************************************/
 
 /****************************************************************************
@@ -50,14 +50,12 @@
  *
  ****************************************************************************/
 
-static inline int modlib_sectname(FAR struct mod_loadinfo_s *loadinfo,
-                                  FAR const Elf_Shdr *shdr)
+int modlib_sectname(FAR struct mod_loadinfo_s *loadinfo,
+                    FAR const Elf_Shdr *shdr)
 {
   FAR Elf_Shdr *shstr;
-  FAR uint8_t *buffer;
   off_t  offset;
-  size_t readlen;
-  size_t bytesread;
+  size_t bytesread = 0;
   int shstrndx;
   int ret;
 
@@ -71,6 +69,17 @@ static inline int modlib_sectname(FAR struct mod_loadinfo_s *loadinfo,
     {
       berr("ERROR: No section header string table\n");
       return -EINVAL;
+    }
+
+  /* Allocate an I/O buffer.  This buffer is used by modlib_sectname() to
+   * accumulate the variable length symbol name.
+   */
+
+  ret = modlib_allocbuffer(loadinfo);
+  if (ret < 0)
+    {
+      berr("ERROR: modlib_allocbuffer failed: %d\n", ret);
+      return -ENOMEM;
     }
 
   /* Get the section name string table section header */
@@ -90,13 +99,13 @@ static inline int modlib_sectname(FAR struct mod_loadinfo_s *loadinfo,
 
   /* Loop until we get the entire section name into memory */
 
-  bytesread = 0;
-
   for (; ; )
     {
+      FAR uint8_t *buffer = &loadinfo->iobuffer[bytesread];
+      size_t readlen = loadinfo->buflen - bytesread;
+
       /* Get the number of bytes to read */
 
-      readlen = loadinfo->buflen - bytesread;
       if (offset + readlen > loadinfo->filelen)
         {
           if (loadinfo->filelen <= offset)
@@ -110,8 +119,7 @@ static inline int modlib_sectname(FAR struct mod_loadinfo_s *loadinfo,
 
       /* Read that number of bytes into the array */
 
-      buffer = &loadinfo->iobuffer[bytesread];
-      ret = modlib_read(loadinfo, buffer, readlen, offset);
+      ret = modlib_read(loadinfo, buffer, readlen, offset + bytesread);
       if (ret < 0)
         {
           berr("ERROR: Failed to read section name: %d\n", ret);
@@ -145,10 +153,6 @@ static inline int modlib_sectname(FAR struct mod_loadinfo_s *loadinfo,
 }
 
 /****************************************************************************
- * Public Functions
- ****************************************************************************/
-
-/****************************************************************************
  * Name: modlib_findsection
  *
  * Description:
@@ -167,8 +171,6 @@ static inline int modlib_sectname(FAR struct mod_loadinfo_s *loadinfo,
 int modlib_findsection(FAR struct mod_loadinfo_s *loadinfo,
                        FAR const char *sectname)
 {
-  FAR const Elf_Shdr *shdr;
-  int ret;
   int i;
 
   /* Search through the shdr[] array in loadinfo for a section named
@@ -177,10 +179,11 @@ int modlib_findsection(FAR struct mod_loadinfo_s *loadinfo,
 
   for (i = 0; i < loadinfo->ehdr.e_shnum; i++)
     {
+      FAR const Elf_Shdr *shdr = &loadinfo->shdr[i];
+
       /* Get the name of this section */
 
-      shdr = &loadinfo->shdr[i];
-      ret  = modlib_sectname(loadinfo, shdr);
+      int ret = modlib_sectname(loadinfo, shdr);
       if (ret < 0)
         {
           berr("ERROR: modlib_sectname failed: %d\n", ret);

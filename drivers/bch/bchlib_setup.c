@@ -1,6 +1,8 @@
 /****************************************************************************
  * drivers/bch/bchlib_setup.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -36,6 +38,7 @@
 
 #include <nuttx/kmalloc.h>
 #include <nuttx/fs/fs.h>
+#include <nuttx/drivers/drivers.h>
 
 #include "bch.h"
 
@@ -52,7 +55,7 @@
  *
  ****************************************************************************/
 
-int bchlib_setup(const char *blkdev, bool readonly, FAR void **handle)
+int bchlib_setup(FAR const char *blkdev, bool readonly, FAR void **handle)
 {
   FAR struct bchlib_s *bch;
   struct geometry geo;
@@ -62,7 +65,7 @@ int bchlib_setup(const char *blkdev, bool readonly, FAR void **handle)
 
   /* Allocate the BCH state structure */
 
-  bch = (FAR struct bchlib_s *)kmm_zalloc(sizeof(struct bchlib_s));
+  bch = kmm_zalloc(sizeof(struct bchlib_s));
   if (!bch)
     {
       ferr("ERROR: Failed to allocate BCH structure\n");
@@ -104,22 +107,11 @@ int bchlib_setup(const char *blkdev, bool readonly, FAR void **handle)
 
   /* Save the geometry info and complete initialization of the structure */
 
-  nxsem_init(&bch->sem, 0, 1);
+  nxmutex_init(&bch->lock);
   bch->nsectors = geo.geo_nsectors;
   bch->sectsize = geo.geo_sectorsize;
   bch->sector   = (size_t)-1;
   bch->readonly = readonly;
-
-  /* Allocate the sector I/O buffer */
-
-  bch->buffer = (FAR uint8_t *)kmm_malloc(bch->sectsize);
-  if (!bch->buffer)
-    {
-      ferr("ERROR: Failed to allocate sector buffer\n");
-      ret = -ENOMEM;
-      goto errout_with_bch;
-    }
-
   *handle = bch;
   return OK;
 

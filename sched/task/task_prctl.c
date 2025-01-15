@@ -1,6 +1,8 @@
 /****************************************************************************
  * sched/task/task_prctl.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -126,7 +128,7 @@ int prctl(int option, ...)
                * necessary.
                */
 
-              strncpy(tcb->name, name, CONFIG_TASK_NAME_SIZE);
+              strlcpy(tcb->name, name, sizeof(tcb->name));
               tcb->name[CONFIG_TASK_NAME_SIZE] = '\0';
             }
           else
@@ -135,7 +137,7 @@ int prctl(int option, ...)
                * necessary.
                */
 
-              strncpy(name, tcb->name, CONFIG_TASK_NAME_SIZE - 1);
+              strlcpy(name, tcb->name, sizeof(tcb->name));
               name[CONFIG_TASK_NAME_SIZE - 1] = '\0';
             }
         }

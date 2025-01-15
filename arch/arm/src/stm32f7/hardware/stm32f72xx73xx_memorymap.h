@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/stm32f7/hardware/stm32f72xx73xx_memorymap.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -18,8 +20,8 @@
  *
  ****************************************************************************/
 
-#ifndef __ARCH_ARM_SRC_STM32F7_HARDWARE_STM32F72XXX73XXX_MEMORYMAP_H
-#define __ARCH_ARM_SRC_STM32F7_HARDWARE_STM32F72XXX73XXX_MEMORYMAP_H
+#ifndef __ARCH_ARM_SRC_STM32F7_HARDWARE_STM32F72XX73XX_MEMORYMAP_H
+#define __ARCH_ARM_SRC_STM32F7_HARDWARE_STM32F72XX73XX_MEMORYMAP_H
 
 /****************************************************************************
  * Included Files

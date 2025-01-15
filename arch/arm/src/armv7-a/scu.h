@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/armv7-a/scu.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -90,11 +92,11 @@
 #define SCU_CONFIG_CPU0_TAGRAM_SHIFT 8         /* CPU 0 tag RAM size */
 #define SCU_CONFIG_CPU0_TAGRAM_MASK  (3 << SCU_CONFIG_CPU0_TAGRAM_SHIFT)
 #define SCU_CONFIG_CPU1_TAGRAM_SHIFT 10        /* CPU 1 tag RAM size */
-#define SCU_CONFIG_CPU1_TAGRAM_MASK  (3 << SCU_CONFIG_CPU0_TAGRAM_SHIFT)
-#define SCU_CONFIG_CPU2_TAGRAM_SHIFT 12        /* CPU 1 tag RAM size */
-#define SCU_CONFIG_CPU2_TAGRAM_MASK  (3 << SCU_CONFIG_CPU0_TAGRAM_SHIFT)
-#define SCU_CONFIG_CPU3_TAGRAM_SHIFT 14        /* CPU 1 tag RAM size */
-#define SCU_CONFIG_CPU3_TAGRAM_MASK  (3 << SCU_CONFIG_CPU0_TAGRAM_SHIFT)
+#define SCU_CONFIG_CPU1_TAGRAM_MASK  (3 << SCU_CONFIG_CPU1_TAGRAM_SHIFT)
+#define SCU_CONFIG_CPU2_TAGRAM_SHIFT 12        /* CPU 2 tag RAM size */
+#define SCU_CONFIG_CPU2_TAGRAM_MASK  (3 << SCU_CONFIG_CPU2_TAGRAM_SHIFT)
+#define SCU_CONFIG_CPU3_TAGRAM_SHIFT 14        /* CPU 3 tag RAM size */
+#define SCU_CONFIG_CPU3_TAGRAM_MASK  (3 << SCU_CONFIG_CPU3_TAGRAM_SHIFT)
 
 /* SCU CPU Power Status Register */
 

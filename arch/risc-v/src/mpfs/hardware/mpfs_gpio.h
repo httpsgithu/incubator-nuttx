@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/risc-v/src/mpfs/hardware/mpfs_gpio.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -27,6 +29,12 @@
 
 #include <nuttx/config.h>
 #include "hardware/mpfs_memorymap.h"
+
+#if defined(CONFIG_ARCH_CHIP_MPFS250T_FCVG484) || defined(CONFIG_ARCH_CHIP_MPFS250T_FCG484)
+#include "hardware/mpfs250t_484_pinmap.h"
+#else
+#error The selected MPFS variant is not impelemented
+#endif
 
 /****************************************************************************
  * Pre-processor Definitions

@@ -30,13 +30,14 @@ $(RCOBJS): $(ETCDIR)$(DELIM)%: %
 	$(Q) mkdir -p $(dir $@)
 	$(call PREPROCESS, $<, $@)
 
-$(ETCSRC): $(RCRAWS) $(RCOBJS)
+$(ETCSRC): $(foreach raw,$(RCRAWS), $(if $(wildcard $(BOARD_DIR)$(DELIM)src$(DELIM)$(raw)), $(BOARD_DIR)$(DELIM)src$(DELIM)$(raw), $(if $(wildcard $(BOARD_COMMON_DIR)$(DELIM)$(raw)), $(BOARD_COMMON_DIR)$(DELIM)$(raw), $(BOARD_DIR)$(DELIM)src$(DELIM)$(raw)))) $(RCOBJS)
 	$(foreach raw, $(RCRAWS), \
 	  $(shell rm -rf $(ETCDIR)$(DELIM)$(raw)) \
 	  $(shell mkdir -p $(dir $(ETCDIR)$(DELIM)$(raw))) \
-	  $(shell cp -rfp $(raw) $(ETCDIR)$(DELIM)$(raw)))
-	$(Q) genromfs -f romfs.img -d $(ETCDIR)$(DELIM)$(CONFIG_NSH_ROMFSMOUNTPT) -V "$(basename $<)"
-	$(Q) xxd -i romfs.img | sed -e "s/^unsigned/const unsigned/g" > $@
+	  $(shell cp -rfp $(if $(wildcard $(BOARD_DIR)$(DELIM)src$(DELIM)$(raw)), $(BOARD_DIR)$(DELIM)src$(DELIM)$(raw), $(if $(wildcard $(BOARD_COMMON_DIR)$(DELIM)$(raw)), $(BOARD_COMMON_DIR)$(DELIM)$(raw), $(BOARD_DIR)$(DELIM)src$(DELIM)$(raw))) $(ETCDIR)$(DELIM)$(raw)))
+	$(Q) genromfs -f romfs.img -d $(ETCDIR)$(DELIM)$(CONFIG_ETC_ROMFSMOUNTPT) -V "NSHInitVol"
+	$(Q) echo "#include <nuttx/compiler.h>" > $@
+	$(Q) xxd -i romfs.img | sed -e "s/^unsigned char/const unsigned char aligned_data(4)/g" >> $@
 	$(Q) rm romfs.img
 endif
 
@@ -57,24 +58,20 @@ ifneq ($(CONFIG_ARCH_FAMILY),)
   ARCH_FAMILY = $(patsubst "%",%,$(CONFIG_ARCH_FAMILY))
 endif
 
-CFLAGS += ${shell $(INCDIR) "$(CC)" "$(SCHEDSRCDIR)"}
-CFLAGS += ${shell $(INCDIR) "$(CC)" "$(ARCHSRCDIR)$(DELIM)chip"}
+CFLAGS += ${INCDIR_PREFIX}"$(SCHEDSRCDIR)"
+CFLAGS += ${INCDIR_PREFIX}"$(ARCHSRCDIR)$(DELIM)chip"
 ifneq ($(CONFIG_ARCH_SIM),y)
-  CFLAGS += ${shell $(INCDIR) "$(CC)" "$(ARCHSRCDIR)$(DELIM)common"}
+  CFLAGS += ${INCDIR_PREFIX}"$(ARCHSRCDIR)$(DELIM)common"
 endif
 ifneq ($(ARCH_FAMILY),)
-  CFLAGS += ${shell $(INCDIR) "$(CC)" "$(ARCHSRCDIR)$(DELIM)$(ARCH_FAMILY)"}
+  CFLAGS += ${INCDIR_PREFIX}"$(ARCHSRCDIR)$(DELIM)$(ARCH_FAMILY)"
 endif
 
 all: libboard$(LIBEXT)
 
 ifneq ($(ZDSVERSION),)
 $(ASRCS) $(HEAD_ASRC): %$(ASMEXT): %.S
-ifeq ($(CONFIG_CYGWIN_WINTOOL),y)
-	$(Q) $(CPP) $(CPPFLAGS) `cygpath -w $<` -o $@.tmp
-else
-	$(Q) $(CPP) $(CPPFLAGS) $< -o $@.tmp
-endif
+	$(Q) $(CPP) $(CPPFLAGS) $(call CONVERT_PATH,$<) -o $@.tmp
 	$(Q) cat $@.tmp | sed -e "s/^#/;/g" > $@
 	$(Q) rm $@.tmp
 endif

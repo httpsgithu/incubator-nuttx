@@ -1,6 +1,8 @@
 /****************************************************************************
  * net/igmp/igmp_input.c
  *
+ * SPDX-License-Identifier: BSD-3-Clause
+ *
  *   Copyright (C) 2010, 2014, 2020 Gregory Nutt. All rights reserved.
  *   Author: Gregory Nutt <gnutt@nuttx.org>
  *
@@ -61,13 +63,6 @@
 #ifdef CONFIG_NET_IGMP
 
 /****************************************************************************
- * Pre-processor Definitions
- ****************************************************************************/
-
-#define IPv4BUF     ((FAR struct igmp_iphdr_s *)&dev->d_buf[NET_LL_HDRLEN(dev)])
-#define IGMPBUF(hl) ((FAR struct igmp_hdr_s *)&dev->d_buf[NET_LL_HDRLEN(dev) + (hl)])
-
-/****************************************************************************
  * Public Functions
  ****************************************************************************/
 
@@ -115,7 +110,7 @@
 
 void igmp_input(struct net_driver_s *dev)
 {
-  FAR struct igmp_iphdr_s *ipv4 = IPv4BUF;
+  FAR struct igmp_iphdr_s *ipv4 = IPBUF(0);
   FAR struct igmp_hdr_s *igmp;
   FAR struct igmp_group_s *group;
   in_addr_t destipaddr;
@@ -132,7 +127,7 @@ void igmp_input(struct net_driver_s *dev)
 
   /* The IGMP header immediately follows the IP header */
 
-  igmp = IGMPBUF(iphdrlen);
+  igmp = IPBUF(iphdrlen);
 
   /* Verify the message length */
 
@@ -143,6 +138,7 @@ void igmp_input(struct net_driver_s *dev)
       goto drop;
     }
 
+#ifdef CONFIG_NET_IGMP_CHECKSUMS
   /* Calculate and check the IGMP checksum */
 
   if (net_chksum((FAR uint16_t *)igmp, IGMP_HDRLEN) != 0)
@@ -151,6 +147,7 @@ void igmp_input(struct net_driver_s *dev)
       nwarn("WARNING: Checksum error\n");
       goto drop;
     }
+#endif
 
   /* Find the group (or create a new one) using the incoming IP address. */
 
@@ -198,7 +195,7 @@ void igmp_input(struct net_driver_s *dev)
              *    Query."
              */
 
-            if (igmp->grpaddr == 0)
+            if (net_ipv4addr_cmp(igmp->grpaddr, INADDR_ANY) != 0)
               {
                 FAR struct igmp_group_s *member;
 
@@ -233,7 +230,7 @@ void igmp_input(struct net_driver_s *dev)
                       }
                   }
               }
-            else /* if (igmp->grpaddr != 0) */
+            else /* if (net_ipv4addr_cmp(igmp->grpaddr, INADDR_ANY) == 0) */
               {
                 ninfo("Group-specific multicast query\n");
 
@@ -262,7 +259,7 @@ void igmp_input(struct net_driver_s *dev)
 
         /* Not sent to all systems -- Unicast query */
 
-        else if (group->grpaddr != 0)
+        else if (net_ipv4addr_cmp(igmp->grpaddr, INADDR_ANY) == 0)
           {
             ninfo("Unicast query\n");
             IGMP_STATINCR(g_netstats.igmp.ucast_query);
@@ -304,7 +301,6 @@ void igmp_input(struct net_driver_s *dev)
 
 drop:
   dev->d_len = 0;
-  return;
 }
 
 #endif /* CONFIG_NET_IGMP */

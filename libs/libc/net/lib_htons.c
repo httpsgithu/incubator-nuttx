@@ -1,6 +1,8 @@
 /****************************************************************************
  * libs/libc/net/lib_htons.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -38,9 +40,5 @@ uint16_t htons(uint16_t hs)
 
 uint16_t ntohs(uint16_t ns)
 {
-#ifdef CONFIG_ENDIAN_BIG
-  return ns;
-#else
-  return htons(ns);
-#endif
+  return NTOHS(ns);
 }

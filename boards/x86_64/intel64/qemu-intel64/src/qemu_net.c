@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/x86_64/intel64/qemu-intel64/src/qemu_net.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -30,8 +32,7 @@
 #include <arch/arch.h>
 #include <arch/board/board.h>
 
-#include "up_arch.h"
-#include "up_internal.h"
+#include "x86_64_internal.h"
 
 /****************************************************************************
  * Pre-processor Definitions
@@ -42,7 +43,7 @@
  ****************************************************************************/
 
 /****************************************************************************
- * Name: up_netinitialize
+ * Name: x86_64_netinitialize
  *
  * Description:
  *   All x86 architectures must provide the following function to setup the
@@ -50,10 +51,8 @@
  *
  ****************************************************************************/
 
-#ifdef CONFIG_NET
-void up_netinitialize(void)
+#if defined(CONFIG_NET) && !defined(CONFIG_NETDEV_LATEINIT)
+void x86_64_netinitialize(void)
 {
-  return;
 }
 #endif
-

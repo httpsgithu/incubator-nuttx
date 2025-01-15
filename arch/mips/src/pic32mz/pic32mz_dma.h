@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/mips/src/pic32mz/pic32mz_dma.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -80,7 +82,7 @@
 
 #ifndef __ASSEMBLY__
 
-typedef FAR void *DMA_HANDLE;
+typedef void *DMA_HANDLE;
 typedef void (*dma_callback_t)(DMA_HANDLE handle, uint8_t status, void *arg);
 
 /* DMA channel modes, arguments for pic32mz_dma_mode. */
@@ -247,7 +249,7 @@ void pic32mz_dma_free(DMA_HANDLE handle);
  ****************************************************************************/
 
 int pic32mz_dma_chcfg(DMA_HANDLE handle,
-                      FAR const struct pic32mz_dma_chcfg_s *cfg);
+                      const struct pic32mz_dma_chcfg_s *cfg);
 
 /****************************************************************************
  * Name: pic32mz_dma_xfrsetup
@@ -258,7 +260,7 @@ int pic32mz_dma_chcfg(DMA_HANDLE handle,
  ****************************************************************************/
 
 int pic32mz_dma_xfrsetup(DMA_HANDLE handle,
-                         FAR const struct pic32mz_dma_xfrcfg_s *cfg);
+                         const struct pic32mz_dma_xfrcfg_s *cfg);
 
 /****************************************************************************
  * Name: pic32mz_dma_start

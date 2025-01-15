@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/misoc/src/common/hw/ethmac_mem.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -18,8 +20,8 @@
  *
  ****************************************************************************/
 
-#ifndef __ARCH_MISOC_SRC_COMMON_HW_EMAC_MEM_H
-#define __ARCH_MISOC_SRC_COMMON_HW_EMAC_MEM_H
+#ifndef __ARCH_MISOC_SRC_COMMON_HW_ETHMAC_MEM_H
+#define __ARCH_MISOC_SRC_COMMON_HW_ETHMAC_MEM_H
 
 /****************************************************************************
  * Included Files
@@ -31,9 +33,9 @@
  * Pre-processor Definitions
  ****************************************************************************/
 
-#define ETHMAC_RX0_BASE	ETHMAC_BASE
-#define ETHMAC_RX1_BASE	(ETHMAC_BASE+0x0800)
-#define ETHMAC_TX0_BASE	(ETHMAC_BASE+0x1000)
-#define ETHMAC_TX1_BASE	(ETHMAC_BASE+0x1800)
+#define ETHMAC_RX0_BASE  ETHMAC_BASE
+#define ETHMAC_RX1_BASE  (ETHMAC_BASE+0x0800)
+#define ETHMAC_TX0_BASE  (ETHMAC_BASE+0x1000)
+#define ETHMAC_TX1_BASE  (ETHMAC_BASE+0x1800)
 
-#endif /* __ARCH_MISOC_SRC_COMMON_HW_EMAC_MEM_H */
+#endif /* __ARCH_MISOC_SRC_COMMON_HW_ETHMAC_MEM_H */

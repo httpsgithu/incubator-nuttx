@@ -1,6 +1,8 @@
 /****************************************************************************
  * libs/libc/string/lib_strerrorr.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -54,6 +56,6 @@ int strerror_r(int errnum, FAR char *buf, size_t buflen)
   FAR const char *errstr = strerror(errnum);
 
   DEBUGASSERT(buf != NULL);
-  strncpy(buf, errstr, buflen);
+  strlcpy(buf, errstr, buflen);
   return OK;
 }

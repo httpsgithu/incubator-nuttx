@@ -1,6 +1,8 @@
 /****************************************************************************
  * include/nuttx/rc/lirc_dev.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -44,12 +46,7 @@ static inline uint64_t lirc_get_timestamp(void)
 {
   struct timespec ts;
 
-#ifdef CONFIG_CLOCK_MONOTONIC
-  clock_gettime(CLOCK_MONOTONIC, &ts);
-#else
-  clock_gettime(CLOCK_REALTIME, &ts);
-#endif
-
+  clock_systime_timespec(&ts);
   return 1000000000ull * ts.tv_sec + ts.tv_nsec;
 }
 

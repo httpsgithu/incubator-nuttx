@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/mips/include/irq.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -29,6 +31,11 @@
  * Included Files
  ****************************************************************************/
 
+#include <sys/types.h>
+#ifndef __ASSEMBLY__
+#  include <stdbool.h>
+#endif
+
 /* Include NuttX-specific IRQ definitions */
 
 #include <nuttx/irq.h>
@@ -42,7 +49,7 @@
  */
 
 #ifdef CONFIG_ARCH_MIPS32
-# include <arch/mips32/irq.h>
+#  include <arch/mips32/irq.h>
 #endif
 
 /****************************************************************************
@@ -54,19 +61,6 @@
  ****************************************************************************/
 
 #ifndef __ASSEMBLY__
-
-/****************************************************************************
- * Inline functions
- ****************************************************************************/
-
-/****************************************************************************
- * Public Data
- ****************************************************************************/
-
-/****************************************************************************
- * Public Function Prototypes
- ****************************************************************************/
-
 #ifdef __cplusplus
 #define EXTERN extern "C"
 extern "C"
@@ -74,6 +68,82 @@ extern "C"
 #else
 #define EXTERN extern
 #endif
+
+/****************************************************************************
+ * Inline functions
+ ****************************************************************************/
+
+/* Return the current value of the stack pointer */
+
+static inline_function uint32_t up_getsp(void)
+{
+  register uint32_t sp;
+  __asm__
+  (
+    "\tadd  %0, $0, $29\n"
+    : "=r"(sp)
+  );
+  return sp;
+}
+
+/****************************************************************************
+ * Public Data
+ ****************************************************************************/
+
+/* g_current_regs holds a references to the current interrupt level
+ * register storage structure.  It is non-NULL only during interrupt
+ * processing.  Access to g_current_regs must be through the
+ * [get/set]_current_regs for portability.
+ */
+
+/* For the case of architectures with multiple CPUs, then there must be one
+ * such value for each processor that can receive an interrupt.
+ */
+
+EXTERN volatile uint32_t *g_current_regs;
+
+/****************************************************************************
+ * Public Function Prototypes
+ ****************************************************************************/
+
+/****************************************************************************
+ * Inline functions
+ ****************************************************************************/
+
+static inline_function uint32_t *up_current_regs(void)
+{
+  return (uint32_t *)g_current_regs;
+}
+
+static inline_function void up_set_current_regs(uint32_t *regs)
+{
+  g_current_regs = regs;
+}
+
+/****************************************************************************
+ * Name: up_interrupt_context
+ *
+ * Description:
+ *   Return true is we are currently executing in the interrupt
+ *   handler context.
+ *
+ ****************************************************************************/
+
+#define up_interrupt_context() (up_current_regs() != NULL)
+
+/****************************************************************************
+ * Name: up_getusrpc
+ ****************************************************************************/
+
+#define up_getusrpc(regs) \
+    (((uint32_t *)((regs) ? (regs) : up_current_regs()))[REG_EPC])
+
+/****************************************************************************
+ * Name: up_getusrsp
+ ****************************************************************************/
+
+#define up_getusrsp(regs) \
+    ((uintptr_t)((uint32_t*)(regs))[REG_SP])
 
 #undef EXTERN
 #ifdef __cplusplus

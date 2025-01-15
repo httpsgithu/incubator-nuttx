@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/misoc/src/minerva/minerva_initialstate.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -61,7 +63,7 @@ void up_initial_state(struct tcb_s *tcb)
 
   /* Initialize the idle thread stack */
 
-  if (tcb->pid == 0)
+  if (tcb->pid == IDLE_PROCESS_ID)
     {
       char *stack_ptr = (char *)(g_idle_topstack -
                                  CONFIG_IDLETHREAD_STACKSIZE);

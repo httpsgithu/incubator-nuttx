@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/cxd56xx/common/src/cxd56_isx012.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -37,6 +39,7 @@
 #include "cxd56_i2c.h"
 
 #include <arch/board/board.h>
+#include <arch/chip/pm.h>
 
 /****************************************************************************
  * Pre-processor Definitions
@@ -51,18 +54,21 @@
 #  error "IMAGER_SLEEP must be defined in board.h !!"
 #endif
 
-#define STANDBY_TIME                (600*1000) /* TODO: (max100ms/30fps)*/
-#define DEVICE_STARTUP_TIME           (6*1000) /* ms */
-#define SLEEP_CANCEL_TIME            (13*1000) /* ms */
-#define POWER_CHECK_TIME             (1*1000)  /* ms */
+#define STANDBY_TIME                (600 * 1000) /* TODO: (max100ms/30fps)*/
+#define DEVICE_STARTUP_TIME         (6 * 1000)   /* ms */
+#define SLEEP_CANCEL_TIME           (13 * 1000)  /* ms */
+#define POWER_CHECK_TIME            (1 * 1000)   /* ms */
+#define POWER_OFF_TIME              (50 * 1000)  /* ms */
 
 #define POWER_CHECK_RETRY           (10)
 
 /****************************************************************************
- * Private Data
+ *  Private Data
  ****************************************************************************/
 
-FAR struct i2c_master_s *i2c;
+static struct pm_cpu_freqlock_s g_hv_lock =
+  PM_CPUFREQLOCK_INIT(PM_CPUFREQLOCK_TAG('I', 'S', 0),
+                      PM_CPUFREQLOCK_FLAG_HV);
 
 /****************************************************************************
  * Public Functions
@@ -108,6 +114,10 @@ int board_isx012_power_off(void)
       _err("ERROR: Failed to power off ImageSensor. %d\n", ret);
       return -ENODEV;
     }
+
+  /* Need to wait for power-off to be reflected */
+
+  nxsig_usleep(POWER_OFF_TIME);
 
   ret = -ETIMEDOUT;
   for (i = 0; i < POWER_CHECK_RETRY; i++)
@@ -157,14 +167,16 @@ void board_isx012_release_sleep(void)
   nxsig_usleep(SLEEP_CANCEL_TIME);
 }
 
-int isx012_register(FAR struct i2c_master_s *i2c);
+int isx012_register(struct i2c_master_s *i2c);
 int isx012_unregister(void);
 
-int board_isx012_initialize(int i2c_bus_num)
+struct i2c_master_s *board_isx012_initialize(void)
 {
-  int ret;
-
   _info("Initializing ISX012...\n");
+
+  /* Fix system clock to HV mode */
+
+  up_pm_acquire_freqlock(&g_hv_lock);
 
 #ifdef IMAGER_ALERT
   cxd56_gpio_config(IMAGER_ALERT, true);
@@ -178,26 +190,18 @@ int board_isx012_initialize(int i2c_bus_num)
 
   /* Initialize i2c device */
 
-  i2c = cxd56_i2cbus_initialize(i2c_bus_num);
-  if (!i2c)
-    {
-      return -ENODEV;
-    }
-
-  ret = isx012_initialize(i2c);
-  if (ret < 0)
-    {
-      _err("Failed to initialize ISX012.\n");
-    }
-
-  return ret;
+  return cxd56_i2cbus_initialize(IMAGER_I2C);
 }
 
-int board_isx012_uninitialize(void)
+int board_isx012_uninitialize(struct i2c_master_s *i2c)
 {
   int ret;
 
   _info("Uninitializing ISX012...\n");
+
+  /* Release system clock */
+
+  up_pm_release_freqlock(&g_hv_lock);
 
   /* Initialize i2c device */
 

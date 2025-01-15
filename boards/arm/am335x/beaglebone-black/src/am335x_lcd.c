@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/am335x/beaglebone-black/src/am335x_lcd.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -118,7 +120,7 @@ static int am335x_enable(const struct tda19988_lower_s *lower, bool enable)
 
 int up_fbinitialize(int display)
 {
-  FAR const struct videomode_s *videomode;
+  const struct videomode_s *videomode;
   struct am335x_panel_info_s panel;
   int ret;
 

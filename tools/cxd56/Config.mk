@@ -1,6 +1,8 @@
 ############################################################################
 # tools/cxd56/Config.mk
 #
+# SPDX-License-Identifier: Apache-2.0
+#
 # Licensed to the Apache Software Foundation (ASF) under one or more
 # contributor license agreements.  See the NOTICE file distributed with
 # this work for additional information regarding copyright ownership.  The
@@ -23,7 +25,6 @@
 # archive.  These replace the default definitions at tools/Config.mk
 
 # POSTBUILD -- Perform post build operations
-
 
 ifeq ($(CONFIG_CXD56_BINARY),y)
 

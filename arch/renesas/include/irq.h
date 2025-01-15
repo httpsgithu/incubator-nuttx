@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/renesas/include/irq.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -29,6 +31,11 @@
  * Included Files
  ****************************************************************************/
 
+#include <sys/types.h>
+#ifndef __ASSEMBLY__
+#  include <stdbool.h>
+#endif
+
 #include <nuttx/irq.h>
 #include <arch/chip/irq.h>
 
@@ -40,18 +47,6 @@
  * Public Types
  ****************************************************************************/
 
-/****************************************************************************
- * Inline functions
- ****************************************************************************/
-
-/****************************************************************************
- * Public Data
- ****************************************************************************/
-
-/****************************************************************************
- * Public Function Prototypes
- ****************************************************************************/
-
 #ifndef __ASSEMBLY__
 #ifdef __cplusplus
 #define EXTERN extern "C"
@@ -60,6 +55,46 @@ extern "C"
 #else
 #define EXTERN extern
 #endif
+
+/****************************************************************************
+ * Public Data
+ ****************************************************************************/
+
+/* This holds a references to the current interrupt level
+ * register storage structure.  It is non-NULL only during
+ * interrupt processing.
+ */
+
+EXTERN volatile uint32_t *g_current_regs;
+
+/****************************************************************************
+ * Public Function Prototypes
+ ****************************************************************************/
+
+/****************************************************************************
+ * Inline functions
+ ****************************************************************************/
+
+static inline_function uint32_t *up_current_regs(void)
+{
+  return (uint32_t *)g_current_regs;
+}
+
+static inline_function void up_set_current_regs(uint32_t *regs)
+{
+  g_current_regs = regs;
+}
+
+/****************************************************************************
+ * Name: up_interrupt_context
+ *
+ * Description:
+ *   Return true is we are currently executing in the interrupt
+ *   handler context.
+ *
+ ****************************************************************************/
+
+#define up_interrupt_context() (up_current_regs() != NULL)
 
 #undef EXTERN
 #ifdef __cplusplus

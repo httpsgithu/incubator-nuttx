@@ -1,6 +1,8 @@
 /****************************************************************************
  * sched/group/group.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -29,7 +31,6 @@
 
 #include <sys/types.h>
 #include <stdbool.h>
-#include <queue.h>
 #include <sched.h>
 
 #include <nuttx/kmalloc.h>
@@ -45,48 +46,29 @@ typedef int (*foreachchild_t)(pid_t pid, FAR void *arg);
  * Public Data
  ****************************************************************************/
 
-#if defined(HAVE_GROUP_MEMBERS) || defined(CONFIG_ARCH_ADDRENV)
-/* This is the head of a list of all group members */
-
-extern FAR struct task_group_s *g_grouphead;
-#endif
-
-#ifdef CONFIG_ARCH_ADDRENV
-/* This variable holds the PID of the current task group.  This ID is
- * zero if the current task is a kernel thread that has no address
- * environment (other than the kernel context).
- *
- * This must only be accessed with interrupts disabled.
- */
-
-extern pid_t g_pid_current;
-#endif
-
 /****************************************************************************
  * Public Function Prototypes
  ****************************************************************************/
 
 #ifdef CONFIG_SCHED_CHILD_STATUS
-void weak_function task_initialize(void);
+void task_initialize(void);
+#else
+#  define task_initialize()
 #endif
 
 /* Task group data structure management */
 
-int  group_allocate(FAR struct task_tcb_s *tcb, uint8_t ttype);
-void group_deallocate(FAR struct task_group_s *group);
-int  group_initialize(FAR struct task_tcb_s *tcb);
+int  group_initialize(FAR struct task_tcb_s *tcb, uint8_t ttype);
+void group_postinitialize(FAR struct task_tcb_s *tcb);
 #ifndef CONFIG_DISABLE_PTHREAD
-int  group_bind(FAR struct pthread_tcb_s *tcb);
-int  group_join(FAR struct pthread_tcb_s *tcb);
+void group_bind(FAR struct pthread_tcb_s *tcb);
+void group_join(FAR struct pthread_tcb_s *tcb);
 #endif
 void group_leave(FAR struct tcb_s *tcb);
+void group_drop(FAR struct task_group_s *group);
 #if defined(CONFIG_SCHED_WAITPID) && !defined(CONFIG_SCHED_HAVE_PARENT)
 void group_add_waiter(FAR struct task_group_s *group);
 void group_del_waiter(FAR struct task_group_s *group);
-#endif
-
-#if defined(HAVE_GROUP_MEMBERS) || defined(CONFIG_ARCH_ADDRENV)
-FAR struct task_group_s *group_findbypid(pid_t pid);
 #endif
 
 #ifdef HAVE_GROUP_MEMBERS
@@ -97,12 +79,6 @@ int group_kill_children(FAR struct tcb_s *tcb);
 int group_suspend_children(FAR struct tcb_s *tcb);
 int group_continue(FAR struct tcb_s *tcb);
 #endif
-#endif
-
-#ifdef CONFIG_ARCH_ADDRENV
-/* Group address environment management */
-
-int group_addrenv(FAR struct tcb_s *tcb);
 #endif
 
 /* Convenience functions */
@@ -135,10 +111,9 @@ void group_remove_children(FAR struct task_group_s *group);
 
 /* Group data resource configuration */
 
-int  group_setupidlefiles(FAR struct task_tcb_s *tcb);
-int  group_setuptaskfiles(FAR struct task_tcb_s *tcb);
-#ifdef CONFIG_FILE_STREAM
-int  group_setupstreams(FAR struct task_tcb_s *tcb);
-#endif
+int  group_setupidlefiles(void);
+int  group_setuptaskfiles(FAR struct task_tcb_s *tcb,
+                          FAR const posix_spawn_file_actions_t *actions,
+                          bool cloexec);
 
 #endif /* __SCHED_GROUP_GROUP_H */

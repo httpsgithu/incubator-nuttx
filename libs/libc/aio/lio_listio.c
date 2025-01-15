@@ -1,6 +1,8 @@
 /****************************************************************************
  * libs/libc/aio/lio_listio.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -32,6 +34,7 @@
 #include <errno.h>
 
 #include <nuttx/signal.h>
+#include <nuttx/sched.h>
 
 #include "libc.h"
 #include "aio/aio.h"
@@ -157,10 +160,6 @@ static void lio_sighandler(int signo, siginfo_t *info, void *ucontext)
   DEBUGASSERT(sighand && sighand->list);
   aiocbp->aio_priv = NULL;
 
-  /* Prevent any asynchronous I/O completions while the signal handler runs */
-
-  sched_lock();
-
   /* Check if all of the pending I/O has completed */
 
   ret = lio_checkio(sighand->list, sighand->nent);
@@ -185,8 +184,6 @@ static void lio_sighandler(int signo, siginfo_t *info, void *ucontext)
 
       lib_free(sighand);
     }
-
-  sched_unlock();
 }
 
 /****************************************************************************
@@ -214,55 +211,25 @@ static int lio_sigsetup(FAR struct aiocb * const *list, int nent,
                         FAR struct sigevent *sig)
 {
   FAR struct aiocb *aiocbp;
-  FAR struct lio_sighand_s *sighand;
+  struct lio_sighand_s sighand;
   sigset_t set;
   struct sigaction act;
   int status;
   int i;
 
-  /* Allocate a structure to pass data to the signal handler */
-
-  sighand = lib_zalloc(sizeof(struct lio_sighand_s));
-  if (!sighand)
-    {
-      ferr("ERROR: lib_zalloc failed\n");
-      return -ENOMEM;
-    }
-
   /* Initialize the allocated structure */
 
-  sighand->list = list;
-  sighand->sig  = *sig;
-  sighand->nent = nent;
-  sighand->pid  = getpid();
-
-  /* Save this structure as the private data attached to each aiocb */
-
-  for (i = 0; i < nent; i++)
-    {
-      /* Skip over NULL entries in the list */
-
-      aiocbp = list[i];
-      if (aiocbp)
-        {
-          FAR void *priv = NULL;
-
-          /* Check if I/O is pending for  this entry */
-
-          if (aiocbp->aio_result == -EINPROGRESS)
-            {
-              priv = (FAR void *)sighand;
-            }
-
-          aiocbp->aio_priv = priv;
-        }
-    }
+  memset(&sighand, 0, sizeof(struct lio_sighand_s));
+  sighand.list = list;
+  sighand.sig  = *sig;
+  sighand.nent = nent;
+  sighand.pid  = _SCHED_GETPID();
 
   /* Make sure that SIGPOLL is not blocked */
 
   sigemptyset(&set);
   sigaddset(&set, SIGPOLL);
-  status = sigprocmask(SIG_UNBLOCK, &set, &sighand->oprocmask);
+  status = sigprocmask(SIG_UNBLOCK, &set, &sighand.oprocmask);
   if (status != OK)
     {
       int errcode = get_errno();
@@ -281,7 +248,7 @@ static int lio_sigsetup(FAR struct aiocb * const *list, int nent,
   sigfillset(&act.sa_mask);
   sigdelset(&act.sa_mask, SIGPOLL);
 
-  status = sigaction(SIGPOLL, &act, &sighand->oact);
+  status = sigaction(SIGPOLL, &act, &sighand.oact);
   if (status != OK)
     {
       int errcode = get_errno();
@@ -290,6 +257,36 @@ static int lio_sigsetup(FAR struct aiocb * const *list, int nent,
 
       DEBUGASSERT(errcode > 0);
       return -errcode;
+    }
+
+  /* Save this structure as the private data attached to each aiocb */
+
+  for (i = 0; i < nent; i++)
+    {
+      /* Skip over NULL entries in the list */
+
+      aiocbp = list[i];
+      if (aiocbp)
+        {
+          FAR void *priv = NULL;
+
+          /* Check if I/O is pending for  this entry */
+
+          if (aiocbp->aio_result == -EINPROGRESS)
+            {
+              priv = lib_zalloc(sizeof(struct lio_sighand_s));
+              if (!priv)
+                {
+                  ferr("ERROR: lib_zalloc failed\n");
+                  return -ENOMEM;
+                }
+
+              memcpy(priv, (FAR void *)&sighand,
+                      sizeof(struct lio_sighand_s));
+            }
+
+          aiocbp->aio_priv = priv;
+        }
     }
 
   return OK;
@@ -516,7 +513,12 @@ int lio_listio(int mode, FAR struct aiocb * const list[], int nent,
   int ret;
   int i;
 
-  DEBUGASSERT(mode == LIO_WAIT || mode == LIO_NOWAIT);
+  if (mode != LIO_WAIT && mode != LIO_NOWAIT)
+    {
+      set_errno(EINVAL);
+      return ERROR;
+    }
+
   DEBUGASSERT(list);
 
   nqueued = 0;    /* No I/O operations yet queued */
@@ -664,7 +666,7 @@ int lio_listio(int mode, FAR struct aiocb * const list[], int nent,
         }
       else
         {
-          status = nxsig_notification(getpid(), sig,
+          status = nxsig_notification(_SCHED_GETPID(), sig,
                                       SI_ASYNCIO, &aiocbp->aio_sigwork);
           if (status < 0 && ret == OK)
             {

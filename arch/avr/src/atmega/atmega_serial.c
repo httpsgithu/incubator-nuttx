@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/avr/src/atmega/atmega_serial.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -40,8 +42,7 @@
 
 #include <arch/board/board.h>
 
-#include "up_arch.h"
-#include "up_internal.h"
+#include "avr_internal.h"
 #include "atmega.h"
 
 /****************************************************************************
@@ -100,7 +101,6 @@ static int  usart0_attach(struct uart_dev_s *dev);
 static void usart0_detach(struct uart_dev_s *dev);
 static int  usart0_rxinterrupt(int irq, void *context, FAR void *arg);
 static int  usart0_txinterrupt(int irq, void *context, FAR void *arg);
-static int  usart0_ioctl(struct file *filep, int cmd, unsigned long arg);
 static int  usart0_receive(struct uart_dev_s *dev, FAR unsigned int *status);
 static void usart0_rxint(struct uart_dev_s *dev, bool enable);
 static bool usart0_rxavailable(struct uart_dev_s *dev);
@@ -117,7 +117,6 @@ static int  usart1_attach(struct uart_dev_s *dev);
 static void usart1_detach(struct uart_dev_s *dev);
 static int  usart1_rxinterrupt(int irq, void *context, FAR void *arg);
 static int  usart1_txinterrupt(int irq, void *context, FAR void *arg);
-static int  usart1_ioctl(struct file *filep, int cmd, unsigned long arg);
 static int  usart1_receive(struct uart_dev_s *dev, FAR unsigned int *status);
 static void usart1_rxint(struct uart_dev_s *dev, bool enable);
 static bool usart1_rxavailable(struct uart_dev_s *dev);
@@ -140,7 +139,6 @@ struct uart_ops_s g_usart0_ops =
   .shutdown       = usart0_shutdown,
   .attach         = usart0_attach,
   .detach         = usart0_detach,
-  .ioctl          = usart0_ioctl,
   .receive        = usart0_receive,
   .rxint          = usart0_rxint,
   .rxavailable    = usart0_rxavailable,
@@ -185,7 +183,6 @@ struct uart_ops_s g_usart1_ops =
   .shutdown       = usart1_shutdown,
   .attach         = usart1_attach,
   .detach         = usart1_detach,
-  .ioctl          = usart1_ioctl,
   .receive        = usart1_receive,
   .rxint          = usart1_rxint,
   .rxavailable    = usart1_rxavailable,
@@ -376,7 +373,7 @@ static int usart0_attach(struct uart_dev_s *dev)
   irq_attach(ATMEGA_IRQ_U0RX, usart0_rxinterrupt, NULL);
   irq_attach(ATMEGA_IRQ_U0DRE, usart0_txinterrupt, NULL);
 
-  /* (void)irq_attach(ATMEGA_IRQ_U0TX, usart0_txinterrupt, NULL); */
+  /* irq_attach(ATMEGA_IRQ_U0TX, usart0_txinterrupt, NULL); */
 
   return OK;
 }
@@ -400,7 +397,7 @@ static int usart1_attach(struct uart_dev_s *dev)
   irq_attach(ATMEGA_IRQ_U1RX, usart1_rxinterrupt, NULL);
   irq_attach(ATMEGA_IRQ_U1DRE, usart1_txinterrupt, NULL);
 
-  /* (void)irq_attach(ATMEGA_IRQ_U1TX, usart1_txinterrupt, NULL); */
+  /* irq_attach(ATMEGA_IRQ_U1TX, usart1_txinterrupt, NULL); */
 
   return OK;
 }
@@ -428,7 +425,7 @@ static void usart0_detach(struct uart_dev_s *dev)
   irq_detach(ATMEGA_IRQ_U0RX);
   irq_detach(ATMEGA_IRQ_U0DRE);
 
-  /* (void)irq_detach(ATMEGA_IRQ_U0TX); */
+  /* irq_detach(ATMEGA_IRQ_U0TX); */
 }
 #endif
 
@@ -444,7 +441,7 @@ static void usart1_detach(struct uart_dev_s *dev)
   irq_detach(ATMEGA_IRQ_U1RX);
   irq_detach(ATMEGA_IRQ_U1DRE);
 
-  /* (void)irq_detach(ATMEGA_IRQ_U1TX); */
+  /* irq_detach(ATMEGA_IRQ_U1TX); */
 }
 #endif
 
@@ -453,7 +450,7 @@ static void usart1_detach(struct uart_dev_s *dev)
  *
  * Description:
  *   This is the USART RX interrupt handler.  It will be invoked when an
- *   RX interrupt received.  It will call uart_receivechar to perform the RX
+ *   RX interrupt received.  It will call uart_recvchars to perform the RX
  *   data transfers.
  *
  ****************************************************************************/
@@ -541,62 +538,6 @@ static int usart1_txinterrupt(int irq, void *context, FAR void *arg)
     }
 
   return OK;
-}
-#endif
-
-/****************************************************************************
- * Name: usart0/1_ioctl
- *
- * Description:
- *   All ioctl calls will be routed through this method
- *
- ****************************************************************************/
-
-#ifdef CONFIG_AVR_USART0
-static int usart0_ioctl(struct file *filep, int cmd, unsigned long arg)
-{
-#ifdef CONFIG_SERIAL_TERMIOS
-  int ret = OK;
-
-  switch (cmd)
-    {
-     case TCGETS:
-     case TCSETS:
-      break;
-
-    default:
-      ret = -ENOTTY;
-      break;
-    }
-
-  return ret;
-#else
-  return -ENOTTY;
-#endif
-}
-#endif
-
-#ifdef CONFIG_AVR_USART1
-static int usart1_ioctl(struct file *filep, int cmd, unsigned long arg)
-{
-#ifdef CONFIG_SERIAL_TERMIOS
-  int ret = OK;
-
-  switch (cmd)
-    {
-     case TCGETS:
-     case TCSETS:
-      break;
-
-    default:
-      ret = -ENOTTY;
-      break;
-    }
-
-  return ret;
-#else
-  return -ENOTTY;
-#endif
 }
 #endif
 
@@ -884,16 +825,16 @@ static bool usart1_txempty(struct uart_dev_s *dev)
 #ifdef USE_EARLYSERIALINIT
 
 /****************************************************************************
- * Name: up_earlyserialinit
+ * Name: avr_earlyserialinit
  *
  * Description:
  *   Performs the low level USART initialization early in debug so that the
  *   serial console will be available during bootup.  This must be called
- *   before up_serialinit.
+ *   before avr_serialinit.
  *
  ****************************************************************************/
 
-void up_earlyserialinit(void)
+void avr_earlyserialinit(void)
 {
   /* Disable all USARTS */
 
@@ -918,15 +859,15 @@ void up_earlyserialinit(void)
 #endif
 
 /****************************************************************************
- * Name: up_serialinit
+ * Name: avr_serialinit
  *
  * Description:
  *   Register serial console and serial ports.  This assumes
- *   that up_earlyserialinit was called previously.
+ *   that avr_earlyserialinit was called previously.
  *
  ****************************************************************************/
 
-void up_serialinit(void)
+void avr_serialinit(void)
 {
   /* Register the console */
 
@@ -950,7 +891,7 @@ void up_serialinit(void)
  *
  ****************************************************************************/
 
-int up_putc(int ch)
+void up_putc(int ch)
 {
 #ifdef HAVE_SERIAL_CONSOLE
   uint8_t imr;
@@ -961,16 +902,7 @@ int up_putc(int ch)
   usart1_disableusartint(&imr);
 #endif
 
-  /* Check for LF */
-
-  if (ch == '\n')
-    {
-      /* Add CR */
-
-      up_lowputc('\r');
-    }
-
-  up_lowputc(ch);
+  avr_lowputc(ch);
 
 #if defined(CONFIG_USART0_SERIAL_CONSOLE)
   usart0_restoreusartint(imr);
@@ -978,8 +910,6 @@ int up_putc(int ch)
   usart1_restoreusartint(imr);
 #endif
 #endif
-
-  return ch;
 }
 
 #else /* USE_SERIALDRIVER */
@@ -992,21 +922,11 @@ int up_putc(int ch)
  *
  ****************************************************************************/
 
-int up_putc(int ch)
+void up_putc(int ch)
 {
 #ifdef HAVE_SERIAL_CONSOLE
-  /* Check for LF */
-
-  if (ch == '\n')
-    {
-      /* Add CR */
-
-      up_lowputc('\r');
-    }
-
-  up_lowputc(ch);
+  avr_lowputc(ch);
 #endif
-  return ch;
 }
 
 #endif /* USE_SERIALDRIVER */

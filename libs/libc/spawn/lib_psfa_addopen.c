@@ -1,6 +1,8 @@
 /****************************************************************************
  * libs/libc/spawn/lib_psfa_addopen.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -96,7 +98,7 @@ int posix_spawn_file_actions_addopen(
   entry->fd     = fd;
   entry->oflags = oflags;
   entry->mode   = mode;
-  strncpy(entry->path, path, len + 1);
+  strlcpy(entry->path, path, len + 1);
 
   /* And add it to the file action list */
 

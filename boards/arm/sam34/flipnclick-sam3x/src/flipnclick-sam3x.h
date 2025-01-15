@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/sam34/flipnclick-sam3x/src/flipnclick-sam3x.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -87,7 +89,7 @@
  *
  * SPI0 is available on the Arduino compatible SPI connector (but no SPI is
  * available on pins D10-D13 of the main Arduino Shield connectors where
- * you might expect then).  The SPI connector is configured as follows:
+ * you might expect them).  The SPI connector is configured as follows:
  *
  *   Pin Board Signal SAM3X  Pin Board Signal SAM3X
  *   --- ------------ -----  --- ------------ -----
@@ -258,7 +260,7 @@ int sam_bringup(void);
 
 #ifdef HAVE_SSD1306
 struct lcd_dev_s;  /* Forward reference */
-FAR struct lcd_dev_s *sam_graphics_setup(unsigned int devno);
+struct lcd_dev_s *sam_graphics_setup(unsigned int devno);
 #endif
 
 #endif /* __ASSEMBLY__ */

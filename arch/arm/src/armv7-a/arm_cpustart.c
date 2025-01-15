@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/armv7-a/arm_cpustart.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -44,33 +46,6 @@
  ****************************************************************************/
 
 /****************************************************************************
- * Name: arm_registerdump
- ****************************************************************************/
-
-#if 0 /* Was useful in solving some startup problems */
-static inline void arm_registerdump(FAR struct tcb_s *tcb)
-{
-  int regndx;
-
-  _info("CPU%d:\n", up_cpu_index());
-
-  /* Dump the startup registers */
-
-  for (regndx = REG_R0; regndx <= REG_R15; regndx += 8)
-    {
-      uint32_t *ptr = (uint32_t *)&tcb->xcp.regs[regndx];
-      _info("R%d: %08x %08x %08x %08x %08x %08x %08x %08x\n",
-            regndx, ptr[0], ptr[1], ptr[2], ptr[3],
-            ptr[4], ptr[5], ptr[6], ptr[7]);
-    }
-
-  _info("CPSR: %08x\n", tcb->xcp.regs[REG_CPSR]);
-}
-#else
-# define arm_registerdump(tcb)
-#endif
-
-/****************************************************************************
  * Public Functions
  ****************************************************************************/
 
@@ -90,9 +65,9 @@ static inline void arm_registerdump(FAR struct tcb_s *tcb)
  *
  ****************************************************************************/
 
-int arm_start_handler(int irq, FAR void *context, FAR void *arg)
+int arm_start_handler(int irq, void *context, void *arg)
 {
-  FAR struct tcb_s *tcb = this_task();
+  struct tcb_s *tcb = this_task();
 
   sinfo("CPU%d Started\n", this_cpu());
 
@@ -106,16 +81,8 @@ int arm_start_handler(int irq, FAR void *context, FAR void *arg)
 
   nxsched_resume_scheduler(tcb);
 
-  /* Dump registers so that we can see what is going to happen on return */
+  UNUSED(tcb);
 
-  arm_registerdump(tcb);
-
-  /* Then switch contexts. This instantiates the exception context of the
-   * tcb at the head of the assigned task list.  In this case, this should
-   * be the CPUs NULL task.
-   */
-
-  arm_restorestate(tcb->xcp.regs);
   return OK;
 }
 
@@ -146,7 +113,7 @@ int arm_start_handler(int irq, FAR void *context, FAR void *arg)
  *
  ****************************************************************************/
 
-int up_cpu_start(int cpu)
+int weak_function up_cpu_start(int cpu)
 {
   sinfo("Starting CPU%d\n", cpu);
 
@@ -160,7 +127,9 @@ int up_cpu_start(int cpu)
 
   /* Execute SGI1 */
 
-  return arm_cpu_sgi(GIC_IRQ_SGI1, (1 << cpu));
+  arm_cpu_sgi(GIC_SMP_CPUSTART, (1 << cpu));
+
+  return OK;
 }
 
 #endif /* CONFIG_SMP */

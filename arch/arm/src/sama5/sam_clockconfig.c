@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/sama5/sam_clockconfig.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -31,9 +33,7 @@
 #include <arch/board/board.h>
 #include <arch/sama5/chip.h>
 
-#include "arm_arch.h"
 #include "arm_internal.h"
-
 #include "sam_periphclks.h"
 #include "sam_clockconfig.h"
 #include "hardware/sam_pmc.h"
@@ -434,6 +434,7 @@ static inline void sam_usbclockconfig(void)
    *   1) Enable UHP peripheral clock, bit (1 << AT91C_ID_UHPHS) in
    *      PMC_PCER register.
    *   2) Write CKGR_PLLCOUNT field in PMC_UCKR register.
+   *      Set CLKTRIM register if required.
    *   3) Enable UPLL, bit AT91C_CKGR_UPLLEN in PMC_UCKR register.
    *   4) Wait until UTMI_PLL is locked. LOCKU bit in PMC_SR register
    *   5) Enable BIAS, bit AT91C_CKGR_BIASEN in PMC_UCKR register.
@@ -449,6 +450,28 @@ static inline void sam_usbclockconfig(void)
    */
 
   /* 2) Write CKGR_PLLCOUNT field in PMC_UCKR register. */
+
+#if defined(ATSAMA5D2) || defined(ATSAMA5D3)
+
+  /* get UTMI timing register */
+
+  regval = getreg32(SAM_SFR_VBASE + SAM_SFR_UTMICKTRIM_OFFSET);
+  regval &= ~SFR_UTMICKTRIM_FREQ_MASK;
+
+#if BOARD_MAINOSC_FREQUENCY == (12000000)
+  regval |= SFR_UTMICKTRIM_FREQ_12MHZ;
+#elif BOARD_MAINOSC_FREQUENCY == (16000000)
+  regval |= SFR_UTMICKTRIM_FREQ_16MHZ;
+#elif BOARD_MAINOSC_FREQUENCY == (24000000)
+  regval |= SFR_UTMICKTRIM_FREQ_24MHZ;
+#elif (BOARD_MAINOSC_FREQUENCY == (48000000)) && defined(ATSAMA5D3)
+  regval |= SFR_UTMICKTRIM_FREQ_48MHZ;
+#else
+#  error Board oscillator frequency not compatible with use of UPLL
+#endif
+
+  putreg32(regval, (SAM_SFR_VBASE + SAM_SFR_UTMICKTRIM_OFFSET));
+#endif
 
   regval = PMC_CKGR_UCKR_UPLLCOUNT(BOARD_CKGR_UCKR_UPLLCOUNT);
   putreg32(regval, SAM_PMC_CKGR_UCKR);

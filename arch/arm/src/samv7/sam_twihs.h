@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/samv7/sam_twihs.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -50,7 +52,7 @@
  *
  ****************************************************************************/
 
-FAR struct i2c_master_s *sam_i2cbus_initialize(int port);
+struct i2c_master_s *sam_i2cbus_initialize(int port);
 
 /****************************************************************************
  * Name: sam_i2cbus_uninitialize
@@ -67,6 +69,6 @@ FAR struct i2c_master_s *sam_i2cbus_initialize(int port);
  *
  ****************************************************************************/
 
-int sam_i2cbus_uninitialize(FAR struct i2c_master_s *dev);
+int sam_i2cbus_uninitialize(struct i2c_master_s *dev);
 
 #endif /* __ARCH_ARM_SRC_SAMV7_SAM_TWIHS_H */

@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/imx6/imx_gpio.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -50,10 +52,10 @@
  */
 
 #define GPIO_MODE_SHIFT        (30)      /* Bits 30-31: Pin mode */
-#define GPIO_MODE_MASK         (3 << GPIO_MODE_SHIFT)
-#  define GPIO_INPUT           (0 << GPIO_MODE_SHIFT) /* GPIO input */
-#  define GPIO_OUTPUT          (1 << GPIO_MODE_SHIFT) /* GPIO output */
-#  define GPIO_PERIPH          (2 << GPIO_MODE_SHIFT) /* Peripheral */
+#define GPIO_MODE_MASK         (3u << GPIO_MODE_SHIFT)
+#  define GPIO_INPUT           (0u << GPIO_MODE_SHIFT) /* GPIO input */
+#  define GPIO_OUTPUT          (1u << GPIO_MODE_SHIFT) /* GPIO output */
+#  define GPIO_PERIPH          (2u << GPIO_MODE_SHIFT) /* Peripheral */
 
 /* Initial Output Value:
  *

@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/stm32/stm32f411-minimum/src/stm32_bringup.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -30,11 +32,45 @@
 
 #include "stm32.h"
 
+#ifdef CONFIG_USERLED
+#  include <nuttx/leds/userled.h>
+#endif
+
+#ifdef CONFIG_INPUT_BUTTONS
+#  include <nuttx/input/buttons.h>
+#endif
+
 #ifdef CONFIG_STM32_OTGFS
 #  include "stm32_usbhost.h"
 #endif
 
 #include "stm32f411-minimum.h"
+
+/****************************************************************************
+ * Pre-processor Definitions
+ ****************************************************************************/
+
+/* Checking needed by W25 Flash */
+
+#define HAVE_W25      1
+
+/* Can't support the W25 device if it SPI1 or W25 support is not enabled */
+
+#if !defined(CONFIG_STM32_SPI1) || !defined(CONFIG_MTD_W25)
+#  undef HAVE_W25
+#endif
+
+/* Can't support W25 features if mountpoints are disabled */
+
+#ifdef CONFIG_DISABLE_MOUNTPOINT
+#  undef HAVE_W25
+#endif
+
+/* Default W25 minor number */
+
+#if defined(HAVE_W25) && !defined(CONFIG_NSH_W25MINOR)
+#  define CONFIG_NSH_W25MINOR 0
+#endif
 
 /****************************************************************************
  * Public Functions
@@ -58,6 +94,62 @@ int stm32_bringup(void)
 {
   int ret = OK;
 
+#ifdef CONFIG_USERLED
+  /* Register the LED driver */
+
+  ret = userled_lower_initialize("/dev/userleds");
+  if (ret < 0)
+    {
+      syslog(LOG_ERR, "ERROR: userled_lower_initialize() failed: %d\n", ret);
+    }
+#endif
+
+#ifdef CONFIG_INPUT_BUTTONS
+  /* Register the BUTTON driver */
+
+  ret = btn_lower_initialize("/dev/buttons");
+  if (ret < 0)
+    {
+      syslog(LOG_ERR, "ERROR: btn_lower_initialize() failed: %d\n", ret);
+    }
+#endif
+
+#ifdef CONFIG_PWM
+  /* Initialize PWM and register the PWM device. */
+
+  ret = stm32_pwm_setup();
+  if (ret < 0)
+    {
+      syslog(LOG_ERR, "ERROR: stm32_pwm_setup() failed: %d\n", ret);
+    }
+#endif
+
+#ifdef CONFIG_RGBLED
+  /* Configure and initialize the RGB LED. */
+
+  ret = stm32_rgbled_setup();
+  if (ret < 0)
+    {
+      syslog(LOG_ERR, "ERROR: stm32_rgbled_setup() failed: %d\n", ret);
+    }
+#endif
+
+#ifdef CONFIG_STM32F411MINIMUM_GPIO
+  ret = stm32_gpio_initialize();
+  if (ret != OK)
+    {
+      gerr("ERROR: Failed to initialize gpio: %d\n", ret);
+    }
+#endif
+
+#ifdef CONFIG_ADC_HX711
+  ret = stm32_hx711_initialize();
+  if (ret != OK)
+    {
+      aerr("ERROR: Failed to initialize hx711: %d\n", ret);
+    }
+#endif
+
 #if defined(CONFIG_STM32_OTGFS) && defined(CONFIG_USBHOST)
   /* Initialize USB host operation.  stm32_usbhost_initialize() starts a
    * thread will monitor for USB connection and disconnection events.
@@ -67,6 +159,18 @@ int stm32_bringup(void)
   if (ret != OK)
     {
       uerr("ERROR: Failed to initialize USB host: %d\n", ret);
+      return ret;
+    }
+#endif
+
+#ifdef HAVE_W25
+  /* Initialize and register the W25 FLASH file system. */
+
+  ret = stm32_w25initialize(CONFIG_NSH_W25MINOR);
+  if (ret < 0)
+    {
+      syslog(LOG_ERR, "ERROR: Failed to initialize W25 minor %d: %d\n",
+             CONFIG_NSH_W25MINOR, ret);
       return ret;
     }
 #endif

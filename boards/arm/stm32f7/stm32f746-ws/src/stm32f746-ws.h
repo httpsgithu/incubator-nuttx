@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/stm32f7/stm32f746-ws/src/stm32f746-ws.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -18,8 +20,8 @@
  *
  ****************************************************************************/
 
-#ifndef __BOARDS_ARM_STM32F746_WS_SRC_STM32F746_WS_H
-#define __BOARDS_ARM_STM32F746_WS_SRC_STM32F746_WS_H
+#ifndef __BOARDS_ARM_STM32F7_STM32F746_WS_SRC_STM32F746_WS_H
+#define __BOARDS_ARM_STM32F7_STM32F746_WS_SRC_STM32F746_WS_H
 
 /****************************************************************************
  * Included Files
@@ -126,4 +128,4 @@ int stm32_dma_alloc_init(void);
 #endif
 
 #endif /* __ASSEMBLY__ */
-#endif /* __BOARDS_ARM_STM32F746_WS_SRC_STM32F746_WS_H */
+#endif /* __BOARDS_ARM_STM32F7_STM32F746_WS_SRC_STM32F746_WS_H */

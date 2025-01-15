@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/rp2040/common/src/rp2040_st7789.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -45,11 +47,11 @@
 #define LCD_SPI_PORTNO CONFIG_RP2040_LCD_SPI_CH
 
 #if LCD_SPI_PORTNO
-#define LCD_DC         CONFIG_RP2040_SPI1_GPIO
+#define LCD_DC         CONFIG_RP2040_SPI1_RX_GPIO
 #define LCD_RST        12
 #define LCD_BL         13
 #else
-#define LCD_DC         CONFIG_RP2040_SPI0_GPIO
+#define LCD_DC         CONFIG_RP2040_SPI0_RX_GPIO
 #endif
 
 /****************************************************************************
@@ -116,7 +118,7 @@ int board_lcd_initialize(void)
  *
  ****************************************************************************/
 
-FAR struct lcd_dev_s *board_lcd_getdev(int devno)
+struct lcd_dev_s *board_lcd_getdev(int devno)
 {
   g_lcd = st7789_lcdinitialize(g_spidev);
   if (!g_lcd)

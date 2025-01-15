@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/tiva/hardware/tiva_sysctrl.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -18,8 +20,8 @@
  *
  ****************************************************************************/
 
-#ifndef __ARCH_ARM_SRC_TIVA_HARDWARE_TIVA_SYSCONTROL_H
-#define __ARCH_ARM_SRC_TIVA_HARDWARE_TIVA_SYSCONTROL_H
+#ifndef __ARCH_ARM_SRC_TIVA_HARDWARE_TIVA_SYSCTRL_H
+#define __ARCH_ARM_SRC_TIVA_HARDWARE_TIVA_SYSCTRL_H
 
 /****************************************************************************
  * Included Files
@@ -62,4 +64,4 @@
  * Public Function Prototypes
  ****************************************************************************/
 
-#endif /* __ARCH_ARM_SRC_TIVA_HARDWARE_TIVA_SYSCONTROL_H */
+#endif /* __ARCH_ARM_SRC_TIVA_HARDWARE_TIVA_SYSCTRL_H */

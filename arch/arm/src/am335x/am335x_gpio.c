@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/am335x/am335x_gpio.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -29,9 +31,10 @@
 #include <errno.h>
 
 #include <nuttx/irq.h>
+#include <nuttx/spinlock.h>
 
 #include "chip.h"
-#include "arm_arch.h"
+#include "arm_internal.h"
 #include "am335x_pinmux.h"
 #include "am335x_gpio.h"
 
@@ -217,6 +220,8 @@ static const uint8_t *g_gpio_padctl[AM335X_GPIO_NPORTS] =
   g_gpio3_padctl,                    /* GPIO3 */
 };
 
+static spinlock_t g_gpio_lock = SP_UNLOCKED;
+
 /****************************************************************************
  * Private Functions
  ****************************************************************************/
@@ -362,7 +367,7 @@ int am335x_gpio_config(gpio_pinset_t pinset)
 
   /* Configure the pin as an input initially to avoid any spurious outputs */
 
-  flags = enter_critical_section();
+  flags = spin_lock_irqsave(&g_gpio_lock);
 
   /* Configure based upon the pin mode */
 
@@ -405,7 +410,7 @@ int am335x_gpio_config(gpio_pinset_t pinset)
         break;
     }
 
-  leave_critical_section(flags);
+  spin_unlock_irqrestore(&g_gpio_lock, flags);
   return ret;
 }
 
@@ -423,9 +428,9 @@ void am335x_gpio_write(gpio_pinset_t pinset, bool value)
   int port = (pinset & GPIO_PORT_MASK) >> GPIO_PORT_SHIFT;
   int pin  = (pinset & GPIO_PIN_MASK) >> GPIO_PIN_SHIFT;
 
-  flags = enter_critical_section();
+  flags = spin_lock_irqsave(&g_gpio_lock);
   am335x_gpio_setoutput(port, pin, value);
-  leave_critical_section(flags);
+  spin_unlock_irqrestore(&g_gpio_lock, flags);
 }
 
 /****************************************************************************
@@ -443,9 +448,9 @@ bool am335x_gpio_read(gpio_pinset_t pinset)
   int pin  = (pinset & GPIO_PIN_MASK) >> GPIO_PIN_SHIFT;
   bool value;
 
-  flags = enter_critical_section();
+  flags = spin_lock_irqsave(&g_gpio_lock);
   value = am335x_gpio_getinput(port, pin);
-  leave_critical_section(flags);
+  spin_unlock_irqrestore(&g_gpio_lock, flags);
   return value;
 }
 

@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/mips/src/pic32mx/pic32mx_lowconsole.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -30,9 +32,7 @@
 #include <arch/irq.h>
 #include <arch/board/board.h>
 
-#include "mips_arch.h"
 #include "mips_internal.h"
-
 #include "pic32mx_config.h"
 #include "pic32mx.h"
 
@@ -327,14 +327,14 @@ void pic32mx_consoleinit(void)
 #endif
 
 /****************************************************************************
- * Name: up_lowputc
+ * Name: mips_lowputc
  *
  * Description:
  *   Output one byte on the serial console.
  *
  ****************************************************************************/
 
-void up_lowputc(char ch)
+void mips_lowputc(char ch)
 {
 #ifdef HAVE_SERIAL_CONSOLE
   /* Wait for the transmit buffer not full */

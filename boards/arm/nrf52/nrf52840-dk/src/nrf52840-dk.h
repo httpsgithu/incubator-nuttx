@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/nrf52/nrf52840-dk/src/nrf52840-dk.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -33,6 +35,18 @@
 /****************************************************************************
  * Pre-processor Definitions
  ****************************************************************************/
+
+/* Configuration ************************************************************/
+
+/* procfs File System */
+
+#ifdef CONFIG_FS_PROCFS
+#  ifdef CONFIG_NSH_PROC_MOUNTPOINT
+#    define NRF52_PROCFS_MOUNTPOINT CONFIG_NSH_PROC_MOUNTPOINT
+#  else
+#    define NRF52_PROCFS_MOUNTPOINT "/proc"
+#  endif
+#endif
 
 /* LED definitions **********************************************************/
 
@@ -154,18 +168,6 @@ int nrf52_lpwaninitialize(void);
 #endif
 
 /****************************************************************************
- * Name: nrf52_timer_driver_setup
- *
- * Description:
- *   Initialize TIMER driver.
- *
- ****************************************************************************/
-
-#ifdef CONFIG_TIMER
-int nrf52_timer_driver_setup(FAR const char *devpath, int timer);
-#endif
-
-/****************************************************************************
  * Name: nrf52_pwm_setup
  *
  * Description:
@@ -187,6 +189,18 @@ int nrf52_pwm_setup(void);
 
 #ifdef CONFIG_ADC
 int nrf52_adc_setup(void);
+#endif
+
+/****************************************************************************
+ * Name: nrf52_mx25_initialize
+ *
+ * Description:
+ *   Initialize the MX25RXX QSPI memeory
+ *
+ ****************************************************************************/
+
+#ifdef CONFIG_NRF52_QSPI
+int nrf52_mx25_initialize(void);
 #endif
 
 #endif /* __ASSEMBLY__ */

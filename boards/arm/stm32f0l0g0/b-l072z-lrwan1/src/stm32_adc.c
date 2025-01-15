@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/stm32f0l0g0/b-l072z-lrwan1/src/stm32_adc.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -28,7 +30,8 @@
 #include <errno.h>
 #include <debug.h>
 
-#include <nuttx/board.h>
+#include <arch/board/board.h>
+
 #include <nuttx/analog/adc.h>
 
 #include "stm32.h"
@@ -88,7 +91,7 @@ static const uint32_t g_pinlist1[2]  =
 int stm32_adc_setup(void)
 {
   static bool initialized = false;
-  FAR struct adc_dev_s *adc;
+  struct adc_dev_s *adc;
   int ret;
   int i;
 

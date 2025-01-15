@@ -1,6 +1,8 @@
 /****************************************************************************
  * libs/libc/misc/lib_kbdencode.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -55,10 +57,10 @@
 static void kbd_encode(uint8_t keycode, FAR struct lib_outstream_s *stream,
                        uint8_t terminator)
 {
-  stream->put(stream, ASCII_ESC);
-  stream->put(stream, '[');
-  stream->put(stream, (int)keycode);
-  stream->put(stream, terminator);
+  lib_stream_putc(stream, ASCII_ESC);
+  lib_stream_putc(stream, '[');
+  lib_stream_putc(stream, (int)keycode);
+  lib_stream_putc(stream, terminator);
 }
 
 /****************************************************************************

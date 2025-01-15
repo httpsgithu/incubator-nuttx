@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/lpc214x/lpc214x_head.S
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -379,7 +381,6 @@
 #endif
 	.endm
 
-
 /* Configure the Memory Accelerator Module (MAM) */
 
 	.macro	configmam, base, val
@@ -495,7 +496,7 @@ _vector_table:
 __start:
 	/* Setup the initial processor mode */
 
-	mov	r0, #(PSR_MODE_SVC | PSR_I_BIT | PSR_F_BIT )
+	mov	r0, #(PSR_MODE_SYS | PSR_I_BIT | PSR_F_BIT )
 	msr	cpsr, r0
 
 	/* Set up external memory mode (if so selected) */

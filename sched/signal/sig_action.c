@@ -1,6 +1,8 @@
 /****************************************************************************
  * sched/signal/sig_action.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -27,20 +29,95 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <signal.h>
-#include <queue.h>
 #include <sched.h>
 #include <assert.h>
 #include <errno.h>
 
 #include <nuttx/irq.h>
+#include <nuttx/queue.h>
+#include <nuttx/signal.h>
+#include <nuttx/spinlock.h>
 
 #include "sched/sched.h"
 #include "group/group.h"
 #include "signal/signal.h"
 
 /****************************************************************************
+ * Preprocessor definitions
+ ****************************************************************************/
+
+/* judges if a sigaction instance is a preallocated one */
+
+#if CONFIG_SIG_PREALLOC_ACTIONS > 0
+#  define IS_PREALLOC_ACTION(x) ( \
+          (uintptr_t)(x) >= (uintptr_t)g_sigactions && \
+          (uintptr_t)(x) < ((uintptr_t)g_sigactions) + sizeof(g_sigactions))
+#else
+#  define IS_PREALLOC_ACTION(x) false
+#endif
+
+/****************************************************************************
+ * Private Data
+ ****************************************************************************/
+
+static spinlock_t g_sigaction_spin;
+
+#if CONFIG_SIG_PREALLOC_ACTIONS > 0
+static sigactq_t  g_sigactions[CONFIG_SIG_PREALLOC_ACTIONS];
+static bool       g_sigactions_used = false;
+#endif
+
+/****************************************************************************
  * Private Functions
  ****************************************************************************/
+
+/****************************************************************************
+ * Name: nxsig_alloc_actionblock
+ *
+ * Description:
+ *   Allocate a block of signal actions and place them
+ *   on the free list.
+ *
+ ****************************************************************************/
+
+static void nxsig_alloc_actionblock(void)
+{
+  FAR sigactq_t *sigact;
+  irqstate_t flags;
+  int i;
+
+  /* Use pre-allocated instances only once */
+
+#if CONFIG_SIG_PREALLOC_ACTIONS > 0
+  flags = spin_lock_irqsave(&g_sigaction_spin);
+  if (!g_sigactions_used)
+    {
+      for (i = 0; i < CONFIG_SIG_PREALLOC_ACTIONS; i++)
+        {
+          sq_addlast((FAR sq_entry_t *)(g_sigactions + i), &g_sigfreeaction);
+        }
+
+      g_sigactions_used = true;
+    }
+
+  spin_unlock_irqrestore(&g_sigaction_spin, flags);
+#endif
+
+  /* Allocate a block of signal actions */
+
+  sigact = kmm_malloc((sizeof(sigactq_t)) * CONFIG_SIG_ALLOC_ACTIONS);
+  if (sigact != NULL)
+    {
+      flags = spin_lock_irqsave(&g_sigaction_spin);
+
+      for (i = 0; i < CONFIG_SIG_ALLOC_ACTIONS; i++)
+        {
+          sq_addlast((FAR sq_entry_t *)sigact++, &g_sigfreeaction);
+        }
+
+      spin_unlock_irqrestore(&g_sigaction_spin, flags);
+    }
+}
 
 /****************************************************************************
  * Name: nxsig_alloc_action
@@ -53,14 +130,17 @@
 static FAR sigactq_t *nxsig_alloc_action(void)
 {
   FAR sigactq_t *sigact;
+  irqstate_t flags;
 
   /* Try to get the signal action structure from the free list */
 
+  flags = spin_lock_irqsave(&g_sigaction_spin);
   sigact = (FAR sigactq_t *)sq_remfirst(&g_sigfreeaction);
+  spin_unlock_irqrestore(&g_sigaction_spin, flags);
 
-  /* Check if we got one. */
+  /* Check if we got one via loop as not in critical section now */
 
-  if (!sigact)
+  while (!sigact)
     {
       /* Add another block of signal actions to the list */
 
@@ -68,8 +148,9 @@ static FAR sigactq_t *nxsig_alloc_action(void)
 
       /* And try again */
 
+      flags = spin_lock_irqsave(&g_sigaction_spin);
       sigact = (FAR sigactq_t *)sq_remfirst(&g_sigfreeaction);
-      DEBUGASSERT(sigact);
+      spin_unlock_irqrestore(&g_sigaction_spin, flags);
     }
 
   return sigact;
@@ -157,8 +238,16 @@ int nxsig_action(int signo, FAR const struct sigaction *act,
    * execution, no special precautions should be necessary.
    */
 
-  DEBUGASSERT(rtcb != NULL && rtcb->group != NULL);
+  DEBUGASSERT(rtcb != NULL);
+
   group = rtcb->group;
+
+  /* If the value of group is null, the task may have exited */
+
+  if (group == NULL)
+    {
+      return -EINVAL;
+    }
 
   /* Verify the signal number */
 
@@ -193,8 +282,8 @@ int nxsig_action(int signo, FAR const struct sigaction *act,
           /* Return SIG_DFL if the default signal is attached */
 
           oact->sa_handler = SIG_DFL;
-          oact->sa_mask    = NULL_SIGNAL_SET;
           oact->sa_flags   = SA_SIGINFO;
+          sigemptyset(&oact->sa_mask);
         }
       else
 #endif
@@ -211,8 +300,8 @@ int nxsig_action(int signo, FAR const struct sigaction *act,
           /* There isn't an old value */
 
           oact->sa_handler = NULL;
-          oact->sa_mask    = NULL_SIGNAL_SET;
           oact->sa_flags   = 0;
+          sigemptyset(&oact->sa_mask);
         }
     }
 
@@ -331,6 +420,7 @@ int nxsig_action(int signo, FAR const struct sigaction *act,
       sigact->act.sa_handler = handler;
       sigact->act.sa_mask    = act->sa_mask;
       sigact->act.sa_flags   = act->sa_flags;
+      sigact->act.sa_user    = act->sa_user;
     }
 
   return OK;
@@ -363,7 +453,18 @@ int sigaction(int signo, FAR const struct sigaction *act,
 
 void nxsig_release_action(FAR sigactq_t *sigact)
 {
-  /* Just put it back on the free list */
+  irqstate_t flags;
 
-  sq_addlast((FAR sq_entry_t *)sigact, &g_sigfreeaction);
+  if (CONFIG_SIG_ALLOC_ACTIONS > 1 || IS_PREALLOC_ACTION(sigact))
+    {
+      /* Non-preallocated instances will never return to heap! */
+
+      flags = spin_lock_irqsave(&g_sigaction_spin);
+      sq_addlast((FAR sq_entry_t *)sigact, &g_sigfreeaction);
+      spin_unlock_irqrestore(&g_sigaction_spin, flags);
+    }
+  else
+    {
+      kmm_free(sigact);
+    }
 }

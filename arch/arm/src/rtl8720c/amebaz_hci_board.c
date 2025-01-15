@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/rtl8720c/amebaz_hci_board.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -204,7 +206,7 @@ static void set_reg_val(uint32_t reg, uint32_t mask, uint32_t val)
   HAL_WRITE32(reg, 0, data);
 }
 
-static int hci_iqk_phy_efuse_valid(FAR IQK_T           *iqk_data)
+static int hci_iqk_phy_efuse_valid(IQK_T *iqk_data)
 {
   if ((hci_phy_efuse[3] == 0xff) &&
       (hci_phy_efuse[4] == 0xff) &&
@@ -230,7 +232,7 @@ static int hci_iqk_phy_efuse_valid(FAR IQK_T           *iqk_data)
     }
 }
 
-static int hci_iqk_lgc_efuse_valid(FAR IQK_T *iqk_data)
+static int hci_iqk_lgc_efuse_valid(IQK_T *iqk_data)
 {
   if ((hci_lgc_efuse[0x16] == 0xff) &&
       (hci_lgc_efuse[0x17] == 0xff) &&
@@ -339,7 +341,7 @@ int hci_start_iqk(void)
   return 0;
 }
 
-int hci_set_init_config_mac(FAR uint8_t *addr, uint8_t diffvalue)
+int hci_set_init_config_mac(uint8_t *addr, uint8_t diffvalue)
 {
   for (uint8_t i = 0; i < BT_MAC_ADDR_LEN; i++)
     {
@@ -350,7 +352,7 @@ int hci_set_init_config_mac(FAR uint8_t *addr, uint8_t diffvalue)
   return 0;
 }
 
-int hci_get_baudrate(FAR uint32_t *bt_baudrate, FAR uint32_t *uart_baudrate)
+int hci_get_baudrate(uint32_t *bt_baudrate, uint32_t *uart_baudrate)
 {
   typedef struct
   {
@@ -548,7 +550,7 @@ int hci_find_fw_patch(uint8_t chipid)
   return 0;
 }
 
-int hci_fetch_command(FAR uint8_t *command)
+int hci_fetch_command(uint8_t *command)
 {
   unsigned int config_size = sizeof(rtl_vendor_init_config);
   static unsigned int command_offset;
@@ -775,7 +777,7 @@ static int hci_parse_config(void)
 
           break;
         case 0x19f:
-          for (i = 0; i < entry_len; i ++)
+          for (i = 0; i < entry_len; i++)
             {
               if (hci_lgc_efuse[LEFUSE(0x19c + i)] != 0xff)
                 {
@@ -785,7 +787,7 @@ static int hci_parse_config(void)
 
           break;
         case 0x1a4:
-          for (i = 0; i < entry_len; i ++)
+          for (i = 0; i < entry_len; i++)
             {
               if (hci_lgc_efuse[LEFUSE(0x1a2 + i)] != 0xff)
                 {

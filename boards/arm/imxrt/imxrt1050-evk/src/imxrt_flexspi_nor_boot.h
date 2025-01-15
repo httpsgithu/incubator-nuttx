@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/imxrt/imxrt1050-evk/src/imxrt_flexspi_nor_boot.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -63,7 +65,7 @@
 #define SCLK 1
 
 #ifdef CONFIG_IMXRT1050_EVK_SDRAM
-#  define DCD_ADDRESS               &g_dcd_data
+#  define DCD_ADDRESS               g_dcd_data
 #else
 #  define DCD_ADDRESS               0
 #endif

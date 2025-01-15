@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/imx6/hardware/imx_memorymap.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -814,10 +816,10 @@
 
 #  ifdef CONFIG_ARCH_LOWVECTORS
 
-/* In this case, page table must lie at the top 16Kb of OCRAM. */
+/* In this case, page table must lie at the top 16Kb * ncpus of OCRAM. */
 
-#    define PGTABLE_BASE_PADDR    (IMX_OCRAM_PBASE + IMX_OCRAM_SIZE - PGTABLE_SIZE)
-#    define PGTABLE_BASE_VADDR    (IMX_OCRAM_VBASE + IMX_OCRAM_SIZE - PGTABLE_SIZE)
+#    define PGTABLE_BASE_PADDR    (IMX_OCRAM_PBASE + IMX_OCRAM_SIZE - ALL_PGTABLE_SIZE)
+#    define PGTABLE_BASE_VADDR    (IMX_OCRAM_VBASE + IMX_OCRAM_SIZE - ALL_PGTABLE_SIZE)
 #    define PGTABLE_IN_HIGHSRAM   1
 
 /* We will force the IDLE stack to precede the page table */
@@ -829,7 +831,7 @@
 
 /* Otherwise, the vectors lie at another location (perhaps in NOR FLASH,
  * perhaps elsewhere in OCRAM).  The page table will then be positioned
- * at the first 16Kb of SRAM.
+ * at the first 16Kb * ncpus of SRAM.
  */
 
 #    define PGTABLE_BASE_PADDR    IMX_OCRAM_PBASE
@@ -838,8 +840,8 @@
 
 /* We will force the IDLE stack to follow the page table */
 
-#    define IDLE_STACK_PBASE      (PGTABLE_BASE_PADDR + PGTABLE_SIZE)
-#    define IDLE_STACK_VBASE      (PGTABLE_BASE_VADDR + PGTABLE_SIZE)
+#    define IDLE_STACK_PBASE      (PGTABLE_BASE_PADDR + ALL_PGTABLE_SIZE)
+#    define IDLE_STACK_VBASE      (PGTABLE_BASE_VADDR + ALL_PGTABLE_SIZE)
 
 #  endif /* CONFIG_ARCH_LOWVECTORS */
 
@@ -884,8 +886,8 @@
 
 /* We will force the IDLE stack to follow the page table */
 
-#    define IDLE_STACK_PBASE      (PGTABLE_BASE_PADDR + PGTABLE_SIZE)
-#    define IDLE_STACK_VBASE      (PGTABLE_BASE_VADDR + PGTABLE_SIZE)
+#    define IDLE_STACK_PBASE      (PGTABLE_BASE_PADDR + ALL_PGTABLE_SIZE)
+#    define IDLE_STACK_VBASE      (PGTABLE_BASE_VADDR + ALL_PGTABLE_SIZE)
 
 #endif /* !PGTABLE_BASE_PADDR || !PGTABLE_BASE_VADDR */
 
@@ -923,9 +925,9 @@
  *    memory to address 0x0000:0000 using both the MMU and the AXI matrix
  *    REMAP register.  So no L2 page table is required.
  *
- * 2) If on-demand paging is supported (CONFIG_PAGING=y), than an additional
- *    L2 page table is needed.  This page table will use the remainder of
- *    the address space.
+ * 2) If on-demand paging is supported (CONFIG_LEGACY_PAGING=y), than an
+ *    additional L2 page table is needed.  This page table will use the
+ *    remainder of the address space.
  */
 
 #ifndef CONFIG_ARCH_LOWVECTORS
@@ -974,7 +976,7 @@
 
 /* Paging L2 page table base addresses
  *
- * NOTE: If CONFIG_PAGING is defined, mmu.h will re-assign the virtual
+ * NOTE: If CONFIG_LEGACY_PAGING is defined, mmu.h will re-assign the virtual
  * address of the page table.
  */
 

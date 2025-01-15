@@ -1,6 +1,8 @@
 /********************************************************************
  * arch/arm/src/dm320/dm320_restart.S
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -51,9 +53,9 @@
 	.globl	up_restart
 	.type	up_restart, %function
 up_restart:
-	/* Make sure that we are in SVC mode with all IRQs disabled */
+	/* Make sure that we are in SYS mode with all IRQs disabled */
 
-	mov	r0, #(PSR_MODE_SVC | PSR_I_BIT | PSR_F_BIT)
+	mov	r0, #(PSR_MODE_SYS | PSR_I_BIT | PSR_F_BIT)
 	msr	cpsr_c, r0
 
 	/* Create identity mapping for first MB section to support

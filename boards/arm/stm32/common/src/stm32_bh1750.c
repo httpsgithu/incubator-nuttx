@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/stm32/common/src/stm32_bh1750.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -28,7 +30,7 @@
 #include <debug.h>
 #include <stdio.h>
 
-#include <nuttx/spi/spi.h>
+#include <nuttx/i2c/i2c_master.h>
 #include <arch/board/board.h>
 #include <nuttx/sensors/bh1750fvi.h>
 
@@ -47,7 +49,7 @@
  * Name: stm32_bh1750initialize
  *
  * Description:
- *   Initialize and register the MPL115A Pressure Sensor driver.
+ *   Initialize and register the BH1750FVI Ambient Light driver.
  *
  * Input Parameters:
  *   devno - The device number, used to build the device path as /dev/lightN
@@ -60,7 +62,8 @@
 
 int board_bh1750_initialize(int devno, int busno)
 {
-  FAR struct i2c_master_s *i2c;
+  struct i2c_master_s *i2c;
+  char devpath[12];
   int ret;
 
   sninfo("Initializing BH1750FVI!\n");
@@ -68,18 +71,18 @@ int board_bh1750_initialize(int devno, int busno)
   /* Initialize I2C */
 
   i2c = stm32_i2cbus_initialize(busno);
-
   if (!i2c)
     {
       return -ENODEV;
     }
 
-  /* Then register the barometer sensor */
+  /* Then register the ambient light sensor */
 
+  snprintf(devpath, sizeof(devpath), "/dev/light%d", devno);
   ret = bh1750fvi_register(devpath, i2c, BH1750FVI_I2C_ADDR);
   if (ret < 0)
     {
-      snerr("ERROR: Error registering BM180\n");
+      snerr("ERROR: Error registering BH1750FVI\n");
     }
 
   return ret;

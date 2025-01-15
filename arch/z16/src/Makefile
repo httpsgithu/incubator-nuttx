@@ -1,6 +1,8 @@
 ############################################################################
 # arch/z16/src/Makefile
 #
+# SPDX-License-Identifier: Apache-2.0
+#
 # Licensed to the Apache Software Foundation (ASF) under one or more
 # contributor license agreements.  See the NOTICE file distributed with
 # this work for additional information regarding copyright ownership.  The
@@ -18,15 +20,15 @@
 #
 ############################################################################
 
-include $(TOPDIR)/Make.defs
+include $(TOPDIR)/tools/Make.defs
 include chip/Make.defs
 
 COMPILER = ${shell basename "$(CC)"}
 ARCHSRCDIR = $(TOPDIR)/arch/$(CONFIG_ARCH)/src
 
-INCLUDES += ${shell $(INCDIR) "$(CC)" $(ARCHSRCDIR)$(DELIM)chip}
-INCLUDES += ${shell $(INCDIR) "$(CC)" $(ARCHSRCDIR)$(DELIM)common}
-INCLUDES += ${shell $(INCDIR) "$(CC)" $(TOPDIR)$(DELIM)sched}
+INCLUDES += ${INCDIR_PREFIX}$(ARCHSRCDIR)$(DELIM)chip
+INCLUDES += ${INCDIR_PREFIX}$(ARCHSRCDIR)$(DELIM)common
+INCLUDES += ${INCDIR_PREFIX}$(TOPDIR)$(DELIM)sched
 
 CFLAGS += $(INCLUDES)
 CPPFLAGS += $(INCLUDES)
@@ -122,7 +124,7 @@ endif
 
 # This is part of the top-level export target
 
-export_startup: board/libboard$(LIBEXT) $(STARTUP_OBJS)
+export_startup: $(STARTUP_OBJS)
 ifeq ($(CONFIG_WINDOWS_NATIVE),y)
 	$(Q) if exist "$(EXPORT_DIR)$(DELIM)startup" ( copy $(STARTUP_OBJS) "$(EXPORT_DIR)$(DELIM)startup$(DELIM)." /b /y)
 else

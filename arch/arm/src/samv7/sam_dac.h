@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/samv7/sam_dac.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -104,7 +106,7 @@ extern "C"
  ****************************************************************************/
 
 struct dac_dev_s;
-FAR struct dac_dev_s *sam_dac_initialize(int intf);
+struct dac_dev_s *sam_dac_initialize(int intf);
 
 #undef EXTERN
 #ifdef __cplusplus

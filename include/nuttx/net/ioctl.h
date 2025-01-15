@@ -1,6 +1,8 @@
 /****************************************************************************
  * include/nuttx/net/ioctl.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -47,6 +49,7 @@
 #define SIOCGIFNETMASK   _SIOC(0x0007)  /* Get network mask */
 #define SIOCSIFNETMASK   _SIOC(0x0008)  /* Set network mask */
 #define SIOCGIFMTU       _SIOC(0x0009)  /* Get MTU size */
+#define SIOCSIFMTU       _SIOC(0x0033)  /* Set MTU size */
 
 /* IPv6 interface control operations */
 
@@ -72,6 +75,7 @@
 
 #define SIOCGIFNAME      _SIOC(0x002A)  /* Get interface name string */
 #define SIOCGIFINDEX     _SIOC(0x002B)  /* Get index based name string */
+#define SIOCSIFNAME      _SIOC(0x0034)  /* Set interface name string*/
 
 /* Interface flags */
 
@@ -104,6 +108,8 @@
 /* TUN/TAP driver ***********************************************************/
 
 #define TUNSETIFF        _SIOC(0x0028)  /* Set TUN/TAP interface */
+#define TUNGETIFF        _SIOC(0x0035)  /* Get TUN/TAP interface */
+#define TUNSETCARRIER    _SIOC(0x0040)  /* Set TUN/TAP carrier state */
 
 /* Telnet driver ************************************************************/
 
@@ -112,8 +118,41 @@
 
 /* SocketCAN ****************************************************************/
 
-#define SIOCGCANBITRATE  _SIOC(0x002C)  /* Get bitrate from a CAN controller */
-#define SIOCSCANBITRATE  _SIOC(0x002D)  /* Set bitrate of a CAN controller */
+#define SIOCGCANBITRATE    _SIOC(0x002C)  /* Get bitrate from a CAN controller */
+#define SIOCSCANBITRATE    _SIOC(0x002D)  /* Set bitrate of a CAN controller */
+#define SIOCACANEXTFILTER  _SIOC(0x002E)  /* Add hardware-level exteneded ID filter */
+#define SIOCDCANEXTFILTER  _SIOC(0x002F)  /* Delete hardware-level exteneded ID filter */
+#define SIOCACANSTDFILTER  _SIOC(0x0030)  /* Add hardware-level standard ID filter */
+#define SIOCDCANSTDFILTER  _SIOC(0x0031)  /* Delete hardware-level standard ID filter */
+#define SIOCCANRECOVERY    _SIOC(0x0032)  /* Recovery can, work only when bus-off state */
+#define SIOCGCANSTATE      _SIOC(0x0041)  /* Get state from a CAN/LIN controller */
+#define SIOCSCANSTATE      _SIOC(0x0042)  /* Set the LIN/CAN controller state */
+
+/* Network socket control ***************************************************/
+
+#define SIOCDENYINETSOCK _SIOC(0x003C) /* Deny network socket. */
+
+/* Bridge calls *************************************************************/
+
+#define SIOCBRADDBR        _SIOC(0x0036)  /* Create new bridge device */
+#define SIOCBRDELBR        _SIOC(0x0037)  /* Remove bridge device */
+#define SIOCBRADDIF        _SIOC(0x0038)  /* Add interface to bridge */
+#define SIOCBRDELIF        _SIOC(0x0039)  /* Remove interface from bridge */
+#define SIOCGIFBR          _SIOC(0x003A)  /* Bridging support */
+#define SIOCSIFBR          _SIOC(0x003B)  /* Set bridging options */
+
+/* ETH Tool calls ***********************************************************/
+
+#define SIOCETHTOOL        _SIOC(0x003D)  /* Ethtool interface */
+
+/* TCP socket control *******************************************************/
+
+#define SIOCATMARK         _SIOC(0x003E)  /* Determine whether socket is at
+                                           * out-of-band mark */
+
+/* RSS notify recv cpu calls ************************************************/
+
+#define SIOCNOTIFYRECVCPU  _SIOC(0x003F)  /* RSS notify recv cpu */
 
 /****************************************************************************
  * Public Type Definitions

@@ -1,6 +1,8 @@
 /****************************************************************************
  * libs/libc/pthread/pthread_keycreate.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -26,10 +28,25 @@
 
 #include <pthread.h>
 #include <assert.h>
+#include <errno.h>
 
+#include <nuttx/mutex.h>
 #include <nuttx/tls.h>
 
-#if CONFIG_TLS_NELEM > 0
+#if defined(CONFIG_TLS_NELEM) && CONFIG_TLS_NELEM > 0
+
+/****************************************************************************
+ * Private Functions
+ ****************************************************************************/
+
+/****************************************************************************
+ * Name: pthread_destructor
+ ****************************************************************************/
+
+static void pthread_destructor(FAR void *arg)
+{
+  UNUSED(arg);
+}
 
 /****************************************************************************
  * Public Functions
@@ -70,23 +87,50 @@
 int pthread_key_create(FAR pthread_key_t *key,
                        CODE void (*destructor)(FAR void *))
 {
-  int tlsindex;
+  FAR struct task_info_s *info = task_get_info();
+  int candidate;
+  int ret;
 
   DEBUGASSERT(key != NULL);
+  DEBUGASSERT(info != NULL);
 
-  /* Allocate a TLS index */
+  /* Search for an unused index.  This is done in a critical section here to
+   * avoid concurrent modification of the group TLS index set.
+   */
 
-  tlsindex = tls_alloc(destructor);
-
-  /* Check if found a TLS index. */
-
-  if (tlsindex >= 0)
+  ret = nxmutex_lock(&info->ta_lock);
+  if (ret < 0)
     {
-      *key = tlsindex;
-      return OK;
+      return -ret;
     }
 
-  return -tlsindex;
+  ret = EAGAIN;
+
+  for (candidate = 0; candidate < CONFIG_TLS_NELEM; candidate++)
+    {
+      /* Is this candidate index available? */
+
+      if (info->ta_tlsdtor[candidate] == NULL)
+        {
+          /* Yes.. allocate the index and break out of the loop */
+
+          if (destructor)
+            {
+              info->ta_tlsdtor[candidate] = destructor;
+            }
+          else
+            {
+              info->ta_tlsdtor[candidate] = pthread_destructor;
+            }
+
+          *key = candidate;
+          ret = OK;
+          break;
+        }
+    }
+
+  nxmutex_unlock(&info->ta_lock);
+  return ret;
 }
 
 #endif /* CONFIG_TLS_NELEM */

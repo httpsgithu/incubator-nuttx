@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/stm32h7/stm32_dma.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -34,8 +36,6 @@
 #include <nuttx/irq.h>
 #include <nuttx/arch.h>
 #include <arch/stm32h7/chip.h>
-
-#include "arm_arch.h"
 
 #include "arm_internal.h"
 #include "sched/sched.h"
@@ -114,7 +114,7 @@ struct stm32_dmamux_s
   uint32_t base;                /* DMAMUX base address */
 };
 
-typedef FAR struct stm32_dmamux_s *DMA_MUX;
+typedef struct stm32_dmamux_s *DMA_MUX;
 
 /* This structure describes one DMA controller */
 
@@ -141,7 +141,7 @@ struct stm32_dmach_s
   void          *arg;       /* Argument passed to callback function */
 };
 
-typedef FAR struct stm32_dmach_s *DMA_CHANNEL;
+typedef struct stm32_dmach_s *DMA_CHANNEL;
 
 /* DMA operations */
 
@@ -149,32 +149,32 @@ struct stm32_dma_ops_s
 {
   /* Start the DMA transfer */
 
-  CODE void (*dma_disable)(DMA_CHANNEL dmachan);
+  void (*dma_disable)(DMA_CHANNEL dmachan);
 
   /* DMA interrupt */
 
-  CODE int (*dma_interrupt)(int irq, void *context, FAR void *arg);
+  int (*dma_interrupt)(int irq, void *context, void *arg);
 
   /* Setup the DMA */
 
-  CODE void (*dma_setup)(DMA_HANDLE handle, FAR stm32_dmacfg_t *cfg);
+  void (*dma_setup)(DMA_HANDLE handle, stm32_dmacfg_t *cfg);
 
   /* Start the DMA */
 
-  CODE void (*dma_start)(DMA_HANDLE handle, dma_callback_t callback,
-                         void *arg, bool half);
+  void (*dma_start)(DMA_HANDLE handle, dma_callback_t callback,
+                    void *arg, bool half);
 
   /* Read remaining DMA bytes */
 
-  CODE size_t (*dma_residual)(DMA_HANDLE handle);
+  size_t (*dma_residual)(DMA_HANDLE handle);
 
   /* Check the DMA configuration  */
 
-  CODE bool (*dma_capable)(FAR stm32_dmacfg_t *cfg);
+  bool (*dma_capable)(stm32_dmacfg_t *cfg);
 
   /* Dump the DMA registers */
 
-  CODE void (*dma_dump)(DMA_HANDLE handle, const char *msg);
+  void (*dma_dump)(DMA_HANDLE handle, const char *msg);
 };
 
 /****************************************************************************
@@ -183,13 +183,13 @@ struct stm32_dma_ops_s
 
 #ifdef CONFIG_STM32H7_MDMA
 static void stm32_mdma_disable(DMA_CHANNEL dmachan);
-static int stm32_mdma_interrupt(int irq, void *context, FAR void *arg);
-static void stm32_mdma_setup(DMA_HANDLE handle, FAR stm32_dmacfg_t *cfg);
+static int stm32_mdma_interrupt(int irq, void *context, void *arg);
+static void stm32_mdma_setup(DMA_HANDLE handle, stm32_dmacfg_t *cfg);
 static void stm32_mdma_start(DMA_HANDLE handle, dma_callback_t callback,
                              void *arg, bool half);
 static size_t stm32_mdma_residual(DMA_HANDLE handle);
 #ifdef CONFIG_STM32H7_DMACAPABLE
-static bool stm32_mdma_capable(FAR stm32_dmacfg_t *cfg);
+static bool stm32_mdma_capable(stm32_dmacfg_t *cfg);
 #endif
 #ifdef CONFIG_DEBUG_DMA_INFO
 static void stm32_mdma_dump(DMA_HANDLE handle, const char *msg);
@@ -198,13 +198,13 @@ static void stm32_mdma_dump(DMA_HANDLE handle, const char *msg);
 
 #if defined(CONFIG_STM32H7_DMA1) || defined(CONFIG_STM32H7_DMA2)
 static void stm32_sdma_disable(DMA_CHANNEL dmachan);
-static int stm32_sdma_interrupt(int irq, void *context, FAR void *arg);
-static void stm32_sdma_setup(DMA_HANDLE handle, FAR stm32_dmacfg_t *cfg);
+static int stm32_sdma_interrupt(int irq, void *context, void *arg);
+static void stm32_sdma_setup(DMA_HANDLE handle, stm32_dmacfg_t *cfg);
 static void stm32_sdma_start(DMA_HANDLE handle, dma_callback_t callback,
                              void *arg, bool half);
 static size_t stm32_sdma_residual(DMA_HANDLE handle);
 #ifdef CONFIG_STM32H7_DMACAPABLE
-static bool stm32_sdma_capable(FAR stm32_dmacfg_t *cfg);
+static bool stm32_sdma_capable(stm32_dmacfg_t *cfg);
 #endif
 #ifdef CONFIG_DEBUG_DMA_INFO
 static void stm32_sdma_dump(DMA_HANDLE handle, const char *msg);
@@ -213,13 +213,13 @@ static void stm32_sdma_dump(DMA_HANDLE handle, const char *msg);
 
 #ifdef CONFIG_STM32H7_BDMA
 static void stm32_bdma_disable(DMA_CHANNEL dmachan);
-static int stm32_bdma_interrupt(int irq, void *context, FAR void *arg);
-static void stm32_bdma_setup(DMA_HANDLE handle, FAR stm32_dmacfg_t *cfg);
+static int stm32_bdma_interrupt(int irq, void *context, void *arg);
+static void stm32_bdma_setup(DMA_HANDLE handle, stm32_dmacfg_t *cfg);
 static void stm32_bdma_start(DMA_HANDLE handle, dma_callback_t callback,
                              void *arg, bool half);
 static size_t stm32_bdma_residual(DMA_HANDLE handle);
 #ifdef CONFIG_STM32H7_DMACAPABLE
-static bool stm32_bdma_capable(FAR stm32_dmacfg_t *cfg);
+static bool stm32_bdma_capable(stm32_dmacfg_t *cfg);
 #endif
 #ifdef CONFIG_DEBUG_DMA_INFO
 static void stm32_bdma_dump(DMA_HANDLE handle, const char *msg);
@@ -240,8 +240,15 @@ static void stm32_dmamux_dump(DMA_MUX dmamux, uint8_t chan);
 #endif
 static DMA_CHANNEL stm32_dma_channel_get(uint8_t channel,
                                          uint8_t controller);
-static void stm32_gdma_limits_get(uint8_t controller, FAR uint8_t *first,
-                                  FAR uint8_t *last);
+static void stm32_gdma_limits_get(uint8_t controller, uint8_t *first,
+                                  uint8_t *last);
+
+static inline void dmachan_modifyreg32(DMA_CHANNEL dmachan,
+                                       uint32_t offset, uint32_t clrbits,
+                                       uint32_t setbits)
+{
+  modifyreg32(dmachan->base + offset, clrbits, setbits);
+}
 
 /****************************************************************************
  * Private Data
@@ -886,8 +893,8 @@ static DMA_CHANNEL stm32_dma_channel_get(uint8_t channel, uint8_t controller)
  *
  ****************************************************************************/
 
-static void stm32_gdma_limits_get(uint8_t controller, FAR uint8_t *first,
-                                  FAR uint8_t *nchan)
+static void stm32_gdma_limits_get(uint8_t controller, uint8_t *first,
+                                  uint8_t *nchan)
 {
   DEBUGASSERT(first != NULL);
   DEBUGASSERT(nchan != NULL);
@@ -929,7 +936,7 @@ static void stm32_mdma_disable(DMA_CHANNEL dmachan)
  *
  ****************************************************************************/
 
-static int stm32_mdma_interrupt(int irq, void *context, FAR void *arg)
+static int stm32_mdma_interrupt(int irq, void *context, void *arg)
 {
 #warning stm32_mdma_interrupt
 }
@@ -942,7 +949,7 @@ static int stm32_mdma_interrupt(int irq, void *context, FAR void *arg)
  *
  ****************************************************************************/
 
-static void stm32_mdma_setup(DMA_HANDLE handle, FAR stm32_dmacfg_t *cfg)
+static void stm32_mdma_setup(DMA_HANDLE handle, stm32_dmacfg_t *cfg)
 {
   DMA_CHANNEL dmachan    = (DMA_CHANNEL)handle;
   uint8_t     controller = dmachan->ctrl;
@@ -996,7 +1003,7 @@ static size_t stm32_mdma_residual(DMA_HANDLE handle)
  ****************************************************************************/
 
 #ifdef CONFIG_STM32H7_DMACAPABLE
-static bool stm32_mdma_capable(FAR stm32_dmacfg_t *cfg)
+static bool stm32_mdma_capable(stm32_dmacfg_t *cfg)
 {
   uint32_t transfer_size;
   uint32_t mend;
@@ -1115,7 +1122,7 @@ static void stm32_sdma_disable(DMA_CHANNEL dmachan)
  *
  ****************************************************************************/
 
-static int stm32_sdma_interrupt(int irq, void *context, FAR void *arg)
+static int stm32_sdma_interrupt(int irq, void *context, void *arg)
 {
   DMA_CHANNEL dmachan     = NULL;
   uint32_t    status      = 0;
@@ -1210,8 +1217,9 @@ static int stm32_sdma_interrupt(int irq, void *context, FAR void *arg)
  *
  ****************************************************************************/
 
-static void stm32_sdma_setup(DMA_HANDLE handle, FAR stm32_dmacfg_t *cfg)
+static void stm32_sdma_setup(DMA_HANDLE handle, stm32_dmacfg_t *cfg)
 {
+  uint32_t timeout;
   DMA_CHANNEL dmachan = (DMA_CHANNEL)handle;
   uint32_t regoffset  = 0;
   uint32_t regval     = 0;
@@ -1237,7 +1245,37 @@ static void stm32_sdma_setup(DMA_HANDLE handle, FAR stm32_dmacfg_t *cfg)
    * for the EN bit to be cleared before starting any stream configuration."
    */
 
-  while ((dmachan_getreg(dmachan, STM32_DMA_SCR_OFFSET) & DMA_SCR_EN) != 0);
+  /* Drivers using DMA should manage the streams. If a DMA request
+   * is not made on an error or an abort occurs. The driver should
+   * stop the DMA. If it fails to do so we can not just hang waiting
+   * on the HW that will not change state.
+   *
+   * If at the end of waiting the HW is still not ready there is a HW problem
+   * or a SW usage problem.
+   *
+   * Enable DEBUGASSERT to detect this.
+   */
+
+  if ((dmachan_getreg(dmachan, STM32_DMA_SCR_OFFSET) & DMA_SCR_EN) != 0)
+    {
+      /* Attempt to disable the DMA stream and wait up to a 100 us for it
+       * to stop.
+       */
+
+      dmachan_modifyreg32(dmachan, STM32_DMA_SCR_OFFSET, DMA_SCR_EN, 0);
+      timeout = 100;
+      while (timeout != 0 &&
+             (dmachan_getreg(dmachan, STM32_DMA_SCR_OFFSET) &
+              DMA_SCR_EN) != 0)
+        {
+          up_udelay(1);
+          timeout--;
+        }
+
+        DEBUGASSERT(timeout != 0 &&
+                    (dmachan_getreg(dmachan, STM32_DMA_SCR_OFFSET) &
+                     DMA_SCR_EN) == 0);
+    }
 
   /* "... All the stream dedicated bits set in the status register (DMA_LISR
    * and DMA_HISR) from the previous data block DMA transfer should be
@@ -1452,7 +1490,7 @@ static size_t stm32_sdma_residual(DMA_HANDLE handle)
  ****************************************************************************/
 
 #ifdef CONFIG_STM32H7_DMACAPABLE
-static bool stm32_sdma_capable(FAR stm32_dmacfg_t *cfg)
+static bool stm32_sdma_capable(stm32_dmacfg_t *cfg)
 {
   uint32_t transfer_size;
   uint32_t burst_length;
@@ -1732,7 +1770,7 @@ static void stm32_bdma_disable(DMA_CHANNEL dmachan)
  *
  ****************************************************************************/
 
-static int stm32_bdma_interrupt(int irq, void *context, FAR void *arg)
+static int stm32_bdma_interrupt(int irq, void *context, void *arg)
 {
   DMA_CHANNEL dmachan     = NULL;
   uint32_t    status      = 0;
@@ -1804,8 +1842,9 @@ static inline int32_t stm32_sdma_scr_2_bdma_ccr(int32_t scr)
  *
  ****************************************************************************/
 
-static void stm32_bdma_setup(DMA_HANDLE handle, FAR stm32_dmacfg_t *cfg)
+static void stm32_bdma_setup(DMA_HANDLE handle, stm32_dmacfg_t *cfg)
 {
+  uint32_t    timeout;
   DMA_CHANNEL dmachan    = (DMA_CHANNEL)handle;
   uint32_t    regval     = 0;
   uint32_t    scr        = cfg->cfg1;
@@ -1831,12 +1870,37 @@ static void stm32_bdma_setup(DMA_HANDLE handle, FAR stm32_dmacfg_t *cfg)
    * for the EN bit to be cleared before starting any stream configuration."
    */
 
-  regval =  dmachan_getreg(dmachan, STM32_BDMACH_CCR_OFFSET);
-  regval &= ~BDMA_CCR_EN;
-  dmachan_putreg(dmachan, STM32_BDMACH_CCR_OFFSET, regval);
+  /* Drivers using DMA should manage the streams. If a DMA request
+   * is not made on an error or an abort occurs. The driver should
+   * stop the DMA. If it fails to do so we can not just hang waiting
+   * on the HW that will not change state.
+   *
+   * If at the end of waiting the HW is still not ready there is a HW problem
+   * or a SW usage problem.
+   *
+   * Enable DEBUGASSERT to detect this.
+   */
 
-  while ((dmachan_getreg(dmachan, STM32_BDMACH_CCR_OFFSET) &
-          BDMA_CCR_EN) != 0);
+  if ((dmachan_getreg(dmachan, STM32_BDMACH_CCR_OFFSET) & BDMA_CCR_EN) != 0)
+    {
+      /* Attempt to disable the DMA stream and wait up to a 100 us for it
+       * to stop.
+       */
+
+      dmachan_modifyreg32(dmachan, STM32_BDMACH_CCR_OFFSET, BDMA_CCR_EN, 0);
+      timeout = 100;
+      while (timeout != 0 &&
+             (dmachan_getreg(dmachan, STM32_BDMACH_CCR_OFFSET) &
+              BDMA_CCR_EN) != 0)
+        {
+          up_udelay(1);
+          timeout--;
+        }
+
+        DEBUGASSERT(timeout != 0 &&
+                    (dmachan_getreg(dmachan, STM32_BDMACH_CCR_OFFSET) &
+                        BDMA_CCR_EN) == 0);
+    }
 
   /* "... All the stream dedicated bits set in the status register BDMA_ISR
    * from the previous data block DMA transfer should be cleared before the
@@ -1987,7 +2051,7 @@ static size_t stm32_bdma_residual(DMA_HANDLE handle)
  ****************************************************************************/
 
 #ifdef CONFIG_STM32H7_DMACAPABLE
-static bool stm32_bdma_capable(FAR stm32_dmacfg_t *cfg)
+static bool stm32_bdma_capable(stm32_dmacfg_t *cfg)
 {
   uint32_t transfer_size;
   uint32_t mend;
@@ -2248,7 +2312,7 @@ void weak_function arm_dma_initialize(void)
 
           default:
             {
-              ASSERT(0);
+              PANIC();
               break;
             }
         }
@@ -2446,7 +2510,7 @@ void stm32_dmafree(DMA_HANDLE handle)
  *
  ****************************************************************************/
 
-void stm32_dmasetup(DMA_HANDLE handle, FAR stm32_dmacfg_t *cfg)
+void stm32_dmasetup(DMA_HANDLE handle, stm32_dmacfg_t *cfg)
 {
   DMA_CHANNEL dmachan    = (DMA_CHANNEL)handle;
   uint8_t     controller = dmachan->ctrl;
@@ -2543,7 +2607,7 @@ size_t stm32_dmaresidual(DMA_HANDLE handle)
  ****************************************************************************/
 
 #ifdef CONFIG_STM32H7_DMACAPABLE
-bool stm32_dmacapable(DMA_HANDLE handle, FAR stm32_dmacfg_t *cfg)
+bool stm32_dmacapable(DMA_HANDLE handle, stm32_dmacfg_t *cfg)
 {
   DMA_CHANNEL dmachan    = (DMA_CHANNEL)handle;
   uint8_t     controller = dmachan->ctrl;

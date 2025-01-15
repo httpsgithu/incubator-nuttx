@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/imxrt/teensy-4.x/src/imxrt_adc.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -32,8 +34,7 @@
 #include <arch/board/board.h>
 
 #include "chip.h"
-#include "arm_arch.h"
-
+#include "arm_internal.h"
 #include "imxrt_adc.h"
 #include "teensy-4.h"
 
@@ -41,7 +42,11 @@
 
 /* channels 1 and 2 have the same number of pins on Teensy */
 
+#ifdef CONFIG_TEENSY_41_PIKRON_BB
+#define ADC_NCHANNELS 3
+#else
 #define ADC_NCHANNELS 16
+#endif
 
 /****************************************************************************
  * Private Data
@@ -49,7 +54,11 @@
 
 static const uint8_t g_chanlist[ADC_NCHANNELS] =
   {
+#ifdef CONFIG_TEENSY_41_PIKRON_BB
+    4, 2, 9
+#else
     0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 15
+#endif
   };
 
 /****************************************************************************

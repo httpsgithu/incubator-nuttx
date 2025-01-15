@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/stm32f0l0g0/nucleo-l073rz/src/nucleo-l073rz.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -178,7 +180,7 @@ int stm32_lpwaninitialize(void);
  ****************************************************************************/
 
 #ifdef CONFIG_CL_MFRC522
-int stm32_mfrc522initialize(FAR const char *devpath);
+int stm32_mfrc522initialize(const char *devpath);
 #endif
 
 #endif /* __BOARDS_ARM_STM32F0L0G0_NUCLEO_L073RZ_SRC_NUCLEO_L073RZ_H */

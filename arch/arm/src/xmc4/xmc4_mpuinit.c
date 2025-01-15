@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/xmc4/xmc4_mpuinit.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -25,6 +27,7 @@
 #include <nuttx/config.h>
 
 #include <assert.h>
+#include <sys/param.h>
 
 #include <nuttx/userspace.h>
 
@@ -32,18 +35,6 @@
 #include "xmc4_mpuinit.h"
 
 #if defined(CONFIG_BUILD_PROTECTED) && defined(CONFIG_ARM_MPU)
-
-/****************************************************************************
- * Pre-processor Definitions
- ****************************************************************************/
-
-#ifndef MAX
-#  define MAX(a,b) a > b ? a : b
-#endif
-
-#ifndef MIN
-#  define MIN(a,b) a < b ? a : b
-#endif
 
 /****************************************************************************
  * Private Data

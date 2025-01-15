@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/cxd56xx/hardware/cxd56_ge2d.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -18,8 +20,8 @@
  *
  ****************************************************************************/
 
-#ifndef __ARCH_ARM_SRC_CXD56XX_CXD56_GE2D_H
-#define __ARCH_ARM_SRC_CXD56XX_CXD56_GE2D_H
+#ifndef __ARCH_ARM_SRC_CXD56XX_HARDWARE_CXD56_GE2D_H
+#define __ARCH_ARM_SRC_CXD56XX_HARDWARE_CXD56_GE2D_H
 
 /****************************************************************************
  * Included Files

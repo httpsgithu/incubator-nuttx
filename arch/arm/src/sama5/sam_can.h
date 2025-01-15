@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/sama5/sam_can.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -120,7 +122,7 @@ extern "C"
  ****************************************************************************/
 
 struct can_dev_s;
-FAR struct can_dev_s *sam_caninitialize(int port);
+struct can_dev_s *sam_caninitialize(int port);
 
 #undef EXTERN
 #if defined(__cplusplus)
