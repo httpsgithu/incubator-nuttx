@@ -1,6 +1,8 @@
 /****************************************************************************
  * drivers/lcd/ft80x.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -42,6 +44,7 @@
 #include <nuttx/config.h>
 #include <nuttx/signal.h>
 #include <nuttx/wqueue.h>
+#include <nuttx/mutex.h>
 
 /****************************************************************************
  * Public Types
@@ -154,7 +157,7 @@ struct ft80x_eventinfo_s
   struct sigevent event;                  /* Describe the way a task is to be notified */
   struct sigwork_s work;                  /* Work for SIGEV_THREAD */
   bool enable;                            /* True: enable notification; false: disable */
-  int16_t pid;                            /* Send the notification to this task */
+  pid_t pid;                              /* Send the notification to this task */
 };
 
 /* This structure describes the overall state of the FT80x driver */
@@ -177,7 +180,7 @@ struct ft80x_dev_s
 
   struct work_s intwork;                  /* Support back end interrupt processing */
   uint32_t frequency;                     /* Effective frequency */
-  sem_t exclsem;                          /* Mutual exclusion semaphore */
+  mutex_t lock;                           /* Mutual exclusion mutex */
 #ifndef CONFIG_DISABLE_PSEUDOFS_OPERATIONS
   uint8_t crefs;                          /* Number of open references */
   bool unlinked;                          /* True if the driver has been unlinked */

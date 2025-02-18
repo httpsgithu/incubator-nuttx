@@ -1,6 +1,8 @@
 /****************************************************************************
  * graphics/nxglib/lcd/nxglib_getrectangle.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -66,7 +68,7 @@ void NXGL_FUNCNAME(nxgl_getrectangle, NXGLIB_SUFFIX)
 
   for (srcrow = rect->pt1.y; srcrow <= rect->pt2.y; srcrow++)
     {
-      pinfo->getrun(srcrow, rect->pt1.x, dline, ncols);
+      pinfo->getrun(pinfo->dev, srcrow, rect->pt1.x, dline, ncols);
       dline += deststride;
     }
 }

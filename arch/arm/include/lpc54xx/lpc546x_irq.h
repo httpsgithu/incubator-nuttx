@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/include/lpc54xx/lpc546x_irq.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -18,8 +20,8 @@
  *
  ****************************************************************************/
 
-#ifndef __ARCH_ARM_INCLUDE_LPC54XX_LPC543X_IRQ_H
-#define __ARCH_ARM_INCLUDE_LPC54XX_LPC543X_IRQ_H
+#ifndef __ARCH_ARM_INCLUDE_LPC54XX_LPC546X_IRQ_H
+#define __ARCH_ARM_INCLUDE_LPC54XX_LPC546X_IRQ_H
 
 /****************************************************************************
  * Included Files
@@ -96,4 +98,4 @@
 
 #define NR_IRQS                 LPC54_IRQ_NIRQS
 
-#endif /* __ARCH_ARM_INCLUDE_LPC54XX_LPC543X_IRQ_H */
+#endif /* __ARCH_ARM_INCLUDE_LPC54XX_LPC546X_IRQ_H */

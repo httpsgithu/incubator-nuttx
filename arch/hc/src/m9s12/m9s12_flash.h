@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/hc/src/m9s12/m9s12_flash.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -18,8 +20,8 @@
  *
  ****************************************************************************/
 
-#ifndef __ARCH_ARM_HC_SRC_M9S12_M9S12_FLASH_H
-#define __ARCH_ARM_HC_SRC_M9S12_M9S12_FLASH_H
+#ifndef __ARCH_HC_SRC_M9S12_M9S12_FLASH_H
+#define __ARCH_HC_SRC_M9S12_M9S12_FLASH_H
 
 /****************************************************************************
  * Included Files
@@ -91,7 +93,7 @@
 
 /* Interrupts */
 
-#  define HCS12_UVECTOR_BASE 0xf780 /* 0xf780–0xf7fe: User vector base */
+#  define HCS12_UVECTOR_BASE 0xf780 /* 0xf780-0xf7fe: User vector base */
 #endif
 
 /* FLASH interface */
@@ -104,7 +106,7 @@
 
 /* Interrupts */
 
-#define HCS12_VECTOR_BASE  0xff80 /* 0xff80–0xfffe: Actual vector base */
+#define HCS12_VECTOR_BASE  0xff80 /* 0xff80-0xfffe: Actual vector base */
 
 /* Register Offsets *********************************************************/
 
@@ -191,4 +193,4 @@
  * Public Functions Prototypes
  ****************************************************************************/
 
-#endif /* __ARCH_ARM_HC_SRC_M9S12_M9S12_FLASH_H */
+#endif /* __ARCH_HC_SRC_M9S12_M9S12_FLASH_H */

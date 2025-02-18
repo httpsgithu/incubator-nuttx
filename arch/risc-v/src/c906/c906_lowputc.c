@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/risc-v/src/c906/c906_lowputc.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -29,8 +31,6 @@
 #include <arch/board/board.h>
 
 #include "riscv_internal.h"
-#include "riscv_arch.h"
-
 #include "c906_config.h"
 #include "hardware/c906_memorymap.h"
 #include "hardware/c906_uart.h"

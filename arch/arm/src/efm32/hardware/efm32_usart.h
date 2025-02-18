@@ -1,7 +1,12 @@
 /****************************************************************************
  * arch/arm/src/efm32/hardware/efm32_usart.h
  *
- *    (C) Copyright 2014 Silicon Labs, http://www.silabs.com
+ * SPDX-License-Identifier: BSD-3-Clause
+ * SPDX-FileCopyrightText: 2014 Silicon Laboratories, Inc.
+ * SPDX-FileCopyrightText: 2014 Pierre-noel Bouteville . All rights reserved.
+ * SPDX-FileCopyrightText: 2014 Gregory Nutt. All rights reserved.
+ * SPDX-FileContributor: Pierre-noel Bouteville <pnb990@gmail.com>
+ * SPDX-FileContributor: Gregory Nutt <gnutt@nuttx.org>
  *
  * Permission is granted to anyone to use this software for any purpose,
  * including commercial applications, and to alter it and redistribute it
@@ -23,11 +28,6 @@
  * Silicon Labs will not be liable for any consequential, incidental, or
  * special damages, or any other relief, or for any claim by any third party,
  * arising from your use of this Software.
- *
- *   Copyright (C) 2014 Pierre-noel Bouteville . All rights reserved.
- *   Copyright (C) 2014 Gregory Nutt. All rights reserved.
- *   Authors: Pierre-noel Bouteville <pnb990@gmail.com>
- *            Gregory Nutt <gnutt@nuttx.org>
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -58,8 +58,8 @@
  *
  ****************************************************************************/
 
-#ifndef __ARCH_ARM_SRC_EFM32_CHIP_EFM32_USART_H
-#define __ARCH_ARM_SRC_EFM32_CHIP_EFM32_USART_H
+#ifndef __ARCH_ARM_SRC_EFM32_HARDWARE_EFM32_USART_H
+#define __ARCH_ARM_SRC_EFM32_HARDWARE_EFM32_USART_H
 
 /****************************************************************************
  * Included Files
@@ -1388,4 +1388,4 @@
 #define USART_I2SCTRL_FORMAT_W16D8            (_USART_I2SCTRL_FORMAT_W16D8 << 8)     /* Shifted mode W16D8 for USART_I2SCTRL */
 #define USART_I2SCTRL_FORMAT_W8D8             (_USART_I2SCTRL_FORMAT_W8D8 << 8)      /* Shifted mode W8D8 for USART_I2SCTRL */
 
-#endif /* __ARCH_ARM_SRC_EFM32_CHIP_EFM32_USART_H */
+#endif /* __ARCH_ARM_SRC_EFM32_HARDWARE_EFM32_USART_H */

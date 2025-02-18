@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/nuc1xx/nuc_timerisr.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -33,8 +35,6 @@
 #include "nvic.h"
 #include "clock/clock.h"
 #include "arm_internal.h"
-#include "arm_arch.h"
-
 #include "chip.h"
 #include "hardware/nuc_clk.h"
 #include "hardware/nuc_gcr.h"
@@ -103,7 +103,7 @@
  *
  ****************************************************************************/
 
-#ifdef CONFIG_NUC_SYSTICK_CORECLK
+#ifndef CONFIG_NUC_SYSTICK_CORECLK
 static inline void nuc_unlock(void)
 {
   putreg32(0x59, NUC_GCR_REGWRPROT);
@@ -126,7 +126,7 @@ static inline void nuc_unlock(void)
  *
  ****************************************************************************/
 
-#ifdef CONFIG_NUC_SYSTICK_CORECLK
+#ifndef CONFIG_NUC_SYSTICK_CORECLK
 static inline void nuc_lock(void)
 {
   putreg32(0, NUC_GCR_REGWRPROT);

@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/samd2l2/samd20-xplained/src/sam_mmcsd.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -77,7 +79,7 @@
 
 int sam_sdinitialize(int port, int minor)
 {
-  FAR struct spi_dev_s *spi;
+  struct spi_dev_s *spi;
   int ret;
 
   /* Get the SPI driver instance for the SD chip select */

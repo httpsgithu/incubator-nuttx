@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/common/arm_semi_syslog.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -27,8 +29,6 @@
 
 #include <syscall.h>
 
-#include "arm_internal.h"
-
 #ifdef CONFIG_ARM_SEMIHOSTING_SYSLOG
 
 /****************************************************************************
@@ -47,22 +47,31 @@
  * Name: up_putc
  ****************************************************************************/
 
-int up_putc(int ch)
+void up_putc(int ch)
 {
   smh_call(SEMI_SYSLOG_WRITEC, &ch);
-  return ch;
 }
 
 /****************************************************************************
- * Name: up_puts
+ * Name: up_nputs
  *
  * Description:
  *   Output a string on the console
  *
  ****************************************************************************/
 
-void up_puts(FAR const char *str)
+void up_nputs(const char *str, size_t len)
 {
-  smh_call(SEMI_SYSLOG_WRITE0, (char *)str);
+  if (len == ~((size_t)0))
+    {
+      smh_call(SEMI_SYSLOG_WRITE0, (char *)str);
+    }
+  else
+    {
+      while (len-- > 0)
+        {
+          up_putc(*str++);
+        }
+    }
 }
 #endif

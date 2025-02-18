@@ -83,7 +83,7 @@ That NuttX directory organization is discussed in `Appendix
 B <#grapicsdirs>`__ of this document. The logic modules are discussed in
 the following sub-paragraphs.
 
-.. figure:: NXOrganization.gif
+.. figure:: NXOrganization.png
   :align: center
 
 NX Graphics Library (``NXGL``)
@@ -171,6 +171,8 @@ NX Header Files
   nxtk.rst
   nxfonts.rst
   nxcursor.rst
+  nxwm_threading.rst
+  framebuffer_char_driver.rst
   sample.rst
   appendix.rst
 

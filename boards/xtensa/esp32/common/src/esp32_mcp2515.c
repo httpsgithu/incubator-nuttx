@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/xtensa/esp32/common/src/esp32_mcp2515.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -62,9 +64,9 @@ struct esp32_mcp2515config_s
 
   /* Additional private definitions only known to this driver */
 
-  FAR struct mcp2515_can_s *handle; /* The MCP2515 driver handle */
-  mcp2515_handler_t handler;        /* The MCP2515 interrupt handler */
-  FAR void *arg;                    /* Argument to pass to the interrupt handler */
+  struct mcp2515_can_s *handle; /* The MCP2515 driver handle */
+  mcp2515_handler_t handler;    /* The MCP2515 interrupt handler */
+  void *arg;                    /* Argument to pass to the interrupt handler */
 };
 
 /****************************************************************************
@@ -78,8 +80,8 @@ struct esp32_mcp2515config_s
  *   attach  - Attach the MCP2515 interrupt handler to the GPIO interrupt
  */
 
-static int  mcp2515_attach(FAR struct mcp2515_config_s *state,
-                           mcp2515_handler_t handler, FAR void *arg);
+static int  mcp2515_attach(struct mcp2515_config_s *state,
+                           mcp2515_handler_t handler, void *arg);
 
 /****************************************************************************
  * Private Data
@@ -118,10 +120,10 @@ static struct esp32_mcp2515config_s g_mcp2515config =
 
 /* This is the MCP2515 Interrupt handler */
 
-int mcp2515_interrupt(int irq, FAR void *context, FAR void *arg)
+int mcp2515_interrupt(int irq, void *context, void *arg)
 {
-  FAR struct esp32_mcp2515config_s *priv =
-             (FAR struct esp32_mcp2515config_s *)arg;
+  struct esp32_mcp2515config_s *priv =
+             (struct esp32_mcp2515config_s *)arg;
 
   DEBUGASSERT(priv != NULL);
 
@@ -137,11 +139,11 @@ int mcp2515_interrupt(int irq, FAR void *context, FAR void *arg)
   return OK;
 }
 
-static int mcp2515_attach(FAR struct mcp2515_config_s *state,
-                          mcp2515_handler_t handler, FAR void *arg)
+static int mcp2515_attach(struct mcp2515_config_s *state,
+                          mcp2515_handler_t handler, void *arg)
 {
-  FAR struct esp32_mcp2515config_s *priv =
-             (FAR struct esp32_mcp2515config_s *)state;
+  struct esp32_mcp2515config_s *priv =
+             (struct esp32_mcp2515config_s *)state;
   irqstate_t flags;
   int irq = ESP32_PIN2IRQ(GPIO_MCP2515_IRQ);
   int ret;
@@ -161,6 +163,7 @@ static int mcp2515_attach(FAR struct mcp2515_config_s *state,
   if (ret < 0)
     {
       syslog(LOG_ERR, "ERROR: gpint_attach() failed: %d\n", ret);
+      leave_critical_section(flags);
       return ret;
     }
 
@@ -191,9 +194,9 @@ static int mcp2515_attach(FAR struct mcp2515_config_s *state,
 
 int board_mcp2515_initialize(int devno)
 {
-  FAR struct spi_dev_s     *spi;
-  FAR struct can_dev_s     *can;
-  FAR struct mcp2515_can_s *mcp2515;
+  struct spi_dev_s     *spi;
+  struct can_dev_s     *can;
+  struct mcp2515_can_s *mcp2515;
   char devpath[10];
   int ret;
 
@@ -241,7 +244,7 @@ int board_mcp2515_initialize(int devno)
 
       /* Create the '/dev/canX' name based on 'devno' */
 
-      snprintf(devpath, 10, "/dev/can%d", devno);
+      snprintf(devpath, sizeof(devpath), "/dev/can%d", devno);
 
       /* Register the CAN driver at "/dev/can0" */
 

@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/cxd56xx/cxd56_gpioint.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -32,7 +34,7 @@
 #include <nuttx/arch.h>
 #include <nuttx/spinlock.h>
 
-#include "arm_arch.h"
+#include "arm_internal.h"
 #include "chip.h"
 
 #include "cxd56_pinconfig.h"
@@ -93,6 +95,8 @@
  * Private Data
  ****************************************************************************/
 
+static spinlock_t g_cxd56_lock = SP_UNLOCKED;
+
 static xcpt_t g_isr[MAX_SLOT];
 static uint32_t g_bothedge = 0;
 
@@ -112,7 +116,7 @@ static int alloc_slot(int pin, bool isalloc)
                                      : CXD56_TOPREG_IOCAPP_INTSEL0;
   int offset = (pin < PIN_IS_CLK) ? 1 : 56;
 
-  flags = spin_lock_irqsave(NULL);
+  flags = spin_lock_irqsave(&g_cxd56_lock);
 
   for (slot = 0; slot < MAX_SYS_SLOT; slot++)
     {
@@ -142,12 +146,12 @@ static int alloc_slot(int pin, bool isalloc)
         }
       else
         {
-          spin_unlock_irqrestore(NULL, flags);
+          spin_unlock_irqrestore(&g_cxd56_lock, flags);
           return -ENXIO; /* no space */
         }
     }
 
-  spin_unlock_irqrestore(NULL, flags);
+  spin_unlock_irqrestore(&g_cxd56_lock, flags);
 
   if (PIN_IS_CLK <= pin)
     {
@@ -291,7 +295,7 @@ static int set_gpioint_config(int slot, uint32_t gpiocfg)
       val |= (INT_ROUTE_PMU_LATCH << shift);
       break;
     default:
-      DEBUGASSERT(0);
+      DEBUGPANIC();
       break;
     }
 
@@ -307,13 +311,13 @@ static void invert_irq(int irq)
   irqstate_t flags;
   uint32_t val;
 
-  flags = spin_lock_irqsave(NULL);
+  flags = spin_lock_irqsave(&g_cxd56_lock);
 
   val = getreg32(CXD56_INTC_INVERT);
   val ^= (1 << (irq - CXD56_IRQ_EXTINT));
   putreg32(val, CXD56_INTC_INVERT);
 
-  spin_unlock_irqrestore(NULL, flags);
+  spin_unlock_irqrestore(&g_cxd56_lock, flags);
 }
 
 static bool inverted_irq(int irq)
@@ -332,7 +336,7 @@ static bool enabled_irq(int irq)
   return ((val & (1 << (irq - CXD56_IRQ_EXTINT))) != 0);
 }
 
-static int gpioint_handler(int irq, FAR void *context, FAR void *arg)
+static int gpioint_handler(int irq, void *context, void *arg)
 {
   uint32_t val;
   uint32_t shift;
@@ -404,7 +408,7 @@ static int gpioint_handler(int irq, FAR void *context, FAR void *arg)
  ****************************************************************************/
 
 int cxd56_gpioint_config(uint32_t pin, uint32_t gpiocfg, xcpt_t isr,
-                         FAR void *arg)
+                         void *arg)
 {
   int slot;
   int irq;
@@ -429,9 +433,9 @@ int cxd56_gpioint_config(uint32_t pin, uint32_t gpiocfg, xcpt_t isr,
       irq_attach(irq, NULL, NULL);
       g_isr[slot] = NULL;
 
-      flags = spin_lock_irqsave(NULL);
+      flags = spin_lock_irqsave(&g_cxd56_lock);
       g_bothedge &= ~(1 << slot);
-      spin_unlock_irqrestore(NULL, flags);
+      spin_unlock_irqrestore(&g_cxd56_lock, flags);
       return irq;
     }
 
@@ -445,9 +449,9 @@ int cxd56_gpioint_config(uint32_t pin, uint32_t gpiocfg, xcpt_t isr,
     {
       /* set GPIO pseudo both edge interrupt */
 
-      flags = spin_lock_irqsave(NULL);
+      flags = spin_lock_irqsave(&g_cxd56_lock);
       g_bothedge |= (1 << slot);
-      spin_unlock_irqrestore(NULL, flags);
+      spin_unlock_irqrestore(&g_cxd56_lock, flags);
 
       /* detect the change from the current signal */
 

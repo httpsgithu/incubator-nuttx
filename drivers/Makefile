@@ -1,6 +1,8 @@
 ############################################################################
 # drivers/Makefile
 #
+# SPDX-License-Identifier: Apache-2.0
+#
 # Licensed to the Apache Software Foundation (ASF) under one or more
 # contributor license agreements.  See the NOTICE file distributed with
 # this work for additional information regarding copyright ownership.  The
@@ -20,6 +22,8 @@
 
 include $(TOPDIR)/Make.defs
 
+CSRCS = drivers_initialize.c
+
 # Include support for various drivers.  Each Make.defs file will add its
 # files to the source file list, add its DEPPATH info, and will add
 # the appropriate paths to the VPATH variable
@@ -28,16 +32,22 @@ include analog/Make.defs
 include audio/Make.defs
 include bch/Make.defs
 include can/Make.defs
+include clk/Make.defs
 include crypto/Make.defs
+include devicetree/Make.defs
+include dma/Make.defs
 include math/Make.defs
 include motor/Make.defs
 include i2c/Make.defs
 include i2s/Make.defs
+include i3c/Make.defs
+include ipcc/Make.defs
 include input/Make.defs
 include ioexpander/Make.defs
 include lcd/Make.defs
 include leds/Make.defs
 include loop/Make.defs
+include misc/Make.defs
 include mmcsd/Make.defs
 include modem/Make.defs
 include mtd/Make.defs
@@ -45,51 +55,40 @@ include eeprom/Make.defs
 include efuse/Make.defs
 include net/Make.defs
 include note/Make.defs
+include pinctrl/Make.defs
 include pipes/Make.defs
 include power/Make.defs
+include regmap/Make.defs
+include rmt/Make.defs
+include rpmsg/Make.defs
 include rptun/Make.defs
 include sensors/Make.defs
 include serial/Make.defs
 include spi/Make.defs
 include syslog/Make.defs
+include thermal/Make.defs
 include timers/Make.defs
 include usbdev/Make.defs
 include usbhost/Make.defs
 include usbmisc/Make.defs
 include usbmonitor/Make.defs
+include vhost/Make.defs
 include video/Make.defs
+include virtio/Make.defs
 include wireless/Make.defs
 include contactless/Make.defs
 include 1wire/Make.defs
 include rf/Make.defs
 include rc/Make.defs
+include segger/Make.defs
+include usrsock/Make.defs
+include reset/Make.defs
+include pci/Make.defs
+include coresight/Make.defs
+include aie/Make.defs
 
 ifeq ($(CONFIG_SPECIFIC_DRIVERS),y)
 -include platform/Make.defs
-endif
-
-ifeq ($(CONFIG_DEV_SIMPLE_ADDRENV),y)
-  CSRCS += addrenv.c
-endif
-
-CSRCS += dev_null.c dev_zero.c
-
-ifeq ($(CONFIG_LWL_CONSOLE),y)
-  CSRCS += lwl_console.c
-endif
-
-ifneq ($(CONFIG_DISABLE_MOUNTPOINT),y)
-  CSRCS += ramdisk.c
-ifeq ($(CONFIG_DRVR_MKRD),y)
-  CSRCS += mkrd.c
-endif
-ifeq ($(CONFIG_DRVR_WRITEBUFFER),y)
-  CSRCS += rwbuffer.c
-else
-ifeq ($(CONFIG_DRVR_READAHEAD),y)
-  CSRCS += rwbuffer.c
-endif
-endif
 endif
 
 AOBJS = $(ASRCS:.S=$(OBJEXT))
@@ -101,7 +100,7 @@ OBJS = $(AOBJS) $(COBJS)
 BIN = libdrivers$(LIBEXT)
 
 all: $(BIN)
-.PHONY: depend clean distclean
+.PHONY: context depend clean distclean
 
 $(AOBJS): %$(OBJEXT): %.S
 	$(call ASSEMBLE, $<, $@)
@@ -111,6 +110,8 @@ $(COBJS): %$(OBJEXT): %.c
 
 $(BIN): $(OBJS)
 	$(call ARCHIVE, $@, $(OBJS))
+
+context::
 
 makedepfile: $(CSRCS:.c=.ddc) $(ASRCS:.S=.dds)
 	$(call CATFILE, Make.dep, $^)
@@ -126,7 +127,7 @@ clean:
 	$(call DELFILE, $(BIN))
 	$(call CLEAN)
 
-distclean: clean
+distclean:: clean
 	$(call DELFILE, Make.dep)
 	$(call DELFILE, .depend)
 

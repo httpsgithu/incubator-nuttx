@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/common/arm_internal.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -29,8 +31,12 @@
 
 #ifndef __ASSEMBLY__
 #  include <nuttx/compiler.h>
+#  include <nuttx/arch.h>
 #  include <sys/types.h>
 #  include <stdint.h>
+#  include <syscall.h>
+
+#  include "chip.h"
 #endif
 
 /****************************************************************************
@@ -52,6 +58,12 @@
 #  elif defined(CONFIG_CONSOLE_SYSLOG)
 #    undef  USE_SERIALDRIVER
 #    undef  USE_EARLYSERIALINIT
+#  elif defined(CONFIG_SERIAL_RTT_CONSOLE)
+#    undef  USE_SERIALDRIVER
+#    undef  USE_EARLYSERIALINIT
+#  elif defined(CONFIG_RPMSG_UART_CONSOLE)
+#    undef  USE_SERIALDRIVER
+#    undef  USE_EARLYSERIALINIT
 #  else
 #    define USE_SERIALDRIVER 1
 #    define USE_EARLYSERIALINIT 1
@@ -68,72 +80,25 @@
 #  define USE_SERIALDRIVER 1
 #endif
 
+/* For use with EABI and floating point, the stack must be aligned to 8-byte
+ * addresses.
+ */
+
+#define STACK_ALIGNMENT     8
+
+/* Stack alignment macros */
+
+#define STACK_ALIGN_MASK    (STACK_ALIGNMENT - 1)
+#define STACK_ALIGN_DOWN(a) ((a) & ~STACK_ALIGN_MASK)
+#define STACK_ALIGN_UP(a)   (((a) + STACK_ALIGN_MASK) & ~STACK_ALIGN_MASK)
+
 /* Check if an interrupt stack size is configured */
 
 #ifndef CONFIG_ARCH_INTERRUPTSTACK
 #  define CONFIG_ARCH_INTERRUPTSTACK 0
 #endif
 
-/* Macros to handle saving and restoring interrupt state.  In the current ARM
- * model, the state is always copied to and from the stack and TCB.  In the
- * Cortex-M0/3 model, the state is copied from the stack to the TCB, but only
- * a referenced is passed to get the state from the TCB.  Cortex-M4 is the
- * same, but may have additional complexity for floating point support in
- * some configurations.
- */
-
-#if defined(CONFIG_ARCH_ARMV6M) || defined(CONFIG_ARCH_ARMV7M) || \
-    defined(CONFIG_ARCH_ARMV8M)
-
-  /* If the floating point unit is present and enabled, then save the
-   * floating point registers as well as normal ARM registers.  This only
-   * applies if "lazy" floating point register save/restore is used
-   */
-
-#  if defined(CONFIG_ARCH_FPU) && defined(CONFIG_ARMV7M_LAZYFPU)
-#    define arm_savestate(regs)  arm_copyarmstate(regs, (uint32_t*)CURRENT_REGS)
-#  else
-#    define arm_savestate(regs)  arm_copyfullstate(regs, (uint32_t*)CURRENT_REGS)
-#  endif
-#  define arm_restorestate(regs) (CURRENT_REGS = regs)
-
-/* The Cortex-A and Cortex-R support the same mechanism, but only lazy
- * floating point register save/restore.
- */
-
-#elif defined(CONFIG_ARCH_ARMV7A) || defined(CONFIG_ARCH_ARMV7R)
-
-  /* If the floating point unit is present and enabled, then save the
-   * floating point registers as well as normal ARM registers.
-   */
-
-#  if defined(CONFIG_ARCH_FPU)
-#    define arm_savestate(regs)  arm_copyarmstate(regs, (uint32_t*)CURRENT_REGS)
-#  else
-#    define arm_savestate(regs)  arm_copyfullstate(regs, (uint32_t*)CURRENT_REGS)
-#  endif
-#  define arm_restorestate(regs) (CURRENT_REGS = regs)
-
-/* Otherwise, for the ARM7 and ARM9.  The state is copied in full from stack
- * to stack.  This is not very efficient and should be fixed to match
- * Cortex-A5.
- */
-
-#else
-
-  /* If the floating point unit is present and enabled, then save the
-   * floating point registers as well as normal ARM registers.  Only "lazy"
-   * floating point save/restore is supported.
-   */
-
-#  if defined(CONFIG_ARCH_FPU)
-#    define arm_savestate(regs)  arm_copyarmstate(regs, (uint32_t*)CURRENT_REGS)
-#  else
-#    define arm_savestate(regs)  arm_copyfullstate(regs, (uint32_t*)CURRENT_REGS)
-#  endif
-#  define arm_restorestate(regs) arm_copyfullstate((uint32_t*)CURRENT_REGS, regs)
-
-#endif
+#define INTSTACK_SIZE (CONFIG_ARCH_INTERRUPTSTACK & ~STACK_ALIGN_MASK)
 
 /* Toolchain dependent, linker defined section addresses */
 
@@ -146,13 +111,17 @@
 #  define _START_DATA  __sfb(".data")
 #  define _END_DATA    __sfe(".data")
 #else
-#  define _START_TEXT  &_stext
-#  define _END_TEXT    &_etext
-#  define _START_BSS   &_sbss
-#  define _END_BSS     &_ebss
-#  define _DATA_INIT   &_eronly
-#  define _START_DATA  &_sdata
-#  define _END_DATA    &_edata
+#  define _START_TEXT  _stext
+#  define _END_TEXT    _etext
+#  define _START_BSS   _sbss
+#  define _END_BSS     _ebss
+#  define _DATA_INIT   _eronly
+#  define _START_DATA  _sdata
+#  define _END_DATA    _edata
+#  define _START_TDATA _stdata
+#  define _END_TDATA   _etdata
+#  define _START_TBSS  _stbss
+#  define _END_TBSS    _etbss
 #endif
 
 /* This is the value used to mark the stack for subsequent stack monitoring
@@ -163,11 +132,94 @@
 #define INTSTACK_COLOR 0xdeadbeef
 #define HEAP_COLOR     'h'
 
+#define getreg8(a)     (*(volatile uint8_t *)(a))
+#define putreg8(v,a)   (*(volatile uint8_t *)(a) = (v))
+#define getreg16(a)    (*(volatile uint16_t *)(a))
+#define putreg16(v,a)  (*(volatile uint16_t *)(a) = (v))
+#define getreg32(a)    (*(volatile uint32_t *)(a))
+#define putreg32(v,a)  (*(volatile uint32_t *)(a) = (v))
+#define getreg64(a)    (*(volatile uint64_t *)(a))
+#define putreg64(v,a)  (*(volatile uint64_t *)(a) = (v))
+
+/* Non-atomic, but more effective modification of registers */
+
+#define modreg8(v,m,a)  putreg8((getreg8(a) & ~(m)) | ((v) & (m)), (a))
+#define modreg16(v,m,a) putreg16((getreg16(a) & ~(m)) | ((v) & (m)), (a))
+#define modreg32(v,m,a) putreg32((getreg32(a) & ~(m)) | ((v) & (m)), (a))
+#define modreg64(v,m,a) putreg64((getreg64(a) & ~(m)) | ((v) & (m)), (a))
+
+/* Context switching */
+
+#ifndef arm_fullcontextrestore
+#  define arm_fullcontextrestore() sys_call0(SYS_restore_context)
+#endif
+
+/* Redefine the linker symbols as armlink style */
+
+#ifdef CONFIG_ARM_TOOLCHAIN_ARMCLANG
+#  define _stext   Image$$text$$Base
+#  define _etext   Image$$text$$Limit
+#  define _eronly  Image$$eronly$$Base
+#  define _sdata   Image$$data$$Base
+#  define _edata   Image$$data$$RW$$Limit
+#  define _sbss    Image$$bss$$Base
+#  define _ebss    Image$$bss$$ZI$$Limit
+#  define _stdata  Image$$tdata$$Base
+#  define _etdata  Image$$tdata$$Limit
+#  define _stbss   Image$$tbss$$Base
+#  define _etbss   Image$$tbss$$Limit
+#  define _snoinit Image$$noinit$$Base
+#  define _enoinit Image$$noinit$$Limit
+#endif
+
+/* MPIDR_EL1, Multiprocessor Affinity Register */
+
+#define MPIDR_AFFLVL_MASK   (0xff)
+#define MPIDR_ID_MASK       (0x00ffffff)
+
+#define MPIDR_AFF0_SHIFT    (0)
+#define MPIDR_AFF1_SHIFT    (8)
+#define MPIDR_AFF2_SHIFT    (16)
+
+/* mpidr register, the register is define:
+ *   - bit 0~7:   Aff0
+ *   - bit 8~15:  Aff1
+ *   - bit 16~23: Aff2
+ *   - bit 24:    MT, multithreading
+ *   - bit 25~29: RES0
+ *   - bit 30:    U, multiprocessor/Uniprocessor
+ *   - bit 31:    RES1
+ *  Different ARM/ARM64 cores will use different Affn define, the mpidr
+ *  value is not CPU number, So we need to change CPU number to mpid
+ *  and vice versa
+ */
+
+#define GET_MPIDR()             CP15_GET(MPIDR)
+
+#define MPIDR_AFFLVL(mpidr, aff_level) \
+  (((mpidr) >> MPIDR_AFF ## aff_level ## _SHIFT) & MPIDR_AFFLVL_MASK)
+
+#define MPID_TO_CORE(mpid, aff_level) \
+  (((mpid) >> MPIDR_AFF ## aff_level ## _SHIFT) & MPIDR_AFFLVL_MASK)
+
+#define CORE_TO_MPID(core, aff_level) \
+  ({ \
+    uint64_t __mpidr = GET_MPIDR(); \
+    __mpidr &= ~(MPIDR_AFFLVL_MASK << MPIDR_AFF ## aff_level ## _SHIFT); \
+    __mpidr |= (core << MPIDR_AFF ## aff_level ## _SHIFT); \
+    __mpidr &= MPIDR_ID_MASK; \
+    __mpidr; \
+  })
+
 /****************************************************************************
  * Public Types
  ****************************************************************************/
 
 #ifndef __ASSEMBLY__
+/* g_interrupt_context store irq status */
+
+extern volatile bool g_interrupt_context[CONFIG_SMP_NCPUS];
+
 typedef void (*up_vector_t)(void);
 #endif
 
@@ -184,28 +236,6 @@ extern "C"
 #define EXTERN extern
 #endif
 
-/* g_current_regs[] holds a references to the current interrupt level
- * register storage structure.  If is non-NULL only during interrupt
- * processing.  Access to g_current_regs[] must be through the macro
- * CURRENT_REGS for portability.
- */
-
-#ifdef CONFIG_SMP
-/* For the case of architectures with multiple CPUs, then there must be one
- * such value for each processor that can receive an interrupt.
- */
-
-int up_cpu_index(void); /* See include/nuttx/arch.h */
-EXTERN volatile uint32_t *g_current_regs[CONFIG_SMP_NCPUS];
-#  define CURRENT_REGS (g_current_regs[up_cpu_index()])
-
-#else
-
-EXTERN volatile uint32_t *g_current_regs[1];
-#  define CURRENT_REGS (g_current_regs[0])
-
-#endif
-
 /* This is the beginning of heap as provided from arm_head.S.
  * This is the first address in DRAM after the loaded
  * program+bss+idle stack.  The end of the heap is
@@ -217,29 +247,23 @@ EXTERN const uintptr_t g_idle_topstack;
 /* Address of the saved user stack pointer */
 
 #if CONFIG_ARCH_INTERRUPTSTACK > 3
-EXTERN uint32_t g_intstackalloc; /* Allocated stack base */
-EXTERN uint32_t g_intstacktop;   /* Initial top of interrupt stack */
+EXTERN uint8_t g_intstackalloc[]; /* Allocated stack base */
+EXTERN uint8_t g_intstacktop[];   /* Initial top of interrupt stack */
 #endif
 
-/* These 'addresses' of these values are setup by the linker script.  They
- * are not actual uint32_t storage locations! They are only used
- * meaningfully in the following way:
- *
- *  - The linker script defines, for example, the symbol_sdata.
- *  - The declareion extern uint32_t _sdata; makes C happy.  C will believe
- *    that the value _sdata is the address of a uint32_t variable _data (it
- *    is not!).
- *  - We can recoved the linker value then by simply taking the address of
- *    of _data.  like:  uint32_t *pdata = &_sdata;
- */
+/* These symbols are setup by the linker script. */
 
-EXTERN uint32_t _stext;           /* Start of .text */
-EXTERN uint32_t _etext;           /* End_1 of .text + .rodata */
-EXTERN const uint32_t _eronly;    /* End+1 of read only section (.text + .rodata) */
-EXTERN uint32_t _sdata;           /* Start of .data */
-EXTERN uint32_t _edata;           /* End+1 of .data */
-EXTERN uint32_t _sbss;            /* Start of .bss */
-EXTERN uint32_t _ebss;            /* End+1 of .bss */
+EXTERN uint8_t _stext[];           /* Start of .text */
+EXTERN uint8_t _etext[];           /* End_1 of .text + .rodata */
+EXTERN const uint8_t _eronly[];    /* End+1 of read only section (.text + .rodata) */
+EXTERN uint8_t _sdata[];           /* Start of .data */
+EXTERN uint8_t _edata[];           /* End+1 of .data */
+EXTERN uint8_t _sbss[];            /* Start of .bss */
+EXTERN uint8_t _ebss[];            /* End+1 of .bss */
+EXTERN uint8_t _stdata[];          /* Start of .tdata */
+EXTERN uint8_t _etdata[];          /* End+1 of .tdata */
+EXTERN uint8_t _stbss[];           /* Start of .tbss */
+EXTERN uint8_t _etbss[];           /* End+1 of .tbss */
 
 /* Sometimes, functions must be executed from RAM.  In this case, the
  * following macro may be used (with GCC!) to specify a function that will
@@ -263,9 +287,9 @@ EXTERN uint32_t _ebss;            /* End+1 of .bss */
  * functions from flash to RAM.
  */
 
-EXTERN const uint32_t _framfuncs; /* Copy source address in FLASH */
-EXTERN uint32_t _sramfuncs;       /* Copy destination start address in RAM */
-EXTERN uint32_t _eramfuncs;       /* Copy destination end address in RAM */
+EXTERN const uint8_t _framfuncs[]; /* Copy source address in FLASH */
+EXTERN uint8_t _sramfuncs[];       /* Copy destination start address in RAM */
+EXTERN uint8_t _eramfuncs[];       /* Copy destination end address in RAM */
 
 #else /* CONFIG_ARCH_RAMFUNCS */
 
@@ -287,21 +311,21 @@ EXTERN uint32_t _eramfuncs;       /* Copy destination end address in RAM */
  ****************************************************************************/
 
 #ifndef __ASSEMBLY__
+/* Atomic modification of registers */
+
+void modifyreg8(unsigned int addr, uint8_t clearbits, uint8_t setbits);
+void modifyreg16(unsigned int addr, uint16_t clearbits, uint16_t setbits);
+void modifyreg32(unsigned int addr, uint32_t clearbits, uint32_t setbits);
 
 /* Low level initialization provided by board-level logic *******************/
 
 void arm_boot(void);
 
+int arm_psci_init(const char *method);
+
 /* Context switching */
 
-void arm_copyfullstate(uint32_t *dest, uint32_t *src);
-#ifdef CONFIG_ARCH_FPU
-void arm_copyarmstate(uint32_t *dest, uint32_t *src);
-#endif
 uint32_t *arm_decodeirq(uint32_t *regs);
-int  arm_saveusercontext(uint32_t *saveregs);
-void arm_fullcontextrestore(uint32_t *restoreregs) noreturn_function;
-void arm_switchcontext(uint32_t *saveregs, uint32_t *restoreregs);
 
 /* Signal handling **********************************************************/
 
@@ -317,24 +341,45 @@ void arm_pminitialize(void);
 
 /* Interrupt handling *******************************************************/
 
-/* Exception handling logic unique to the Cortex-M family */
-
-#if defined(CONFIG_ARCH_ARMV6M) || defined(CONFIG_ARCH_ARMV7M) || \
-    defined(CONFIG_ARCH_ARMV8M)
+#if CONFIG_ARCH_INTERRUPTSTACK > 7
+void weak_function arm_initialize_stack(void);
+#endif
 
 /* Interrupt acknowledge and dispatch */
 
 void arm_ack_irq(int irq);
 uint32_t *arm_doirq(int irq, uint32_t *regs);
 
+/* Exception handling logic unique to the Cortex-M family */
+
+#if defined(CONFIG_ARCH_ARMV6M) || defined(CONFIG_ARCH_ARMV7M) || \
+    defined(CONFIG_ARCH_ARMV8M)
+
+/* This is the address of the  exception vector table (determined by the
+ * linker script).
+ */
+
+#if defined(__ICCARM__)
+/* _vectors replaced on __vector_table for IAR C-SPY Simulator */
+
+EXTERN const void *__vector_table[];
+#else
+EXTERN const void * const _vectors[];
+#endif
+
 /* Exception Handlers */
 
-int  arm_svcall(int irq, FAR void *context, FAR void *arg);
-int  arm_hardfault(int irq, FAR void *context, FAR void *arg);
+int  arm_svcall(int irq, void *context, void *arg);
+int  arm_hardfault(int irq, void *context, void *arg);
+int  arm_enable_dbgmonitor(void);
+int  arm_dbgmonitor(int irq, void *context, void *arg);
 
 #  if defined(CONFIG_ARCH_ARMV7M) || defined(CONFIG_ARCH_ARMV8M)
 
-int  arm_memfault(int irq, FAR void *context, FAR void *arg);
+int  arm_memfault(int irq, void *context, void *arg);
+int  arm_busfault(int irq, void *context, void *arg);
+int  arm_usagefault(int irq, void *context, void *arg);
+int  arm_securefault(int irq, void *context, void *arg);
 
 #  endif /* CONFIG_ARCH_CORTEXM3,4,7 */
 
@@ -342,20 +387,22 @@ int  arm_memfault(int irq, FAR void *context, FAR void *arg);
 * (but should be back-ported to the ARM7 and ARM9 families).
  */
 
-#elif defined(CONFIG_ARCH_ARMV7A) || defined(CONFIG_ARCH_ARMV7R)
+#elif defined(CONFIG_ARCH_ARMV7A) || defined(CONFIG_ARCH_ARMV7R) || defined(CONFIG_ARCH_ARMV8R)
 
 /* Interrupt acknowledge and dispatch */
 
-uint32_t *arm_doirq(int irq, uint32_t *regs);
+#ifdef CONFIG_ARCH_HIPRI_INTERRUPT
+uint32_t *arm_dofiq(int fiq, uint32_t *regs);
+#endif
 
 /* Paging support */
 
-#ifdef CONFIG_PAGING
+#ifdef CONFIG_LEGACY_PAGING
 void arm_pginitialize(void);
 uint32_t *arm_va2pte(uintptr_t vaddr);
-#else /* CONFIG_PAGING */
-# define arm_pginitialize()
-#endif /* CONFIG_PAGING */
+#else /* CONFIG_LEGACY_PAGING */
+#  define arm_pginitialize()
+#endif /* CONFIG_LEGACY_PAGING */
 
 /* Exception Handlers */
 
@@ -368,26 +415,21 @@ uint32_t *arm_undefinedinsn(uint32_t *regs);
 
 #else /* ARM7 | ARM9 */
 
-/* Interrupt acknowledge and dispatch */
-
-void arm_ack_irq(int irq);
-void arm_doirq(int irq, uint32_t *regs);
-
 /* Paging support (and exception handlers) */
 
-#ifdef CONFIG_PAGING
+#ifdef CONFIG_LEGACY_PAGING
 void arm_pginitialize(void);
 uint32_t *arm_va2pte(uintptr_t vaddr);
 void arm_dataabort(uint32_t *regs, uint32_t far, uint32_t fsr);
-#else /* CONFIG_PAGING */
-# define arm_pginitialize()
+#else /* CONFIG_LEGACY_PAGING */
+#  define arm_pginitialize()
 void arm_dataabort(uint32_t *regs);
-#endif /* CONFIG_PAGING */
+#endif /* CONFIG_LEGACY_PAGING */
 
 /* Exception handlers */
 
 void arm_prefetchabort(uint32_t *regs);
-void arm_syscall(uint32_t *regs);
+uint32_t *arm_syscall(uint32_t *regs);
 void arm_undefinedinsn(uint32_t *regs);
 
 #endif /* CONFIG_ARCH_ARMV[6-8]M */
@@ -403,17 +445,14 @@ void arm_vectorfiq(void);
 /* Floating point unit ******************************************************/
 
 #ifdef CONFIG_ARCH_FPU
-void arm_savefpu(uint32_t *regs);
-void arm_restorefpu(const uint32_t *regs);
+void arm_fpuconfig(void);
 #else
-#  define arm_savefpu(regs)
-#  define arm_restorefpu(regs)
+#  define arm_fpuconfig()
 #endif
 
 /* Low level serial output **************************************************/
 
 void arm_lowputc(char ch);
-void up_puts(const char *str);
 void arm_lowputs(const char *str);
 
 #ifdef USE_SERIALDRIVER
@@ -422,14 +461,6 @@ void arm_serialinit(void);
 
 #ifdef USE_EARLYSERIALINIT
 void arm_earlyserialinit(void);
-#endif
-
-#ifdef CONFIG_RPMSG_UART
-void rpmsg_serialinit(void);
-#endif
-
-#ifdef CONFIG_LWL_CONSOLE
-void lwlconsole_init(void);
 #endif
 
 /* DMA **********************************************************************/
@@ -451,12 +482,8 @@ void arm_l2ccinitialize(void);
 #if CONFIG_MM_REGIONS > 1
 void arm_addregion(void);
 #else
-# define arm_addregion()
+#  define arm_addregion()
 #endif
-
-/* Watchdog timer ***********************************************************/
-
-void arm_wdtinit(void);
 
 /* Networking ***************************************************************/
 
@@ -474,7 +501,7 @@ void arm_wdtinit(void);
 #if defined(CONFIG_NET) && !defined(CONFIG_NETDEV_LATEINIT)
 void arm_netinitialize(void);
 #else
-# define arm_netinitialize()
+#  define arm_netinitialize()
 #endif
 
 /* USB **********************************************************************/
@@ -483,13 +510,28 @@ void arm_netinitialize(void);
 void arm_usbinitialize(void);
 void arm_usbuninitialize(void);
 #else
-# define arm_usbinitialize()
-# define arm_usbuninitialize()
+#  define arm_usbinitialize()
+#  define arm_usbuninitialize()
 #endif
 
 /* Debug ********************************************************************/
 #ifdef CONFIG_STACK_COLORATION
-void arm_stack_color(FAR void *stackbase, size_t nbytes);
+size_t arm_stack_check(void *stackbase, size_t nbytes);
+void arm_stack_color(void *stackbase, size_t nbytes);
+#endif
+
+#ifdef CONFIG_ARCH_TRUSTZONE_SECURE
+int arm_gen_nonsecurefault(int irq, uint32_t *regs);
+#else
+# define arm_gen_nonsecurefault(i, r)  (0)
+#endif
+
+#if defined(CONFIG_ARMV7M_STACKCHECK) || defined(CONFIG_ARMV8M_STACKCHECK)
+void arm_stack_check_init(void) noinstrument_function;
+#endif
+
+#ifdef CONFIG_ARM_COREDUMP_REGION
+  void arm_coredump_add_region(void);
 #endif
 
 #undef EXTERN

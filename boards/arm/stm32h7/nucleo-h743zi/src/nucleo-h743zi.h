@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/stm32h7/nucleo-h743zi/src/nucleo-h743zi.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -36,10 +38,12 @@
 
 /* Configuration ************************************************************/
 
-#define HAVE_PROC       1
-#define HAVE_USBDEV     1
-#define HAVE_USBHOST    1
-#define HAVE_USBMONITOR 1
+#define HAVE_PROC            1
+#define HAVE_USBDEV          1
+#define HAVE_USBHOST         1
+#define HAVE_USBMONITOR      1
+#define HAVE_MTDCONFIG       1
+#define HAVE_PROGMEM_CHARDEV 1
 
 /* Can't support USB host or device features if USB OTG FS is not enabled */
 
@@ -76,6 +80,19 @@
 
 #if !defined(CONFIG_USBDEV_TRACE) && !defined(CONFIG_USBHOST_TRACE)
 #  undef HAVE_USBMONITOR
+#endif
+
+#if !defined(CONFIG_STM32H7_PROGMEM) || !defined(CONFIG_MTD_PROGMEM)
+#  undef HAVE_PROGMEM_CHARDEV
+#endif
+
+/* This is the on-chip progmem memory driver minor number */
+
+#define PROGMEM_MTD_MINOR 0
+
+/* flash  */
+#if defined(CONFIG_MMCSD)
+#  define FLASH_BASED_PARAMS
 #endif
 
 /* procfs File System */
@@ -138,7 +155,7 @@
 #define GPIO_OTGFS_VBUS   (GPIO_INPUT|GPIO_FLOAT|GPIO_SPEED_100MHz| \
                            GPIO_OPENDRAIN|GPIO_PORTA|GPIO_PIN9)
 
-# define GPIO_OTGFS_PWRON  (GPIO_OUTPUT|GPIO_FLOAT|GPIO_SPEED_100MHz|  \
+#define GPIO_OTGFS_PWRON  (GPIO_OUTPUT|GPIO_FLOAT|GPIO_SPEED_100MHz|  \
                            GPIO_PUSHPULL|GPIO_PORTG|GPIO_PIN6)
 
 #ifdef CONFIG_USBHOST
@@ -181,6 +198,16 @@
                             GPIO_OUTPUT_CLEAR | GPIO_PORTF | GPIO_PIN12)
 #define GPIO_NRF24L01_IRQ  (GPIO_INPUT | GPIO_FLOAT | GPIO_PORTD | GPIO_PIN15)
 
+/* MMC/SD
+ * CS  - PD15 (D9)
+ * NCD - PF12 (D8)
+ */
+
+#define GPIO_MMCSD_CS    (GPIO_OUTPUT | GPIO_PUSHPULL | GPIO_SPEED_50MHz | \
+                          GPIO_OUTPUT_SET | GPIO_PORTD | GPIO_PIN15)
+#define GPIO_MMCSD_NCD    (GPIO_INPUT | GPIO_PULLUP | GPIO_EXTI |  \
+                           GPIO_PORTF | GPIO_PIN12)
+
 /* LMS9DS1 configuration */
 
 #define LMS9DS1_I2CBUS 1
@@ -211,7 +238,8 @@
  *   CONFIG_BOARD_LATE_INITIALIZE=y :
  *     Called from board_late_initialize().
  *
- *   CONFIG_BOARD_LATE_INITIALIZE=y && CONFIG_BOARDCTL=y :
+ *   CONFIG_BOARD_LATE_INITIALIZE=n && CONFIG_BOARDCTL=y &&
+ *   CONFIG_NSH_ARCHINIT:
  *     Called from the NSH library
  *
  ****************************************************************************/
@@ -349,6 +377,32 @@ int stm32_pca9635_initialize(void);
 
 #ifdef CONFIG_PWM
 int stm32_pwm_setup(void);
+#endif
+
+/****************************************************************************
+ * Name: stm32_mtd_initialize
+ *
+ * Description:
+ *   Initialize MTD drivers.
+ *
+ ****************************************************************************/
+#ifdef CONFIG_MTD
+
+#ifdef HAVE_PROGMEM_CHARDEV
+int stm32_progmem_init(void);
+#endif /* HAVE_PROGMEM_CHARDEV */
+#endif
+
+/****************************************************************************
+ * Name: stm32_mmcsd_initialize
+ *
+ * Description:
+ *   Initialize SPI-based SD card and card detect thread.
+ *
+ ****************************************************************************/
+
+#ifdef CONFIG_MMCSD_SPI
+int stm32_mmcsd_initialize(int minor);
 #endif
 
 #endif /* __BOARDS_ARM_STM32H7_NUCLEO_H743ZI_SRC_NUCLEO_H743ZI_H */

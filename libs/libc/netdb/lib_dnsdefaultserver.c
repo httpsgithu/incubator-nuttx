@@ -1,6 +1,8 @@
 /****************************************************************************
  * libs/libc/netdb/lib_dnsdefaultserver.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -57,9 +59,9 @@ int dns_default_nameserver(void)
 #else /* CONFIG_NETDB_RESOLVCONF */
 int dns_default_nameserver(void)
 {
-  dns_semtake();
+  dns_lock();
   g_dns_nservers = 0;
-  dns_semgive();
+  dns_unlock();
   return OK;
 }
 #endif /* CONFIG_NETDB_RESOLVCONF */

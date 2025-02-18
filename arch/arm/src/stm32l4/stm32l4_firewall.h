@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/stm32l4/stm32l4_firewall.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -93,7 +95,7 @@ extern "C"
  *
  ****************************************************************************/
 
-int stm32l4_firewallsetup(FAR struct stm32l4_firewall_t *setup);
+int stm32l4_firewallsetup(struct stm32l4_firewall_t *setup);
 
 #undef EXTERN
 #if defined(__cplusplus)

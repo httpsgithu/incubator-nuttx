@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/stm32/common/src/stm32_apds9960.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -28,7 +30,6 @@
 #include <debug.h>
 #include <stdio.h>
 
-#include <nuttx/spi/spi.h>
 #include <nuttx/sensors/apds9960.h>
 #include <arch/board/board.h>
 
@@ -51,16 +52,16 @@ struct stm32_apds9960config_s
 
   /* Additional private definitions only known to this driver */
 
-  FAR void *arg;  /* Argument to pass to the interrupt handler */
-  FAR xcpt_t isr; /* ISR Handler */
+  void *arg;  /* Argument to pass to the interrupt handler */
+  xcpt_t isr; /* ISR Handler */
 };
 
 /****************************************************************************
  * Private Function Prototypes
  ****************************************************************************/
 
-static int  apds9960_irq_attach(FAR struct apds9960_config_s *state,
-                                xcpt_t isr, FAR void *arg);
+static int  apds9960_irq_attach(struct apds9960_config_s *state,
+                                xcpt_t isr, void *arg);
 
 /****************************************************************************
  * Private Data
@@ -90,8 +91,8 @@ static struct stm32_apds9960config_s g_apds9960config =
 
 /* Attach the APDS-9960 interrupt handler to the GPIO interrupt */
 
-static int apds9960_irq_attach(FAR struct apds9960_config_s *state,
-                               xcpt_t isr, FAR void *arg)
+static int apds9960_irq_attach(struct apds9960_config_s *state,
+                               xcpt_t isr, void *arg)
 {
   irqstate_t flags;
 
@@ -129,7 +130,7 @@ static int apds9960_irq_attach(FAR struct apds9960_config_s *state,
 
 int board_apds9960_initialize(int devno, int busno)
 {
-  FAR struct i2c_master_s *i2c;
+  struct i2c_master_s *i2c;
   char devpath[12];
   int ret;
 
@@ -154,7 +155,7 @@ int board_apds9960_initialize(int devno, int busno)
 
   /* Then register the gesture sensor */
 
-  snprintf(devpath, 12, "/dev/gest%d", devno);
+  snprintf(devpath, sizeof(devpath), "/dev/gest%d", devno);
   ret = apds9960_register(devpath, &g_apds9960config.config);
   if (ret < 0)
     {

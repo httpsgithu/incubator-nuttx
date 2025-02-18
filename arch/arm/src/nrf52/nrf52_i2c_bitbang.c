@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/nrf52/nrf52_i2c_bitbang.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -28,7 +30,7 @@
 #include <nuttx/i2c/i2c_bitbang.h>
 #include <nuttx/kmalloc.h>
 #include "nrf52_gpio.h"
-#include "arm_arch.h"
+#include "arm_internal.h"
 
 /****************************************************************************
  * Pre-processor Definitions
@@ -49,15 +51,15 @@ struct nrf52_i2c_bitbang_dev_s
  * Private Function Prototypes
  ****************************************************************************/
 
-static void i2c_bb_initialize(FAR struct i2c_bitbang_lower_dev_s *lower);
+static void i2c_bb_initialize(struct i2c_bitbang_lower_dev_s *lower);
 
-static void i2c_bb_set_scl(FAR struct i2c_bitbang_lower_dev_s *lower,
+static void i2c_bb_set_scl(struct i2c_bitbang_lower_dev_s *lower,
                            bool high);
-static void i2c_bb_set_sda(FAR struct i2c_bitbang_lower_dev_s *lower,
+static void i2c_bb_set_sda(struct i2c_bitbang_lower_dev_s *lower,
                            bool high);
 
-static bool i2c_bb_get_scl(FAR struct i2c_bitbang_lower_dev_s *lower);
-static bool i2c_bb_get_sda(FAR struct i2c_bitbang_lower_dev_s *lower);
+static bool i2c_bb_get_scl(struct i2c_bitbang_lower_dev_s *lower);
+static bool i2c_bb_get_sda(struct i2c_bitbang_lower_dev_s *lower);
 
 /****************************************************************************
  * Private Data
@@ -80,7 +82,7 @@ const static struct i2c_bitbang_lower_ops_s g_ops =
  * Private Functions
  ****************************************************************************/
 
-static void i2c_bb_initialize(FAR struct i2c_bitbang_lower_dev_s *lower)
+static void i2c_bb_initialize(struct i2c_bitbang_lower_dev_s *lower)
 {
 #ifdef CONFIG_NRF52_HAVE_PORT1
   int port;
@@ -123,7 +125,7 @@ static void i2c_bb_initialize(FAR struct i2c_bitbang_lower_dev_s *lower)
   modifyreg32(base + NRF52_GPIO_PIN_CNF_OFFSET(pin), GPIO_CNF_INPUT, 0);
 }
 
-static void i2c_bb_set_scl(FAR struct i2c_bitbang_lower_dev_s *lower,
+static void i2c_bb_set_scl(struct i2c_bitbang_lower_dev_s *lower,
                            bool high)
 {
   struct nrf52_i2c_bitbang_dev_s *dev = lower->priv;
@@ -131,7 +133,7 @@ static void i2c_bb_set_scl(FAR struct i2c_bitbang_lower_dev_s *lower,
   nrf52_gpio_write(dev->scl_pin, high);
 }
 
-static void i2c_bb_set_sda(FAR struct i2c_bitbang_lower_dev_s *lower,
+static void i2c_bb_set_sda(struct i2c_bitbang_lower_dev_s *lower,
                            bool high)
 {
   struct nrf52_i2c_bitbang_dev_s *dev = lower->priv;
@@ -139,14 +141,14 @@ static void i2c_bb_set_sda(FAR struct i2c_bitbang_lower_dev_s *lower,
   nrf52_gpio_write(dev->sda_pin, high);
 }
 
-static bool i2c_bb_get_scl(FAR struct i2c_bitbang_lower_dev_s *lower)
+static bool i2c_bb_get_scl(struct i2c_bitbang_lower_dev_s *lower)
 {
   struct nrf52_i2c_bitbang_dev_s *dev = lower->priv;
 
   return nrf52_gpio_read(dev->scl_pin);
 }
 
-static bool i2c_bb_get_sda(FAR struct i2c_bitbang_lower_dev_s *lower)
+static bool i2c_bb_get_sda(struct i2c_bitbang_lower_dev_s *lower)
 {
   struct nrf52_i2c_bitbang_dev_s *dev = lower->priv;
 

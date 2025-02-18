@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/stm32h7/hardware/stm32_qspi.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -18,8 +20,8 @@
  *
  ****************************************************************************/
 
-#ifndef __ARCH_ARM_SRC_STM32H7_HARDWARE_STM32H7_QSPI_H
-#define __ARCH_ARM_SRC_STM32H7_HARDWARE_STM32H7_QSPI_H
+#ifndef __ARCH_ARM_SRC_STM32H7_HARDWARE_STM32_QSPI_H
+#define __ARCH_ARM_SRC_STM32H7_HARDWARE_STM32_QSPI_H
 
 /****************************************************************************
  * Included Files
@@ -207,7 +209,7 @@
 /* Low-Power Timeout Register */
 
 #define QSPI_LPTR_TIMEOUT_SHIFT    (0)        /* Bits 0-15: Timeout period */
-#define QSPI_LPTR_TIMEOUT_MASK     (0xFFff << QSPI_PIR_INTERVAL_SHIFT)
+#define QSPI_LPTR_TIMEOUT_MASK     (0xFFff << QSPI_LPTR_TIMEOUT_SHIFT)
 
 /****************************************************************************
  * Public Types
@@ -221,4 +223,4 @@
  * Public Functions Prototypes
  ****************************************************************************/
 
-#endif /* __ARCH_ARM_SRC_STM32H7_HARDWARE_STM32H4_QSPI_H */
+#endif /* __ARCH_ARM_SRC_STM32H7_HARDWARE_STM32_QSPI_H */

@@ -1,6 +1,8 @@
 /****************************************************************************
  * drivers/mtd/sst25xx.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -861,7 +863,7 @@ static int sst25xx_ioctl(FAR struct mtd_dev_s *dev, int cmd,
   FAR struct sst25xx_dev_s *priv = (FAR struct sst25xx_dev_s *)dev;
   int ret = -EINVAL; /* Assume good command with bad parameters */
 
-  finfo("cmd: %d \n", cmd);
+  finfo("cmd: %d\n", cmd);
 
   switch (cmd)
     {
@@ -871,6 +873,8 @@ static int sst25xx_ioctl(FAR struct mtd_dev_s *dev, int cmd,
                                            ((uintptr_t)arg);
           if (geo)
             {
+              memset(geo, 0, sizeof(*geo));
+
               /* Populate the geometry structure with information need to
                * know the capacity and how to access the device.
                *

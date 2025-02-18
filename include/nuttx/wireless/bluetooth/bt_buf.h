@@ -1,15 +1,8 @@
 /****************************************************************************
  * include/nuttx/wireless/bluetooth/bt_buf.h
- * Bluetooth buffer management.
  *
- *   Copyright (C) 2018 Gregory Nutt. All rights reserved.
- *   Author: Gregory Nutt <gnutt@nuttx.org>
- *
- * Ported from the Intel/Zephyr arduino101_firmware_source-v1.tar package
- * where the code was released with a compatible 3-clause BSD license:
- *
- *   Copyright (c) 2016, Intel Corporation
- *   All rights reserved.
+ * SPDX-License-Identifier: BSD-2-Clause
+ * SPDX-FileCopyrightText: 2016, Intel Corporation. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -49,6 +42,8 @@
 
 #include <stddef.h>
 #include <stdint.h>
+
+#include <nuttx/spinlock.h>
 
 /****************************************************************************
  * Public Types
@@ -121,6 +116,7 @@ struct bt_bufferlist_s
 {
   FAR struct bt_buf_s *head;
   FAR struct bt_buf_s *tail;
+  spinlock_t lock;
 };
 
 /****************************************************************************

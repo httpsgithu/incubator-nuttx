@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/stm32f7/stm32f769i-disco/src/stm32_sporadic.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -55,22 +57,22 @@ void arch_sporadic_initialize(void)
   stm32_configgpio(GPIO_SCHED_RUNNING);
 }
 
-void arch_sporadic_start(FAR struct tcb_s *tcb)
+void arch_sporadic_start(struct tcb_s *tcb)
 {
   stm32_gpiowrite(GPIO_SCHED_HIGHPRI, true);
 }
 
-void arch_sporadic_lowpriority(FAR struct tcb_s *tcb)
+void arch_sporadic_lowpriority(struct tcb_s *tcb)
 {
   stm32_gpiowrite(GPIO_SCHED_HIGHPRI, false);
 }
 
-void arch_sporadic_suspend(FAR struct tcb_s *tcb)
+void arch_sporadic_suspend(struct tcb_s *tcb)
 {
   stm32_gpiowrite(GPIO_SCHED_RUNNING, false);
 }
 
-void arch_sporadic_resume(FAR struct tcb_s *tcb)
+void arch_sporadic_resume(struct tcb_s *tcb)
 {
   stm32_gpiowrite(GPIO_SCHED_RUNNING, true);
 }

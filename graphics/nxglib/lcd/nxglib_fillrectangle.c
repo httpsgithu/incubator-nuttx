@@ -1,6 +1,8 @@
 /****************************************************************************
  * graphics/nxglib/lcd/nxglib_fillrectangle.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -78,6 +80,6 @@ void NXGL_FUNCNAME(nxgl_fillrectangle, NXGLIB_SUFFIX)
     {
       /* Draw the raster line at this row */
 
-      pinfo->putrun(row, rect->pt1.x, pinfo->buffer, ncols);
+      pinfo->putrun(pinfo->dev, row, rect->pt1.x, pinfo->buffer, ncols);
     }
 }

@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/samd5e5/same54-xplained-pro/src/sam_boot.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -74,6 +76,6 @@ void board_late_initialize(void)
 {
   /* Perform board-specific initialization */
 
-  (void)sam_bringup();
+  sam_bringup();
 }
 #endif

@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/imxrt/hardware/imxrt_enc.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -18,8 +20,8 @@
  *
  ****************************************************************************/
 
-#ifndef __ARCH_ARM_SRC_IMXRT_CHIP_IMXRT_ENC_H
-#define __ARCH_ARM_SRC_IMXRT_CHIP_IMXRT_ENC_H
+#ifndef __ARCH_ARM_SRC_IMXRT_HARDWARE_IMXRT_ENC_H
+#define __ARCH_ARM_SRC_IMXRT_HARDWARE_IMXRT_ENC_H
 
 /****************************************************************************
  * Included Files
@@ -214,4 +216,4 @@
 #define ENC_CTRL2_OUTCTL                (1 << 9)    /* Bit 9: POSMATCH Output Control */
                                                     /* Bits 10-15: Reserved */
 
-#endif /* __ARCH_ARM_SRC_IMXRT_CHIP_IMXRT_ENC_H */
+#endif /* __ARCH_ARM_SRC_IMXRT_HARDWARE_IMXRT_ENC_H */

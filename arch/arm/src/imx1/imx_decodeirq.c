@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/imx1/imx_decodeirq.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -30,11 +32,10 @@
 #include <assert.h>
 #include <debug.h>
 
-#include "chip.h"
-#include "arm_arch.h"
-#include "arm_internal.h"
+#include <nuttx/addrenv.h>
 
-#include "group/group.h"
+#include "chip.h"
+#include "arm_internal.h"
 
 /****************************************************************************
  * Pre-processor Definitions
@@ -58,8 +59,11 @@
 
 uint32_t *arm_decodeirq(uint32_t *regs)
 {
+  struct tcb_s *tcb = this_task();
+
 #ifdef CONFIG_SUPPRESS_INTERRUPTS
-  CURRENT_REGS = regs;
+  tcb->xcp.regs = regs;
+  up_set_interrupt_context(true);
   err("ERROR: Unexpected IRQ\n");
   PANIC();
   return NULL;
@@ -67,14 +71,14 @@ uint32_t *arm_decodeirq(uint32_t *regs)
   uint32_t regval;
   int irq;
 
-  /* Current regs non-zero indicates that we are processing an interrupt;
-   * CURRENT_REGS is also used to manage interrupt level context switches.
-   *
-   * Nested interrupts are not supported.
-   */
+  /* Nested interrupts are not supported. */
 
-  DEBUGASSERT(CURRENT_REGS == NULL);
-  CURRENT_REGS = regs;
+  DEBUGASSERT(!up_interrupt_context());
+
+  /* Set irq flag */
+
+  up_set_interrupt_context(true);
+  tcb->xcp.regs = regs;
 
   /* Loop while there are pending interrupts to be processed */
 
@@ -100,43 +104,29 @@ uint32_t *arm_decodeirq(uint32_t *regs)
           /* Deliver the IRQ */
 
           irq_dispatch(irq, regs);
-
-#if defined(CONFIG_ARCH_FPU) || defined(CONFIG_ARCH_ADDRENV)
-          /* Check for a context switch.  If a context switch occurred, then
-           * CURRENT_REGS will have a different value than it did on entry.
-           * If an interrupt level context switch has occurred, then restore
-           * the floating point state and the establish the correct address
-           * environment before returning from the interrupt.
-           */
-
-          if (regs != CURRENT_REGS)
-            {
-#ifdef CONFIG_ARCH_FPU
-              /* Restore floating point registers */
-
-              arm_restorefpu((uint32_t *)CURRENT_REGS);
-#endif
+          tcb = this_task();
 
 #ifdef CONFIG_ARCH_ADDRENV
+          /* Check for a context switch. */
+
+          if (regs != tcb->xcp.regs)
+            {
               /* Make sure that the address environment for the previously
                * running task is closed down gracefully (data caches dump,
                * MMU flushed) and set up the address environment for the new
                * thread at the head of the ready-to-run list.
                */
 
-              group_addrenv(NULL);
-#endif
+              addrenv_switch(tcb);
             }
 #endif
         }
     }
   while (irq < NR_IRQS);
 
-  /* Set CURRENT_REGS to NULL to indicate that we are no longer in
-   * an interrupt handler.
-   */
+  /* Set irq flag */
 
-  CURRENT_REGS = NULL;
+  up_set_interrupt_context(false);
   return NULL;  /* Return not used in this architecture */
 #endif
 }

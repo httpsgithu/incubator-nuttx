@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/lpc43xx/lpc43_irq.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -36,9 +38,7 @@
 #include "chip.h"
 #include "nvic.h"
 #include "ram_vectors.h"
-#include "arm_arch.h"
 #include "arm_internal.h"
-
 #include "lpc43_irq.h"
 
 /****************************************************************************
@@ -59,24 +59,6 @@
 
 #define NVIC_ENA_OFFSET    (0)
 #define NVIC_CLRENA_OFFSET (NVIC_IRQ0_31_CLEAR - NVIC_IRQ0_31_ENABLE)
-
-/****************************************************************************
- * Public Data
- ****************************************************************************/
-
-/* g_current_regs[] holds a references to the current interrupt level
- * register storage structure.  If is non-NULL only during interrupt
- * processing.  Access to g_current_regs[] must be through the macro
- * CURRENT_REGS for portability.
- */
-
-volatile uint32_t *g_current_regs[1];
-
-/* This is the address of the  exception vector table (determined by the
- * linker script).
- */
-
-extern uint32_t _vectors[];
 
 /****************************************************************************
  * Private Functions
@@ -142,8 +124,7 @@ static void lpc43_dumpnvic(const char *msg, int irq)
 #endif
 
 /****************************************************************************
- * Name: lpc43_nmi, lpc43_busfault, lpc43_usagefault, lpc43_pendsv,
- *       lpc43_dbgmonitor, lpc43_pendsv, lpc43_reserved
+ * Name: lpc43_nmi, lpc43_pendsv, lpc43_pendsv, lpc43_reserved
  *
  * Description:
  *   Handlers for various exceptions.  None are handled and all are fatal
@@ -153,7 +134,7 @@ static void lpc43_dumpnvic(const char *msg, int irq)
  ****************************************************************************/
 
 #ifdef CONFIG_DEBUG_FEATURES
-static int lpc43_nmi(int irq, FAR void *context, FAR void *arg)
+static int lpc43_nmi(int irq, void *context, void *arg)
 {
   up_irq_save();
   _err("PANIC!!! NMI received\n");
@@ -161,23 +142,7 @@ static int lpc43_nmi(int irq, FAR void *context, FAR void *arg)
   return 0;
 }
 
-static int lpc43_busfault(int irq, FAR void *context, FAR void *arg)
-{
-  up_irq_save();
-  _err("PANIC!!! Bus fault received\n");
-  PANIC();
-  return 0;
-}
-
-static int lpc43_usagefault(int irq, FAR void *context, FAR void *arg)
-{
-  up_irq_save();
-  _err("PANIC!!! Usage fault received\n");
-  PANIC();
-  return 0;
-}
-
-static int lpc43_pendsv(int irq, FAR void *context, FAR void *arg)
+static int lpc43_pendsv(int irq, void *context, void *arg)
 {
   up_irq_save();
   _err("PANIC!!! PendSV received\n");
@@ -185,15 +150,7 @@ static int lpc43_pendsv(int irq, FAR void *context, FAR void *arg)
   return 0;
 }
 
-static int lpc43_dbgmonitor(int irq, FAR void *context, FAR void *arg)
-{
-  up_irq_save();
-  _err("PANIC!!! Debug Monitor received\n");
-  PANIC();
-  return 0;
-}
-
-static int lpc43_reserved(int irq, FAR void *context, FAR void *arg)
+static int lpc43_reserved(int irq, void *context, void *arg)
 {
   up_irq_save();
   _err("PANIC!!! Reserved interrupt\n");
@@ -211,7 +168,6 @@ static int lpc43_reserved(int irq, FAR void *context, FAR void *arg)
  *
  ****************************************************************************/
 
-#ifdef CONFIG_ARMV7M_USEBASEPRI
 static inline void lpc43_prioritize_syscall(int priority)
 {
   uint32_t regval;
@@ -223,7 +179,6 @@ static inline void lpc43_prioritize_syscall(int priority)
   regval |= (priority << NVIC_SYSH_PRIORITY_PR11_SHIFT);
   putreg32(regval, NVIC_SYSH8_11_PRIORITY);
 }
-#endif
 
 /****************************************************************************
  * Name: lpc43_irqinfo
@@ -297,9 +252,6 @@ static int lpc43_irqinfo(int irq, uintptr_t *regaddr, uint32_t *bit,
 void up_irqinitialize(void)
 {
   uint32_t regaddr;
-#if defined(CONFIG_DEBUG_FEATURES) && !defined(CONFIG_ARMV7M_USEBASEPRI)
-  uint32_t regval;
-#endif
   int num_priority_registers;
   int i;
 
@@ -353,10 +305,6 @@ void up_irqinitialize(void)
       regaddr += 4;
     }
 
-  /* currents_regs is non-NULL only while processing an interrupt */
-
-  CURRENT_REGS = NULL;
-
   /* Attach the SVCall and Hard Fault exception handlers.  The SVCall
    * exception is used for performing context switches; The Hard Fault
    * must also be caught because a SVCall may show up as a Hard Fault
@@ -371,9 +319,8 @@ void up_irqinitialize(void)
 #ifdef CONFIG_ARCH_IRQPRIO
   /* up_prioritize_irq(LPC43_IRQ_PENDSV, NVIC_SYSH_PRIORITY_MIN); */
 #endif
-#ifdef CONFIG_ARMV7M_USEBASEPRI
+
   lpc43_prioritize_syscall(NVIC_SYSH_SVCALL_PRIORITY);
-#endif
 
   /* If the MPU is enabled, then attach and enable the Memory Management
    * Fault handler.
@@ -391,25 +338,15 @@ void up_irqinitialize(void)
 #ifndef CONFIG_ARM_MPU
   irq_attach(LPC43_IRQ_MEMFAULT, arm_memfault, NULL);
 #endif
-  irq_attach(LPC43_IRQ_BUSFAULT, lpc43_busfault, NULL);
-  irq_attach(LPC43_IRQ_USAGEFAULT, lpc43_usagefault, NULL);
+  irq_attach(LPC43_IRQ_BUSFAULT, arm_busfault, NULL);
+  irq_attach(LPC43_IRQ_USAGEFAULT, arm_usagefault, NULL);
   irq_attach(LPC43_IRQ_PENDSV, lpc43_pendsv, NULL);
-  irq_attach(LPC43_IRQ_DBGMONITOR, lpc43_dbgmonitor, NULL);
+  arm_enable_dbgmonitor();
+  irq_attach(LPC43_IRQ_DBGMONITOR, arm_dbgmonitor, NULL);
   irq_attach(LPC43_IRQ_RESERVED, lpc43_reserved, NULL);
 #endif
 
   lpc43_dumpnvic("initial", LPC43M4_IRQ_NIRQS);
-
-  /* If a debugger is connected, try to prevent it from catching hardfaults.
-   * If CONFIG_ARMV7M_USEBASEPRI, no hardfaults are expected in normal
-   * operation.
-   */
-
-#if defined(CONFIG_DEBUG_FEATURES) && !defined(CONFIG_ARMV7M_USEBASEPRI)
-  regval  = getreg32(NVIC_DEMCR);
-  regval &= ~NVIC_DEMCR_VCHARDERR;
-  putreg32(regval, NVIC_DEMCR);
-#endif
 
   /* And finally, enable interrupts */
 

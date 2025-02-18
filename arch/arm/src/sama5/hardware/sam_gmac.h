@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/sama5/hardware/sam_gmac.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -1002,10 +1004,10 @@
 #define GMACRXD_STA_SNAP          (1 << 24) /* Bit 24: Frame was SNAP encoded */
 #define GMACRXD_STA_ADDR_SHIFT    (25)      /* Bits 25-26: Specific Address Register match */
 #define GMACRXD_STA_ADDR_MASK     (3 << GMACRXD_STA_ADDR_SHIFT)
-# define GMACRXD_STA_ADDR1_MATCH  (0 << GMACRXD_STA_ADDR_SHIFT) /* Specific address register 1 match */
-# define GMACRXD_STA_ADDR2_MATCH  (1 << GMACRXD_STA_ADDR_SHIFT) /* Specific address register 2 match */
-# define GMACRXD_STA_ADDR3_MATCH  (2 << GMACRXD_STA_ADDR_SHIFT) /* Specific address register 3 match */
-# define GMACRXD_STA_ADDR4_MATCH  (3 << GMACRXD_STA_ADDR_SHIFT) /* Specific address register 4 match */
+#  define GMACRXD_STA_ADDR1_MATCH (0 << GMACRXD_STA_ADDR_SHIFT) /* Specific address register 1 match */
+#  define GMACRXD_STA_ADDR2_MATCH (1 << GMACRXD_STA_ADDR_SHIFT) /* Specific address register 2 match */
+#  define GMACRXD_STA_ADDR3_MATCH (2 << GMACRXD_STA_ADDR_SHIFT) /* Specific address register 3 match */
+#  define GMACRXD_STA_ADDR4_MATCH (3 << GMACRXD_STA_ADDR_SHIFT) /* Specific address register 4 match */
 
 #define GMACRXD_STA_ADDRMATCH     (1 << 27) /* Bit 27: Specific Address Register match found */
                                             /* Bit 28: Reserved */

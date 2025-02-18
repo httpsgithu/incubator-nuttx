@@ -1,24 +1,16 @@
 /****************************************************************************
  * arch/arm/src/stm32h7/stm32_i2c.c
- * STM32 I2C Hardware Layer - Device Driver
  *
- *   Copyright (C) 2011 Uros Platise. All rights reserved.
- *   Author: Uros Platise <uros.platise@isotel.eu>
- *
- * With extensions and modifications for the F1, F2, and F4 by:
- *
- *   Copyright (C) 2016-2017 Gregory Nutt. All rights reserved.
- *   Authors: Gregory Nutt <gnutt@nuttx.org>
- *            John Wharington
- *            David Sidrane <david_s5@nscdg.com>
- *            Bob Feretich <bob.feretich@rafresearch.com>
- *   Modified for STM32H7 by Mateusz Szafoni <raiden00@railab.me>
- *
- * Major rewrite of ISR and supporting methods, including support
- * for NACK and RELOAD by:
- *
- *   Copyright (c) 2016 Doug Vetter.  All rights reserved.
- *   Author: Doug Vetter <oss@aileronlabs.com>
+ * SPDX-License-Identifier: BSD-3-Clause
+ * SPDX-FileCopyrightText: 2016-2017 Gregory Nutt. All rights reserved.
+ * SPDX-FileCopyrightText: 2016 Doug Vetter.  All rights reserved.
+ * SPDX-FileCopyrightText: 2011 Uros Platise. All rights reserved.
+ * SPDX-FileContributor: Uros Platise <uros.platise@isotel.eu>
+ * SPDX-FileContributor: Gregory Nutt <gnutt@nuttx.org>
+ * SPDX-FileContributor: John Wharington
+ * SPDX-FileContributor: David Sidrane <david_s5@nscdg.com>
+ * SPDX-FileContributor: Bob Feretich <bob.feretich@rafresearch.com>
+ * SPDX-FileContributor: Doug Vetter <oss@aileronlabs.com>
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -216,6 +208,7 @@
 
 #include <nuttx/arch.h>
 #include <nuttx/irq.h>
+#include <nuttx/mutex.h>
 #include <nuttx/semaphore.h>
 #include <nuttx/kmalloc.h>
 #include <nuttx/clock.h>
@@ -224,8 +217,7 @@
 
 #include <arch/board/board.h>
 
-#include "arm_arch.h"
-
+#include "arm_internal.h"
 #include "stm32_rcc.h"
 #include "stm32_i2c.h"
 #include "stm32_gpio.h"
@@ -254,6 +246,10 @@
 #    warning "Clock Source STM32_RCC_D3CCIPR_I2C4SRC must be HSI"
 #    define INVALID_CLOCK_SOURCE
 #  endif
+#endif
+
+#if STM32_HSI_FREQUENCY != 16000000 || defined(INVALID_CLOCK_SOURCE)
+#   error STM32_I2C: Peripheral clock is HSI and it must be 16mHz or the speed/timing calculations need to be redone.
 #endif
 
 /* CONFIG_I2C_POLLED may be set so that I2C interrupts will not be used.
@@ -397,7 +393,7 @@ struct stm32_i2c_priv_s
   const struct stm32_i2c_config_s *config;
 
   int refs;                    /* Reference count */
-  sem_t sem_excl;              /* Mutual exclusion semaphore */
+  mutex_t lock;                /* Mutual exclusion mutex */
 #ifndef CONFIG_I2C_POLLED
   sem_t sem_isr;               /* Interrupt wait semaphore */
 #endif
@@ -441,53 +437,50 @@ struct stm32_i2c_inst_s
  * Private Function Prototypes
  ****************************************************************************/
 
-static inline uint16_t stm32_i2c_getreg(FAR struct stm32_i2c_priv_s *priv,
+static inline uint16_t stm32_i2c_getreg(struct stm32_i2c_priv_s *priv,
                                         uint8_t offset);
-static inline void stm32_i2c_putreg(FAR struct stm32_i2c_priv_s *priv,
+static inline void stm32_i2c_putreg(struct stm32_i2c_priv_s *priv,
                                     uint8_t offset, uint16_t value);
-static inline void stm32_i2c_putreg32(FAR struct stm32_i2c_priv_s *priv,
+static inline void stm32_i2c_putreg32(struct stm32_i2c_priv_s *priv,
                                       uint8_t offset, uint32_t value);
-static inline void stm32_i2c_modifyreg32(FAR struct stm32_i2c_priv_s *priv,
+static inline void stm32_i2c_modifyreg32(struct stm32_i2c_priv_s *priv,
                                          uint8_t offset, uint32_t clearbits,
                                          uint32_t setbits);
 #ifdef CONFIG_STM32H7_I2C_DYNTIMEO
-static useconds_t stm32_i2c_tousecs(int msgc, FAR struct i2c_msg_s *msgs);
+static uint32_t stm32_i2c_toticks(int msgc, struct i2c_msg_s *msgs);
 #endif /* CONFIG_STM32H7_I2C_DYNTIMEO */
-static inline int  stm32_i2c_sem_waitdone(FAR struct stm32_i2c_priv_s *priv);
-static inline void stm32_i2c_sem_waitstop(FAR struct stm32_i2c_priv_s *priv);
-static inline void stm32_i2c_sem_post(FAR struct i2c_master_s *dev);
-static inline void stm32_i2c_sem_init(FAR struct i2c_master_s *dev);
-static inline void stm32_i2c_sem_destroy(FAR struct i2c_master_s *dev);
+static inline int  stm32_i2c_sem_waitdone(struct stm32_i2c_priv_s *priv);
+static inline void stm32_i2c_sem_waitstop(struct stm32_i2c_priv_s *priv);
 #ifdef CONFIG_I2C_TRACE
-static void stm32_i2c_tracereset(FAR struct stm32_i2c_priv_s *priv);
-static void stm32_i2c_tracenew(FAR struct stm32_i2c_priv_s *priv,
+static void stm32_i2c_tracereset(struct stm32_i2c_priv_s *priv);
+static void stm32_i2c_tracenew(struct stm32_i2c_priv_s *priv,
                                uint32_t status);
-static void stm32_i2c_traceevent(FAR struct stm32_i2c_priv_s *priv,
+static void stm32_i2c_traceevent(struct stm32_i2c_priv_s *priv,
                                enum stm32_trace_e event, uint32_t parm);
-static void stm32_i2c_tracedump(FAR struct stm32_i2c_priv_s *priv);
+static void stm32_i2c_tracedump(struct stm32_i2c_priv_s *priv);
 #endif /* CONFIG_I2C_TRACE */
-static void stm32_i2c_setclock(FAR struct stm32_i2c_priv_s *priv,
+static void stm32_i2c_setclock(struct stm32_i2c_priv_s *priv,
                                uint32_t frequency);
-static inline void stm32_i2c_sendstart(FAR struct stm32_i2c_priv_s *priv);
-static inline void stm32_i2c_sendstop(FAR struct stm32_i2c_priv_s *priv);
+static inline void stm32_i2c_sendstart(struct stm32_i2c_priv_s *priv);
+static inline void stm32_i2c_sendstop(struct stm32_i2c_priv_s *priv);
 static inline
-uint32_t stm32_i2c_getstatus(FAR struct stm32_i2c_priv_s *priv);
-static int stm32_i2c_isr_process(struct stm32_i2c_priv_s * priv);
+uint32_t stm32_i2c_getstatus(struct stm32_i2c_priv_s *priv);
+static int stm32_i2c_isr_process(struct stm32_i2c_priv_s *priv);
 #ifndef CONFIG_I2C_POLLED
-static int stm32_i2c_isr(int irq, void *context, FAR void *arg);
+static int stm32_i2c_isr(int irq, void *context, void *arg);
 #endif
-static int stm32_i2c_init(FAR struct stm32_i2c_priv_s *priv);
-static int stm32_i2c_deinit(FAR struct stm32_i2c_priv_s *priv);
+static int stm32_i2c_init(struct stm32_i2c_priv_s *priv);
+static int stm32_i2c_deinit(struct stm32_i2c_priv_s *priv);
 
-static int stm32_i2c_process(FAR struct i2c_master_s *dev,
-                             FAR struct i2c_msg_s *msgs, int count);
-static int stm32_i2c_transfer(FAR struct i2c_master_s *dev,
-                              FAR struct i2c_msg_s *msgs, int count);
+static int stm32_i2c_process(struct i2c_master_s *dev,
+                             struct i2c_msg_s *msgs, int count);
+static int stm32_i2c_transfer(struct i2c_master_s *dev,
+                              struct i2c_msg_s *msgs, int count);
 #ifdef CONFIG_I2C_RESET
-static int stm32_i2c_reset(FAR struct i2c_master_s * dev);
+static int stm32_i2c_reset(struct i2c_master_s *dev);
 #endif
 #ifdef CONFIG_PM
-static int stm32_i2c_pm_prepare(FAR struct pm_callback_s *cb, int domain,
+static int stm32_i2c_pm_prepare(struct pm_callback_s *cb, int domain,
                                 enum pm_state_e pmstate);
 #endif
 
@@ -513,6 +506,10 @@ static struct stm32_i2c_priv_s stm32_i2c1_priv =
 {
   .config        = &stm32_i2c1_config,
   .refs          = 0,
+  .lock          = NXMUTEX_INITIALIZER,
+#ifndef CONFIG_I2C_POLLED
+  .sem_isr       = SEM_INITIALIZER(0),
+#endif
   .intstate      = INTSTATE_IDLE,
   .msgc          = 0,
   .msgv          = NULL,
@@ -545,6 +542,10 @@ static struct stm32_i2c_priv_s stm32_i2c2_priv =
 {
   .config        = &stm32_i2c2_config,
   .refs          = 0,
+  .lock          = NXMUTEX_INITIALIZER,
+#ifndef CONFIG_I2C_POLLED
+  .sem_isr       = SEM_INITIALIZER(0),
+#endif
   .intstate      = INTSTATE_IDLE,
   .msgc          = 0,
   .msgv          = NULL,
@@ -577,6 +578,10 @@ static struct stm32_i2c_priv_s stm32_i2c3_priv =
 {
   .config        = &stm32_i2c3_config,
   .refs          = 0,
+  .lock          = NXMUTEX_INITIALIZER,
+#ifndef CONFIG_I2C_POLLED
+  .sem_isr       = SEM_INITIALIZER(0),
+#endif
   .intstate      = INTSTATE_IDLE,
   .msgc          = 0,
   .msgv          = NULL,
@@ -609,6 +614,10 @@ static struct stm32_i2c_priv_s stm32_i2c4_priv =
 {
   .config        = &stm32_i2c4_config,
   .refs          = 0,
+  .lock          = NXMUTEX_INITIALIZER,
+#ifndef CONFIG_I2C_POLLED
+  .sem_isr       = SEM_INITIALIZER(0),
+#endif
   .intstate      = INTSTATE_IDLE,
   .msgc          = 0,
   .msgv          = NULL,
@@ -645,7 +654,7 @@ static const struct i2c_ops_s stm32_i2c_ops =
  *
  ****************************************************************************/
 
-static inline uint16_t stm32_i2c_getreg(FAR struct stm32_i2c_priv_s *priv,
+static inline uint16_t stm32_i2c_getreg(struct stm32_i2c_priv_s *priv,
                                         uint8_t offset)
 {
   return getreg16(priv->config->base + offset);
@@ -659,7 +668,7 @@ static inline uint16_t stm32_i2c_getreg(FAR struct stm32_i2c_priv_s *priv,
  *
  ****************************************************************************/
 
-static inline uint32_t stm32_i2c_getreg32(FAR struct stm32_i2c_priv_s *priv,
+static inline uint32_t stm32_i2c_getreg32(struct stm32_i2c_priv_s *priv,
                                           uint8_t offset)
 {
   return getreg32(priv->config->base + offset);
@@ -673,7 +682,7 @@ static inline uint32_t stm32_i2c_getreg32(FAR struct stm32_i2c_priv_s *priv,
  *
  ****************************************************************************/
 
-static inline void stm32_i2c_putreg(FAR struct stm32_i2c_priv_s *priv,
+static inline void stm32_i2c_putreg(struct stm32_i2c_priv_s *priv,
                                     uint8_t offset, uint16_t value)
 {
   putreg16(value, priv->config->base + offset);
@@ -687,7 +696,7 @@ static inline void stm32_i2c_putreg(FAR struct stm32_i2c_priv_s *priv,
  *
  ****************************************************************************/
 
-static inline void stm32_i2c_putreg32(FAR struct stm32_i2c_priv_s *priv,
+static inline void stm32_i2c_putreg32(struct stm32_i2c_priv_s *priv,
                                       uint8_t offset, uint32_t value)
 {
   putreg32(value, priv->config->base + offset);
@@ -701,7 +710,7 @@ static inline void stm32_i2c_putreg32(FAR struct stm32_i2c_priv_s *priv,
  *
  ****************************************************************************/
 
-static inline void stm32_i2c_modifyreg32(FAR struct stm32_i2c_priv_s *priv,
+static inline void stm32_i2c_modifyreg32(struct stm32_i2c_priv_s *priv,
                                          uint8_t offset, uint32_t clearbits,
                                          uint32_t setbits)
 {
@@ -709,7 +718,7 @@ static inline void stm32_i2c_modifyreg32(FAR struct stm32_i2c_priv_s *priv,
 }
 
 /****************************************************************************
- * Name: stm32_i2c_tousecs
+ * Name: stm32_i2c_toticks
  *
  * Description:
  *   Return a micro-second delay based on the number of bytes left to be
@@ -718,7 +727,7 @@ static inline void stm32_i2c_modifyreg32(FAR struct stm32_i2c_priv_s *priv,
  ****************************************************************************/
 
 #ifdef CONFIG_STM32H7_I2C_DYNTIMEO
-static useconds_t stm32_i2c_tousecs(int msgc, FAR struct i2c_msg_s *msgs)
+static uint32_t stm32_i2c_toticks(int msgc, struct i2c_msg_s *msgs)
 {
   size_t bytecount = 0;
   int i;
@@ -734,7 +743,7 @@ static useconds_t stm32_i2c_tousecs(int msgc, FAR struct i2c_msg_s *msgs)
    * factor.
    */
 
-  return (useconds_t)(CONFIG_STM32H7_I2C_DYNTIMEO_USECPERBYTE * bytecount);
+  return USEC2TICK(CONFIG_STM32H7_I2C_DYNTIMEO_USECPERBYTE * bytecount);
 }
 #endif
 
@@ -766,9 +775,8 @@ static inline void stm32_i2c_enableinterrupts(struct stm32_i2c_priv_s *priv)
  ****************************************************************************/
 
 #ifndef CONFIG_I2C_POLLED
-static inline int stm32_i2c_sem_waitdone(FAR struct stm32_i2c_priv_s *priv)
+static inline int stm32_i2c_sem_waitdone(struct stm32_i2c_priv_s *priv)
 {
-  struct timespec abstime;
   irqstate_t flags;
   int ret;
 
@@ -789,42 +797,20 @@ static inline int stm32_i2c_sem_waitdone(FAR struct stm32_i2c_priv_s *priv)
   priv->intstate = INTSTATE_WAITING;
   do
     {
-      /* Get the current time */
-
-      clock_gettime(CLOCK_REALTIME, &abstime);
-
-      /* Calculate a time in the future */
-
-#if CONFIG_STM32H7_I2CTIMEOSEC > 0
-      abstime.tv_sec += CONFIG_STM32H7_I2CTIMEOSEC;
-#endif
-
-      /* Add a value proportional to the number of bytes in the transfer */
-
-#ifdef CONFIG_STM32H7_I2C_DYNTIMEO
-      abstime.tv_nsec += 1000 * stm32_i2c_tousecs(priv->msgc, priv->msgv);
-      if (abstime.tv_nsec >= 1000 * 1000 * 1000)
-        {
-          abstime.tv_sec++;
-          abstime.tv_nsec -= 1000 * 1000 * 1000;
-        }
-
-#elif CONFIG_STM32H7_I2CTIMEOMS > 0
-      abstime.tv_nsec += CONFIG_STM32H7_I2CTIMEOMS * 1000 * 1000;
-      if (abstime.tv_nsec >= 1000 * 1000 * 1000)
-        {
-          abstime.tv_sec++;
-          abstime.tv_nsec -= 1000 * 1000 * 1000;
-        }
-#endif
-
       /* Wait until either the transfer is complete or the timeout expires */
 
-      ret = nxsem_timedwait_uninterruptible(&priv->sem_isr, &abstime);
+#ifdef CONFIG_STM32H7_I2C_DYNTIMEO
+      ret = nxsem_tickwait_uninterruptible(&priv->sem_isr,
+                         stm32_i2c_toticks(priv->msgc, priv->msgv));
+#else
+      ret = nxsem_tickwait_uninterruptible(&priv->sem_isr,
+                                           CONFIG_STM32H7_I2CTIMEOTICKS);
+#endif
       if (ret < 0)
         {
           /* Break out of the loop on irrecoverable errors.  This would
-           * include timeouts and mystery errors reported by nxsem_timedwait.
+           * include timeouts and mystery errors reported by
+           * nxsem_tickwait_uninterruptible.
            */
 
           break;
@@ -847,7 +833,7 @@ static inline int stm32_i2c_sem_waitdone(FAR struct stm32_i2c_priv_s *priv)
   return ret;
 }
 #else
-static inline int stm32_i2c_sem_waitdone(FAR struct stm32_i2c_priv_s *priv)
+static inline int stm32_i2c_sem_waitdone(struct stm32_i2c_priv_s *priv)
 {
   clock_t timeout;
   clock_t start;
@@ -857,14 +843,14 @@ static inline int stm32_i2c_sem_waitdone(FAR struct stm32_i2c_priv_s *priv)
   /* Get the timeout value */
 
 #ifdef CONFIG_STM32H7_I2C_DYNTIMEO
-  timeout = USEC2TICK(stm32_i2c_tousecs(priv->msgc, priv->msgv));
+  timeout = stm32_i2c_toticks(priv->msgc, priv->msgv);
 #else
   timeout = CONFIG_STM32H7_I2CTIMEOTICKS;
 #endif
 
   /* Signal the interrupt handler that we are waiting.  NOTE:  Interrupts
    * are currently disabled but will be temporarily re-enabled below when
-   * nxsem_timedwait() sleeps.
+   * nxsem_tickwait_uninterruptible() sleeps.
    */
 
   priv->intstate = INTSTATE_WAITING;
@@ -906,7 +892,7 @@ static inline int stm32_i2c_sem_waitdone(FAR struct stm32_i2c_priv_s *priv)
  ****************************************************************************/
 
 static inline void
-stm32_i2c_set_7bit_address(FAR struct stm32_i2c_priv_s *priv)
+stm32_i2c_set_7bit_address(struct stm32_i2c_priv_s *priv)
 {
   stm32_i2c_modifyreg32(priv, STM32_I2C_CR2_OFFSET, I2C_CR2_SADD7_MASK,
                         ((priv->msgv->addr & 0x7f) << I2C_CR2_SADD7_SHIFT));
@@ -920,8 +906,8 @@ stm32_i2c_set_7bit_address(FAR struct stm32_i2c_priv_s *priv)
  ****************************************************************************/
 
 static inline void
-stm32_i2c_set_bytes_to_transfer(FAR struct stm32_i2c_priv_s *priv,
-                               uint8_t n_bytes)
+stm32_i2c_set_bytes_to_transfer(struct stm32_i2c_priv_s *priv,
+                                uint8_t n_bytes)
 {
   stm32_i2c_modifyreg32(priv, STM32_I2C_CR2_OFFSET, I2C_CR2_NBYTES_MASK,
                         (n_bytes << I2C_CR2_NBYTES_SHIFT));
@@ -935,7 +921,7 @@ stm32_i2c_set_bytes_to_transfer(FAR struct stm32_i2c_priv_s *priv,
  ****************************************************************************/
 
 static inline void
-stm32_i2c_set_write_transfer_dir(FAR struct stm32_i2c_priv_s *priv)
+stm32_i2c_set_write_transfer_dir(struct stm32_i2c_priv_s *priv)
 {
   stm32_i2c_modifyreg32(priv, STM32_I2C_CR2_OFFSET, I2C_CR2_RD_WRN, 0);
 }
@@ -948,7 +934,7 @@ stm32_i2c_set_write_transfer_dir(FAR struct stm32_i2c_priv_s *priv)
  ****************************************************************************/
 
 static inline void
-stm32_i2c_set_read_transfer_dir(FAR struct stm32_i2c_priv_s *priv)
+stm32_i2c_set_read_transfer_dir(struct stm32_i2c_priv_s *priv)
 {
   stm32_i2c_modifyreg32(priv, STM32_I2C_CR2_OFFSET, 0, I2C_CR2_RD_WRN);
 }
@@ -961,7 +947,7 @@ stm32_i2c_set_read_transfer_dir(FAR struct stm32_i2c_priv_s *priv)
  ****************************************************************************/
 
 static inline void
-stm32_i2c_enable_reload(FAR struct stm32_i2c_priv_s *priv)
+stm32_i2c_enable_reload(struct stm32_i2c_priv_s *priv)
 {
   stm32_i2c_modifyreg32(priv, STM32_I2C_CR2_OFFSET, 0, I2C_CR2_RELOAD);
 }
@@ -974,7 +960,7 @@ stm32_i2c_enable_reload(FAR struct stm32_i2c_priv_s *priv)
  ****************************************************************************/
 
 static inline void
-stm32_i2c_disable_reload(FAR struct stm32_i2c_priv_s *priv)
+stm32_i2c_disable_reload(struct stm32_i2c_priv_s *priv)
 {
   stm32_i2c_modifyreg32(priv, STM32_I2C_CR2_OFFSET, I2C_CR2_RELOAD, 0);
 }
@@ -987,7 +973,7 @@ stm32_i2c_disable_reload(FAR struct stm32_i2c_priv_s *priv)
  *
  ****************************************************************************/
 
-static inline void stm32_i2c_sem_waitstop(FAR struct stm32_i2c_priv_s *priv)
+static inline void stm32_i2c_sem_waitstop(struct stm32_i2c_priv_s *priv)
 {
   clock_t start;
   clock_t elapsed;
@@ -1041,58 +1027,6 @@ static inline void stm32_i2c_sem_waitstop(FAR struct stm32_i2c_priv_s *priv)
 }
 
 /****************************************************************************
- * Name: stm32_i2c_sem_post
- *
- * Description:
- *   Release the mutual exclusion semaphore
- *
- ****************************************************************************/
-
-static inline void stm32_i2c_sem_post(FAR struct i2c_master_s *dev)
-{
-  nxsem_post(&((struct stm32_i2c_inst_s *)dev)->priv->sem_excl);
-}
-
-/****************************************************************************
- * Name: stm32_i2c_sem_init
- *
- * Description:
- *   Initialize semaphores
- *
- ****************************************************************************/
-
-static inline void stm32_i2c_sem_init(FAR struct i2c_master_s *dev)
-{
-  nxsem_init(&((struct stm32_i2c_inst_s *)dev)->priv->sem_excl, 0, 1);
-
-#ifndef CONFIG_I2C_POLLED
-  /* This semaphore is used for signaling and, hence, should not have
-   * priority inheritance enabled.
-   */
-
-  nxsem_init(&((struct stm32_i2c_inst_s *)dev)->priv->sem_isr, 0, 0);
-  nxsem_set_protocol(&((struct stm32_i2c_inst_s *)dev)->priv->sem_isr,
-                     SEM_PRIO_NONE);
-#endif
-}
-
-/****************************************************************************
- * Name: stm32_i2c_sem_destroy
- *
- * Description:
- *   Destroy semaphores.
- *
- ****************************************************************************/
-
-static inline void stm32_i2c_sem_destroy(FAR struct i2c_master_s *dev)
-{
-  nxsem_destroy(&((struct stm32_i2c_inst_s *)dev)->priv->sem_excl);
-#ifndef CONFIG_I2C_POLLED
-  nxsem_destroy(&((struct stm32_i2c_inst_s *)dev)->priv->sem_isr);
-#endif
-}
-
-/****************************************************************************
  * Name: stm32_i2c_trace*
  *
  * Description:
@@ -1101,7 +1035,7 @@ static inline void stm32_i2c_sem_destroy(FAR struct i2c_master_s *dev)
  ****************************************************************************/
 
 #ifdef CONFIG_I2C_TRACE
-static void stm32_i2c_traceclear(FAR struct stm32_i2c_priv_s *priv)
+static void stm32_i2c_traceclear(struct stm32_i2c_priv_s *priv)
 {
   struct stm32_trace_s *trace = &priv->trace[priv->tndx];
 
@@ -1112,7 +1046,7 @@ static void stm32_i2c_traceclear(FAR struct stm32_i2c_priv_s *priv)
   trace->time   = 0;              /* Time of first status or event */
 }
 
-static void stm32_i2c_tracereset(FAR struct stm32_i2c_priv_s *priv)
+static void stm32_i2c_tracereset(struct stm32_i2c_priv_s *priv)
 {
   /* Reset the trace info for a new data collection */
 
@@ -1121,7 +1055,7 @@ static void stm32_i2c_tracereset(FAR struct stm32_i2c_priv_s *priv)
   stm32_i2c_traceclear(priv);
 }
 
-static void stm32_i2c_tracenew(FAR struct stm32_i2c_priv_s *priv,
+static void stm32_i2c_tracenew(struct stm32_i2c_priv_s *priv,
                                uint32_t status)
 {
   struct stm32_trace_s *trace = &priv->trace[priv->tndx];
@@ -1163,7 +1097,7 @@ static void stm32_i2c_tracenew(FAR struct stm32_i2c_priv_s *priv,
     }
 }
 
-static void stm32_i2c_traceevent(FAR struct stm32_i2c_priv_s *priv,
+static void stm32_i2c_traceevent(struct stm32_i2c_priv_s *priv,
                                 enum stm32_trace_e event, uint32_t parm)
 {
   struct stm32_trace_s *trace;
@@ -1174,8 +1108,8 @@ static void stm32_i2c_traceevent(FAR struct stm32_i2c_priv_s *priv,
 
       /* Initialize the new trace entry */
 
-      trace->event  = event;
-      trace->parm   = parm;
+      trace->event = event;
+      trace->parm  = parm;
 
       /* Bump up the trace index (unless we are out of trace entries) */
 
@@ -1190,7 +1124,7 @@ static void stm32_i2c_traceevent(FAR struct stm32_i2c_priv_s *priv,
     }
 }
 
-static void stm32_i2c_tracedump(FAR struct stm32_i2c_priv_s *priv)
+static void stm32_i2c_tracedump(struct stm32_i2c_priv_s *priv)
 {
   struct stm32_trace_s *trace;
   int i;
@@ -1262,7 +1196,7 @@ static void stm32_i2c_tracedump(FAR struct stm32_i2c_priv_s *priv)
  *
  ****************************************************************************/
 
-static void stm32_i2c_setclock(FAR struct stm32_i2c_priv_s *priv,
+static void stm32_i2c_setclock(struct stm32_i2c_priv_s *priv,
                                uint32_t frequency)
 {
   uint8_t presc;
@@ -1363,7 +1297,7 @@ static void stm32_i2c_setclock(FAR struct stm32_i2c_priv_s *priv,
  *
  ****************************************************************************/
 
-static inline void stm32_i2c_sendstart(FAR struct stm32_i2c_priv_s *priv)
+static inline void stm32_i2c_sendstart(struct stm32_i2c_priv_s *priv)
 {
   bool next_norestart = false;
 
@@ -1489,7 +1423,7 @@ static inline void stm32_i2c_sendstart(FAR struct stm32_i2c_priv_s *priv)
  *
  ****************************************************************************/
 
-static inline void stm32_i2c_sendstop(FAR struct stm32_i2c_priv_s *priv)
+static inline void stm32_i2c_sendstop(struct stm32_i2c_priv_s *priv)
 {
   i2cinfo("Sending STOP\n");
   stm32_i2c_traceevent(priv, I2CEVENT_WRITE_STOP, 0);
@@ -1505,7 +1439,7 @@ static inline void stm32_i2c_sendstop(FAR struct stm32_i2c_priv_s *priv)
  *
  ****************************************************************************/
 
-static inline uint32_t stm32_i2c_getstatus(FAR struct stm32_i2c_priv_s *priv)
+static inline uint32_t stm32_i2c_getstatus(struct stm32_i2c_priv_s *priv)
 {
   return getreg32(priv->config->base + STM32_I2C_ISR_OFFSET);
 }
@@ -2052,9 +1986,9 @@ static int stm32_i2c_isr_process(struct stm32_i2c_priv_s *priv)
               i2cinfo("TCR: DISABLE RELOAD: NBYTES = dcnt = %i msgc = %i\n",
                       priv->dcnt, priv->msgc);
 
-              stm32_i2c_disable_reload(priv);
-
               stm32_i2c_set_bytes_to_transfer(priv, priv->dcnt);
+
+              stm32_i2c_disable_reload(priv);
             }
 
           i2cinfo("TCR: EXIT dcnt = %i msgc = %i status 0x%08" PRIx32 "\n",
@@ -2185,7 +2119,7 @@ static int stm32_i2c_isr_process(struct stm32_i2c_priv_s *priv)
  ****************************************************************************/
 
 #ifndef CONFIG_I2C_POLLED
-static int stm32_i2c_isr(int irq, void *context, FAR void *arg)
+static int stm32_i2c_isr(int irq, void *context, void *arg)
 {
   struct stm32_i2c_priv_s *priv = (struct stm32_i2c_priv_s *)arg;
 
@@ -2202,7 +2136,7 @@ static int stm32_i2c_isr(int irq, void *context, FAR void *arg)
  *
  ****************************************************************************/
 
-static int stm32_i2c_init(FAR struct stm32_i2c_priv_s *priv)
+static int stm32_i2c_init(struct stm32_i2c_priv_s *priv)
 {
   /* Power-up and configure GPIOs */
 
@@ -2255,7 +2189,7 @@ static int stm32_i2c_init(FAR struct stm32_i2c_priv_s *priv)
  *
  ****************************************************************************/
 
-static int stm32_i2c_deinit(FAR struct stm32_i2c_priv_s *priv)
+static int stm32_i2c_deinit(struct stm32_i2c_priv_s *priv)
 {
   /* Disable I2C */
 
@@ -2294,11 +2228,11 @@ static int stm32_i2c_deinit(FAR struct stm32_i2c_priv_s *priv)
  *
  ****************************************************************************/
 
-static int stm32_i2c_process(FAR struct i2c_master_s *dev,
-                             FAR struct i2c_msg_s *msgs, int count)
+static int stm32_i2c_process(struct i2c_master_s *dev,
+                             struct i2c_msg_s *msgs, int count)
 {
   struct stm32_i2c_inst_s     *inst = (struct stm32_i2c_inst_s *)dev;
-  FAR struct stm32_i2c_priv_s *priv = inst->priv;
+  struct stm32_i2c_priv_s *priv = inst->priv;
   uint32_t    status = 0;
   uint32_t    cr1;
   uint32_t    cr2;
@@ -2515,7 +2449,7 @@ static int stm32_i2c_process(FAR struct i2c_master_s *dev,
   /* Dump the trace result */
 
   stm32_i2c_tracedump(priv);
-  stm32_i2c_sem_post(dev);
+  nxmutex_unlock(&priv->lock);
 
   return -errval;
 }
@@ -2528,14 +2462,21 @@ static int stm32_i2c_process(FAR struct i2c_master_s *dev,
  *
  ****************************************************************************/
 
-static int stm32_i2c_transfer(FAR struct i2c_master_s *dev,
-                              FAR struct i2c_msg_s *msgs, int count)
+static int stm32_i2c_transfer(struct i2c_master_s *dev,
+                              struct i2c_msg_s *msgs, int count)
 {
+  struct stm32_i2c_priv_s *priv;
   int ret;
+
+  DEBUGASSERT(dev);
+
+  /* Get I2C private structure */
+
+  priv = ((struct stm32_i2c_inst_s *)dev)->priv;
 
   /* Ensure that address or flags don't change meanwhile */
 
-  ret = nxsem_wait(&((struct stm32_i2c_inst_s *)dev)->priv->sem_excl);
+  ret = nxmutex_lock(&priv->lock);
   if (ret >= 0)
     {
       ret = stm32_i2c_process(dev, msgs, count);
@@ -2553,9 +2494,9 @@ static int stm32_i2c_transfer(FAR struct i2c_master_s *dev,
  ****************************************************************************/
 
 #ifdef CONFIG_I2C_RESET
-static int stm32_i2c_reset(FAR struct i2c_master_s * dev)
+static int stm32_i2c_reset(struct i2c_master_s *dev)
 {
-  struct stm32_i2c_priv_s * priv;
+  struct stm32_i2c_priv_s *priv;
   unsigned int clock_count;
   unsigned int stretch_count;
   uint32_t scl_gpio;
@@ -2575,7 +2516,7 @@ static int stm32_i2c_reset(FAR struct i2c_master_s * dev)
 
   /* Lock out other clients */
 
-  ret = nxsem_wait_uninterruptible(&priv->sem_excl);
+  ret = nxmutex_lock(&priv->lock);
   if (ret < 0)
     {
       return ret;
@@ -2675,7 +2616,7 @@ out:
 
   /* Release the port for re-use by other clients */
 
-  stm32_i2c_sem_post(dev);
+  nxmutex_unlock(&priv->lock);
   return ret;
 }
 #endif /* CONFIG_I2C_RESET */
@@ -2710,13 +2651,12 @@ out:
  ****************************************************************************/
 
 #ifdef CONFIG_PM
-static int stm32_i2c_pm_prepare(FAR struct pm_callback_s *cb, int domain,
+static int stm32_i2c_pm_prepare(struct pm_callback_s *cb, int domain,
                                 enum pm_state_e pmstate)
 {
   struct stm32_i2c_priv_s *priv =
                       (struct stm32_i2c_priv_s *)((char *)cb -
                        offsetof(struct stm32_i2c_priv_s, pm_cb));
-  int sval;
 
   /* Logic to prepare for a reduced power state goes here. */
 
@@ -2731,13 +2671,7 @@ static int stm32_i2c_pm_prepare(FAR struct pm_callback_s *cb, int domain,
 
       /* Check if exclusive lock for I2C bus is held. */
 
-      if (nxsem_get_value(&priv->sem_excl, &sval) < 0)
-        {
-          DEBUGASSERT(false);
-          return -EINVAL;
-        }
-
-      if (sval <= 0)
+      if (nxmutex_is_locked(&priv->lock))
         {
           /* Exclusive lock is held, do not allow entry to deeper PM
            * states.
@@ -2771,19 +2705,10 @@ static int stm32_i2c_pm_prepare(FAR struct pm_callback_s *cb, int domain,
  *
  ****************************************************************************/
 
-FAR struct i2c_master_s *stm32_i2cbus_initialize(int port)
+struct i2c_master_s *stm32_i2cbus_initialize(int port)
 {
-  struct stm32_i2c_priv_s * priv = NULL;  /* private data of device with multiple instances */
-  struct stm32_i2c_inst_s * inst = NULL;  /* device, single instance */
-  irqstate_t irqs;
-#ifdef CONFIG_PM
-  int ret;
-#endif
-
-#if STM32_HSI_FREQUENCY != 16000000 || defined(INVALID_CLOCK_SOURCE)
-#   warning STM32_I2C_INIT: Peripheral clock is HSI and it must be 16mHz or the speed/timing calculations need to be redone.
-  return NULL;
-#endif
+  struct stm32_i2c_priv_s *priv = NULL;  /* private data of device with multiple instances */
+  struct stm32_i2c_inst_s *inst = NULL;  /* device, single instance */
 
   /* Get I2C private structure */
 
@@ -2822,30 +2747,26 @@ FAR struct i2c_master_s *stm32_i2cbus_initialize(int port)
 
   /* Initialize instance */
 
-  inst->ops       = &stm32_i2c_ops;
-  inst->priv      = priv;
+  inst->ops  = &stm32_i2c_ops;
+  inst->priv = priv;
 
   /* Init private data for the first time, increment refs count,
    * power-up hardware and configure GPIOs.
    */
 
-  irqs = enter_critical_section();
-
-  if ((volatile int)priv->refs++ == 0)
+  nxmutex_lock(&priv->lock);
+  if (priv->refs++ == 0)
     {
-      stm32_i2c_sem_init((struct i2c_master_s *)inst);
       stm32_i2c_init(priv);
 
 #ifdef CONFIG_PM
       /* Register to receive power management callbacks */
 
-      ret = pm_register(&priv->pm_cb);
-      DEBUGASSERT(ret == OK);
-      UNUSED(ret);
+      DEBUGVERIFY(pm_register(&priv->pm_cb));
 #endif
     }
 
-  leave_critical_section(irqs);
+  nxmutex_unlock(&priv->lock);
   return (struct i2c_master_s *)inst;
 }
 
@@ -2857,43 +2778,38 @@ FAR struct i2c_master_s *stm32_i2cbus_initialize(int port)
  *
  ****************************************************************************/
 
-int stm32_i2cbus_uninitialize(FAR struct i2c_master_s * dev)
+int stm32_i2cbus_uninitialize(struct i2c_master_s *dev)
 {
-  irqstate_t irqs;
+  struct stm32_i2c_priv_s *priv;
 
   DEBUGASSERT(dev);
+  priv = ((struct stm32_i2c_inst_s *)dev)->priv;
 
   /* Decrement refs and check for underflow */
 
-  if (((struct stm32_i2c_inst_s *)dev)->priv->refs == 0)
+  if (priv->refs == 0)
     {
       return ERROR;
     }
 
-  irqs = enter_critical_section();
-
-  if (--((struct stm32_i2c_inst_s *)dev)->priv->refs)
+  nxmutex_lock(&priv->lock);
+  if (--priv->refs)
     {
-      leave_critical_section(irqs);
+      nxmutex_unlock(&priv->lock);
       kmm_free(dev);
       return OK;
     }
 
-  leave_critical_section(irqs);
-
 #ifdef CONFIG_PM
   /* Unregister power management callbacks */
 
-  pm_unregister(&((struct stm32_i2c_inst_s *)dev)->priv->pm_cb);
+  pm_unregister(&priv->pm_cb);
 #endif
 
   /* Disable power and other HW resource (GPIO's) */
 
-  stm32_i2c_deinit(((struct stm32_i2c_inst_s *)dev)->priv);
-
-  /* Release unused resources */
-
-  stm32_i2c_sem_destroy((struct i2c_master_s *)dev);
+  stm32_i2c_deinit(priv);
+  nxmutex_unlock(&priv->lock);
 
   kmm_free(dev);
   return OK;

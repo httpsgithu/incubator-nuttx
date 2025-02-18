@@ -1,7 +1,8 @@
 /****************************************************************************
  * drivers/mtd/mtd_modeltab.c
  *
- *   Copyright (c) 2012, Atmel Corporation
+ * SPDX-License-Identifier: BSD-3-Clause
+ * SPDX-FileCopyrightText: Copyright (c) 2012, Atmel Corporation
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -37,7 +38,6 @@
  ****************************************************************************/
 
 #include <nuttx/config.h>
-#include <nuttx/mtd/nand_config.h>
 
 #include <nuttx/mtd/nand_scheme.h>
 #include <nuttx/mtd/nand_model.h>
@@ -49,8 +49,8 @@
 /* List of NandFlash models which can be recognized by the software */
 
 /****************************************************************************
- *  ID     OPTIONS             PAGE  SPARE  DEV  BLOCK | SCHEME
- *                             SIZE  SIZE   SIZE  SIZE  |
+ *  ID     OPTIONS             PAGE SPARE DEV  BLOCK | SCHEME
+ *                             SIZE SIZE  SIZE SIZE  |
  ****************************************************************************/
 
 const struct nand_model_s g_nandmodels[NAND_NMODELS] =

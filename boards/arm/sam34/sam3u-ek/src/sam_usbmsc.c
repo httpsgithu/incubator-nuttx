@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/sam34/sam3u-ek/src/sam_usbmsc.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -66,7 +68,7 @@
 
 int board_usbmsc_initialize(int port)
 {
-  FAR struct sdio_dev_s *sdio;
+  struct sdio_dev_s *sdio;
   int ret;
 
   /* First, get an instance of the SDIO interface */

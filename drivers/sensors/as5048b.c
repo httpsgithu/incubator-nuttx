@@ -1,6 +1,8 @@
 /****************************************************************************
  * drivers/sensors/as5048b.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -91,11 +93,13 @@ static int as5048b_ioctl(FAR struct qe_lowerhalf_s *lower, int cmd,
 
 static const struct qe_ops_s g_qeops =
 {
-  as5048b_setup,
-  as5048b_shutdown,
-  as5048b_position,
-  as5048b_reset,
-  as5048b_ioctl
+  as5048b_setup,    /* setup */
+  as5048b_shutdown, /* shutdown */
+  as5048b_position, /* position */
+  NULL,             /* setposmax */
+  as5048b_reset,    /* reset */
+  NULL,             /* setindex */
+  as5048b_ioctl     /* ioctl */
 };
 
 /****************************************************************************
@@ -600,7 +604,7 @@ FAR struct qe_lowerhalf_s *as5048b_initialize(FAR struct i2c_master_s *i2c,
 
   /* Initialize the device's structure */
 
-  priv = (FAR struct as5048b_dev_s *)kmm_malloc(sizeof(*priv));
+  priv = kmm_malloc(sizeof(*priv));
   if (priv == NULL)
     {
       snerr("ERROR: Failed to allocate instance\n");

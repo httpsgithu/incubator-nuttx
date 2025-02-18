@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/stm32/common/include/board_qencoder.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -18,8 +20,8 @@
  *
  ****************************************************************************/
 
-#ifndef __STM32_QENCODER_H
-#define __STM32_QENCODER_H
+#ifndef __BOARDS_ARM_STM32_COMMON_INCLUDE_BOARD_QENCODER_H
+#define __BOARDS_ARM_STM32_COMMON_INCLUDE_BOARD_QENCODER_H
 
 /****************************************************************************
  * Included Files
@@ -70,4 +72,4 @@ int board_qencoder_initialize(int devno, int timerno);
 }
 #endif
 
-#endif // __STM32_QENCODER_H
+#endif /* __BOARDS_ARM_STM32_COMMON_INCLUDE_BOARD_QENCODER_H */

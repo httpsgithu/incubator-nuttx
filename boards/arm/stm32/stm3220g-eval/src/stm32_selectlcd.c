@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/stm32/stm3220g-eval/src/stm32_selectlcd.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -28,8 +30,7 @@
 #include <debug.h>
 
 #include "chip.h"
-#include "arm_arch.h"
-
+#include "arm_internal.h"
 #include "stm32.h"
 #include "stm3220g-eval.h"
 
@@ -137,9 +138,9 @@ void stm32_selectlcd(void)
 
   /* Bank3 NOR/SRAM timing register configuration */
 
-  putreg32(FSMC_BTR_ADDSET(5) | FSMC_BTR_ADDHLD(0) |
-           FSMC_BTR_DATAST(9) | FSMC_BTR_BUSTURN(0) |
-           FSMC_BTR_CLKDIV(0) | FSMC_BTR_DATLAT(0) |
+  putreg32(FSMC_BTR_ADDSET(5) | FSMC_BTR_ADDHLD(1) |
+           FSMC_BTR_DATAST(9) | FSMC_BTR_BUSTURN(1) |
+           FSMC_BTR_CLKDIV(1) | FSMC_BTR_DATLAT(2) |
            FSMC_BTR_ACCMODA, STM32_FSMC_BTR3);
 
   putreg32(0xffffffff, STM32_FSMC_BWTR3);

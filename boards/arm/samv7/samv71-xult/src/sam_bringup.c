@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/samv7/samv71-xult/src/sam_bringup.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -25,14 +27,14 @@
 #include <nuttx/config.h>
 
 #include <sys/mount.h>
+#include <sys/param.h>
 
 #include <stdbool.h>
 #include <stdio.h>
 #include <syslog.h>
 #include <errno.h>
 #include <debug.h>
-
-#include <nuttx/fs/fs.h>
+#include <nuttx/signal.h>
 
 #ifdef CONFIG_USBMONITOR
 #  include <nuttx/usb/usbmonitor.h>
@@ -40,6 +42,7 @@
 
 #include <nuttx/drivers/drivers.h>
 #include <nuttx/drivers/ramdisk.h>
+#include <nuttx/fs/fs.h>
 #include <nuttx/fs/nxffs.h>
 #include <nuttx/i2c/i2c_master.h>
 #include <nuttx/video/fb.h>
@@ -60,8 +63,8 @@
 #  include <nuttx/leds/userled.h>
 #endif
 
-#ifdef HAVE_PROGMEM_CHARDEV
-#  include "sam_progmem.h"
+#ifdef CONFIG_VNCSERVER
+#  include <nuttx/video/vnc.h>
 #endif
 
 #if defined(HAVE_RTC_DSXXXX) || defined(HAVE_RTC_PCF85263)
@@ -75,8 +78,20 @@
 #  include "sam_twihs.h"
 #endif
 
+#ifdef HAVE_HSMCI
+#  include "board_hsmci.h"
+#endif /* HAVE_HSMCI */
+
+#ifdef HAVE_AUTOMOUNTER
+#  include "sam_automount.h"
+#endif /* HAVE_AUTOMOUNTER */
+
 #ifdef HAVE_ROMFS
 #  include <arch/board/boot_romfsimg.h>
+#endif
+
+#ifdef HAVE_PROGMEM_CHARDEV
+#  include "board_progmem.h"
 #endif
 
 /****************************************************************************
@@ -86,6 +101,37 @@
 #define NSECTORS(n) \
   (((n)+CONFIG_SAMV71XULT_ROMFS_ROMDISK_SECTSIZE-1) / \
    CONFIG_SAMV71XULT_ROMFS_ROMDISK_SECTSIZE)
+
+/****************************************************************************
+ * Private Data
+ ****************************************************************************/
+
+#if defined(CONFIG_SAMV7_PROGMEM_OTA_PARTITION)
+static struct mtd_partition_s g_mtd_partition_table[] =
+{
+  {
+    .offset  = CONFIG_SAMV7_OTA_PRIMARY_SLOT_OFFSET,
+    .size    = CONFIG_SAMV7_OTA_SLOT_SIZE,
+    .devpath = CONFIG_SAMV7_OTA_PRIMARY_SLOT_DEVPATH
+  },
+  {
+    .offset  = CONFIG_SAMV7_OTA_SECONDARY_SLOT_OFFSET,
+    .size    = CONFIG_SAMV7_OTA_SLOT_SIZE,
+    .devpath = CONFIG_SAMV7_OTA_SECONDARY_SLOT_DEVPATH
+  },
+  {
+    .offset  = CONFIG_SAMV7_OTA_SCRATCH_OFFSET,
+    .size    = CONFIG_SAMV7_OTA_SCRATCH_SIZE,
+    .devpath = CONFIG_SAMV7_OTA_SCRATCH_DEVPATH
+  }
+};
+
+static const size_t g_mtd_partition_table_size =
+    nitems(g_mtd_partition_table);
+#else
+#  define g_mtd_partition_table         NULL
+#  define g_mtd_partition_table_size    0
+#endif /* CONFIG_SAMV7_PROGMEM_OTA_PARTITION */
 
 /****************************************************************************
  * Private Functions
@@ -102,7 +148,7 @@
 #ifdef HAVE_I2CTOOL
 static void sam_i2c_register(int bus)
 {
-  FAR struct i2c_master_s *i2c;
+  struct i2c_master_s *i2c;
   int ret;
 
   i2c = sam_i2cbus_initialize(bus);
@@ -163,15 +209,15 @@ static void sam_i2ctool(void)
 int sam_bringup(void)
 {
 #ifdef HAVE_S25FL1
-  FAR struct qspi_dev_s *qspi;
+  struct qspi_dev_s *qspi;
 #endif
-#if defined(HAVE_S25FL1) || defined(HAVE_PROGMEM_CHARDEV)
-  FAR struct mtd_dev_s *mtd;
+#if defined(HAVE_S25FL1)
+  struct mtd_dev_s *mtd;
 #endif
 #if defined(HAVE_RTC_DSXXXX) || defined(HAVE_RTC_PCF85263)
-  FAR struct i2c_master_s *i2c;
+  struct i2c_master_s *i2c;
 #endif
-#if defined(HAVE_S25FL1_CHARDEV) || defined(HAVE_PROGMEM_CHARDEV)
+#if defined(HAVE_S25FL1_CHARDEV)
 #if defined(CONFIG_BCH)
   char blockdev[18];
   char chardev[12];
@@ -217,7 +263,7 @@ int sam_bringup(void)
         {
           /* Synchronize the system time to the RTC time */
 
-          clock_synchronize();
+          clock_synchronize(NULL);
         }
     }
 
@@ -244,7 +290,7 @@ int sam_bringup(void)
         {
           /* Synchronize the system time to the RTC time */
 
-          clock_synchronize();
+          clock_synchronize(NULL);
         }
     }
 #endif
@@ -297,33 +343,37 @@ int sam_bringup(void)
 #ifdef HAVE_HSMCI
   /* Initialize the HSMCI0 driver */
 
-  ret = sam_hsmci_initialize(HSMCI0_SLOTNO, HSMCI0_MINOR);
+  ret = sam_hsmci_initialize(HSMCI0_SLOTNO, HSMCI0_MINOR, GPIO_HSMCI0_CD,
+                             IRQ_HSMCI0_CD, true);
   if (ret < 0)
     {
       syslog(LOG_ERR, "ERROR: sam_hsmci_initialize(%d,%d) failed: %d\n",
              HSMCI0_SLOTNO, HSMCI0_MINOR, ret);
     }
 
-#ifdef CONFIG_SAMV71XULT_HSMCI0_MOUNT
+#ifdef CONFIG_SAMV7_HSMCI0_MOUNT
   else
     {
-      /* REVISIT: A delay seems to be required here or the mount will fail */
-
-      /* Mount the volume on HSMCI0 */
-
-      ret = nx_mount(CONFIG_SAMV71XULT_HSMCI0_MOUNT_BLKDEV,
-                     CONFIG_SAMV71XULT_HSMCI0_MOUNT_MOUNTPOINT,
-                     CONFIG_SAMV71XULT_HSMCI0_MOUNT_FSTYPE,
-                     0, NULL);
-
-      if (ret < 0)
+      if (sam_cardinserted(HSMCI0_SLOTNO))
         {
-          syslog(LOG_ERR, "ERROR: Failed to mount %s: %d\n",
-                 CONFIG_SAMV71XULT_HSMCI0_MOUNT_MOUNTPOINT, ret);
+          nxsig_usleep(1000 * 1000);
+
+          /* Mount the volume on HSMCI0 */
+
+          ret = nx_mount(CONFIG_SAMV7_HSMCI0_MOUNT_BLKDEV,
+                         CONFIG_SAMV7_HSMCI0_MOUNT_MOUNTPOINT,
+                         CONFIG_SAMV7_HSMCI0_MOUNT_FSTYPE,
+                         0, NULL);
+
+          if (ret < 0)
+            {
+              syslog(LOG_ERR, "ERROR: Failed to mount %s: %d\n",
+                     CONFIG_SAMV7_HSMCI0_MOUNT_MOUNTPOINT, ret);
+            }
         }
     }
 
-#endif /* CONFIG_SAMV71XULT_HSMCI0_MOUNT */
+#endif /* CONFIG_SAMV7_HSMCI0_MOUNT */
 #endif /* HAVE_HSMCI */
 
 #ifdef HAVE_AUTOMOUNTER
@@ -420,8 +470,9 @@ int sam_bringup(void)
 #if defined(CONFIG_BCH)
       /* Use the minor number to create device paths */
 
-      snprintf(blockdev, 18, "/dev/mtdblock%d", S25FL1_MTD_MINOR);
-      snprintf(chardev, 12, "/dev/mtd%d", S25FL1_MTD_MINOR);
+      snprintf(blockdev, sizeof(blockdev), "/dev/mtdblock%d",
+               S25FL1_MTD_MINOR);
+      snprintf(chardev, sizeof(chardev), "/dev/mtd%d", S25FL1_MTD_MINOR);
 
       /* Now create a character device on the block device */
 
@@ -440,42 +491,13 @@ int sam_bringup(void)
 #ifdef HAVE_PROGMEM_CHARDEV
   /* Initialize the SAMV71 FLASH programming memory library */
 
-  sam_progmem_initialize();
-
-  /* Create an instance of the SAMV71 FLASH program memory device driver */
-
-  mtd = progmem_initialize();
-  if (!mtd)
-    {
-      syslog(LOG_ERR, "ERROR: progmem_initialize failed\n");
-    }
-
-  /* Use the FTL layer to wrap the MTD driver as a block driver */
-
-  ret = ftl_initialize(PROGMEM_MTD_MINOR, mtd);
+  ret = board_progmem_init(PROGMEM_MTD_MINOR, g_mtd_partition_table,
+                           g_mtd_partition_table_size);
   if (ret < 0)
     {
-      syslog(LOG_ERR, "ERROR: Failed to initialize the FTL layer: %d\n",
-             ret);
+      syslog(LOG_ERR, "ERROR: Failed to initialize progmem: %d\n", ret);
       return ret;
     }
-
-#if defined(CONFIG_BCH)
-  /* Use the minor number to create device paths */
-
-  snprintf(blockdev, 18, "/dev/mtdblock%d", PROGMEM_MTD_MINOR);
-  snprintf(chardev, 12, "/dev/mtd%d", PROGMEM_MTD_MINOR);
-
-  /* Now create a character device on the block device */
-
-  ret = bchdev_register(blockdev, chardev, false);
-  if (ret < 0)
-    {
-      syslog(LOG_ERR, "ERROR: bchdev_register %s failed: %d\n",
-             chardev, ret);
-      return ret;
-    }
-#endif /* defined(CONFIG_BCH) */
 #endif
 
 #ifdef HAVE_USBHOST
@@ -546,11 +568,19 @@ int sam_bringup(void)
 #ifdef CONFIG_VIDEO_FB
   /* Initialize and register the LCD framebuffer driver */
 
+#  ifdef CONFIG_VNCSERVER
+  ret = vnc_fb_register(0);
+  if (ret < 0)
+    {
+      syslog(LOG_ERR, "ERROR: vnc_fb_register() failed: %d\n", ret);
+    }
+#  else
   ret = fb_register(0, 0);
   if (ret < 0)
     {
       syslog(LOG_ERR, "ERROR: fb_register() failed: %d\n", ret);
     }
+#  endif
 #endif
 
   /* If we got here then perhaps not all initialization was successful, but

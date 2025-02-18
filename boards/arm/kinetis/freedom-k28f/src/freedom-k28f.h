@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/kinetis/freedom-k28f/src/freedom-k28f.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -205,10 +207,10 @@
 struct i2c_master_s;  /* Forward reference */
 
 #ifdef CONFIG_KINETIS_I2C0
-extern FAR struct i2c_master_s *g_i2c0_dev;
+extern struct i2c_master_s *g_i2c0_dev;
 #endif
 #ifdef CONFIG_KINETIS_I2C1
-extern FAR struct i2c_master_s *g_i2c1_dev;
+extern struct i2c_master_s *g_i2c1_dev;
 #endif
 
 /****************************************************************************

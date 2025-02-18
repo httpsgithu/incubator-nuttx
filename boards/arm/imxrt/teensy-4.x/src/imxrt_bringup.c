@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/imxrt/teensy-4.x/src/imxrt_bringup.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -30,7 +32,6 @@
 #include <syslog.h>
 #include <nuttx/fs/fs.h>
 #include <nuttx/i2c/i2c_master.h>
-#include <nuttx/video/fb.h>
 #include <imxrt_lpi2c.h>
 #include <imxrt_lpspi.h>
 #include <nuttx/input/buttons.h>
@@ -69,7 +70,7 @@
  * Private Functions
  ****************************************************************************/
 
-#if defined (CONFIG_IMXRT_USDHC) && (CONFIG_TEENSY_41) 
+#if defined (CONFIG_IMXRT_USDHC) && (CONFIG_TEENSY_41)
 static int nsh_sdmmc_initialize(void)
 {
   struct sdio_dev_s *sdmmc;
@@ -135,9 +136,9 @@ int imxrt_bringup(void)
 #endif
 
 #if !defined(CONFIG_BOARDCTL_USBDEVCTRL) && !defined(CONFIG_USBDEV_COMPOSITE)
-# ifdef CONFIG_CDCACM
+#  ifdef CONFIG_CDCACM
     cdcacm_initialize(0, NULL);
-# endif
+#  endif
 #endif
 
 #if defined(CONFIG_I2C_DRIVER)

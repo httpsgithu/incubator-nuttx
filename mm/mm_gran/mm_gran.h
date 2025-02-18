@@ -1,6 +1,8 @@
 /****************************************************************************
  * mm/mm_gran/mm_gran.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -31,7 +33,8 @@
 
 #include <arch/types.h>
 #include <nuttx/mm/gran.h>
-#include <nuttx/semaphore.h>
+#include <nuttx/mutex.h>
+#include <nuttx/spinlock.h>
 
 /****************************************************************************
  * Pre-processor Definitions
@@ -46,7 +49,7 @@
 
 /* Debug */
 
-#ifdef CONFIG_DEBUG_GRAM
+#ifdef CONFIG_DEBUG_GRAN
 #  define granerr                    _err
 #  define granwarn                   _warn
 #  define graninfo                   _info
@@ -65,11 +68,13 @@
 struct gran_s
 {
   uint8_t    log2gran;  /* Log base 2 of the size of one granule */
+  uint8_t    log2align; /* Log base 2 of required alignment */
   uint16_t   ngranules; /* The total number of (aligned) granules in the heap */
 #ifdef CONFIG_GRAN_INTR
   irqstate_t irqstate;  /* For exclusive access to the GAT */
+  spinlock_t lock;
 #else
-  sem_t      exclsem;   /* For exclusive access to the GAT */
+  mutex_t    lock;       /* For exclusive access to the GAT */
 #endif
   uintptr_t  heapstart; /* The aligned start of the granule heap */
   uint32_t   gat[1];    /* Start of the granule allocation table */
@@ -109,11 +114,12 @@ void gran_leave_critical(FAR struct gran_s *priv);
  *   ngranules - The number of granules allocated
  *
  * Returned Value:
- *   None
+ *   On success, a non-NULL pointer to the allocated memory is returned;
+ *   NULL is returned on failure.
  *
  ****************************************************************************/
 
-void gran_mark_allocated(FAR struct gran_s *priv, uintptr_t alloc,
-                         unsigned int ngranules);
+FAR void *gran_mark_allocated(FAR struct gran_s *priv, uintptr_t alloc,
+                              unsigned int ngranules);
 
 #endif /* __MM_MM_GRAN_MM_GRAN_H */

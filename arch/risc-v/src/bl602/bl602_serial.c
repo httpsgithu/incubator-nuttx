@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/risc-v/src/bl602/bl602_serial.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -37,16 +39,14 @@
 #include <nuttx/serial/serial.h>
 #include <nuttx/fs/ioctl.h>
 #include <nuttx/serial/tioctl.h>
+#include <nuttx/spinlock.h>
 
 #include "bl602_lowputc.h"
 #include "bl602_gpio.h"
 
 #include "hardware/bl602_uart.h"
 #include "hardware/bl602_glb.h"
-
-#include "riscv_arch.h"
 #include "riscv_internal.h"
-
 #include "bl602_config.h"
 #include "chip.h"
 
@@ -151,6 +151,8 @@ static bool bl602_txempty(struct uart_dev_s *dev);
 /****************************************************************************
  * Private Data
  ****************************************************************************/
+
+static spinlock_t g_bl602_serial_lock = SP_UNLOCKED;
 
 static const struct uart_ops_s g_uart_ops =
 {
@@ -286,9 +288,9 @@ static struct uart_dev_s *const g_uart_devs[] =
  *
  * Description:
  *   This is the UART interrupt handler.  It will be invoked when an
- *   interrupt received on the 'irq'  It should call uart_transmitchars or
- *   uart_receivechar to perform the appropriate data transfers.  The
- *   interrupt handling logic must be able to map the 'irq' number into the
+ *   interrupt is received on the 'irq'.  It should call uart_xmitchars or
+ *   uart_recvchars to perform the appropriate data transfers.  The
+ *   interrupt handling logic must be able to map the 'arg' to the
  *   appropriate uart_dev_s structure in order to call these functions.
  *
  ****************************************************************************/
@@ -394,7 +396,7 @@ static void bl602_shutdown(struct uart_dev_s *dev)
 
 static int bl602_attach(struct uart_dev_s *dev)
 {
-  int              ret;
+  int                  ret;
   struct bl602_uart_s *priv = (struct bl602_uart_s *)dev->priv;
 
   ret = irq_attach(priv->irq, __uart_interrupt, (void *)dev);
@@ -452,7 +454,7 @@ static int bl602_ioctl(struct file *filep, int cmd, unsigned long arg)
       do
         {
           struct termios * termiosp = (struct termios *)arg;
-          struct bl602_uart_s *priv     = (struct bl602_uart_s *)dev->priv;
+          struct bl602_uart_s *priv = (struct bl602_uart_s *)dev->priv;
 
           if (!termiosp)
             {
@@ -567,19 +569,19 @@ static int bl602_ioctl(struct file *filep, int cmd, unsigned long arg)
 
           if (priv->config.idx == 0)
             {
-#if CONFIG_UART0_IFLOWCONTROL
+#ifdef CONFIG_UART0_IFLOWCONTROL
               config.iflow_ctl = (termiosp->c_cflag & CRTS_IFLOW) != 0;
 #endif
-#if CONFIG_UART0_OFLOWCONTROL
+#ifdef CONFIG_UART0_OFLOWCONTROL
               config.oflow_ctl = (termiosp->c_cflag & CCTS_OFLOW) != 0;
 #endif
             }
           else
             {
-#if CONFIG_UART1_IFLOWCONTROL
+#ifdef CONFIG_UART1_IFLOWCONTROL
               config.iflow_ctl = (termiosp->c_cflag & CRTS_IFLOW) != 0;
 #endif
-#if CONFIG_UART1_OFLOWCONTROL
+#ifdef CONFIG_UART1_OFLOWCONTROL
               config.oflow_ctl = (termiosp->c_cflag & CCTS_OFLOW) != 0;
 #endif
             }
@@ -662,7 +664,7 @@ static int bl602_receive(struct uart_dev_s *dev, unsigned int *status)
 static void bl602_rxint(struct uart_dev_s *dev, bool enable)
 {
   uint32_t int_mask;
-  struct bl602_uart_s *priv  = (struct bl602_uart_s *)dev->priv;
+  struct bl602_uart_s *priv = (struct bl602_uart_s *)dev->priv;
   uint8_t uart_idx = priv->config.idx;
   irqstate_t       flags = enter_critical_section();
 
@@ -858,7 +860,7 @@ void riscv_serialinit(void)
 
   /* Register all UARTs */
 
-  strcpy(devname, "/dev/ttySx");
+  strlcpy(devname, "/dev/ttySx", sizeof(devname));
   for (i = 0; i < sizeof(g_uart_devs) / sizeof(g_uart_devs[0]); i++)
     {
       if (g_uart_devs[i] == 0)
@@ -888,27 +890,14 @@ void riscv_serialinit(void)
  *
  ****************************************************************************/
 
-int up_putc(int ch)
+void up_putc(int ch)
 {
 #ifdef HAVE_SERIAL_CONSOLE
-  struct bl602_uart_s *priv = (struct bl602_uart_s *)CONSOLE_DEV.priv;
-  (void)priv;
-
-  irqstate_t flags = enter_critical_section();
-
-  /* Check for LF */
-
-  if (ch == '\n')
-    {
-      /* Add CR */
-
-      riscv_lowputc('\r');
-    }
+  irqstate_t flags = spin_lock_irqsave(&g_bl602_serial_lock);
 
   riscv_lowputc(ch);
-  leave_critical_section(flags);
+  spin_unlock_irqrestore(&g_bl602_serial_lock, flags);
 #endif
-  return ch;
 }
 
 /****************************************************************************
@@ -931,9 +920,8 @@ void riscv_serialinit(void)
 {
 }
 
-int up_putc(int ch)
+void up_putc(int ch)
 {
-  return ch;
 }
 
 #endif /* HAVE_UART_DEVICE */
@@ -947,21 +935,11 @@ int up_putc(int ch)
  *
  ****************************************************************************/
 
-int up_putc(int ch)
+void up_putc(int ch)
 {
 #ifdef HAVE_SERIAL_CONSOLE
-  /* Check for LF */
-
-  if (ch == '\n')
-    {
-      /* Add CR */
-
-      riscv_lowputc('\r');
-    }
-
   riscv_lowputc(ch);
 #endif
-  return ch;
 }
 
 #endif /* USE_SERIALDRIVER */

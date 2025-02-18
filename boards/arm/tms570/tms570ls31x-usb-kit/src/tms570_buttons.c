@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/tms570/tms570ls31x-usb-kit/src/tms570_buttons.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -30,11 +32,9 @@
 #include <nuttx/arch.h>
 #include <nuttx/board.h>
 #include <nuttx/irq.h>
-
-#include <nuttx/irq.h>
 #include <arch/board/board.h>
 
-#include "arm_arch.h"
+#include "arm_internal.h"
 #include "tms570_gio.h"
 #include "tms570ls31x_usb_kit.h"
 
@@ -167,7 +167,7 @@ uint32_t board_buttons(void)
  *
  ****************************************************************************/
 
-int board_button_irq(int id, xcpt_t irqhandler, FAR void *arg)
+int board_button_irq(int id, xcpt_t irqhandler, void *arg)
 {
 #ifdef HAVE_IRQBUTTONS
   if (id == BUTTON_GIOA7)

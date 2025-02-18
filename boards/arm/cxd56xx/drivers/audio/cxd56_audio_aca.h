@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/cxd56xx/drivers/audio/cxd56_audio_aca.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -56,7 +58,7 @@ CXD56_AUDIO_ECODE cxd56_audio_aca_poweron(void);
 CXD56_AUDIO_ECODE cxd56_audio_aca_poweroff(void);
 CXD56_AUDIO_ECODE cxd56_audio_aca_poweron_micbias(void);
 CXD56_AUDIO_ECODE cxd56_audio_aca_poweron_input(
-                                  FAR cxd56_audio_mic_gain_t *gain);
+                                  cxd56_audio_mic_gain_t *gain);
 CXD56_AUDIO_ECODE cxd56_audio_aca_set_smaster(void);
 CXD56_AUDIO_ECODE cxd56_audio_aca_poweron_output(void);
 CXD56_AUDIO_ECODE cxd56_audio_aca_poweroff_input(void);
@@ -64,7 +66,7 @@ CXD56_AUDIO_ECODE cxd56_audio_aca_poweroff_output(void);
 CXD56_AUDIO_ECODE cxd56_audio_aca_enable_output(void);
 CXD56_AUDIO_ECODE cxd56_audio_aca_disable_output(void);
 CXD56_AUDIO_ECODE cxd56_audio_aca_set_micgain(
-                                  FAR cxd56_audio_mic_gain_t *gain);
+                                  cxd56_audio_mic_gain_t *gain);
 CXD56_AUDIO_ECODE cxd56_audio_aca_notify_micbootdone(void);
 
 #endif /* __BOARDS_ARM_CXD56XX_DRIVERS_AUDIO_CXD56_AUDIO_ACA_H */

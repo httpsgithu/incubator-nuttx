@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/cxd56xx/common/src/cxd56_sensors.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -51,6 +53,12 @@
 #  define _BMI160  1
 #else
 #  define _BMI160  0
+#endif
+
+#if defined(CONFIG_SENSORS_BMI270) || defined(CONFIG_SENSORS_BMI270_SCU)
+#  define _BMI270  1
+#else
+#  define _BMI270  0
 #endif
 
 #if defined(CONFIG_SENSORS_KX022) || defined(CONFIG_SENSORS_KX022_SCU)
@@ -107,7 +115,7 @@
 #  define _RPR0521RS  0
 #endif
 
-#if (_BMI160 + _KX022) > 1
+#if (_BMI160 + _BMI270 + _KX022) > 1
 #  error "Duplicate accelerometer sensor device."
 #endif
 
@@ -156,7 +164,7 @@
  ****************************************************************************/
 
 typedef int (*_init_t)(int bus);
-typedef int (*_initdev_t)(FAR const char *devpath, int bus);
+typedef int (*_initdev_t)(const char *devpath, int bus);
 
 struct sensor_device_s
 {
@@ -181,6 +189,13 @@ static struct sensor_device_s sensor_device[] =
   _I2C_DEVICE_WOPATH(bmi160), /* Accel + Gyro */
 #  else /* CONFIG_SENSORS_BMI160_SPI */
   _SPI_DEVICE_WOPATH(bmi160),
+#  endif
+#endif
+#if defined(CONFIG_SENSORS_BMI270) || defined(CONFIG_SENSORS_BMI270_SCU)
+#  if defined(CONFIG_SENSORS_BMI270_I2C) || defined(CONFIG_SENSORS_BMI270_SCU_I2C)
+  _I2C_DEVICE_WOPATH(bmi270),
+#  else /* CONFIG_SENSORS_BMI270_SPI */
+  _SPI_DEVICE_WOPATH(bmi270),
 #  endif
 #endif
 #if defined(CONFIG_SENSORS_KX022) || defined(CONFIG_SENSORS_KX022_SCU)
@@ -216,6 +231,9 @@ static struct sensor_device_s sensor_device[] =
 #if defined(CONFIG_SENSORS_BH1745NUC) || defined(CONFIG_SENSORS_BH1745NUC_SCU)
   _I2C_DEVICE(bh1745nuc, "/dev/color"), /* Color */
 #endif
+#if defined(CONFIG_SENSORS_SCD41)
+  _I2C_DEVICE(scd41, "/dev/co2"), /* CO2 */
+#endif
 };
 
 /****************************************************************************
@@ -234,7 +252,7 @@ int board_sensors_initialize(void)
 {
   int ret = 0;
   int i;
-  FAR struct sensor_device_s *dev;
+  struct sensor_device_s *dev;
 
   ret = board_power_control(POWER_SENSOR, true);
   if (ret)

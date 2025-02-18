@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/cxd56xx/spresense/src/cxd56_gpioif.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -136,8 +138,6 @@ void board_gpio_write(uint32_t pin, int value)
     {
       cxd56_gpio_write(pin, (value > 0));
     }
-
-  return;
 }
 
 /****************************************************************************

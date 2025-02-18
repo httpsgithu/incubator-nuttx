@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/kl/freedom-kl26z/src/kl_spi.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -118,7 +120,7 @@ void weak_function kl_spidev_initialize(void)
  ****************************************************************************/
 
 #ifdef CONFIG_KL_SPI0
-void kl_spi0select(FAR struct spi_dev_s *dev, uint32_t devid,
+void kl_spi0select(struct spi_dev_s *dev, uint32_t devid,
                    bool selected)
 {
   spiinfo("devid: %d CS: %s\n",
@@ -127,7 +129,7 @@ void kl_spi0select(FAR struct spi_dev_s *dev, uint32_t devid,
 #endif
 
 #ifdef CONFIG_KL_SPI1
-void kl_spi1select(FAR struct spi_dev_s *dev, uint32_t devid,
+void kl_spi1select(struct spi_dev_s *dev, uint32_t devid,
                    bool selected)
 {
   spiinfo("devid: %d CS: %s\n",
@@ -150,14 +152,14 @@ void kl_spi1select(FAR struct spi_dev_s *dev, uint32_t devid,
  ****************************************************************************/
 
 #ifdef CONFIG_KL_SPI0
-uint8_t kl_spi0status(FAR struct spi_dev_s *dev, uint32_t devid)
+uint8_t kl_spi0status(struct spi_dev_s *dev, uint32_t devid)
 {
   return 0;
 }
 #endif
 
 #ifdef CONFIG_KL_SPI1
-uint8_t kl_spi1status(FAR struct spi_dev_s *dev, uint32_t devid)
+uint8_t kl_spi1status(struct spi_dev_s *dev, uint32_t devid)
 {
   return 0;
 }
@@ -182,14 +184,14 @@ uint8_t kl_spi1status(FAR struct spi_dev_s *dev, uint32_t devid)
 
 #ifdef CONFIG_SPI_CMDDATA
 #ifdef CONFIG_KL_SPI0
-int kl_spi0cmddata(FAR struct spi_dev_s *dev, uint32_t devid, bool cmd)
+int kl_spi0cmddata(struct spi_dev_s *dev, uint32_t devid, bool cmd)
 {
   return 0;
 }
 #endif
 
 #ifdef CONFIG_KL_SPI1
-int kl_spi1cmddata(FAR struct spi_dev_s *dev, uint32_t devid, bool cmd)
+int kl_spi1cmddata(struct spi_dev_s *dev, uint32_t devid, bool cmd)
 {
   return 0;
 }

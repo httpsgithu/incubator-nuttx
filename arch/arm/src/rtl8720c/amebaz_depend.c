@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/rtl8720c/amebaz_depend.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -24,6 +26,8 @@
 
 #include "amebaz_depend.h"
 #include <nuttx/mqueue.h>
+#include <nuttx/semaphore.h>
+#include <nuttx/signal.h>
 #include <nuttx/syslog/syslog.h>
 
 /****************************************************************************
@@ -39,11 +43,11 @@
 int __wrap_printf(const char *fmt, ...)
 {
   va_list ap;
-  int ret;
+
   va_start(ap, fmt);
-  ret = nx_vsyslog(LOG_INFO, fmt, &ap);
+  vsyslog(LOG_INFO, fmt, &ap);
   va_end(ap);
-  return ret;
+  return 0;
 }
 
 /* stdio.h Wrapper End */
@@ -168,7 +172,7 @@ void rtw_init_sema(void **sema, int init_val)
       return;
     }
 
-  if (sem_init(_sema, 0, init_val))
+  if (nxsem_init(_sema, 0, init_val))
     {
       free(_sema);
       return;
@@ -179,14 +183,14 @@ void rtw_init_sema(void **sema, int init_val)
 
 void rtw_free_sema(void **sema)
 {
-  sem_destroy(*sema);
+  nxsem_destroy(*sema);
   free(*sema);
   *sema = NULL;
 }
 
 void rtw_up_sema(void **sema)
 {
-  sem_post(*sema);
+  nxsem_post(*sema);
 }
 
 void rtw_up_sema_from_isr(void **sema)
@@ -196,25 +200,16 @@ void rtw_up_sema_from_isr(void **sema)
 
 uint32_t rtw_down_timeout_sema(void **sema, uint32_t timeout)
 {
-  struct timespec abstime;
   int ret;
+
   if (timeout == 0xffffffff)
     {
-      ret = sem_wait(*sema);
+      ret = nxsem_wait(*sema);
     }
 
   else
     {
-      clock_gettime(CLOCK_REALTIME, &abstime);
-      abstime.tv_sec += timeout / 1000;
-      abstime.tv_nsec += (timeout % 1000) * 1000 * 1000;
-      if (abstime.tv_nsec >= (1000 * 1000000))
-        {
-          abstime.tv_sec += 1;
-          abstime.tv_nsec -= (1000 * 1000000);
-        }
-
-      ret = sem_timedwait(*sema, &abstime);
+      ret = nxsem_tickwait(*sema, MSEC2TICK(timeout));
     }
 
   return !ret;
@@ -405,7 +400,7 @@ void rtw_yield_os(void)
 
 void rtw_usleep_os(int us)
 {
-  usleep(us);
+  nxsig_usleep(us);
 }
 
 void rtw_msleep_os(int ms)
@@ -604,12 +599,12 @@ int rtw_get_random_bytes(void *dst, uint32_t size)
 
 /* Thread Wrapper Start */
 
-static int nuttx_task_hook(int argc, FAR char *argv[])
+static int nuttx_task_hook(int argc, char *argv[])
 {
   struct task_struct *task;
   struct nthread_wrapper *wrap;
-  task = (FAR struct task_struct *)
-         ((uintptr_t)strtoul(argv[1], NULL, 0));
+  task = (struct task_struct *)
+         ((uintptr_t)strtoul(argv[1], NULL, 16));
   if (!task || !task->priv)
     {
       return 0;
@@ -632,7 +627,7 @@ int rtw_create_task(struct task_struct *task, const char *name,
   char *argv[2];
   char arg1[16];
   int pid;
-  snprintf(arg1, 16, "0x%" PRIxPTR, (uintptr_t)task);
+  snprintf(arg1, 16, "%p", task);
   argv[0] = arg1;
   argv[1] = NULL;
   wrap = malloc(sizeof(*wrap));
@@ -661,7 +656,7 @@ int rtw_create_task(struct task_struct *task, const char *name,
       return pid;
     }
 
-  wrap->pid = pid;
+  wrap->pid = (pid_t)pid;
   return 1;
 }
 

@@ -1,6 +1,8 @@
 /****************************************************************************
  * include/nuttx/sensors/adxl345.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -18,8 +20,8 @@
  *
  ****************************************************************************/
 
-#ifndef __INCLUDE_NUTTX_INPUT_ADXL345_H
-#define __INCLUDE_NUTTX_INPUT_ADXL345_H
+#ifndef __INCLUDE_NUTTX_SENSORS_ADXL345_H
+#define __INCLUDE_NUTTX_SENSORS_ADXL345_H
 
 /****************************************************************************
  * Included Files
@@ -378,4 +380,4 @@ int adxl345_register(ADXL345_HANDLE handle, int minor);
 #endif
 
 #endif /* CONFIG_SENSORS_ADXL345 */
-#endif /* __INCLUDE_NUTTX_INPUT_ADXL345_H */
+#endif /* __INCLUDE_NUTTX_SENSORS_ADXL345_H */

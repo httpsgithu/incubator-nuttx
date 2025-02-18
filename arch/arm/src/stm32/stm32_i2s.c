@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/stm32/stm32_i2s.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -53,12 +55,13 @@
 #include <string.h>
 #include <errno.h>
 #include <assert.h>
-#include <queue.h>
 #include <debug.h>
 
 #include <nuttx/arch.h>
+#include <nuttx/mutex.h>
 #include <nuttx/semaphore.h>
 #include <nuttx/kmalloc.h>
+#include <nuttx/queue.h>
 #include <nuttx/wdog.h>
 #include <nuttx/wqueue.h>
 #include <nuttx/spi/spi.h>
@@ -68,8 +71,6 @@
 #include <arch/board/board.h>
 
 #include "arm_internal.h"
-#include "arm_arch.h"
-
 #include "stm32_dma.h"
 #include "stm32_spi.h"
 #include "stm32_rcc.h"
@@ -278,7 +279,7 @@ struct stm32_i2s_s
 {
   struct i2s_dev_s  dev;          /* Externally visible I2S interface */
   uintptr_t         base;         /* I2S controller register base address */
-  sem_t             exclsem;      /* Assures mutually exclusive access to I2S */
+  mutex_t           lock;         /* Assures mutually exclusive access to I2S */
   bool              initialized;  /* Has I2S interface been initialized */
   uint8_t           datalen;      /* Data width (8 or 16) */
   uint8_t           align;        /* Log2 of data width (0 or 1) */
@@ -324,7 +325,7 @@ struct stm32_i2s_s
 static bool     i2s_checkreg(struct stm32_i2s_s *priv, bool wr,
                              uint16_t regval, uint32_t regaddr);
 #else
-# define        i2s_checkreg(priv,wr,regval,regaddr) (false)
+#  define       i2s_checkreg(priv,wr,regval,regaddr) (false)
 #endif
 
 static inline uint16_t i2s_getreg(struct stm32_i2s_s *priv, uint8_t offset);
@@ -344,14 +345,6 @@ static void     i2s_dump_regs(struct stm32_i2s_s *priv, const char *msg);
 #  define       i2s_init_buffer(b,s)
 #  define       i2s_dump_buffer(m,b,s)
 #endif
-
-/* Semaphore helpers */
-
-static int      i2s_exclsem_take(struct stm32_i2s_s *priv);
-#define         i2s_exclsem_give(priv) nxsem_post(&priv->exclsem)
-
-static int      i2s_bufsem_take(struct stm32_i2s_s *priv);
-#define         i2s_bufsem_give(priv) nxsem_post(&priv->bufsem)
 
 /* Buffer container helpers */
 
@@ -533,7 +526,7 @@ static bool i2s_checkreg(struct stm32_i2s_s *priv, bool wr, uint16_t regval,
  *
  ****************************************************************************/
 
-static inline uint16_t i2s_getreg(FAR struct stm32_i2s_s *priv,
+static inline uint16_t i2s_getreg(struct stm32_i2s_s *priv,
                                   uint8_t offset)
 {
   uint32_t regaddr = priv->base + offset;
@@ -565,7 +558,7 @@ static inline uint16_t i2s_getreg(FAR struct stm32_i2s_s *priv,
  *
  ****************************************************************************/
 
-static inline void i2s_putreg(FAR struct stm32_i2s_s *priv, uint8_t offset,
+static inline void i2s_putreg(struct stm32_i2s_s *priv, uint8_t offset,
                               uint16_t regval)
 {
   uint32_t regaddr = priv->base + offset;
@@ -611,46 +604,6 @@ static void i2s_dump_regs(struct stm32_i2s_s *priv, const char *msg)
 #endif
 
 /****************************************************************************
- * Name: i2s_exclsem_take
- *
- * Description:
- *   Take the exclusive access semaphore handling any exceptional conditions
- *
- * Input Parameters:
- *   priv - A reference to the i2s peripheral state
- *
- * Returned Value:
- *   Normally OK, but may return -ECANCELED in the rare event that the task
- *   has been canceled.
- *
- ****************************************************************************/
-
-static int i2s_exclsem_take(struct stm32_i2s_s *priv)
-{
-  return nxsem_wait_uninterruptible(&priv->exclsem);
-}
-
-/****************************************************************************
- * Name: i2s_bufsem_take
- *
- * Description:
- *   Take the buffer semaphore handling any exceptional conditions
- *
- * Input Parameters:
- *   priv - A reference to the i2s peripheral state
- *
- * Returned Value:
- *   Normally OK, but may return -ECANCELED in the rare event that the task
- *   has been canceled.
- *
- ****************************************************************************/
-
-static int i2s_bufsem_take(struct stm32_i2s_s *priv)
-{
-  return nxsem_wait_uninterruptible(&priv->bufsem);
-}
-
-/****************************************************************************
  * Name: i2s_buf_allocate
  *
  * Description:
@@ -680,7 +633,7 @@ static struct stm32_buffer_s *i2s_buf_allocate(struct stm32_i2s_s *priv)
    * have at least one free buffer container.
    */
 
-  ret = i2s_bufsem_take(priv);
+  ret = nxsem_wait_uninterruptible(&priv->bufsem);
   if (ret < 0)
     {
       return NULL;
@@ -731,7 +684,7 @@ static void i2s_buf_free(struct stm32_i2s_s *priv,
 
   /* Wake up any threads waiting for a buffer container */
 
-  i2s_bufsem_give(priv);
+  nxsem_post(&priv->bufsem);
 }
 
 /****************************************************************************
@@ -1890,7 +1843,7 @@ static int stm32_i2s_receive(struct i2s_dev_s *dev, struct ap_buffer_s *apb,
 
   /* Get exclusive access to the I2S driver data */
 
-  ret = i2s_exclsem_take(priv);
+  ret = nxmutex_lock(&priv->lock);
   if (ret < 0)
     {
       goto errout_with_buf;
@@ -1902,7 +1855,7 @@ static int stm32_i2s_receive(struct i2s_dev_s *dev, struct ap_buffer_s *apb,
     {
       i2serr("ERROR: I2S%d has no receiver\n", priv->i2sno);
       ret = -EAGAIN;
-      goto errout_with_exclsem;
+      goto errout_with_lock;
     }
 
   /* Add a reference to the audio buffer */
@@ -1929,11 +1882,11 @@ static int stm32_i2s_receive(struct i2s_dev_s *dev, struct ap_buffer_s *apb,
   ret = i2s_rxdma_setup(priv);
   DEBUGASSERT(ret == OK);
   leave_critical_section(flags);
-  i2s_exclsem_give(priv);
+  nxmutex_unlock(&priv->lock);
   return OK;
 
-errout_with_exclsem:
-  i2s_exclsem_give(priv);
+errout_with_lock:
+  nxmutex_unlock(&priv->lock);
 
 errout_with_buf:
   i2s_buf_free(priv, bfcontainer);
@@ -1946,7 +1899,7 @@ errout_with_buf:
 #endif
 }
 
-static int roundf(float num)
+static int stm32_i2s_roundf(float num)
 {
   if (((int)(num + 0.5f)) > num)
     {
@@ -2102,7 +2055,7 @@ static int stm32_i2s_send(struct i2s_dev_s *dev, struct ap_buffer_s *apb,
 
   /* Get exclusive access to the I2S driver data */
 
-  ret = i2s_exclsem_take(priv);
+  ret = nxmutex_lock(&priv->lock);
   if (ret < 0)
     {
       goto errout_with_buf;
@@ -2114,7 +2067,7 @@ static int stm32_i2s_send(struct i2s_dev_s *dev, struct ap_buffer_s *apb,
     {
       i2serr("ERROR: I2S%d has no transmitter\n", priv->i2sno);
       ret = -EAGAIN;
-      goto errout_with_exclsem;
+      goto errout_with_lock;
     }
 
   /* Add a reference to the audio buffer */
@@ -2141,11 +2094,11 @@ static int stm32_i2s_send(struct i2s_dev_s *dev, struct ap_buffer_s *apb,
   ret = i2s_txdma_setup(priv);
   DEBUGASSERT(ret == OK);
   leave_critical_section(flags);
-  i2s_exclsem_give(priv);
+  nxmutex_unlock(&priv->lock);
   return OK;
 
-errout_with_exclsem:
-  i2s_exclsem_give(priv);
+errout_with_lock:
+  nxmutex_unlock(&priv->lock);
 
 errout_with_buf:
   i2s_buf_free(priv, bfcontainer);
@@ -2209,8 +2162,8 @@ static uint32_t i2s_mckdivider(struct stm32_i2s_s *priv)
             {
               for (n = 2; n <= 256; ++n)
                 {
-                  napprox = roundf(priv->samplerate / 1000000.0f *
-                                   (8 * 32 * R * (2 * n + od)));
+                  napprox = stm32_i2s_roundf(priv->samplerate / 1000000.0f *
+                                             (8 * 32 * R * (2 * n + od)));
                   if ((napprox > 432) || (napprox < 50))
                     {
                       continue;
@@ -2567,9 +2520,9 @@ static void i2s3_configure(struct stm32_i2s_s *priv)
  *
  ****************************************************************************/
 
-FAR struct i2s_dev_s *stm32_i2sbus_initialize(int port)
+struct i2s_dev_s *stm32_i2sbus_initialize(int port)
 {
-  FAR struct stm32_i2s_s *priv = NULL;
+  struct stm32_i2s_s *priv = NULL;
   irqstate_t flags;
   int ret;
 
@@ -2582,7 +2535,7 @@ FAR struct i2s_dev_s *stm32_i2sbus_initialize(int port)
    * chip select structures.
    */
 
-  priv = (struct stm32_i2s_s *)kmm_zalloc(sizeof(struct stm32_i2s_s));
+  priv = kmm_zalloc(sizeof(struct stm32_i2s_s));
   if (!priv)
     {
       i2serr("ERROR: Failed to allocate a chip select structure\n");
@@ -2595,7 +2548,7 @@ FAR struct i2s_dev_s *stm32_i2sbus_initialize(int port)
 
   /* Initialize the common parts for the I2S device structure */
 
-  nxsem_init(&priv->exclsem, 0, 1);
+  nxmutex_init(&priv->lock);
   priv->dev.ops = &g_i2sops;
   priv->i2sno   = port;
 
@@ -2625,6 +2578,7 @@ FAR struct i2s_dev_s *stm32_i2sbus_initialize(int port)
 #endif
     {
       i2serr("ERROR: Unsupported I2S port: %d\n", port);
+      leave_critical_section(flags);
       return NULL;
     }
 
@@ -2646,7 +2600,9 @@ FAR struct i2s_dev_s *stm32_i2sbus_initialize(int port)
   /* Failure exits */
 
 errout_with_alloc:
-  nxsem_destroy(&priv->exclsem);
+  leave_critical_section(flags);
+  nxmutex_destroy(&priv->lock);
+  nxsem_destroy(&priv->bufsem);
   kmm_free(priv);
   return NULL;
 }

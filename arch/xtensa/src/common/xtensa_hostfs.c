@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/xtensa/src/common/xtensa_hostfs.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -23,6 +25,7 @@
  ****************************************************************************/
 
 #include <nuttx/config.h>
+#include <nuttx/cache.h>
 #include <nuttx/fs/hostfs.h>
 
 #include <arch/simcall.h>
@@ -96,6 +99,14 @@ int host_open(const char *pathname, int flags, int mode)
       simcall_flags |= SIMCALL_O_EXCL;
     }
 
+  if ((flags & O_NONBLOCK) != 0)
+    {
+      simcall_flags |= SIMCALL_O_NONBLOCK;
+    }
+
+#ifdef CONFIG_XTENSA_SEMIHOSTING_HOSTFS_CACHE_COHERENCE
+  up_clean_dcache(pathname, pathname + strlen(pathname) + 1);
+#endif
   return host_call(SIMCALL_SYS_OPEN, (int)pathname, simcall_flags, mode);
 }
 
@@ -106,15 +117,23 @@ int host_close(int fd)
 
 ssize_t host_read(int fd, void *buf, size_t count)
 {
+#ifdef CONFIG_XTENSA_SEMIHOSTING_HOSTFS_CACHE_COHERENCE
+  up_invalidate_dcache(buf, buf + count);
+#endif
+
   return host_call(SIMCALL_SYS_READ, fd, (int)buf, count);
 }
 
 ssize_t host_write(int fd, const void *buf, size_t count)
 {
+#ifdef CONFIG_XTENSA_SEMIHOSTING_HOSTFS_CACHE_COHERENCE
+  up_clean_dcache(buf, buf + count);
+#endif
+
   return host_call(SIMCALL_SYS_WRITE, fd, (int)buf, count);
 }
 
-off_t host_lseek(int fd, off_t offset, int whence)
+off_t host_lseek(int fd, off_t pos, off_t offset, int whence)
 {
   return host_call(SIMCALL_SYS_LSEEK, fd, offset, whence);
 }
@@ -140,12 +159,12 @@ int host_fstat(int fd, struct stat *buf)
    * Assumptions:
    *  - host_lseek never fails
    *  - It's ok to change the file offset temporarily as
-   *    hostfs_semtake provides enough serialization.
+   *    hostfs_lock provides enough serialization.
    */
 
-  off_t saved_off = host_lseek(fd, 0, SEEK_CUR);
-  off_t size = host_lseek(fd, 0, SEEK_END);
-  host_lseek(fd, saved_off, SEEK_SET);
+  off_t saved_off = host_lseek(fd, 0, 0, SEEK_CUR);
+  off_t size = host_lseek(fd, 0, 0, SEEK_END);
+  host_lseek(fd, 0, saved_off, SEEK_SET);
 
   memset(buf, 0, sizeof(*buf));
   buf->st_mode = S_IFREG | 0777;
@@ -192,7 +211,7 @@ int host_unlink(const char *pathname)
   return -ENOSYS;
 }
 
-int host_mkdir(const char *pathname, mode_t mode)
+int host_mkdir(const char *pathname, int mode)
 {
   return -ENOSYS;
 }

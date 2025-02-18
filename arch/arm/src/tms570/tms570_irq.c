@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/tms570/tms570_irq.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -33,25 +35,11 @@
 #include <nuttx/arch.h>
 #include <arch/irq.h>
 
-#include "arm_arch.h"
 #include "arm_internal.h"
-
 #include "hardware/tms570_vim.h"
 #include "tms570_gio.h"
 #include "tms570_esm.h"
 #include "tms570_irq.h"
-
-/****************************************************************************
- * Public Data
- ****************************************************************************/
-
-/* g_current_regs[] holds a references to the current interrupt level
- * register storage structure.  If is non-NULL only during interrupt
- * processing.  Access to g_current_regs[] must be through the macro
- * CURRENT_REGS for portability.
- */
-
-volatile uint32_t *g_current_regs[1];
 
 /****************************************************************************
  * Private Functions
@@ -101,14 +89,14 @@ static void tms570_error_handler(void)
 
 void up_irqinitialize(void)
 {
-  FAR uintptr_t *vimram;
+  uintptr_t *vimram;
   int i;
 
   /* Initialize VIM RAM vectors.  These vectors are not used in the current
    * interrupt handler logic.
    */
 
-  vimram = (FAR uintptr_t *)TMS570_VIMRAM_BASE;
+  vimram = (uintptr_t *)TMS570_VIMRAM_BASE;
   for (i = 0; i < (TMS570_IRQ_NCHANNELS + 1); i++)
     {
       *vimram++ = (uintptr_t)tms570_error_handler;
@@ -139,10 +127,6 @@ void up_irqinitialize(void)
 #ifdef TMS570_VIM_REQENACLR3
   putreg32(0xffffffff, TMS570_VIM_REQENACLR3);
 #endif
-
-  /* currents_regs is non-NULL only while processing an interrupt */
-
-  CURRENT_REGS = NULL;
 
 #ifdef CONFIG_ARMV7R_HAVE_DECODEFIQ
   /* By default, interrupt CHAN0 is mapped to ESM (Error Signal Module)
@@ -235,7 +219,7 @@ uint32_t *arm_decodeirq(uint32_t *regs)
  ****************************************************************************/
 
 #ifdef CONFIG_ARMV7R_HAVE_DECODEFIQ
-uint32_t *arm_decodefiq(FAR uint32_t *regs)
+uint32_t *arm_decodefiq(uint32_t *regs)
 {
   int vector;
 

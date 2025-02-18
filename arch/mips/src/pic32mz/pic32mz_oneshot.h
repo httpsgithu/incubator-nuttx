@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/mips/src/pic32mz/pic32mz_oneshot.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -66,17 +68,17 @@ typedef void (*oneshot_handler_t)(void *arg);
 
 struct pic32mz_oneshot_s
 {
-  uint8_t chan;                          /* The timer/counter in use      */
+  uint8_t chan;                       /* The timer/counter in use      */
 #if CONFIG_PIC32MZ_ONESHOT_MAXTIMERS > 1
-  uint8_t cbndx;                         /* Timer callback handler index  */
+  uint8_t cbndx;                      /* Timer callback handler index  */
 #endif
-  volatile bool running;                 /* True: the timer is running    */
-  FAR struct pic32mz_timer_dev_s *timer; /* PIC32MZ timer driver          */
-  volatile oneshot_handler_t handler;    /* Oneshot expiration callback   */
-  volatile void *arg;                    /* Callback's argument           */
-  uint32_t freq;                         /* Timer's frequency             */
-  uint32_t period;                       /* Timer's period                */
-  uint8_t  width;                        /* Timer's width                 */
+  volatile bool running;              /* True: the timer is running    */
+  struct pic32mz_timer_dev_s *timer;  /* PIC32MZ timer driver          */
+  volatile oneshot_handler_t handler; /* Oneshot expiration callback   */
+  volatile void *arg;                 /* Callback's argument           */
+  uint32_t freq;                      /* Timer's frequency             */
+  uint32_t period;                    /* Timer's period                */
+  uint8_t  width;                     /* Timer's width                 */
 };
 
 /****************************************************************************

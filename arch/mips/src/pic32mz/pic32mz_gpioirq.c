@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/mips/src/pic32mz/pic32mz_gpioirq.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -32,7 +34,6 @@
 #include <arch/board/board.h>
 #include <arch/pic32mz/irq.h>
 
-#include "mips_arch.h"
 #include "mips_internal.h"
 #include "hardware/pic32mz_ioport.h"
 #include "pic32mz_gpio.h"
@@ -59,7 +60,7 @@ static inline bool pic32mz_edgedetect(pinset_t pinset);
 static inline unsigned int pic32mz_edgemode(pinset_t pinset);
 static inline bool pic32mz_pullup(pinset_t pinset);
 static inline bool pic32mz_pulldown(pinset_t pinset);
-static int pic32mz_cninterrupt(int irq, FAR void *context, FAR void *arg);
+static int pic32mz_cninterrupt(int irq, void *context, void *arg);
 
 /****************************************************************************
  * Public Data
@@ -207,7 +208,7 @@ static inline unsigned int pic32mz_pin(pinset_t pinset)
  *
  ****************************************************************************/
 
-static int pic32mz_cninterrupt(int irq, FAR void *context, FAR void *arg)
+static int pic32mz_cninterrupt(int irq, void *context, void *arg)
 {
   struct ioport_level2_s *handlers;
   xcpt_t handler;
@@ -344,7 +345,7 @@ static int pic32mz_cninterrupt(int irq, FAR void *context, FAR void *arg)
 
   /* Clear the pending interrupt */
 
-  up_clrpend_irq(irq);
+  mips_clrpend_irq(irq);
   return ret;
 }
 
@@ -415,7 +416,7 @@ void pic32mz_gpioirqinitialize(void)
 
           /* Clear the CN interrupt flag. Same assumption as above. */
 
-          up_clrpend_irq(PIC32MZ_IRQ_PORTA + i);
+          mips_clrpend_irq(PIC32MZ_IRQ_PORTA + i);
         }
     }
 }

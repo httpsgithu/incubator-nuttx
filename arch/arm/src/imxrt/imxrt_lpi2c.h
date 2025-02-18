@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/imxrt/imxrt_lpi2c.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -18,8 +20,8 @@
  *
  ****************************************************************************/
 
-#ifndef __ARCH_ARM_SRC_IMXRT_IMX_LPI2C_H
-#define __ARCH_ARM_SRC_IMXRT_IMX_LPI2C_H
+#ifndef __ARCH_ARM_SRC_IMXRT_IMXRT_LPI2C_H
+#define __ARCH_ARM_SRC_IMXRT_IMXRT_LPI2C_H
 
 /****************************************************************************
  * Included Files
@@ -52,7 +54,7 @@
  *
  ****************************************************************************/
 
-FAR struct i2c_master_s *imxrt_i2cbus_initialize(int port);
+struct i2c_master_s *imxrt_i2cbus_initialize(int port);
 
 /****************************************************************************
  * Name: imxrt_i2cbus_uninitialize
@@ -69,6 +71,6 @@ FAR struct i2c_master_s *imxrt_i2cbus_initialize(int port);
  *
  ****************************************************************************/
 
-int imxrt_i2cbus_uninitialize(FAR struct i2c_master_s *dev);
+int imxrt_i2cbus_uninitialize(struct i2c_master_s *dev);
 
-#endif /* __ARCH_ARM_SRC_IMXRT_IMX_LPI2C_H */
+#endif /* __ARCH_ARM_SRC_IMXRT_IMXRT_LPI2C_H */

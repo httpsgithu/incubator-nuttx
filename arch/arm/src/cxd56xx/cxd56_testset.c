@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/cxd56xx/cxd56_testset.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -29,8 +31,7 @@
 
 #include "hardware/cxd56_sph.h"
 #include "cxd56_sph.h"
-
-#include "arm_arch.h"
+#include "arm_internal.h"
 
 /****************************************************************************
  * Pre-processor Definitions
@@ -46,7 +47,7 @@
  * Name: up_testset2
  ****************************************************************************/
 
-spinlock_t up_testset2(volatile FAR spinlock_t *lock)
+spinlock_t up_testset2(volatile spinlock_t *lock)
 {
   register uintptr_t ret asm("r0") = (uintptr_t)(lock);
 
@@ -91,11 +92,11 @@ spinlock_t up_testset2(volatile FAR spinlock_t *lock)
  *
  ****************************************************************************/
 
-spinlock_t up_testset(volatile FAR spinlock_t *lock)
+spinlock_t up_testset(volatile spinlock_t *lock)
 {
 #ifdef CONFIG_CXD56_TESTSET_WITH_HWSEM
   spinlock_t ret;
-  uint32_t sphlocked = ((up_cpu_index() + 2) << 16) | 0x1;
+  uint32_t sphlocked = ((this_cpu() + 2) << 16) | 0x1;
 
   /* Lock hardware semaphore */
 
@@ -110,7 +111,7 @@ spinlock_t up_testset(volatile FAR spinlock_t *lock)
   if (ret == SP_UNLOCKED)
     {
       *lock = SP_LOCKED;
-      SP_DMB();
+      UP_DMB();
     }
 
   /* Unlock hardware semaphore */

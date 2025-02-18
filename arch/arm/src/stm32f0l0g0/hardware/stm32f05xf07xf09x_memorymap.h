@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/stm32f0l0g0/hardware/stm32f05xf07xf09x_memorymap.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -18,8 +20,8 @@
  *
  ****************************************************************************/
 
-#ifndef __ARCH_ARM_SRC_STM32F0L0G0_HARDWARE_ST32F05XF07XF09X_MEMORYMAP_H
-#define __ARCH_ARM_SRC_STM32F0L0G0_HARDWARE_ST32F05XF07XF09X_MEMORYMAP_H
+#ifndef __ARCH_ARM_SRC_STM32F0L0G0_HARDWARE_STM32F05XF07XF09X_MEMORYMAP_H
+#define __ARCH_ARM_SRC_STM32F0L0G0_HARDWARE_STM32F05XF07XF09X_MEMORYMAP_H
 
 /****************************************************************************
  * Pre-processor Definitions
@@ -103,7 +105,7 @@
 #define STM32_USART6_BASE    0x40011400     /* 0x40011400-0x400117ff USART6 */
 #define STM32_USART7_BASE    0x40011800     /* 0x40011800-0x40011bff USART7 */
 #define STM32_USART8_BASE    0x40011c00     /* 0x40011c00-0x40011fff USART8 */
-#define STM32_ADC12_BASE     0x40012400     /* 0x40012400-0x400127ff ADC 12 */
+#define STM32_ADC1_BASE      0x40012400     /* 0x40012400-0x400127ff ADC1 */
 #define STM32_TIM1_BASE      0x40012c00     /* 0x40012c00-0x40012fff TIM1 */
 #define STM32_SPI1_BASE      0x40013000     /* 0x40013000-0x400133ff SPI1 */
 #define STM32_USART1_BASE    0x40013800     /* 0x40013800-0x40013bff USART1 */
@@ -139,4 +141,4 @@
 #define STM32_SCS_BASE       0xe000e000
 #define STM32_DEBUGMCU_BASE  0xe0042000
 
-#endif /* __ARCH_ARM_SRC_STM32F0L0G0_HARDWARE_ST32F05XF07XF09X_MEMORYMAP_H */
+#endif /* __ARCH_ARM_SRC_STM32F0L0G0_HARDWARE_STM32F05XF07XF09X_MEMORYMAP_H */

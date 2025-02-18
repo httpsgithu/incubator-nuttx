@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/tms570/tms570_gioirq.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -35,9 +37,7 @@
 #include <nuttx/irq.h>
 #include <arch/board/board.h>
 
-#include "arm_arch.h"
 #include "arm_internal.h"
-
 #include "tms570_gio.h"
 #include "hardware/tms570_gio.h"
 
@@ -55,7 +55,7 @@
  *
  ****************************************************************************/
 
-static int tms3570_gio_interrupt(int irq, void *context, FAR void *arg)
+static int tms3570_gio_interrupt(int irq, void *context, void *arg)
 {
   uint32_t off1;
   int irq2;

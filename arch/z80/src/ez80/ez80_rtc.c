@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/z80/src/ez80/ez80_rtc.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -39,7 +41,6 @@
 #include <arch/io.h>
 
 #include "chip.h"
-#include "z80_arch.h"
 #include "ez80_rtc.h"
 
 #include <arch/board/board.h>

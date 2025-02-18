@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/armv7-a/arm_addrenv_ustack.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -22,7 +24,7 @@
  * Address Environment Interfaces
  *
  * Low-level interfaces used in binfmt/ to instantiate tasks with address
- * environments.  These interfaces all operate on type group_addrenv_t which
+ * environments.  These interfaces all operate on type arch_addrenv_t which
  * is an abstract representation of a task group's address environment and
  * must be defined in arch/arch.h if CONFIG_ARCH_ADDRENV is defined.
  *
@@ -34,7 +36,6 @@
  *                         address environment
  *   up_addrenv_heapsize - Returns the size of the initial heap allocation.
  *   up_addrenv_select   - Instantiate an address environment
- *   up_addrenv_restore  - Restore an address environment
  *   up_addrenv_clone    - Copy an address environment from one location to
  *                         another.
  *
@@ -126,7 +127,7 @@
  *
  ****************************************************************************/
 
-int up_addrenv_ustackalloc(FAR struct tcb_s *tcb, size_t stacksize)
+int up_addrenv_ustackalloc(struct tcb_s *tcb, size_t stacksize)
 {
   int ret;
 
@@ -175,7 +176,7 @@ int up_addrenv_ustackalloc(FAR struct tcb_s *tcb, size_t stacksize)
  *
  ****************************************************************************/
 
-int up_addrenv_ustackfree(FAR struct tcb_s *tcb)
+int up_addrenv_ustackfree(struct tcb_s *tcb)
 {
   binfo("tcb=%p\n", tcb);
   DEBUGASSERT(tcb);
@@ -206,14 +207,14 @@ int up_addrenv_ustackfree(FAR struct tcb_s *tcb)
  *
  ****************************************************************************/
 
-int up_addrenv_vustack(FAR const struct tcb_s *tcb, FAR void **vstack)
+int up_addrenv_vustack(const struct tcb_s *tcb, void **vstack)
 {
-  binfo("Return=%p\n", (FAR void *)CONFIG_ARCH_STACK_VBASE);
+  binfo("Return=%p\n", (void *)CONFIG_ARCH_STACK_VBASE);
 
   /* Not much to do in this case */
 
   DEBUGASSERT(tcb);
-  *vstack = (FAR void *)CONFIG_ARCH_STACK_VBASE;
+  *vstack = (void *)CONFIG_ARCH_STACK_VBASE;
   return OK;
 }
 
@@ -236,7 +237,7 @@ int up_addrenv_vustack(FAR const struct tcb_s *tcb, FAR void **vstack)
  *
  ****************************************************************************/
 
-int up_addrenv_ustackselect(FAR const struct tcb_s *tcb)
+int up_addrenv_ustackselect(const struct tcb_s *tcb)
 {
   uintptr_t vaddr;
   uintptr_t paddr;

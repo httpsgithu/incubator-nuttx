@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/stm32/common/src/stm32_max31855.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -56,7 +58,7 @@
 
 int board_max31855_initialize(int devno, int busno)
 {
-  FAR struct spi_dev_s *spi;
+  struct spi_dev_s *spi;
   char devpath[12];
   int ret;
 
@@ -67,9 +69,9 @@ int board_max31855_initialize(int devno, int busno)
       return -ENODEV;
     }
 
-  /* Then register the barometer sensor */
+  /* Then register the temperature sensor */
 
-  snprintf(devpath, 12, "/dev/temp%d", devno);
+  snprintf(devpath, sizeof(devpath), "/dev/temp%d", devno);
   ret = max31855_register(devpath, spi, devno);
   if (ret < 0)
     {

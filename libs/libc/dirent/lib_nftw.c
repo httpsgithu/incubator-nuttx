@@ -1,6 +1,8 @@
 /****************************************************************************
  * libs/libc/dirent/lib_nftw.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -201,7 +203,7 @@ do_nftw(FAR char *path, nftw_cb_t fn, int fdlimit, int flags, int level)
               return -1;
             }
 
-          strcpy(path + j, de->d_name);
+          strlcpy(path + j, de->d_name, PATH_MAX - j);
           r = do_nftw(path, fn, fdlimit - 1, flags, level + 1);
           if (r)
             {
@@ -234,8 +236,7 @@ int nftw(FAR const char *path, nftw_cb_t fn, int fdlimit, int flags)
 {
   char pathbuf[PATH_MAX + 1];
 
-  strncpy(pathbuf, path, PATH_MAX);
-  pathbuf[PATH_MAX] = '\0';
+  strlcpy(pathbuf, path, sizeof(pathbuf));
 
   return do_nftw(pathbuf, fn, fdlimit, flags, 0);
 }

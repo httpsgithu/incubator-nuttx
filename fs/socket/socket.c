@@ -1,6 +1,8 @@
 /****************************************************************************
  * fs/socket/socket.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -36,6 +38,7 @@
 #include <debug.h>
 
 #include "inode/inode.h"
+#include "fs_heap.h"
 
 /****************************************************************************
  * Private Functions Prototypes
@@ -51,6 +54,7 @@ static int sock_file_ioctl(FAR struct file *filep, int cmd,
                            unsigned long arg);
 static int sock_file_poll(FAR struct file *filep, struct pollfd *fds,
                           bool setup);
+static int sock_file_truncate(FAR struct file *filep, off_t length);
 
 /****************************************************************************
  * Private Data
@@ -58,26 +62,27 @@ static int sock_file_poll(FAR struct file *filep, struct pollfd *fds,
 
 static const struct file_operations g_sock_fileops =
 {
-  sock_file_open,   /* open */
-  sock_file_close,  /* close */
-  sock_file_read,   /* read */
-  sock_file_write,  /* write */
-  NULL,             /* seek */
-  sock_file_ioctl,  /* ioctl */
-  sock_file_poll,   /* poll */
-#ifndef CONFIG_DISABLE_PSEUDOFS_OPERATIONS
-  NULL,               /* unlink */
-#endif
+  sock_file_open,     /* open */
+  sock_file_close,    /* close */
+  sock_file_read,     /* read */
+  sock_file_write,    /* write */
+  NULL,               /* seek */
+  sock_file_ioctl,    /* ioctl */
+  NULL,               /* mmap */
+  sock_file_truncate, /* truncate */
+  sock_file_poll      /* poll */
 };
 
 static struct inode g_sock_inode =
 {
-  .i_crefs = 1,
-  .i_flags = FSNODEFLAG_TYPE_SOCKET,
-  .u =
-    {
-      .i_ops = &g_sock_fileops,
-    },
+  NULL,                   /* i_parent */
+  NULL,                   /* i_peer */
+  NULL,                   /* i_child */
+  1,                      /* i_crefs */
+  FSNODEFLAG_TYPE_SOCKET, /* i_flags */
+  {
+    &g_sock_fileops       /* u */
+  }
 };
 
 /****************************************************************************
@@ -89,7 +94,7 @@ static int sock_file_open(FAR struct file *filep)
   FAR struct socket *psock;
   int ret;
 
-  psock = kmm_zalloc(sizeof(*psock));
+  psock = fs_heap_zalloc(sizeof(*psock));
   if (psock == NULL)
     {
       return -ENOMEM;
@@ -102,7 +107,7 @@ static int sock_file_open(FAR struct file *filep)
     }
   else
     {
-      kmm_free(psock);
+      fs_heap_free(psock);
     }
 
   return ret;
@@ -111,7 +116,7 @@ static int sock_file_open(FAR struct file *filep)
 static int sock_file_close(FAR struct file *filep)
 {
   psock_close(filep->f_priv);
-  kmm_free(filep->f_priv);
+  fs_heap_free(filep->f_priv);
   return 0;
 }
 
@@ -139,6 +144,11 @@ static int sock_file_poll(FAR struct file *filep, FAR struct pollfd *fds,
   return psock_poll(filep->f_priv, fds, setup);
 }
 
+static int sock_file_truncate(FAR struct file *filep, off_t length)
+{
+  return -EINVAL;
+}
+
 /****************************************************************************
  * Public Functions
  ****************************************************************************/
@@ -161,15 +171,7 @@ static int sock_file_poll(FAR struct file *filep, FAR struct pollfd *fds,
 
 int sockfd_allocate(FAR struct socket *psock, int oflags)
 {
-  int sockfd;
-
-  sockfd = files_allocate(&g_sock_inode, oflags, 0, psock, 0);
-  if (sockfd >= 0)
-    {
-      inode_addref(&g_sock_inode);
-    }
-
-  return sockfd;
+  return file_allocate(&g_sock_inode, oflags, 0, psock, 0, true);
 }
 
 /****************************************************************************
@@ -181,16 +183,19 @@ int sockfd_allocate(FAR struct socket *psock, int oflags)
  * Input Parameters:
  *   sockfd - The socket descriptor index to use.
  *
- * Returned Value:
- *   On success, a reference to the socket structure associated with the
- *   the socket descriptor is returned.  NULL is returned on any failure.
+ * Returns zero (OK) on success.  On failure, it returns a negated errno
+ * value to indicate the nature of the error.
+ *
+ *    EBADF
+ *      The file descriptor is not a valid index in the descriptor table.
+ *    ENOTSOCK
+ *      psock is a descriptor for a file, not a socket.
  *
  ****************************************************************************/
 
 FAR struct socket *file_socket(FAR struct file *filep)
 {
-  if (filep != NULL && filep->f_inode != NULL &&
-      INODE_IS_SOCKET(filep->f_inode))
+  if (filep != NULL && INODE_IS_SOCKET(filep->f_inode))
     {
       return filep->f_priv;
     }
@@ -198,16 +203,22 @@ FAR struct socket *file_socket(FAR struct file *filep)
   return NULL;
 }
 
-FAR struct socket *sockfd_socket(int sockfd)
+int sockfd_socket(int sockfd, FAR struct file **filep,
+                  FAR struct socket **socketp)
 {
-  FAR struct file *filep;
-
-  if (fs_getfilep(sockfd, &filep) < 0)
+  if (fs_getfilep(sockfd, filep) < 0)
     {
-      return NULL;
+      *socketp = NULL;
+      return -EBADF;
     }
 
-  return file_socket(filep);
+  *socketp = file_socket(*filep);
+  if (*socketp == NULL)
+    {
+      fs_putfilep(*filep);
+    }
+
+  return *socketp != NULL ? OK : -ENOTSOCK;
 }
 
 /****************************************************************************
@@ -259,7 +270,12 @@ int socket(int domain, int type, int protocol)
       oflags |= O_CLOEXEC;
     }
 
-  psock = kmm_zalloc(sizeof(*psock));
+  if (type & SOCK_NONBLOCK)
+    {
+      oflags |= O_NONBLOCK;
+    }
+
+  psock = fs_heap_zalloc(sizeof(*psock));
   if (psock == NULL)
     {
       ret = -ENOMEM;
@@ -291,7 +307,7 @@ errout_with_psock:
   psock_close(psock);
 
 errout_with_alloc:
-  kmm_free(psock);
+  fs_heap_free(psock);
 
 errout:
   set_errno(-ret);

@@ -1,6 +1,8 @@
 /****************************************************************************
  * libs/libc/stdio/lib_fputs.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -45,21 +47,11 @@
  ****************************************************************************/
 
 #if defined(CONFIG_ARCH_ROMGETC)
-int fputs(FAR const IPTR char *s, FAR FILE *stream)
+int fputs_unlocked(FAR const IPTR char *s, FAR FILE *stream)
 {
   int nput;
   int ret;
   char ch;
-
-  /* Make sure that a string was provided. */
-
-#ifdef CONFIG_DEBUG_FEATURES /* Most parameter checking is disabled if DEBUG is off */
-  if (!s)
-    {
-      set_errno(EINVAL);
-      return EOF;
-    }
-#endif
 
   /* Write the string.  Loop until the null terminator is encountered */
 
@@ -67,7 +59,7 @@ int fputs(FAR const IPTR char *s, FAR FILE *stream)
     {
       /* Write the next character to the stream buffer */
 
-      ret = lib_fwrite(&ch, 1, stream);
+      ret = lib_fwrite_unlocked(&ch, 1, stream);
       if (ret <= 0)
         {
           return EOF;
@@ -77,7 +69,7 @@ int fputs(FAR const IPTR char *s, FAR FILE *stream)
 
       if (ch == '\n' && (stream->fs_flags & __FS_FLAG_LBF) != 0)
         {
-          ret = lib_fflush(stream, true);
+          ret = lib_fflush_unlocked(stream);
           if (ret < 0)
             {
               return EOF;
@@ -89,19 +81,9 @@ int fputs(FAR const IPTR char *s, FAR FILE *stream)
 }
 
 #else
-int fputs(FAR const IPTR char *s, FAR FILE *stream)
+int fputs_unlocked(FAR const IPTR char *s, FAR FILE *stream)
 {
   int nput;
-
-  /* Make sure that a string was provided. */
-
-#ifdef CONFIG_DEBUG_FEATURES /* Most parameter checking is disabled if DEBUG is off */
-  if (s == NULL || stream == NULL)
-    {
-      set_errno(EINVAL);
-      return EOF;
-    }
-#endif
 
   /* If line buffering is enabled, then we will have to output one character
    * at a time, checking for a newline character each time.
@@ -117,7 +99,7 @@ int fputs(FAR const IPTR char *s, FAR FILE *stream)
         {
           /* Write the next character to the stream buffer */
 
-          ret = lib_fwrite(s, 1, stream);
+          ret = lib_fwrite_unlocked(s, 1, stream);
           if (ret <= 0)
             {
               return EOF;
@@ -127,7 +109,7 @@ int fputs(FAR const IPTR char *s, FAR FILE *stream)
 
           if (*s == '\n')
             {
-              ret = lib_fflush(stream, true);
+              ret = lib_fflush_unlocked(stream);
               if (ret < 0)
                 {
                   return EOF;
@@ -152,7 +134,7 @@ int fputs(FAR const IPTR char *s, FAR FILE *stream)
 
       /* Write the string */
 
-      nput = lib_fwrite(s, ntowrite, stream);
+      nput = lib_fwrite_unlocked(s, ntowrite, stream);
       if (nput < 0)
         {
           return EOF;
@@ -162,3 +144,14 @@ int fputs(FAR const IPTR char *s, FAR FILE *stream)
   return nput;
 }
 #endif
+
+int fputs(FAR const IPTR char *s, FAR FILE *stream)
+{
+  int ret;
+
+  flockfile(stream);
+  ret = fputs_unlocked(s, stream);
+  funlockfile(stream);
+
+  return ret;
+}

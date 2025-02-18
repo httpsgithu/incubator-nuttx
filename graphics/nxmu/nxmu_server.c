@@ -1,6 +1,8 @@
 /****************************************************************************
  * graphics/nxmu/nxmu_server.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -80,7 +82,7 @@ static inline void nxmu_connect(FAR struct nxmu_conn_s *conn)
 
   /* Create the client MQ name */
 
-  sprintf(mqname, NX_CLIENT_MQNAMEFMT, conn->cid);
+  snprintf(mqname, sizeof(mqname), NX_CLIENT_MQNAMEFMT, conn->cid);
 
   /* Open the client MQ -- this should have already been created by the
    * client

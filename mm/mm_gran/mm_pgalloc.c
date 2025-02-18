@@ -1,6 +1,8 @@
 /****************************************************************************
  * mm/mm_gran/mm_pgalloc.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -123,7 +125,8 @@ void mm_pginitialize(FAR void *heap_start, size_t heap_size)
 
 void mm_pgreserve(uintptr_t start, size_t size)
 {
-  gran_reserve(g_pgalloc, start, size);
+  FAR void * ret = gran_reserve(g_pgalloc, start, size);
+  DEBUGASSERT(ret != NULL);
 }
 
 /****************************************************************************

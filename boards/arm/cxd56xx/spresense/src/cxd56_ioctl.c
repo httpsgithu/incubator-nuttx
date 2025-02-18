@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/cxd56xx/spresense/src/cxd56_ioctl.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -34,6 +36,7 @@
 #include <arch/chip/chip.h>
 
 #include "cxd56_usbdev.h"
+#include "arch/board/cxd56_sdcard.h"
 
 #ifdef CONFIG_BOARDCTL_IOCTL
 
@@ -91,6 +94,7 @@ int board_ioctl(unsigned int cmd, uintptr_t arg)
         }
         break;
 #endif
+
       default:
         break;
     }

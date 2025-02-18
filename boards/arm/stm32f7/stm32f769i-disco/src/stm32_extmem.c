@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/stm32f7/stm32f769i-disco/src/stm32_extmem.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -31,8 +33,7 @@
 #include <arch/board/board.h>
 
 #include "chip.h"
-#include "arm_arch.h"
-
+#include "arm_internal.h"
 #include "stm32_fmc.h"
 #include "stm32_gpio.h"
 #include "stm32_rcc.h"
@@ -77,8 +78,8 @@ static const uint32_t g_addressconfig[STM32_FMC_NADDRCONFIGS] =
   GPIO_FMC_A10, GPIO_FMC_A11, GPIO_FMC_A12,
 
   GPIO_FMC_NBL0, GPIO_FMC_NBL1, GPIO_FMC_NBL2, GPIO_FMC_NBL3, GPIO_FMC_BA0,
-  GPIO_FMC_BA1, GPIO_FMC_SDNWE_3, GPIO_FMC_SDNCAS, GPIO_FMC_SDNRAS,
-  GPIO_FMC_SDNE0_3, GPIO_FMC_SDCKE0_3, GPIO_FMC_SDCLK
+  GPIO_FMC_BA1, GPIO_FMC_SDNWE, GPIO_FMC_SDNCAS, GPIO_FMC_SDNRAS,
+  GPIO_FMC_SDNE0, GPIO_FMC_SDCKE0, GPIO_FMC_SDCLK
 };
 
 static const uint32_t g_dataconfig[STM32_FMC_NDATACONFIGS] =

@@ -1,6 +1,8 @@
 /****************************************************************************
  * sched/pthread/pthread_cancel.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -24,13 +26,13 @@
 
 #include <nuttx/config.h>
 
-#include <nuttx/arch.h>
-
 #include <sys/types.h>
 #include <unistd.h>
 #include <pthread.h>
 #include <assert.h>
 #include <errno.h>
+
+#include <nuttx/tls.h>
 
 #include "sched/sched.h"
 #include "task/task.h"
@@ -46,7 +48,7 @@ int pthread_cancel(pthread_t thread)
 
   /* First, make sure that the handle references a valid thread */
 
-  if (thread == 0)
+  if ((pid_t)thread == IDLE_PROCESS_ID)
     {
       /* pid == 0 is the IDLE task (in a single CPU configuration).  Callers
        * cannot cancel the IDLE task.
@@ -62,6 +64,13 @@ int pthread_cancel(pthread_t thread)
        * has probably already exited.
        */
 
+      return ESRCH;
+    }
+
+  /* Return ESRCH when thread was in exit processing */
+
+  if ((tcb->flags & TCB_FLAG_EXIT_PROCESSING) != 0)
+    {
       return ESRCH;
     }
 
@@ -85,27 +94,18 @@ int pthread_cancel(pthread_t thread)
 
   if (tcb == this_task())
     {
-      tcb->flags &= ~TCB_FLAG_CANCEL_PENDING;
-      tcb->flags |= TCB_FLAG_CANCEL_DOING;
-#if !defined(CONFIG_BUILD_FLAT) && defined(__KERNEL__)
-      up_pthread_exit(((FAR struct pthread_tcb_s *)tcb)->exit,
-                      PTHREAD_CANCELED);
-#else
       pthread_exit(PTHREAD_CANCELED);
-#endif
     }
+
+  /* Refer to tls_get_info() */
+
+  tls_cleanup_popall(tcb->stack_alloc_ptr);
 
   /* Complete pending join operations */
 
   pthread_completejoin((pid_t)thread, PTHREAD_CANCELED);
 
-#ifndef CONFIG_PTHREAD_MUTEX_UNSAFE
-  /* Recover any mutexes still held by the canceled thread */
-
-  pthread_mutex_inconsistent(tcb);
-#endif
-
   /* Then let nxtask_terminate do the real work */
 
-  return nxtask_terminate((pid_t)thread, false);
+  return nxtask_terminate((pid_t)thread);
 }

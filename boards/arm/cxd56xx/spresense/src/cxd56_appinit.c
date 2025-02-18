@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/cxd56xx/spresense/src/cxd56_appinit.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -23,7 +25,9 @@
  ****************************************************************************/
 
 #include <nuttx/config.h>
+#include <nuttx/compiler.h>
 
+#include <sys/types.h>
 #include <nuttx/board.h>
 
 #include "spresense.h"
@@ -31,10 +35,6 @@
 /****************************************************************************
  * Pre-processor Definitions
  ****************************************************************************/
-
-#ifndef OK
-#  define OK 0
-#endif
 
 /****************************************************************************
  * Public Functions
@@ -93,7 +93,7 @@ int board_app_initialize(uintptr_t arg)
  ****************************************************************************/
 
 #ifdef CONFIG_BOARD_LATE_INITIALIZE
-void board_late_initialize(void)
+void weak_function board_late_initialize(void)
 {
   /* Perform board bring-up here instead of from the
    * board_app_initialize().

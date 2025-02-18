@@ -1,6 +1,8 @@
 /****************************************************************************
  * fs/inode/inode.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -18,8 +20,8 @@
  *
  ****************************************************************************/
 
-#ifndef __FS_INODE_H
-#define __FS_INODE_H
+#ifndef __FS_INODE_INODE_H
+#define __FS_INODE_INODE_H
 
 /****************************************************************************
  * Included Files
@@ -32,9 +34,14 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <dirent.h>
+#include <sched.h>
 
 #include <nuttx/kmalloc.h>
+#include <nuttx/sched.h>
 #include <nuttx/fs/fs.h>
+#include <nuttx/lib/lib.h>
+
+#include "fs_heap.h"
 
 /****************************************************************************
  * Pre-processor Definitions
@@ -58,11 +65,29 @@
     { \
       if ((d)->buffer != NULL) \
         { \
-          kmm_free((d)->buffer); \
+          fs_heap_free((d)->buffer); \
           (d)->buffer  = NULL; \
         } \
     } \
   while (0)
+
+#if CONFIG_FS_BACKTRACE > 0
+#  define FS_ADD_BACKTRACE(filep) \
+     do \
+       { \
+          int n = sched_backtrace(_SCHED_GETTID(), \
+                                  (filep)->f_backtrace, \
+                                  CONFIG_FS_BACKTRACE, \
+                                  CONFIG_FS_BACKTRACE_SKIP); \
+          if (n < CONFIG_FS_BACKTRACE) \
+            { \
+              (filep)->f_backtrace[n] = NULL; \
+            } \
+       } \
+     while (0)
+#else
+#  define FS_ADD_BACKTRACE(filep)
+#endif
 
 /****************************************************************************
  * Public Types
@@ -112,7 +137,7 @@ struct inode_search_s
  * file system.
  */
 
-typedef int (*foreach_inode_t)(FAR struct inode *node,
+typedef int (*foreach_inode_t)(FAR struct inode *inode,
                                FAR char dirpath[PATH_MAX],
                                FAR void *arg);
 
@@ -147,34 +172,44 @@ EXTERN FAR struct inode *g_root_inode;
 void inode_initialize(void);
 
 /****************************************************************************
- * Name: inode_semtake
+ * Name: inode_lock
  *
  * Description:
- *   Get exclusive access to the in-memory inode tree (tree_sem).
+ *   Get writeable exclusive access to the in-memory inode tree.
  *
  ****************************************************************************/
 
-int inode_semtake(void);
+void inode_lock(void);
 
 /****************************************************************************
- * Name: inode_semgive
+ * Name: inode_rlock
  *
  * Description:
- *   Relinquish exclusive access to the in-memory inode tree (tree_sem).
+ *   Get readable exclusive access to the in-memory inode tree.
  *
  ****************************************************************************/
 
-void inode_semgive(void);
+void inode_rlock(void);
 
 /****************************************************************************
- * Name: inode_checkflags
+ * Name: inode_unlock
  *
  * Description:
- *   Check if the access described by 'oflags' is supported on 'inode'
+ *   Relinquish writeable exclusive access to the in-memory inode tree.
  *
  ****************************************************************************/
 
-int inode_checkflags(FAR struct inode *inode, int oflags);
+void inode_unlock(void);
+
+/****************************************************************************
+ * Name: inode_runlock
+ *
+ * Description:
+ *   Relinquish read exclusive access to the in-memory inode tree.
+ *
+ ****************************************************************************/
+
+void inode_runlock(void);
 
 /****************************************************************************
  * Name: inode_search
@@ -258,7 +293,7 @@ int inode_stat(FAR struct inode *inode, FAR struct stat *buf, int resolve);
  *   inode   - The inode of interest
  *   buf     - The caller provide location in which to apply information
  *             about the inode.
- *   flags   - The vaild field in buf
+ *   flags   - The valid field in buf
  *   resolve - Whether to resolve the symbolic link
  *
  * Returned Value:
@@ -278,7 +313,7 @@ int inode_chstat(FAR struct inode *inode,
  *
  ****************************************************************************/
 
-int inode_getpath(FAR struct inode *node, FAR char *path);
+int inode_getpath(FAR struct inode *inode, FAR char *path, size_t len);
 
 /****************************************************************************
  * Name: inode_free
@@ -288,7 +323,7 @@ int inode_getpath(FAR struct inode *node, FAR char *path);
  *
  ****************************************************************************/
 
-void inode_free(FAR struct inode *node);
+void inode_free(FAR struct inode *inode);
 
 /****************************************************************************
  * Name: inode_nextname
@@ -338,21 +373,6 @@ int inode_reserve(FAR const char *path,
                   mode_t mode, FAR struct inode **inode);
 
 /****************************************************************************
- * Name: inode_unlink
- *
- * Description:
- *   Given a path, remove a the node from the in-memory, inode tree that the
- *   path refers to.  This is normally done in preparation to removing or
- *   moving an inode.
- *
- * Assumptions/Limitations:
- *   The caller must hold the inode semaphore
- *
- ****************************************************************************/
-
-FAR struct inode *inode_unlink(FAR const char *path);
-
-/****************************************************************************
  * Name: inode_remove
  *
  * Description:
@@ -377,7 +397,7 @@ int inode_remove(FAR const char *path);
  *
  ****************************************************************************/
 
-int inode_addref(FAR struct inode *inode);
+void inode_addref(FAR struct inode *inode);
 
 /****************************************************************************
  * Name: inode_release
@@ -408,20 +428,44 @@ void inode_release(FAR struct inode *inode);
 int foreach_inode(foreach_inode_t handler, FAR void *arg);
 
 /****************************************************************************
- * Name: files_allocate
+ * Name: dir_allocate
  *
  * Description:
- *   Allocate a struct files instance and associate it with an inode
- *   instance.  Returns the file descriptor == index into the files array.
+ *   Allocate a directory instance and bind it to f_priv of filep.
  *
  ****************************************************************************/
 
-int files_allocate(FAR struct inode *inode, int oflags, off_t pos,
-                   FAR void *priv, int minfd);
+int dir_allocate(FAR struct file *filep, FAR const char *relpath);
+
+/****************************************************************************
+ * Name: pseudofile_create
+ *
+ * Description:
+ *   Create the pseudo-file with specified path and mode, and alloc inode
+ *   of this pseudo-file.
+ *
+ ****************************************************************************/
+
+#ifdef CONFIG_PSEUDOFS_FILE
+int pseudofile_create(FAR struct inode **node, FAR const char *path,
+                      mode_t mode);
+#endif
+
+/****************************************************************************
+ * Name: inode_is_pseudofile
+ *
+ * Description:
+ *    Check inode whether is a pseudo file.
+ *
+ ****************************************************************************/
+
+#ifdef CONFIG_PSEUDOFS_FILE
+bool inode_is_pseudofile(FAR struct inode *inode);
+#endif
 
 #undef EXTERN
 #if defined(__cplusplus)
 }
 #endif
 
-#endif /* __FS_INODE_H */
+#endif /* __FS_INODE_INODE_H */

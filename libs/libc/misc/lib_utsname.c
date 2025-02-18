@@ -1,8 +1,9 @@
 /****************************************************************************
  * libs/libc/misc/lib_utsname.c
  *
- *   Copyright (C) 2015 Stavros Polymenis. All rights reserved.
- *   Author: Stavros Polymenis <sp@orbitalfox.com>
+ * SPDX-License-Identifier: BSD-3-Clause
+ * SPDX-FileCopyrightText: 2015 Stavros Polymenis. All rights reserved.
+ * SPDX-FileContributor: Stavros Polymenis <sp@orbitalfox.com>
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -47,6 +48,17 @@
 #include <unistd.h>
 
 /****************************************************************************
+ * Private Data
+ ****************************************************************************/
+
+#if defined(__DATE__) && defined(__TIME__) && \
+    !defined(CONFIG_LIBC_UNAME_DISABLE_TIMESTAMP)
+static char g_version[] = CONFIG_VERSION_BUILD " " __DATE__ " " __TIME__;
+#else
+static char g_version[] = CONFIG_VERSION_BUILD;
+#endif
+
+/****************************************************************************
  * Public Functions
  ****************************************************************************/
 
@@ -84,26 +96,18 @@ int uname(FAR struct utsname *name)
 
   /* Copy the strings.  Assure that each is NUL terminated. */
 
-  strncpy(name->sysname, "NuttX", SYS_NAMELEN);
+  strlcpy(name->sysname, "NuttX", sizeof(name->sysname));
 
   /* Get the hostname */
 
   ret = gethostname(name->nodename, HOST_NAME_MAX);
   name->nodename[HOST_NAME_MAX - 1] = '\0';
 
-  strncpy(name->release,  CONFIG_VERSION_STRING, SYS_NAMELEN);
-  name->release[SYS_NAMELEN - 1] = '\0';
+  strlcpy(name->release,  CONFIG_VERSION_STRING, sizeof(name->release));
 
-#if defined(__DATE__) && defined(__TIME__)
-  snprintf(name->version, VERSION_NAMELEN, "%s %s %s",
-           CONFIG_VERSION_BUILD, __DATE__, __TIME__);
-#else
-  strncpy(name->version,  CONFIG_VERSION_BUILD, VERSION_NAMELEN);
-#endif
-  name->version[VERSION_NAMELEN - 1] = '\0';
+  strlcpy(name->version,  g_version, sizeof(name->version));
 
-  strncpy(name->machine,  CONFIG_ARCH, SYS_NAMELEN);
-  name->machine[SYS_NAMELEN - 1] = '\0';
+  strlcpy(name->machine,  CONFIG_ARCH, sizeof(name->machine));
 
   return ret;
 }

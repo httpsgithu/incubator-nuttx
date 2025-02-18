@@ -1,6 +1,8 @@
 /****************************************************************************
  * include/nuttx/lib/builtin.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -36,10 +38,15 @@
 
 struct builtin_s
 {
-  const char *name;         /* Invocation name and as seen under /sbin/ */
+  FAR const char *name;     /* Invocation name and as seen under /sbin/ */
   int         priority;     /* Use: SCHED_PRIORITY_DEFAULT */
   int         stacksize;    /* Desired stack size */
   main_t      main;         /* Entry point: main(int argc, char *argv[]) */
+#ifdef CONFIG_SCHED_USER_IDENTITY
+  uid_t       uid;          /* File owner user identity */
+  gid_t       gid;          /* File owner group identity */
+  int         mode;         /* File mode added to */
+#endif
 };
 
 /****************************************************************************
@@ -54,8 +61,7 @@ extern "C"
 #define EXTERN extern
 #endif
 
-#if defined(CONFIG_BUILD_PROTECTED) && defined(CONFIG_FS_BINFS) && \
-    defined(__KERNEL__)
+#if defined(CONFIG_BUILD_PROTECTED) && defined(__KERNEL__)
 /* In the PROTECTED build, the builtin arrays are only needed by BINFS.
  * in this case, the user-space globals are not accessible and must be
  * provided to the OS via the boardctl(BOARDIOC_BUILTINS) call.  In this
@@ -75,7 +81,7 @@ EXTERN int g_builtin_count;
  * address space.  These globals must be provided the application layer.
  */
 
-EXTERN FAR const struct builtin_s g_builtins[];
+EXTERN const struct builtin_s g_builtins[];
 EXTERN const int g_builtin_count;
 #endif
 
@@ -108,8 +114,7 @@ EXTERN const int g_builtin_count;
  *
  ****************************************************************************/
 
-#if defined(CONFIG_BUILD_PROTECTED) && defined(CONFIG_FS_BINFS) && \
-    defined(__KERNEL__)
+#if defined(CONFIG_BUILD_PROTECTED) && defined(__KERNEL__)
 void builtin_setlist(FAR const struct builtin_s *builtins, int count);
 #endif
 
@@ -172,6 +177,64 @@ FAR const char *builtin_getname(int index);
  ****************************************************************************/
 
 FAR const struct builtin_s *builtin_for_index(int index);
+
+#ifdef CONFIG_SCHED_USER_IDENTITY
+
+/****************************************************************************
+ * Name: builtin_getuid
+ *
+ * Description:
+ *   Returns file uid of the application at 'index' in the table
+ *   of built-in applications.
+ *
+ * Input Parameters:
+ *   index - From 0 and on ...
+ *
+ * Returned Value:
+ *   Returns valid uid for app if index is valid.
+ *   Otherwise 0 is returned.
+ *
+ ****************************************************************************/
+
+uid_t builtin_getuid(int index);
+
+/****************************************************************************
+ * Name: builtin_getgid
+ *
+ * Description:
+ *   Returns file gid of the application at 'index' in the table
+ *   of built-in applications.
+ *
+ * Input Parameters:
+ *   index - From 0 and on ...
+ *
+ * Returned Value:
+ *   Returns valid gid for app if index is valid.
+ *   Otherwise 0 is returned.
+ *
+ ****************************************************************************/
+
+gid_t builtin_getgid(int index);
+
+/****************************************************************************
+ * Name: builtin_getmode
+ *
+ * Description:
+ *   Returns file mode of the application at 'index' in the table
+ *   of built-in applications.
+ *
+ * Input Parameters:
+ *   index - From 0 and on ...
+ *
+ * Returned Value:
+ *   Returns valid mode for app if index is valid.
+ *   Otherwise 0 is returned.
+ *
+ ****************************************************************************/
+
+int builtin_getmode(int index);
+
+#endif
 
 #undef EXTERN
 #if defined(__cplusplus)

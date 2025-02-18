@@ -1,7 +1,9 @@
 /****************************************************************************
  * include/nuttx/sensors/isl29023.h
  *
-  * Licensed to the Apache Software Foundation (ASF) under one or more
+ * SPDX-License-Identifier: Apache-2.0
+ *
+ * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
  * ASF licenses this file to you under the Apache License, Version 2.0 (the
@@ -18,8 +20,8 @@
  *
  ****************************************************************************/
 
-#ifndef __INCLUDE_NUTTX_SENSORS_ISL29023
-#define __INCLUDE_NUTTX_SENSORS_ISL29023
+#ifndef __INCLUDE_NUTTX_SENSORS_ISL29023_H
+#define __INCLUDE_NUTTX_SENSORS_ISL29023_H
 
 /****************************************************************************
  * Included Files
@@ -108,4 +110,4 @@ int isl29023_register(FAR const char *devpath, FAR struct i2c_master_s *i2c,
 #endif
 
 #endif /* CONFIG_I2C && CONFIG_SENSORS_ISL29023 */
-#endif /* __INCLUDE_NUTTX_SENSORS_ISL29023 */
+#endif /* __INCLUDE_NUTTX_SENSORS_ISL29023_H */

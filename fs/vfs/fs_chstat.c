@@ -1,6 +1,8 @@
 /****************************************************************************
  * fs/vfs/fs_chstat.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -118,11 +120,6 @@ static int chstat(FAR const char *path,
 
   /* Adjust and check buf and flags */
 
-  if ((flags & CH_STAT_MODE) && (buf->st_mode & ~07777))
-    {
-      goto errout;
-    }
-
   if ((flags & CH_STAT_UID) && buf->st_uid == -1)
     {
       flags &= ~CH_STAT_UID;
@@ -210,7 +207,7 @@ int chmod(FAR const char *path, mode_t mode)
 {
   struct stat buf;
 
-  buf.st_mode = mode;
+  buf.st_mode = mode & 0777;
 
   return chstat(path, &buf, CH_STAT_MODE, 1);
 }
@@ -236,7 +233,7 @@ int lchmod(FAR const char *path, mode_t mode)
 {
   struct stat buf;
 
-  buf.st_mode = mode;
+  buf.st_mode = mode & 0777;
 
   return chstat(path, &buf, CH_STAT_MODE, 0);
 }
@@ -401,7 +398,7 @@ int lutimens(FAR const char *path, const struct timespec times[2])
  *   inode   - The inode of interest
  *   buf     - The caller provide location in which to apply information
  *             about the inode.
- *   flags   - The vaild field in buf
+ *   flags   - The valid field in buf
  *   resolve - Whether to resolve the symbolic link
  *
  * Returned Value:

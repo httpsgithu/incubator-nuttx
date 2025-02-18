@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/s32k1xx/s32k118evb/src/s32k1xx_spi.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -144,7 +146,7 @@ int weak_function s32k1xx_spidev_initialize(void)
 #ifdef CONFIG_S32K1XX_LPSPI0
 /* LPSPI0 *******************************************************************/
 
-void s32k1xx_lpspi0select(FAR struct spi_dev_s *dev, uint32_t devid,
+void s32k1xx_lpspi0select(struct spi_dev_s *dev, uint32_t devid,
                           bool selected)
 {
   spiinfo("devid: %" PRId32 ", CS: %s\n", devid,
@@ -153,7 +155,7 @@ void s32k1xx_lpspi0select(FAR struct spi_dev_s *dev, uint32_t devid,
   s32k1xx_gpiowrite(PIN_LPSPI0_PCS, !selected);
 }
 
-uint8_t s32k1xx_lpspi0status(FAR struct spi_dev_s *dev, uint32_t devid)
+uint8_t s32k1xx_lpspi0status(struct spi_dev_s *dev, uint32_t devid)
 {
   return 0;
 }
@@ -162,7 +164,7 @@ uint8_t s32k1xx_lpspi0status(FAR struct spi_dev_s *dev, uint32_t devid)
 #ifdef CONFIG_S32K1XX_LPSPI1
 /* LPSPI1 *******************************************************************/
 
-void s32k1xx_lpspi1select(FAR struct spi_dev_s *dev, uint32_t devid,
+void s32k1xx_lpspi1select(struct spi_dev_s *dev, uint32_t devid,
                           bool selected)
 {
   spiinfo("devid: %" PRId32 ", CS: %s\n", devid,
@@ -171,7 +173,7 @@ void s32k1xx_lpspi1select(FAR struct spi_dev_s *dev, uint32_t devid,
   s32k1xx_gpiowrite(PIN_LPSPI1_PCS, !selected);
 }
 
-uint8_t s32k1xx_lpspi1status(FAR struct spi_dev_s *dev, uint32_t devid)
+uint8_t s32k1xx_lpspi1status(struct spi_dev_s *dev, uint32_t devid)
 {
   return 0;
 }

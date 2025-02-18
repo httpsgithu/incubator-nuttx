@@ -1,6 +1,8 @@
 /****************************************************************************
  * net/local/local_recvmsg.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -23,8 +25,8 @@
  ****************************************************************************/
 
 #include <nuttx/config.h>
-#if defined(CONFIG_NET) && defined(CONFIG_NET_LOCAL)
 
+#include <sys/param.h>
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <inttypes.h>
@@ -32,6 +34,7 @@
 #include <errno.h>
 #include <assert.h>
 #include <debug.h>
+#include <fcntl.h>
 
 #include <nuttx/kmalloc.h>
 #include <nuttx/fs/fs.h>
@@ -39,14 +42,7 @@
 
 #include "socket/socket.h"
 #include "local/local.h"
-
-/****************************************************************************
- * Pre-processor Definitions
- ****************************************************************************/
-
-#ifndef MIN
-#  define MIN(a,b) ((a) < (b) ? (a) : (b))
-#endif
+#include "utils/utils.h"
 
 /****************************************************************************
  * Private Functions
@@ -62,12 +58,29 @@
  ****************************************************************************/
 
 static int psock_fifo_read(FAR struct socket *psock, FAR void *buf,
-                           FAR size_t *readlen, bool once)
+                           size_t offset, FAR size_t *readlen,
+                           int flags, bool once)
 {
-  FAR struct local_conn_s *conn = (FAR struct local_conn_s *)psock->s_conn;
+  FAR struct local_conn_s *conn = psock->s_conn;
   int ret;
 
-  ret = local_fifo_read(&conn->lc_infile, buf, readlen, once);
+  if (flags & MSG_PEEK)
+    {
+      struct pipe_peek_s peek =
+        {
+          buf,
+          offset,
+          *readlen
+        };
+
+      ret = file_ioctl(&conn->lc_infile, PIPEIOC_PEEK,
+                       (unsigned long)((uintptr_t)&peek));
+    }
+  else
+    {
+      ret = local_fifo_read(&conn->lc_infile, buf, readlen, once);
+    }
+
   if (ret < 0)
     {
       /* -ECONNRESET is a special case.  We may or not have received
@@ -82,8 +95,8 @@ static int psock_fifo_read(FAR struct socket *psock, FAR void *buf,
            * eventually be reported as ENOTCONN.
            */
 
-          psock->s_flags &= ~(_SF_CONNECTED | _SF_CLOSED);
-          conn->lc_state  = LOCAL_STATE_DISCONNECTED;
+          conn->lc_conn.s_flags &= ~(_SF_CONNECTED | _SF_CLOSED);
+          conn->lc_state = LOCAL_STATE_DISCONNECTED;
 
           /* Did we receive any data? */
 
@@ -99,7 +112,11 @@ static int psock_fifo_read(FAR struct socket *psock, FAR void *buf,
         }
       else
         {
-          nerr("ERROR: Failed to read packet: %d\n", ret);
+          if (ret != -EAGAIN)
+            {
+              nerr("ERROR: Failed to read packet: %d\n", ret);
+            }
+
           return ret;
         }
     }
@@ -121,24 +138,14 @@ static int psock_fifo_read(FAR struct socket *psock, FAR void *buf,
 
 #ifdef CONFIG_NET_LOCAL_SCM
 static void local_recvctl(FAR struct local_conn_s *conn,
-                          FAR struct msghdr *msg)
+                          FAR struct msghdr *msg, int flags)
 {
   FAR struct local_conn_s *peer;
-  struct cmsghdr *cmsg;
   int count;
   int *fds;
   int i;
 
   net_lock();
-
-  cmsg  = CMSG_FIRSTHDR(msg);
-  count = (cmsg->cmsg_len - sizeof(struct cmsghdr)) / sizeof(int);
-  cmsg->cmsg_len = 0;
-
-  if (count == 0)
-    {
-      goto out;
-    }
 
   if (conn->lc_peer == NULL)
     {
@@ -158,13 +165,18 @@ static void local_recvctl(FAR struct local_conn_s *conn,
       goto out;
     }
 
-  fds = (int *)CMSG_DATA(cmsg);
+  fds = cmsg_append(msg, SOL_SOCKET, SCM_RIGHTS, NULL,
+                    sizeof(int) * peer->lc_cfpcount);
+  if (fds == NULL)
+    {
+      goto out;
+    }
 
-  count = count > peer->lc_cfpcount ?
-                  peer->lc_cfpcount : count;
+  count = peer->lc_cfpcount;
   for (i = 0; i < count; i++)
     {
-      fds[i] = file_dup(peer->lc_cfps[i], 0);
+      fds[i] = file_dup(peer->lc_cfps[i], 0,
+                        flags & MSG_CMSG_CLOEXEC ? O_CLOEXEC : 0);
       file_close(peer->lc_cfps[i]);
       kmm_free(peer->lc_cfps[i]);
       peer->lc_cfps[i] = NULL;
@@ -183,10 +195,6 @@ static void local_recvctl(FAR struct local_conn_s *conn,
           memmove(peer->lc_cfps[0], peer->lc_cfps[i],
                   sizeof(FAR void *) * peer->lc_cfpcount);
         }
-
-      cmsg->cmsg_len   = CMSG_LEN(sizeof(int) * i);
-      cmsg->cmsg_level = SOL_SOCKET;
-      cmsg->cmsg_type  = SCM_RIGHTS;
     }
 
 out:
@@ -222,7 +230,7 @@ psock_stream_recvfrom(FAR struct socket *psock, FAR void *buf, size_t len,
                       int flags, FAR struct sockaddr *from,
                       FAR socklen_t *fromlen)
 {
-  FAR struct local_conn_s *conn = (FAR struct local_conn_s *)psock->s_conn;
+  FAR struct local_conn_s *conn = psock->s_conn;
   size_t readlen = len;
   int ret;
 
@@ -230,22 +238,39 @@ psock_stream_recvfrom(FAR struct socket *psock, FAR void *buf, size_t len,
 
   if (conn->lc_state != LOCAL_STATE_CONNECTED)
     {
-      if (conn->lc_state == LOCAL_STATE_CONNECTING)
-        {
-          return -EAGAIN;
-        }
-
       nerr("ERROR: not connected\n");
       return -ENOTCONN;
     }
 
-  /* The incoming FIFO should be open */
+  /* Check shutdown state */
 
-  DEBUGASSERT(conn->lc_infile.f_inode != NULL);
+  if (conn->lc_infile.f_inode == NULL)
+    {
+      return 0;
+    }
+
+  /* If it is non-blocking mode, the data in fifo is 0 and
+   * returns directly
+   */
+
+  if (flags & MSG_DONTWAIT)
+    {
+      int data_len = 0;
+      ret = file_ioctl(&conn->lc_infile, FIONREAD, &data_len);
+      if (ret < 0)
+        {
+          return ret;
+        }
+
+      if (data_len == 0)
+        {
+          return -EAGAIN;
+        }
+    }
 
   /* Read the packet */
 
-  ret = psock_fifo_read(psock, buf, &readlen, true);
+  ret = psock_fifo_read(psock, buf, 0, &readlen, flags, true);
   if (ret < 0)
     {
       return ret;
@@ -265,6 +290,56 @@ psock_stream_recvfrom(FAR struct socket *psock, FAR void *buf, size_t len,
   return readlen;
 }
 #endif /* CONFIG_NET_LOCAL_STREAM */
+
+/****************************************************************************
+ * Name: psock_fifo_discard
+ *
+ * Description:
+ *   psock_fifo_discard() discard buffer from a local socket.
+ *
+ * Input Parameters:
+ *   psock      A pointer to a NuttX-specific, internal socket structure
+ *   len        Remaining length of buffer
+ *   flags      Receive flags
+ *
+ * Returned Value:
+ *   On success, returns OK.  Otherwise, on errors, errno is returned
+ *
+ ****************************************************************************/
+
+#ifdef CONFIG_NET_LOCAL_DGRAM
+static int psock_fifo_discard(FAR struct socket *psock, size_t len,
+                              int flags)
+{
+  uint8_t bitbucket[256];
+  size_t tmplen;
+  int ret;
+
+  if (flags & MSG_PEEK)
+    {
+      return OK;
+    }
+
+  while (len > 0)
+    {
+      /* Read 256 bytes into the bit bucket */
+
+      tmplen = MIN(len, sizeof(bitbucket));
+      ret = psock_fifo_read(psock, bitbucket, 0, &tmplen, flags, false);
+      if (ret < 0)
+        {
+          nerr("ERROR: Failed to get bitbucket : ret %d\n", ret);
+          return ret;
+        }
+
+      /* Adjust the number of bytes len to be read from the packet */
+
+      DEBUGASSERT(tmplen <= len);
+      len -= tmplen;
+    }
+
+  return OK;
+}
 
 /****************************************************************************
  * Name: psock_dgram_recvfrom
@@ -287,26 +362,24 @@ psock_stream_recvfrom(FAR struct socket *psock, FAR void *buf, size_t len,
  *
  ****************************************************************************/
 
-#ifdef CONFIG_NET_LOCAL_DGRAM
 static inline ssize_t
 psock_dgram_recvfrom(FAR struct socket *psock, FAR void *buf, size_t len,
                      int flags, FAR struct sockaddr *from,
                      FAR socklen_t *fromlen)
 {
-  FAR struct local_conn_s *conn = (FAR struct local_conn_s *)psock->s_conn;
-  uint16_t pktlen;
+  FAR struct local_conn_s *conn = psock->s_conn;
   size_t readlen;
+  size_t pathlen;
+  bool bclose = false;
+  lc_size_t addrlen;
+  lc_size_t pktlen;
+  int offset = 0;
   int ret;
-
-  /* We keep packet sizes in a uint16_t, so there is a upper limit to the
-   * 'len' that can be supported.
-   */
-
-  DEBUGASSERT(len <= UINT16_MAX);
 
   /* Verify that this is a bound, un-connected peer socket */
 
-  if (conn->lc_state != LOCAL_STATE_BOUND)
+  if (conn->lc_state != LOCAL_STATE_BOUND &&
+      conn->lc_state != LOCAL_STATE_CONNECTED)
     {
       /* Either not bound to address or it is connected */
 
@@ -314,29 +387,37 @@ psock_dgram_recvfrom(FAR struct socket *psock, FAR void *buf, size_t len,
       return -EISCONN;
     }
 
-  /* The incoming FIFO should not be open */
-
-  DEBUGASSERT(conn->lc_infile.f_inode == NULL);
-
-  /* Make sure that half duplex FIFO has been created */
-
-  ret = local_create_halfduplex(conn, conn->lc_path);
-  if (ret < 0)
+  if (conn->lc_infile.f_inode == NULL)
     {
-      nerr("ERROR: Failed to create FIFO for %s: %d\n",
-           conn->lc_path, ret);
-      return ret;
+      bclose = true;
+
+      /* Make sure that half duplex FIFO has been created */
+
+      ret = local_create_halfduplex(conn, conn->lc_path, conn->lc_rcvsize);
+      if (ret < 0)
+        {
+          nerr("ERROR: Failed to create FIFO for %s: %d\n",
+               conn->lc_path, ret);
+          return ret;
+        }
+
+      /* Open the receiving side of the transfer */
+
+      ret = local_open_receiver(conn, (flags & MSG_DONTWAIT) != 0 ||
+                                _SS_ISNONBLOCK(conn->lc_conn.s_flags));
+      if (ret < 0)
+        {
+          nerr("ERROR: Failed to open FIFO for %s: %d\n",
+               conn->lc_path, ret);
+          goto errout_with_halfduplex;
+        }
     }
 
-  /* Open the receiving side of the transfer */
-
-  ret = local_open_receiver(conn, _SS_ISNONBLOCK(psock->s_flags) ||
-                            (flags & MSG_DONTWAIT) != 0);
+  readlen = sizeof(addrlen);
+  ret = psock_fifo_read(psock, &addrlen, offset, &readlen, flags, false);
   if (ret < 0)
     {
-      nerr("ERROR: Failed to open FIFO for %s: %d\n",
-           conn->lc_path, ret);
-      goto errout_with_halfduplex;
+      nerr("ERROR: Failed to get path length: ret %d\n", ret);
       return ret;
     }
 
@@ -344,26 +425,53 @@ psock_dgram_recvfrom(FAR struct socket *psock, FAR void *buf, size_t len,
    * the next packet.
    */
 
-  ret = local_sync(&conn->lc_infile);
+  readlen = sizeof(pktlen);
+  offset += sizeof(addrlen);
+  ret = psock_fifo_read(psock, &pktlen, offset, &readlen, flags, false);
   if (ret < 0)
     {
-      nerr("ERROR: Failed to get packet length: %d\n", ret);
-      goto errout_with_infd;
-    }
-  else if (ret > UINT16_MAX)
-    {
-      nerr("ERROR: Packet is too big: %d\n", ret);
+      nerr("ERROR: Failed to get packet length: ret %d\n", ret);
       goto errout_with_infd;
     }
 
-  pktlen = ret;
+  readlen = addrlen;
+  offset += sizeof(pktlen);
+
+  if (from && fromlen && *fromlen)
+    {
+      pathlen = MIN(*fromlen - 1, readlen);
+      ret = psock_fifo_read(psock, from->sa_data, offset,
+                            &pathlen, flags, false);
+      if (ret < 0)
+        {
+          nerr("ERROR: Failed to get path : ret %d\n", ret);
+          goto errout_with_infd;
+        }
+
+      from->sa_family = AF_LOCAL;
+      from->sa_data[pathlen] = '\0';
+      *fromlen = pathlen;
+      readlen -= pathlen;
+    }
+
+  if (readlen)
+    {
+      ret = psock_fifo_discard(psock, readlen, flags);
+      if (ret < 0)
+        {
+          nerr("ERROR: Failed to discard redunance address: ret %d\n", ret);
+          goto errout_with_infd;
+        }
+    }
 
   /* Read the packet */
 
   readlen = MIN(pktlen, len);
-  ret     = psock_fifo_read(psock, buf, &readlen, false);
+  offset += addrlen;
+  ret     = psock_fifo_read(psock, buf, offset, &readlen, flags, false);
   if (ret < 0)
     {
+      nerr("ERROR: Failed to get packet : ret %d\n", ret);
       goto errout_with_infd;
     }
 
@@ -374,70 +482,30 @@ psock_dgram_recvfrom(FAR struct socket *psock, FAR void *buf, size_t len,
   DEBUGASSERT(readlen <= pktlen);
   if (readlen < pktlen)
     {
-      uint8_t bitbucket[32];
-      uint16_t remaining;
-      size_t tmplen;
-
-      remaining = pktlen - readlen;
-      do
-        {
-          /* Read 32 bytes into the bit bucket */
-
-          tmplen = MIN(remaining, 32);
-          ret     = psock_fifo_read(psock, bitbucket, &tmplen, false);
-          if (ret < 0)
-            {
-              goto errout_with_infd;
-            }
-
-          /* Adjust the number of bytes remaining to be read from the
-           * packet
-           */
-
-          DEBUGASSERT(tmplen <= remaining);
-          remaining -= tmplen;
-          readlen += tmplen;
-        }
-      while (remaining > 0);
+      ret = psock_fifo_discard(psock, pktlen - readlen, flags);
     }
-
-  /* Now we can close the read-only file descriptor */
-
-  file_close(&conn->lc_infile);
-  conn->lc_infile.f_inode = NULL;
-
-  /* Release our reference to the half duplex FIFO */
-
-  local_release_halfduplex(conn);
-
-  /* Return the address family */
-
-  if (from)
-    {
-      ret = local_getaddr(conn, from, fromlen);
-      if (ret < 0)
-        {
-          return ret;
-        }
-    }
-
-  return readlen;
 
 errout_with_infd:
 
   /* Close the read-only file descriptor */
 
-  file_close(&conn->lc_infile);
-  conn->lc_infile.f_inode = NULL;
+  if (bclose)
+    {
+      /* Now we can close the read-only file descriptor */
+
+      file_close(&conn->lc_infile);
+      conn->lc_infile.f_inode = NULL;
 
 errout_with_halfduplex:
 
-  /* Release our reference to the half duplex FIFO */
+      /* Release our reference to the half duplex FIFO */
 
-  local_release_halfduplex(conn);
-  return ret;
+      local_release_halfduplex(conn);
+    }
+
+  return ret < 0 ? ret : readlen;
 }
-#endif /* CONFIG_NET_LOCAL_STREAM */
+#endif /* CONFIG_NET_LOCAL_DGRAM */
 
 /****************************************************************************
  * Public Functions
@@ -471,12 +539,25 @@ errout_with_halfduplex:
 ssize_t local_recvmsg(FAR struct socket *psock, FAR struct msghdr *msg,
                       int flags)
 {
+  FAR struct local_conn_s *conn = psock->s_conn;
   FAR socklen_t *fromlen = &msg->msg_namelen;
   FAR struct sockaddr *from = msg->msg_name;
   FAR void *buf = msg->msg_iov->iov_base;
   size_t len = msg->msg_iov->iov_len;
 
-  DEBUGASSERT(psock && psock->s_conn && buf);
+  /* Check shutdown state */
+
+  if (conn->lc_infile.f_inode == NULL)
+    {
+      return 0;
+    }
+
+  if (msg->msg_iovlen != 1)
+    {
+      return -ENOTSUP;
+    }
+
+  DEBUGASSERT(buf);
 
   /* Check for a stream socket */
 
@@ -507,11 +588,9 @@ ssize_t local_recvmsg(FAR struct socket *psock, FAR struct msghdr *msg,
   if (len >= 0 && msg->msg_control &&
       msg->msg_controllen > sizeof(struct cmsghdr))
     {
-      local_recvctl(psock->s_conn, msg);
+      local_recvctl(psock->s_conn, msg, flags);
     }
 #endif /* CONFIG_NET_LOCAL_SCM */
 
   return len;
 }
-
-#endif /* CONFIG_NET && CONFIG_NET_LOCAL */

@@ -1,6 +1,8 @@
 /****************************************************************************
  * include/nuttx/wireless/lpwan/sx127x.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -18,8 +20,8 @@
  *
  ****************************************************************************/
 
-#ifndef __INCLUDE_NUTTX_SX127X_H
-#define __INCLUDE_NUTTX_SX127X_H
+#ifndef __INCLUDE_NUTTX_WIRELESS_LPWAN_SX127X_H
+#define __INCLUDE_NUTTX_WIRELESS_LPWAN_SX127X_H
 
 /****************************************************************************
  * Included Files
@@ -295,4 +297,4 @@ struct sx127x_lower_s
 int sx127x_register(FAR struct spi_dev_s *spi,
                     FAR const struct sx127x_lower_s *lower);
 
-#endif /* __INCLUDE_NUTTX_SX127X_H */
+#endif /* __INCLUDE_NUTTX_WIRELESS_LPWAN_SX127X_H */

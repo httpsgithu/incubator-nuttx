@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/tiva/eagle100/src/lm_ssi.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -31,7 +33,7 @@
 #include <nuttx/spi/spi.h>
 #include <arch/board/board.h>
 
-#include "arm_arch.h"
+#include "arm_internal.h"
 #include "chip.h"
 #include "tiva_gpio.h"
 #include "eagle100.h"
@@ -94,7 +96,7 @@ void weak_function lm_ssidev_initialize(void)
  *
  ****************************************************************************/
 
-void tiva_ssiselect(FAR struct spi_dev_s *dev, uint32_t devid, bool selected)
+void tiva_ssiselect(struct spi_dev_s *dev, uint32_t devid, bool selected)
 {
   spiinfo("devid: %d CS: %s\n", (int)devid,
           selected ? "assert" : "de-assert");
@@ -108,7 +110,7 @@ void tiva_ssiselect(FAR struct spi_dev_s *dev, uint32_t devid, bool selected)
     }
 }
 
-uint8_t tiva_ssistatus(FAR struct spi_dev_s *dev, uint32_t devid)
+uint8_t tiva_ssistatus(struct spi_dev_s *dev, uint32_t devid)
 {
   spiinfo("Returning SPI_STATUS_PRESENT\n");
   return SPI_STATUS_PRESENT;

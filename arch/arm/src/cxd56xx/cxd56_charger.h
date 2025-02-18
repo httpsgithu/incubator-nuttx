@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/cxd56xx/cxd56_charger.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -23,7 +25,7 @@
 
 /* initialize function */
 
-int cxd56_charger_initialize(FAR const char *devpath);
-int cxd56_charger_uninitialize(FAR const char *devpath);
+int cxd56_charger_initialize(const char *devpath);
+int cxd56_charger_uninitialize(const char *devpath);
 
 #endif /* __ARCH_ARM_SRC_CXD56XX_CXD56_CHARGER_H */

@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/kinetis/freedom-k66f/src/k66_uid.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -47,7 +49,7 @@
  * Name: board_uniqueid
  ****************************************************************************/
 
-int board_uniqueid(FAR uint8_t *uniqueid)
+int board_uniqueid(uint8_t *uniqueid)
 {
   if (uniqueid == NULL)
     {

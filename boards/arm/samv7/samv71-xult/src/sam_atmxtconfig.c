@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/samv7/samv71-xult/src/sam_atmxtconfig.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -233,7 +235,7 @@ const struct atmxt_config_s g_atmxt_config[] =
     .addr   = 0x0000,
     .id     = 0x00,
     .nbytes = 0x00,
-    .bytes  = (FAR uint8_t *)0
+    .bytes  = (uint8_t *)0
   }
 };
 

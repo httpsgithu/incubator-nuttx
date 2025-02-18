@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/risc-v/src/mpfs/hardware/mpfs_emmcsd.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -145,7 +147,7 @@
 
 #define MPFS_EMMCSD_HRS06_ETR           (1 << 15)
 #define MPFS_EMMCSD_HRS06_ETV           (0x3f << 8)
-#define MPFS_EMMCSD_HRS06_EMM           (0x3 << 0)
+#define MPFS_EMMCSD_HRS06_EMM           (0x7 << 0)
 
 /* HRS07 register */
 

@@ -1,6 +1,8 @@
 /****************************************************************************
  * mm/shm/shm.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -32,9 +34,7 @@
 #include <stdint.h>
 
 #include <nuttx/addrenv.h>
-#include <nuttx/semaphore.h>
-
-#ifdef CONFIG_MM_SHM
+#include <nuttx/mutex.h>
 
 /****************************************************************************
  * Pre-processor Definitions
@@ -46,6 +46,32 @@
 #define SRFLAG_INUSE     (1 << 0) /* Bit 0: Region is in use */
 #define SRFLAG_UNLINKED  (1 << 1) /* Bit 1: Region perists while references */
 
+#ifndef CONFIG_ARCH_ADDRENV
+#  error CONFIG_ARCH_ADDRENV must be selected with CONFIG_MM_SHM
+#endif
+
+#ifndef CONFIG_BUILD_KERNEL
+#  error CONFIG_BUILD_KERNEL must be selected with CONFIG_MM_SHM
+#endif
+
+#ifndef CONFIG_GRAN
+#  error CONFIG_GRAN must be selected with CONFIG_MM_SHM
+#endif
+
+#ifndef CONFIG_MM_PGALLOC
+#  error CONFIG_MM_PGALLOC must be selected with CONFIG_MM_SHM
+#endif
+
+/* Debug */
+
+#ifdef CONFIG_DEBUG_SHM
+#  define shmerr                    _err
+#  define shminfo                   _info
+#else
+#  define shmerr                    merr
+#  define shminfo                   minfo
+#endif
+
 /****************************************************************************
  * Public Types
  ****************************************************************************/
@@ -56,10 +82,10 @@
 
 struct shm_region_s
 {
-  struct shmid_ds sr_ds; /* Region info */
-  bool  sr_flags;        /* See SRFLAGS_* definitions */
-  key_t sr_key;          /* Lookup key */
-  sem_t sr_sem;          /* Manages exclusive access to this region */
+  struct  shmid_ds sr_ds;  /* Region info */
+  bool    sr_flags;        /* See SRFLAGS_* definitions */
+  key_t   sr_key;          /* Lookup key */
+  mutex_t sr_lock;         /* Manages exclusive access to this region */
 
   /* List of physical pages allocated for this memory region */
 
@@ -72,7 +98,7 @@ struct shm_region_s
 
 struct shm_info_s
 {
-  sem_t si_sem;         /* Manages exclusive access to the region list */
+  mutex_t si_lock;         /* Manages exclusive access to the region list */
   struct shm_region_s si_region[CONFIG_ARCH_SHM_MAXREGIONS];
 };
 
@@ -108,12 +134,11 @@ extern struct shm_info_s g_shminfo;
  *   None
  *
  * Assumption:
- *   The caller holds either the region table semaphore or else the
- *   semaphore on the particular entry being deleted.
+ *   The caller holds either the region table mutex or else the
+ *   mutex on the particular entry being deleted.
  *
  ****************************************************************************/
 
 void shm_destroy(int shmid);
 
-#endif /* CONFIG_MM_SHM */
 #endif /* __MM_SHM_SHM_H */

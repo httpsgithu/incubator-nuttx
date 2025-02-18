@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/stm32/shenzhou/src/stm32_w25.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -80,8 +82,8 @@
 int stm32_w25initialize(int minor)
 {
 #ifdef HAVE_W25
-  FAR struct spi_dev_s *spi;
-  FAR struct mtd_dev_s *mtd;
+  struct spi_dev_s *spi;
+  struct mtd_dev_s *mtd;
 #ifdef CONFIG_FS_NXFFS
   char devname[12];
 #endif
@@ -126,7 +128,7 @@ int stm32_w25initialize(int minor)
 
   /* Mount the file system at /mnt/w25 */
 
-  snprintf(devname, 12, "/mnt/w25%c", 'a' + minor);
+  snprintf(devname, sizeof(devname), "/mnt/w25%c", 'a' + minor);
   ret = nx_mount(NULL, devname, "nxffs", 0, NULL);
   if (ret < 0)
     {

@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/lpc43xx/bambino-200e/src/lpc43_max31855.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -63,10 +65,10 @@
  *
  ****************************************************************************/
 
-int lpc43_max31855initialize(FAR const char *devpath, int bus,
+int lpc43_max31855initialize(const char *devpath, int bus,
                              uint16_t devid)
 {
-  FAR struct spi_dev_s *spi;
+  struct spi_dev_s *spi;
   spi = lpc43_sspbus_initialize(bus);
   if (!spi)
     {

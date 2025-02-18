@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/z16/src/z16f/z16f_espi.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -32,11 +34,11 @@
 
 #include <arch/board/board.h>
 #include <nuttx/irq.h>
-#include <nuttx/semaphore.h>
+#include <nuttx/mutex.h>
 #include <nuttx/spi/spi.h>
 
-#include "z16_arch.h"
 #include "chip.h"
+#include "z16_internal.h"
 
 #ifdef CONFIG_Z16F_ESPI
 
@@ -49,10 +51,10 @@
 struct z16f_spi_s
 {
   struct spi_dev_s spi;        /* Externally visible part of the SPI interface */
+  mutex_t lock;                /* Assures mutually exclusive access to SPI */
   bool initialized;            /* TRUE: Controller has been initialized */
   uint8_t nbits;               /* Width of word in bits (1-8) */
   uint8_t mode;                /* Mode 0,1,2,3 */
-  sem_t exclsem;               /* Assures mutually exclusive access to SPI */
   uint32_t frequency;          /* Requested clock frequency */
   uint32_t actual;             /* Actual clock frequency */
 
@@ -81,15 +83,15 @@ static void     spi_putreg8(FAR struct z16f_spi_s *priv, uint8_t regval,
 static void     spi_putreg16(FAR struct z16f_spi_s *priv, uint16_t regval,
                   uintptr_t regaddr);
 #else
-# define        spi_getreg8(priv,regaddr)         getreg8(regaddr)
-# define        spi_putreg8(priv,regval,regaddr)  putreg8(regval, regaddr)
-# define        spi_putreg16(priv,regval,regaddr) putreg16(regval, regaddr)
+#  define       spi_getreg8(priv,regaddr)         getreg8(regaddr)
+#  define       spi_putreg8(priv,regval,regaddr)  putreg8(regval, regaddr)
+#  define       spi_putreg16(priv,regval,regaddr) putreg16(regval, regaddr)
 #endif
 
 #ifdef CONFIG_DEBUG_SPI_INFO
 static void     spi_dumpregs(FAR struct z16f_spi_s *priv, const char *msg);
 #else
-# define        spi_dumpregs(priv,msg)
+#  define       spi_dumpregs(priv,msg)
 #endif
 
 static void     spi_flush(FAR struct z16f_spi_s *priv);
@@ -144,7 +146,13 @@ static const struct spi_ops_s g_epsiops =
 
 /* ESPI driver state */
 
-static struct z16f_spi_s g_espi;
+static struct z16f_spi_s g_espi =
+{
+  {
+    &g_epsiops
+  },
+  NXMUTEX_INITIALIZER
+};
 
 /****************************************************************************
  * Public Data
@@ -360,11 +368,11 @@ static int spi_lock(FAR struct spi_dev_s *dev, bool lock)
   spiinfo("lock=%d\n", lock);
   if (lock)
     {
-      ret = nxsem_wait_uninterruptible(&priv->exclsem);
+      ret = nxmutex_lock(&priv->lock);
     }
   else
     {
-      ret = nxsem_post(&priv->exclsem);
+      ret = nxmutex_unlock(&priv->lock);
     }
 
   return ret;
@@ -493,7 +501,7 @@ static void spi_setmode(FAR struct spi_dev_s *dev, enum spi_mode_e mode)
           break;
 
         default:
-          DEBUGASSERT(false);
+          DEBUGPANIC();
           return;
         }
 
@@ -792,8 +800,6 @@ FAR struct spi_dev_s *z16_spibus_initialize(int port)
       /* Initialize the ESPI state structure */
 
       flags = enter_critical_section();
-      priv->spi.ops = &g_epsiops;
-      nxsem_init(&priv->exclsem, 0, 1);
 
       /* Set up the SPI pin configuration (board-specific logic is required
        * to configure and manage all chip selects).

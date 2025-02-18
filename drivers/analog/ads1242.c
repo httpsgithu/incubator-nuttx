@@ -1,6 +1,8 @@
 /****************************************************************************
  * drivers/analog/ads1242.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -101,13 +103,12 @@ static int     ads1242_ioctl(FAR struct file *filep, int cmd,
 
 static const struct file_operations g_ads1242_fops =
 {
-  ads1242_open,
-  ads1242_close,
-  ads1242_read,
-  ads1242_write,
-  NULL,
-  ads1242_ioctl,
-  NULL
+  ads1242_open,   /* open */
+  ads1242_close,  /* close */
+  ads1242_read,   /* read */
+  ads1242_write,  /* write */
+  NULL,           /* seek */
+  ads1242_ioctl,  /* ioctl */
 };
 
 /****************************************************************************
@@ -585,8 +586,7 @@ int ads1242_register(FAR const char *devpath, FAR struct spi_dev_s *spi,
 
   /* Initialize the ADS1242 device structure */
 
-  priv =
-    (FAR struct ads1242_dev_s *)kmm_malloc(sizeof(struct ads1242_dev_s));
+  priv = kmm_malloc(sizeof(struct ads1242_dev_s));
   if (priv == NULL)
     {
        _err("ERROR: Failed to allocate instance\n");

@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/lc823450/lc823450_start.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -18,8 +20,8 @@
  *
  ****************************************************************************/
 
-#ifndef __ARCH_ARM_SRC_LC823450_LC823450_H
-#define __ARCH_ARM_SRC_LC823450_LC823450_H
+#ifndef __ARCH_ARM_SRC_LC823450_LC823450_START_H
+#define __ARCH_ARM_SRC_LC823450_LC823450_START_H
 
 /****************************************************************************
  * Included Files
@@ -31,4 +33,4 @@
  * Public Function Prototypes
  ****************************************************************************/
 
-#endif /* __ARCH_ARM_SRC_LC823450_LC823450_H */
+#endif /* __ARCH_ARM_SRC_LC823450_LC823450_START_H */

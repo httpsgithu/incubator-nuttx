@@ -1,6 +1,8 @@
 ############################################################################
 # boards/arm/cxd56xx/common/src/Make.defs
 #
+# SPDX-License-Identifier: Apache-2.0
+#
 # Licensed to the Apache Software Foundation (ASF) under one or more
 # contributor license agreements.  See the NOTICE file distributed with
 # this work for additional information regarding copyright ownership.  The
@@ -18,18 +20,18 @@
 #
 ############################################################################
 
+ifeq ($(CONFIG_ARCH_BOARD_COMMON),y)
+
 CSRCS += cxd56_boot.c
 
-ifeq ($(CONFIG_AUDIO_CXD56), y)
+ifeq ($(CONFIG_AUDIO_CXD56),y)
+CSRCS += cxd56_audio.c
+else ifeq ($(CONFIG_CXD56_AUDIO),y)
 CSRCS += cxd56_audio.c
 endif
 
-ifeq ($(CONFIG_CXD56_AUDIO), y)
-CSRCS += cxd56_audio.c
-endif
-
-ifeq ($(CONFIG_MODEM_ALTMDM),y)
-CSRCS += cxd56_altmdm.c
+ifeq ($(CONFIG_MODEM_ALT1250),y)
+CSRCS += cxd56_alt1250.c
 endif
 
 ifeq ($(CONFIG_BOARDCTL_UNIQUEID),y)
@@ -88,6 +90,10 @@ ifeq ($(CONFIG_SENSORS_BMI160_SPI),y)
 CSRCS += cxd56_bmi160_spi.c
 endif
 
+ifeq ($(CONFIG_SENSORS_BMI270_I2C),y)
+CSRCS += cxd56_bmi270_i2c.c
+endif
+
 ifeq ($(CONFIG_SENSORS_BMP280),y)
 CSRCS += cxd56_bmp280_i2c.c
 endif
@@ -106,6 +112,10 @@ endif
 
 ifeq ($(CONFIG_SENSORS_RPR0521RS_SCU),y)
 CSRCS += cxd56_rpr0521rs_scu.c
+endif
+
+ifeq ($(CONFIG_SENSORS_SCD41),y)
+CSRCS += cxd56_scd41_i2c.c
 endif
 
 ifeq ($(CONFIG_NETDEVICES),y)
@@ -148,6 +158,10 @@ ifeq ($(CONFIG_VIDEO_ISX012),y)
 CSRCS += cxd56_isx012.c
 endif
 
+ifeq ($(CONFIG_VIDEO_ISX019),y)
+CSRCS += cxd56_isx019.c
+endif
+
 ifeq ($(CONFIG_CXD56_IMAGEPROC),y)
   CSRCS += cxd56_imageproc.c
 endif
@@ -164,6 +178,20 @@ ifeq ($(CONFIG_CXD56_SPISD),y)
   CSRCS += cxd56_spisd.c
 endif
 
+ifeq ($(CONFIG_BOARD_USBDEV_SERIALSTR),y)
+  CSRCS += cxd56_usbdevserialstr.c
+endif
+
+ifeq ($(CONFIG_PM),y)
+  CSRCS += cxd56_pm.c
+endif
+
+ifeq ($(CONFIG_CXD56_GNSS_ADDON),y)
+  CSRCS += cxd56_gnss_addon.c
+endif
+
 DEPPATH += --dep-path src
 VPATH += :src
-CFLAGS += $(shell $(INCDIR) "$(CC)" $(TOPDIR)$(DELIM)arch$(DELIM)$(CONFIG_ARCH)$(DELIM)src$(DELIM)board$(DELIM)src)
+CFLAGS += ${INCDIR_PREFIX}$(TOPDIR)$(DELIM)arch$(DELIM)$(CONFIG_ARCH)$(DELIM)src$(DELIM)board$(DELIM)src
+
+endif

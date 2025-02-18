@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/nrf52/nrf52_adc.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -35,12 +37,12 @@
 #include <nuttx/analog/adc.h>
 #include <nuttx/analog/ioctl.h>
 
-#include "arm_arch.h"
-
+#include "arm_internal.h"
 #include "nrf52_gpio.h"
 #include "nrf52_adc.h"
 
 #include "hardware/nrf52_saadc.h"
+#include "hardware/nrf52_utils.h"
 
 /****************************************************************************
  * Pre-processor Definitions
@@ -54,7 +56,7 @@ struct nrf52_adc_s
 {
   /* Upper-half callback */
 
-  FAR const struct adc_callback_s *cb;
+  const struct adc_callback_s *cb;
 
   /* Channels configuration */
 
@@ -76,31 +78,31 @@ struct nrf52_adc_s
 
 /* ADC Register access */
 
-static inline void nrf52_adc_putreg(FAR struct nrf52_adc_s *priv,
+static inline void nrf52_adc_putreg(struct nrf52_adc_s *priv,
                                     uint32_t offset,
                                     uint32_t value);
-static inline uint32_t nrf52_adc_getreg(FAR struct nrf52_adc_s *priv,
+static inline uint32_t nrf52_adc_getreg(struct nrf52_adc_s *priv,
                                         uint32_t offset);
 
 /* ADC helpers */
 
-static int nrf52_adc_configure(FAR struct nrf52_adc_s *priv);
-static int nrf52_adc_calibrate(FAR struct nrf52_adc_s *priv);
-static uint32_t nrf52_adc_ch_config(FAR struct nrf52_adc_channel_s *cfg);
+static int nrf52_adc_configure(struct nrf52_adc_s *priv);
+static int nrf52_adc_calibrate(struct nrf52_adc_s *priv);
+static uint32_t nrf52_adc_ch_config(struct nrf52_adc_channel_s *cfg);
 static uint32_t nrf52_adc_chanpsel(int psel);
-static int nrf52_adc_chancfg(FAR struct nrf52_adc_s *priv, uint8_t chan,
-                             FAR struct nrf52_adc_channel_s *cfg);
-static int nrf52_adc_isr(int irq, void *context, FAR void *arg);
+static int nrf52_adc_chancfg(struct nrf52_adc_s *priv, uint8_t chan,
+                             struct nrf52_adc_channel_s *cfg);
+static int nrf52_adc_isr(int irq, void *context, void *arg);
 
 /* ADC Driver Methods */
 
-static int  nrf52_adc_bind(FAR struct adc_dev_s *dev,
-                     FAR const struct adc_callback_s *callback);
-static void nrf52_adc_reset(FAR struct adc_dev_s *dev);
-static int  nrf52_adc_setup(FAR struct adc_dev_s *dev);
-static void nrf52_adc_shutdown(FAR struct adc_dev_s *dev);
-static void nrf52_adc_rxint(FAR struct adc_dev_s *dev, bool enable);
-static int  nrf52_adc_ioctl(FAR struct adc_dev_s *dev, int cmd,
+static int  nrf52_adc_bind(struct adc_dev_s *dev,
+                           const struct adc_callback_s *callback);
+static void nrf52_adc_reset(struct adc_dev_s *dev);
+static int  nrf52_adc_setup(struct adc_dev_s *dev);
+static void nrf52_adc_shutdown(struct adc_dev_s *dev);
+static void nrf52_adc_rxint(struct adc_dev_s *dev, bool enable);
+static int  nrf52_adc_ioctl(struct adc_dev_s *dev, int cmd,
                             unsigned long arg);
 
 /****************************************************************************
@@ -149,7 +151,7 @@ static struct adc_dev_s g_nrf52_adc =
  *
  ****************************************************************************/
 
-static inline void nrf52_adc_putreg(FAR struct nrf52_adc_s *priv,
+static inline void nrf52_adc_putreg(struct nrf52_adc_s *priv,
                                     uint32_t offset,
                                     uint32_t value)
 {
@@ -166,7 +168,7 @@ static inline void nrf52_adc_putreg(FAR struct nrf52_adc_s *priv,
  *
  ****************************************************************************/
 
-static inline uint32_t nrf52_adc_getreg(FAR struct nrf52_adc_s *priv,
+static inline uint32_t nrf52_adc_getreg(struct nrf52_adc_s *priv,
                                         uint32_t offset)
 {
   DEBUGASSERT(priv);
@@ -182,16 +184,16 @@ static inline uint32_t nrf52_adc_getreg(FAR struct nrf52_adc_s *priv,
  *
  ****************************************************************************/
 
-static int nrf52_adc_isr(int irq, void *context, FAR void *arg)
+static int nrf52_adc_isr(int irq, void *context, void *arg)
 {
-  FAR struct adc_dev_s   *dev  = (FAR struct adc_dev_s *) arg;
-  FAR struct nrf52_adc_s *priv = NULL;
-  int                     ret  = OK;
-  int                     i    = 0;
+  struct adc_dev_s   *dev  = (struct adc_dev_s *) arg;
+  struct nrf52_adc_s *priv = NULL;
+  int                 ret  = OK;
+  int                 i    = 0;
 
   DEBUGASSERT(dev);
 
-  priv = (FAR struct nrf52_adc_s *) dev->ad_priv;
+  priv = (struct nrf52_adc_s *) dev->ad_priv;
   DEBUGASSERT(priv);
 
   ainfo("nrf52_adc_isr\n");
@@ -226,7 +228,7 @@ static int nrf52_adc_isr(int irq, void *context, FAR void *arg)
  *
  ****************************************************************************/
 
-static int nrf52_adc_configure(FAR struct nrf52_adc_s *priv)
+static int nrf52_adc_configure(struct nrf52_adc_s *priv)
 {
   int regval = 0;
 
@@ -263,6 +265,7 @@ static int nrf52_adc_configure(FAR struct nrf52_adc_s *priv)
   /* Configure ADC buffer */
 
   regval = (uint32_t)&priv->buffer;
+  DEBUGASSERT(nrf52_easydma_valid(regval));
   nrf52_adc_putreg(priv, NRF52_SAADC_PTR_OFFSET, regval);
 
   regval = priv->chan_len;
@@ -279,7 +282,7 @@ static int nrf52_adc_configure(FAR struct nrf52_adc_s *priv)
  *
  ****************************************************************************/
 
-static int nrf52_adc_calibrate(FAR struct nrf52_adc_s *priv)
+static int nrf52_adc_calibrate(struct nrf52_adc_s *priv)
 {
   /* Clear Event */
 
@@ -300,7 +303,7 @@ static int nrf52_adc_calibrate(FAR struct nrf52_adc_s *priv)
  * Name: nrf52_adc_ch_config
  ****************************************************************************/
 
-static uint32_t nrf52_adc_ch_config(FAR struct nrf52_adc_channel_s *cfg)
+static uint32_t nrf52_adc_ch_config(struct nrf52_adc_channel_s *cfg)
 {
   uint32_t regval = 0;
 
@@ -638,8 +641,8 @@ static uint32_t nrf52_adc_chanpsel(int psel)
  *
  ****************************************************************************/
 
-static int nrf52_adc_chancfg(FAR struct nrf52_adc_s *priv, uint8_t chan,
-                             FAR struct nrf52_adc_channel_s *cfg)
+static int nrf52_adc_chancfg(struct nrf52_adc_s *priv, uint8_t chan,
+                             struct nrf52_adc_channel_s *cfg)
 {
   uint32_t regval = 0;
   int      ret    = OK;
@@ -683,10 +686,10 @@ static int nrf52_adc_chancfg(FAR struct nrf52_adc_s *priv, uint8_t chan,
  *
  ****************************************************************************/
 
-static int nrf52_adc_bind(FAR struct adc_dev_s *dev,
-                          FAR const struct adc_callback_s *callback)
+static int nrf52_adc_bind(struct adc_dev_s *dev,
+                          const struct adc_callback_s *callback)
 {
-  FAR struct nrf52_adc_s *priv = (FAR struct nrf52_adc_s *) dev->ad_priv;
+  struct nrf52_adc_s *priv = (struct nrf52_adc_s *) dev->ad_priv;
 
   DEBUGASSERT(dev);
   DEBUGASSERT(priv);
@@ -705,9 +708,9 @@ static int nrf52_adc_bind(FAR struct adc_dev_s *dev,
  *
  ****************************************************************************/
 
-static void nrf52_adc_reset(FAR struct adc_dev_s *dev)
+static void nrf52_adc_reset(struct adc_dev_s *dev)
 {
-  FAR struct nrf52_adc_s *priv = (FAR struct nrf52_adc_s *) dev->ad_priv;
+  struct nrf52_adc_s *priv = (struct nrf52_adc_s *) dev->ad_priv;
 
   DEBUGASSERT(dev);
   DEBUGASSERT(priv);
@@ -728,11 +731,11 @@ static void nrf52_adc_reset(FAR struct adc_dev_s *dev)
  *
  ****************************************************************************/
 
-static int nrf52_adc_setup(FAR struct adc_dev_s *dev)
+static int nrf52_adc_setup(struct adc_dev_s *dev)
 {
-  FAR struct nrf52_adc_s *priv = (FAR struct nrf52_adc_s *) dev->ad_priv;
-  int                     i    = 0;
-  int                     ret  = OK;
+  struct nrf52_adc_s *priv = (struct nrf52_adc_s *) dev->ad_priv;
+  int                 i    = 0;
+  int                 ret  = OK;
 
   DEBUGASSERT(dev);
   DEBUGASSERT(priv);
@@ -801,16 +804,16 @@ errout:
  *
  ****************************************************************************/
 
-static void nrf52_adc_shutdown(FAR struct adc_dev_s *dev)
+static void nrf52_adc_shutdown(struct adc_dev_s *dev)
 {
-  FAR struct nrf52_adc_s *priv = (FAR struct nrf52_adc_s *) dev->ad_priv;
+  struct nrf52_adc_s *priv = (struct nrf52_adc_s *) dev->ad_priv;
 
   DEBUGASSERT(dev);
   DEBUGASSERT(priv);
 
   /* Stop SAADC */
 
-  nrf52_adc_putreg(priv, NRF52_SAADC_TASKS_STOP_OFFSET, 0);
+  nrf52_adc_putreg(priv, NRF52_SAADC_TASKS_STOP_OFFSET, 1);
 
   /* Wait for SAADC stopped */
 
@@ -829,10 +832,10 @@ static void nrf52_adc_shutdown(FAR struct adc_dev_s *dev)
  *
  ****************************************************************************/
 
-static void nrf52_adc_rxint(FAR struct adc_dev_s *dev, bool enable)
+static void nrf52_adc_rxint(struct adc_dev_s *dev, bool enable)
 {
-  FAR struct nrf52_adc_s *priv   = (FAR struct nrf52_adc_s *) dev->ad_priv;
-  uint32_t                regval = 0;
+  struct nrf52_adc_s *priv   = (struct nrf52_adc_s *) dev->ad_priv;
+  uint32_t            regval = 0;
 
   DEBUGASSERT(dev);
   DEBUGASSERT(priv);
@@ -859,11 +862,11 @@ static void nrf52_adc_rxint(FAR struct adc_dev_s *dev, bool enable)
  *
  ****************************************************************************/
 
-static int nrf52_adc_ioctl(FAR struct adc_dev_s *dev, int cmd,
+static int nrf52_adc_ioctl(struct adc_dev_s *dev, int cmd,
                            unsigned long arg)
 {
-  FAR struct nrf52_adc_s *priv = (FAR struct nrf52_adc_s *) dev->ad_priv;
-  int ret                      = OK;
+  struct nrf52_adc_s *priv = (struct nrf52_adc_s *) dev->ad_priv;
+  int ret                  = OK;
 
   DEBUGASSERT(dev);
   DEBUGASSERT(priv);
@@ -921,11 +924,11 @@ static int nrf52_adc_ioctl(FAR struct adc_dev_s *dev, int cmd,
  ****************************************************************************/
 
 struct adc_dev_s *nrf52_adcinitialize(
-    FAR const struct nrf52_adc_channel_s *chan, int channels)
+    const struct nrf52_adc_channel_s *chan, int channels)
 {
-  FAR struct adc_dev_s   *dev  = NULL;
-  FAR struct nrf52_adc_s *priv = NULL;
-  int                     i    = 0;
+  struct adc_dev_s   *dev  = NULL;
+  struct nrf52_adc_s *priv = NULL;
+  int                 i    = 0;
 
   DEBUGASSERT(chan != NULL);
   DEBUGASSERT(channels <= CONFIG_NRF52_SAADC_CHANNELS);
@@ -944,7 +947,7 @@ struct adc_dev_s *nrf52_adcinitialize(
 
   /* Get private data */
 
-  priv = (FAR struct nrf52_adc_s *) dev->ad_priv;
+  priv = (struct nrf52_adc_s *) dev->ad_priv;
 
   /* Copy channels configuration */
 

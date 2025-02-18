@@ -1,6 +1,8 @@
 /****************************************************************************
  * sched/signal/signal.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -29,10 +31,11 @@
 
 #include <stdint.h>
 #include <stdbool.h>
-#include <queue.h>
 #include <sched.h>
 
+#include <nuttx/sched.h>
 #include <nuttx/kmalloc.h>
+#include <nuttx/queue.h>
 
 /****************************************************************************
  * Pre-processor Definitions
@@ -42,7 +45,6 @@
  * allocate in a block
  */
 
-#define NUM_SIGNAL_ACTIONS       4
 #define NUM_PENDING_ACTIONS      4
 #define NUM_SIGNALS_PENDING      4
 
@@ -147,8 +149,7 @@ struct task_group_s;
 
 /* sig_initializee.c */
 
-void weak_function nxsig_initialize(void);
-void               nxsig_alloc_actionblock(void);
+void               nxsig_initialize(void);
 
 /* sig_action.c */
 
@@ -164,15 +165,12 @@ _sa_handler_t      nxsig_default(FAR struct tcb_s *tcb, int signo,
 int                nxsig_default_initialize(FAR struct tcb_s *tcb);
 #endif
 
-/* sig_pending.c */
-
-sigset_t           nxsig_pendingset(FAR struct tcb_s *stcb);
-
 /* sig_dispatch.c */
 
 int                nxsig_tcbdispatch(FAR struct tcb_s *stcb,
                                      FAR siginfo_t *info);
-int                nxsig_dispatch(pid_t pid, FAR siginfo_t *info);
+int                nxsig_dispatch(pid_t pid, FAR siginfo_t *info,
+                                  bool thread);
 
 /* sig_cleanup.c */
 

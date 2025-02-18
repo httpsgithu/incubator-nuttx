@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/lpc31xx/ea3152/src/lpc31_fillpage.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -31,7 +33,7 @@
 #include <nuttx/sched.h>
 #include <nuttx/page.h>
 
-#ifdef CONFIG_PAGING
+#ifdef CONFIG_LEGACY_PAGING
 #ifdef CONFIG_PAGING_BINPATH
 #  include <sys/stat.h>
 #  include <sys/types.h>
@@ -183,12 +185,12 @@ struct pg_source_s
 
   /* This is the M25P* device state structure */
 
-  FAR struct mtd_dev_s *mtd;
+  struct mtd_dev_s *mtd;
 
   /* This the device geometry */
 
 #ifdef CONFIG_DEBUG_FEATURES
-  FAR struct mtd_geometry_s geo;
+  struct mtd_geometry_s geo;
 #endif
 };
 #endif
@@ -221,7 +223,7 @@ static struct pg_source_s g_pgsrc;
 static inline void lpc31_initsrc(void)
 {
 #ifdef CONFIG_EA3152_PAGING_SDSLOT
-  FAR struct sdio_dev_s *sdio;
+  struct sdio_dev_s *sdio;
   int ret;
 #endif
 
@@ -257,7 +259,8 @@ static inline void lpc31_initsrc(void)
 
       /* Now mount the file system */
 
-      snprintf(devname, 16, "/dev/mmcsd%d", CONFIG_EA3152_PAGING_MINOR);
+      snprintf(devname, sizeof(devname), "/dev/mmcsd%d",
+               CONFIG_EA3152_PAGING_MINOR);
       ret = nx_mount(devname, CONFIG_EA3152_PAGING_MOUNTPT, "vfat",
                      MS_RDONLY, NULL);
       DEBUGASSERT(ret == OK);
@@ -278,7 +281,7 @@ static inline void lpc31_initsrc(void)
 #elif defined(CONFIG_PAGING_M25PX) || defined(CONFIG_PAGING_AT45DB)
 static inline void lpc31_initsrc(void)
 {
-  FAR struct spi_dev_s *spi;
+  struct spi_dev_s *spi;
 #ifdef CONFIG_DEBUG_FEATURES
   uint32_t capacity;
   int ret;
@@ -395,7 +398,7 @@ static inline void lpc31_initsrc(void)
 
 /* Version 1:  Supports blocking fill operations */
 
-int up_fillpage(FAR struct tcb_s *tcb, FAR void *vpage)
+int up_fillpage(struct tcb_s *tcb, void *vpage)
 {
 #if defined(CONFIG_PAGING_BINPATH)
   ssize_t nbytes;
@@ -453,7 +456,7 @@ int up_fillpage(FAR struct tcb_s *tcb, FAR void *vpage)
 
   /* Read the page at the correct offset into the SPI FLASH device */
 
-  nbytes = MTD_READ(g_pgsrc.mtd, offset, PAGESIZE, (FAR uint8_t *)vpage);
+  nbytes = MTD_READ(g_pgsrc.mtd, offset, PAGESIZE, (uint8_t *)vpage);
   DEBUGASSERT(nbytes == PAGESIZE);
   return OK;
 
@@ -469,7 +472,7 @@ int up_fillpage(FAR struct tcb_s *tcb, FAR void *vpage)
 
 /* Version 2:  Supports non-blocking, asynchronous fill operations */
 
-int up_fillpage(FAR struct tcb_s *tcb, FAR void *vpage,
+int up_fillpage(struct tcb_s *tcb, void *vpage,
                 up_pgcallback_t pg_callback)
 {
   pginfo("TCB: %p vpage: %d far: %08x\n", tcb, vpage, tcb->xcp.far);
@@ -523,4 +526,4 @@ void weak_function lpc31_pginitialize(void)
    */
 }
 
-#endif /* CONFIG_PAGING */
+#endif /* CONFIG_LEGACY_PAGING */

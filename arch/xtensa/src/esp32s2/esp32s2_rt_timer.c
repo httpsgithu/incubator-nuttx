@@ -33,13 +33,14 @@
 #include <errno.h>
 #include <debug.h>
 
+#include <nuttx/nuttx.h>
 #include <nuttx/irq.h>
 #include <nuttx/kthread.h>
 #include <nuttx/kmalloc.h>
 #include <nuttx/semaphore.h>
 
 #include "xtensa.h"
-#include "xtensa_attr.h"
+#include "esp_attr.h"
 
 #include "hardware/esp32s2_soc.h"
 #include "hardware/esp32s2_system.h"
@@ -74,7 +75,7 @@
 
 struct esp32s2_rt_priv_s
 {
-  int pid;
+  pid_t pid;
   sem_t toutsem;
   struct list_node runlist;
   struct list_node toutlist;
@@ -87,7 +88,8 @@ struct esp32s2_rt_priv_s
 
 static struct esp32s2_rt_priv_s g_rt_priv =
 {
-  .pid = -EINVAL,
+  .pid = INVALID_PROCESS_ID,
+  .toutsem = SEM_INITIALIZER(0),
 };
 
 /****************************************************************************
@@ -349,7 +351,7 @@ static int rt_timer_thread(int argc, char *argv[])
       if (ret)
         {
           tmrerr("ERROR: Wait priv->toutsem error=%d\n", ret);
-          assert(0);
+          ASSERT(0);
         }
 
       flags = enter_critical_section();
@@ -443,8 +445,7 @@ static int rt_timer_isr(int irq, void *context, void *arg)
 
   if (!list_is_empty(&priv->runlist))
     {
-      /**
-       * When stop/delete timer, in the same time the hardware timer
+      /* When stop/delete timer, in the same time the hardware timer
        * interrupt triggers, function "stop/delete" remove the timer
        * from running list, so the 1st timer is not which triggers.
        */
@@ -526,7 +527,7 @@ int rt_timer_create(const struct rt_timer_args_s *args,
 {
   struct rt_timer_s *timer;
 
-  timer = (struct rt_timer_s *)kmm_malloc(sizeof(*timer));
+  timer = kmm_malloc(sizeof(*timer));
   if (!timer)
     {
       tmrerr("ERROR: Failed to allocate %d bytes\n", sizeof(*timer));
@@ -735,8 +736,6 @@ int esp32s2_rt_timer_init(void)
       return -EINVAL;
     }
 
-  nxsem_init(&priv->toutsem, 0, 0);
-
   pid = kthread_create(RT_TIMER_TASK_NAME,
                        RT_TIMER_TASK_PRIORITY,
                        RT_TIMER_TASK_STACK_SIZE,
@@ -752,7 +751,7 @@ int esp32s2_rt_timer_init(void)
   list_initialize(&priv->runlist);
   list_initialize(&priv->toutlist);
 
-  priv->pid = pid;
+  priv->pid = (pid_t)pid;
   priv->timer = tim;
 
   flags = enter_critical_section();
@@ -832,11 +831,9 @@ void esp32s2_rt_timer_deinit(void)
 
   leave_critical_section(flags);
 
-  if (priv->pid != -EINVAL)
+  if (priv->pid != INVALID_PROCESS_ID)
     {
       kthread_delete(priv->pid);
-      priv->pid = -EINVAL;
+      priv->pid = INVALID_PROCESS_ID;
     }
-
-  nxsem_destroy(&priv->toutsem);
 }

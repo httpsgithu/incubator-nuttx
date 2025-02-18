@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/stm32/stm32_foc.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -18,8 +20,8 @@
  *
  ****************************************************************************/
 
-#ifndef __ARCH_ARM_SRC_STM32_FOC_H
-#define __ARCH_ARM_SRC_STM32_FOC_H
+#ifndef __ARCH_ARM_SRC_STM32_STM32_FOC_H
+#define __ARCH_ARM_SRC_STM32_STM32_FOC_H
 
 /****************************************************************************
  * Included Files
@@ -62,15 +64,15 @@ struct stm32_foc_adc_s
 
   /* The list of ADC channels (regular first, then injected) */
 
-  FAR uint8_t *chan;
+  uint8_t *chan;
 
   /* The list of ADC pins */
 
-  FAR uint32_t *pins;
+  uint32_t *pins;
 
   /* The list of ADC channels sample time configuration */
 
-  FAR adc_channel_t *stime;
+  adc_channel_t *stime;
 };
 
 /* Board-specific operations.
@@ -83,37 +85,52 @@ struct stm32_foc_board_ops_s
 {
   /* Board-specific setup */
 
-  CODE int (*setup)(FAR struct foc_dev_s *dev);
+  int (*setup)(struct foc_dev_s *dev);
 
   /* Board-specific shutdown */
 
-  CODE int (*shutdown)(FAR struct foc_dev_s *dev);
+  int (*shutdown)(struct foc_dev_s *dev);
+
+  /* Board-specific ioctl (optional) */
+
+  int (*ioctl)(struct foc_dev_s *dev, int cmd, unsigned long arg);
 
   /* Board-specific calibration setup */
 
-  CODE int (*calibration)(FAR struct foc_dev_s *dev, bool state);
+  int (*calibration)(struct foc_dev_s *dev, bool state);
 
   /* Board-specific fault clear */
 
-  CODE int (*fault_clear)(FAR struct foc_dev_s *dev);
+  int (*fault_clear)(struct foc_dev_s *dev);
 
   /* Board-specific PWM start */
 
-  CODE int (*pwm_start)(FAR struct foc_dev_s *dev, bool state);
+  int (*pwm_start)(struct foc_dev_s *dev, bool state);
 
   /* Get phase currents */
 
-  CODE int (*current_get)(FAR struct foc_dev_s *dev, FAR int16_t *curr_raw,
-                          FAR foc_current_t *curr);
+  int (*current_get)(struct foc_dev_s *dev, int16_t *curr_raw,
+                     foc_current_t *curr);
+
+  /* Board-specific info */
+
+  int (*info_get)(struct foc_dev_s *dev, struct foc_info_s *cfg);
+
+#ifdef CONFIG_MOTOR_FOC_BEMF_SENSE
+  /* Get BEMF voltage */
+
+  int (*voltage_get)(struct foc_dev_s *dev, int16_t *volt_raw,
+                     foc_voltage_t *volt);
+#endif
 
 #ifdef CONFIG_MOTOR_FOC_TRACE
   /* FOC trace interface setup */
 
-  CODE int (*trace_init)(FAR struct foc_dev_s *dev);
+  int (*trace_init)(struct foc_dev_s *dev);
 
   /* FOC trace */
 
-  CODE void (*trace)(FAR struct foc_dev_s *dev, int type, bool state);
+  void (*trace)(struct foc_dev_s *dev, int type, bool state);
 #endif
 };
 
@@ -123,19 +140,17 @@ struct stm32_foc_board_data_s
 {
   /* ADC configuration */
 
-  FAR struct stm32_foc_adc_s *adc_cfg;
+  struct stm32_foc_adc_s *adc_cfg;
+
+#ifdef CONFIG_MOTOR_FOC_BEMF_SENSE
+  /* BEMF voltage ADC configuration */
+
+  struct stm32_foc_adc_s *vadc_cfg;
+#endif
 
   /* PWM deadtime register value */
 
   uint8_t pwm_dt;
-
-  /* PWM deadtime in ns */
-
-  uint16_t pwm_dt_ns;
-
-  /* PWM max supported duty cycle */
-
-  foc_duty_t duty_max;
 };
 
 /* Board-specific FOC configuration */
@@ -144,11 +159,11 @@ struct stm32_foc_board_s
 {
   /* Board-specific FOC operations */
 
-  FAR struct stm32_foc_board_ops_s *ops;
+  struct stm32_foc_board_ops_s *ops;
 
   /* Board-specific FOC data */
 
-  FAR struct stm32_foc_board_data_s *data;
+  struct stm32_foc_board_data_s *data;
 };
 
 /****************************************************************************
@@ -170,14 +185,14 @@ extern "C"
  * Name: stm32_foc_initialize
  ****************************************************************************/
 
-FAR struct foc_dev_s *
-stm32_foc_initialize(int inst, FAR struct stm32_foc_board_s *board);
+struct foc_dev_s *
+stm32_foc_initialize(int inst, struct stm32_foc_board_s *board);
 
 /****************************************************************************
  * Name: stm32_foc_adcget
  ****************************************************************************/
 
-FAR struct adc_dev_s *stm32_foc_adcget(FAR struct foc_dev_s *dev);
+struct adc_dev_s *stm32_foc_adcget(struct foc_dev_s *dev);
 
 #undef EXTERN
 #if defined(__cplusplus)
@@ -185,4 +200,4 @@ FAR struct adc_dev_s *stm32_foc_adcget(FAR struct foc_dev_s *dev);
 #endif
 
 #endif /* __ASSEMBLY__ */
-#endif /* __ARCH_ARM_SRC_STM32_FOC_H */
+#endif /* __ARCH_ARM_SRC_STM32_STM32_FOC_H */

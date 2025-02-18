@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/sam34/sam4s-xplained-pro/src/sam_wdt.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -80,7 +82,7 @@
 #if defined(CONFIG_WDT_THREAD)
 static int wdog_daemon(int argc, char *argv[])
 {
-  FAR struct file filestruct;
+  struct file filestruct;
   int ret;
 
   /* Open the watchdog device for reading */
@@ -137,7 +139,7 @@ errout:
 int sam_watchdog_initialize(void)
 {
 #if (defined(CONFIG_SAM34_WDT) && !defined(CONFIG_WDT_DISABLE_ON_RESET))
-  FAR struct file filestruct;
+  struct file filestruct;
   int ret;
 
   /* Initialize the watchdog timer device */
@@ -183,17 +185,14 @@ int sam_watchdog_initialize(void)
   /* Start Kicker task */
 
 #if defined(CONFIG_WDT_THREAD)
-  sched_lock();
-
   int taskid = kthread_create(CONFIG_WDT_THREAD_NAME,
                               CONFIG_WDT_THREAD_PRIORITY,
                               CONFIG_WDT_THREAD_STACKSIZE,
-                              (main_t)wdog_daemon, (FAR char * const *)NULL);
+                              wdog_daemon, NULL);
 
   DEBUGASSERT(taskid > 0);
   UNUSED(taskid);
 
-  sched_unlock();
 #endif
   return OK;
 errout_with_dev:

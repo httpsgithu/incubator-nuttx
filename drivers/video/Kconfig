@@ -49,6 +49,12 @@ if DRIVERS_VIDEO
 config VIDEO_FB
 	bool "Framebuffer character driver"
 	default n
+	select ARCH_VMA_MAPPING if BUILD_KERNEL
+
+config VIDEO_FB_NPOLLWAITERS
+	int "Video fb poll count of each open structure"
+	depends on VIDEO_FB
+	default 2
 
 config VIDEO_STREAM
 	bool "Video Stream Support"
@@ -56,85 +62,130 @@ config VIDEO_STREAM
 	---help---
 		Enable video Stream support
 
+config GOLDFISH_FB
+	bool "Goldfish Framebuffer character driver"
+	depends on VIDEO_FB
+	default n
+
+config GOLDFISH_GPU_FB
+	bool "Goldfish GPU Framebuffer character driver"
+	depends on VIDEO_FB
+	default n
+
+choice
+	prompt "Select Goldfish GPU Framebuffer format"
+	default GOLDFISH_GPU_FB_RGB565
+	depends on GOLDFISH_GPU_FB
+
+config GOLDFISH_GPU_FB_RGB565
+	bool "RGB565"
+
+config GOLDFISH_GPU_FB_BGRA8888
+	bool "BGRA8888"
+
+endchoice
+
+config GOLDFISH_GPU_FB_PRIORITY
+	int "Goldfish GPU Framebuffer vsync task priority"
+	depends on GOLDFISH_GPU_FB
+	default 100
+
+config GOLDFISH_FB_VIDEO_MODE
+	bool "Goldfish Framebuffer display mode"
+	depends on GOLDFISH_FB
+	default n
+	---help---
+		GOLDFISH_FB_VIDEO_MODE = y  enable video mode
+		GOLDFISH_FB_VIDEO_MODE = n  enable command mode
+
+config GOLDFISH_FB_FRAME_NBUFFER
+	int "Goldfish fb vsync size"
+	depends on GOLDFISH_FB
+	default 2
+
 if VIDEO_STREAM
 
+config VIDEO_REQBUFS_COUNT_MAX
+	int "Maximum Video reqbuf buffers count"
+	default 3
+
 config VIDEO_SCENE_BACKLIGHT
-        bool "Enable backlight scene"
-        default y
-        ---help---
-                Enable backlight scene
+	bool "Enable backlight scene"
+	default y
+	---help---
+		Enable backlight scene
 
 config VIDEO_SCENE_BEACHSNOW
-        bool "Enable beach snow scene"
-        default y
-        ---help---
-                Enable beach snow scene
+	bool "Enable beach snow scene"
+	default y
+	---help---
+		Enable beach snow scene
 
 config VIDEO_SCENE_CANDLELIGHT
-        bool "Enable candle light scene"
-        default y
-        ---help---
-                Enable candle light scene
+	bool "Enable candle light scene"
+	default y
+	---help---
+		Enable candle light scene
 
 config VIDEO_SCENE_DAWNDUSK
-        bool "Enable dawn dusk scene"
-        default y
-        ---help---
-                Enable dawn dusk scene
+	bool "Enable dawn dusk scene"
+	default y
+	---help---
+		Enable dawn dusk scene
 
 config VIDEO_SCENE_FALLCOLORS
-        bool "Enable fall colors scene"
-        default y
-        ---help---
-                Enable fall colors scene
+	bool "Enable fall colors scene"
+	default y
+	---help---
+		Enable fall colors scene
 
 config VIDEO_SCENE_FIREWORKS
-        bool "Enable fireworks scene"
-        default y
-        ---help---
-                Enable fireworks scene
+	bool "Enable fireworks scene"
+	default y
+	---help---
+		Enable fireworks scene
 
 config VIDEO_SCENE_LANDSCAPE
-        bool "Enable landscape scene"
-        default y
-        ---help---
-                Enable landscape scene
+	bool "Enable landscape scene"
+	default y
+	---help---
+		Enable landscape scene
 
 config VIDEO_SCENE_NIGHT
-        bool "Enable night scene"
-        default y
-        ---help---
-                Enable night scene
+	bool "Enable night scene"
+	default y
+	---help---
+		Enable night scene
 
 config VIDEO_SCENE_PARTYINDOOR
-        bool "Enable party and indoor scene"
-        default y
-        ---help---
-                Enable party and indoor scene
+	bool "Enable party and indoor scene"
+	default y
+	---help---
+		Enable party and indoor scene
 
 config VIDEO_SCENE_PORTRAIT
-        bool "Enable portrait scene"
-        default y
-        ---help---
-                Enable portrait scene
+	bool "Enable portrait scene"
+	default y
+	---help---
+		Enable portrait scene
 
 config VIDEO_SCENE_SPORTS
-        bool "Enable sports scene"
-        default y
-        ---help---
-                Enable sports scene
+	bool "Enable sports scene"
+	default y
+	---help---
+		Enable sports scene
 
 config VIDEO_SCENE_SUNSET
-        bool "Enable sunset scene"
-        default y
-        ---help---
-                Enable sunset scene
+	bool "Enable sunset scene"
+	default y
+	---help---
+		Enable sunset scene
 
 config VIDEO_SCENE_TEXT
-        bool "Enable text scene"
-        default y
-        ---help---
-                Enable text scene
+	bool "Enable text scene"
+	default y
+	---help---
+		Enable text scene
 endif
 
 config VIDEO_MAX7456
@@ -146,9 +197,68 @@ config VIDEO_MAX7456
 		multiplexer.
 
 config VIDEO_ISX012
-        bool "ISX012 Image sensor"
-        default n
-        select I2C
+	bool "ISX012 Image sensor"
+	default n
+	select I2C
+
+if VIDEO_ISX012
+
+config VIDEO_ISX012_REGDEBUG
+	bool "Enable to read registers of ISX012 for test"
+	default n
+	---help---
+		Enable to read registers of ISX012 for test.
+
+endif
+
+config VIDEO_ISX019
+	bool "ISX019 Image sensor"
+	default n
+	select I2C
+
+if VIDEO_ISX019
+choice
+	prompt "HDR mode selection"
+	default VIDEO_ISX019_DOL3
+	---help---
+		ISX019 has the DOL-HDR feature, which combines images with different exposure so that
+		both bright and dark data of high-contrast subject can be viewed at the same time.
+		Select DOLX(X = 2 or 3), in which X represents the number of combined images.
+
+config VIDEO_ISX019_DOL3
+	bool "DOL3"
+	---help---
+		DOL3 is the mode that combines 3 images with different exposure.
+
+config VIDEO_ISX019_DOL2
+	bool "DOL2"
+	---help---
+		DOL2 is the mode that combines 2 images with different exposure.
+
+endchoice
+
+config VIDEO_ISX019_INITIAL_JPEG_QUALITY
+	int "Initial JPEG quality"
+	default 70
+	range 1 100
+	---help---
+		The initial JPEG quality.
+
+config VIDEO_ISX019_NAME_WITH_VERSION
+	bool "ISX019 Image sensor name with version number"
+	default n
+	---help---
+		ISX019 Camera board has FPGA for encoding JPEG image.
+		This FPGA has a version number for the circuit.
+		This option enables to report FPGA version with driver name.
+
+config VIDEO_ISX019_REGDEBUG
+	bool "Enable to read registers of ISX019 for test"
+	default n
+	---help---
+		Enable to read registers of ISX019 for test.
+
+endif
 
 config VIDEO_OV2640
 	bool "OV2640 camera chip"
@@ -257,5 +367,21 @@ config OV2640_REGDEBUG
 		Enable details, register level debug output.
 
 endif
+
+config GOLDFISH_CAMERA
+	bool "Goldfish camera support"
+	depends on VIDEO
+	default n
+
+if GOLDFISH_CAMERA
+
+config GOLDFISH_CAMERA_PIPE_PATH
+	string "Goldfish camera pipe path"
+	default "/dev/goldfish_pipe"
+
+endif
+
+source "drivers/video/vnc/Kconfig"
+source "drivers/video/mipidsi/Kconfig"
 
 endif # DRIVERS_VIDEO

@@ -1,6 +1,8 @@
 /****************************************************************************
  * graphics/nxglib/lcd/nxglib_filltrapezoid.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -220,7 +222,7 @@ void NXGL_FUNCNAME(nxgl_filltrapezoid, NXGLIB_SUFFIX)
           /* Then draw the run from ix1 to ix2 at row */
 
           ncols = ix2 - ix1 + 1;
-          pinfo->putrun(row, ix1, pinfo->buffer, ncols);
+          pinfo->putrun(pinfo->dev, row, ix1, pinfo->buffer, ncols);
         }
 
       /* Add the dx/dy value to get the run positions on the next row */

@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/lpc43xx/hardware/lpc43_i2s.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -113,9 +115,9 @@
 #define I2S_DAI_WSHALFPER_MASK      (0x01ff << I2S_DAI_WSHALFPER_SHIFT)
                                               /* Bits 15-31: Reserved */
 
-/* Transmit FIFO: 8 × 32-bit transmit FIFO */
+/* Transmit FIFO: 8 x 32-bit transmit FIFO */
 
-/* Receive FIFO: 8 × 32-bit receive FIFO */
+/* Receive FIFO: 8 x 32-bit receive FIFO */
 
 /* Status Feedback Register */
 

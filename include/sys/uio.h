@@ -1,10 +1,11 @@
 /****************************************************************************
  * include/sys/uio.h
  *
- *   Copyright (C) 2017 Grefory Nutt. All rights reserved.
- *   Copyright (C) 2015 Stavros Polymenis. All rights reserved.
- *   Author: Stavros Polymenis <sp@orbitalfox.com>
- *           Gregory Nutt <gnutt@nuttx.org>
+ * SPDX-License-Identifier: BSD-3-Clause
+ * SPDX-FileCopyrightText: 2017 Grefory Nutt. All rights reserved.
+ * SPDX-FileCopyrightText 2015 Stavros Polymenis. All rights reserved.
+ * SPDX-FileContributor: Stavros Polymenis <sp@orbitalfox.com>
+ * SPDX-FileContributor: Gregory Nutt <gnutt@nuttx.org>
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -48,7 +49,7 @@
  * Pre-processor Definitions
  ****************************************************************************/
 
-#if defined(CONFIG_FS_LARGEFILE) && defined(CONFIG_HAVE_LONG_LONG)
+#if defined(CONFIG_FS_LARGEFILE)
 #  define preadv64  preadv
 #  define pwritev64 pwritev
 #endif
@@ -155,6 +156,12 @@ ssize_t readv(int fildes, FAR const struct iovec *iov, int iovcnt);
  ****************************************************************************/
 
 ssize_t writev(int fildes, FAR const struct iovec *iov, int iovcnt);
+
+ssize_t preadv(int fildes, FAR const struct iovec *iov, int iovcnt,
+               off_t offset);
+
+ssize_t pwritev(int fildes, FAR const struct iovec *iov, int iovcnt,
+                off_t offset);
 
 #undef EXTERN
 #if defined(__cplusplus)

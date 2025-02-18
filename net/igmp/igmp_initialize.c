@@ -1,6 +1,7 @@
 /****************************************************************************
  * net/igmp/igmp_initialize.c
- * IGMP initialization logic
+ *
+ * SPDX-License-Identifier: BSD-3-Clause
  *
  *   Copyright (C) 2010, 2014 Gregory Nutt. All rights reserved.
  *   Author: Gregory Nutt <gnutt@nuttx.org>
@@ -59,28 +60,12 @@
  * Public Data
  ****************************************************************************/
 
-in_addr_t g_ipv4_allsystems;
-in_addr_t g_ipv4_allrouters;
+const in_addr_t g_ipv4_allsystems = HTONL(0xe0000001);
+const in_addr_t g_ipv4_allrouters = HTONL(0xe0000002);
 
 /****************************************************************************
  * Public Functions
  ****************************************************************************/
-
-/****************************************************************************
- * Name:  igmp_initialize
- *
- * Description:
- *   Perform one-time IGMP initialization.
- *
- ****************************************************************************/
-
-void igmp_initialize(void)
-{
-  ninfo("IGMP initializing\n");
-
-  net_ipaddr(g_ipv4_allrouters, 224, 0, 0, 2);
-  net_ipaddr(g_ipv4_allsystems, 224, 0, 0, 1);
-}
 
 /****************************************************************************
  * Name:  igmp_devinit

@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/renesas/src/m16c/m16c_sigdeliver.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -34,15 +36,15 @@
 #include <nuttx/board.h>
 
 #include "sched/sched.h"
-#include "up_internal.h"
-#include "up_arch.h"
+#include "signal/signal.h"
+#include "renesas_internal.h"
 
 /****************************************************************************
  * Public Functions
  ****************************************************************************/
 
 /****************************************************************************
- * Name: up_sigdeliver
+ * Name: renesas_sigdeliver
  *
  * Description:
  *   This is the a signal handling trampoline.  When a signal action was
@@ -51,27 +53,20 @@
  *
  ****************************************************************************/
 
-void up_sigdeliver(void)
+void renesas_sigdeliver(void)
 {
   struct tcb_s *rtcb = this_task();
   uint8_t regs[XCPTCONTEXT_SIZE];
 
-  /* Save the errno.  This must be preserved throughout the signal handling
-   * so that the user code final gets the correct errno value (probably
-   * EINTR).
-   */
-
-  int saved_errno = get_errno();
-
   board_autoled_on(LED_SIGNAL);
 
-  sinfo("rtcb=%p sigdeliver=%p sigpendactionq.head=%p\n",
-        rtcb, rtcb->xcp.sigdeliver, rtcb->sigpendactionq.head);
-  DEBUGASSERT(rtcb->xcp.sigdeliver != NULL);
+  sinfo("rtcb=%p sigpendactionq.head=%p\n",
+        rtcb, rtcb->sigpendactionq.head);
+  DEBUGASSERT((rtcb->flags & TCB_FLAG_SIGDELIVER) != 0);
 
   /* Save the return state on the stack. */
 
-  up_copystate(regs, rtcb->xcp.regs);
+  renesas_copystate(regs, rtcb->xcp.regs);
 
 #ifndef CONFIG_SUPPRESS_INTERRUPTS
   /* Then make sure that interrupts are enabled.  Signal handlers must always
@@ -83,7 +78,7 @@ void up_sigdeliver(void)
 
   /* Deliver the signal */
 
-  ((sig_deliver_t)sig_rtcb->xcp.sigdeliver)(rtcb);
+  nxsig_deliver(rtcb);
 
   /* Output any debug messages BEFORE restoring errno (because they may
    * alter errno), then disable interrupts again and restore the original
@@ -92,7 +87,6 @@ void up_sigdeliver(void)
 
   sinfo("Resuming\n");
   up_irq_save();
-  set_errno(saved_errno);
 
   /* Modify the saved return state with the actual saved values in the
    * TCB.  This depends on the fact that nested signal handling is
@@ -104,15 +98,18 @@ void up_sigdeliver(void)
    * could be modified by a hostile program.
    */
 
-  regs[REG_PC]         = rtcb->xcp.saved_pc[0];
-  regs[REG_PC + 1]     = rtcb->xcp.saved_pc[1];
-  regs[REG_FLG]        = rtcb->xcp.saved_flg;
-  rtcb->xcp.sigdeliver = NULL;  /* Allows next handler to be scheduled */
+  regs[REG_PC]     = rtcb->xcp.saved_pc[0];
+  regs[REG_PC + 1] = rtcb->xcp.saved_pc[1];
+  regs[REG_FLG]    = rtcb->xcp.saved_flg;
+
+  /* Allows next handler to be scheduled */
+
+  rtcb->flags &= ~TCB_FLAG_SIGDELIVER;
 
   /* Then restore the correct state for this thread of
    * execution.
    */
 
   board_autoled_off(LED_SIGNAL);
-  up_fullcontextrestore(regs);
+  renesas_fullcontextrestore(regs);
 }

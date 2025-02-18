@@ -1,6 +1,8 @@
 /****************************************************************************
  * libs/libc/spawn/lib_psa_setschedpolicy.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -51,7 +53,7 @@
 
 int posix_spawnattr_setschedpolicy(FAR posix_spawnattr_t *attr, int policy)
 {
-  DEBUGASSERT(attr && (policy == SCHED_FIFO || policy == SCHED_RR));
+  DEBUGASSERT(attr && (policy >= SCHED_OTHER && policy <= SCHED_SPORADIC));
   attr->policy = (uint8_t)policy;
   return OK;
 }

@@ -1,6 +1,8 @@
 ############################################################################
 # boards/arm/stm32l4/nucleo-l476rg/src/Makefile
 #
+# SPDX-License-Identifier: Apache-2.0
+#
 # Licensed to the Apache Software Foundation (ASF) under one or more
 # contributor license agreements.  See the NOTICE file distributed with
 # this work for additional information regarding copyright ownership.  The
@@ -83,6 +85,14 @@ endif
 
 ifeq ($(CONFIG_SENSORS_BMP180),y)
 CSRCS += stm32_bmp180.c
+endif
+
+ifeq ($(CONFIG_SENSORS_BMP280),y)
+  CSRCS += stm32_bmp280.c
+endif
+
+ifeq ($(CONFIG_SENSORS_MPU9250),y)
+  CSRCS += stm32_mpu9250.c
 endif
 
 ifeq ($(CONFIG_PWM),y)

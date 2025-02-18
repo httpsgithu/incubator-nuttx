@@ -1,6 +1,8 @@
 /****************************************************************************
  * net/igmp/igmp_msg.c
  *
+ * SPDX-License-Identifier: BSD-3-Clause
+ *
  *   Copyright (C) 2010-2011, 2018 Gregory Nutt. All rights reserved.
  *   Author: Gregory Nutt <gnutt@nuttx.org>
  *
@@ -135,7 +137,7 @@ int igmp_waitmsg(FAR struct igmp_group_s *group, uint8_t msgid)
     {
       /* Wait for the semaphore to be posted */
 
-      ret = net_lockedwait_uninterruptible(&group->sem);
+      ret = net_sem_wait_uninterruptible(&group->sem);
       if (ret < 0)
         {
           break;

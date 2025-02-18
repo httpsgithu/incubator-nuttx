@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/lpc17xx_40xx/lpc17_40_ssp.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -35,12 +37,10 @@
 #include <arch/board/board.h>
 #include <nuttx/irq.h>
 #include <nuttx/arch.h>
-#include <nuttx/semaphore.h>
+#include <nuttx/mutex.h>
 #include <nuttx/spi/spi.h>
 
 #include "arm_internal.h"
-#include "arm_arch.h"
-
 #include "chip.h"
 #include "hardware/lpc17_40_syscon.h"
 #include "lpc17_40_gpio.h"
@@ -104,7 +104,7 @@ struct lpc17_40_sspdev_s
 #ifdef CONFIG_LPC17_40_SSP_INTERRUPTS
   uint8_t          sspirq;     /* SPI IRQ number */
 #endif
-  sem_t            exclsem;    /* Held while chip is selected for mutual exclusion */
+  mutex_t          lock;       /* Held while chip is selected for mutual exclusion */
   uint32_t         frequency;  /* Requested clock frequency */
   uint32_t         actual;     /* Actual clock frequency */
   uint8_t          nbits;      /* Width of word in bits (4 to 16) */
@@ -117,34 +117,34 @@ struct lpc17_40_sspdev_s
 
 /* Helpers */
 
-static inline uint32_t ssp_getreg(FAR struct lpc17_40_sspdev_s *priv,
+static inline uint32_t ssp_getreg(struct lpc17_40_sspdev_s *priv,
                                   uint8_t offset);
-static inline void ssp_putreg(FAR struct lpc17_40_sspdev_s *priv,
+static inline void ssp_putreg(struct lpc17_40_sspdev_s *priv,
                               uint8_t offset, uint32_t value);
 
 /* SPI methods */
 
-static int      ssp_lock(FAR struct spi_dev_s *dev, bool lock);
-static uint32_t ssp_setfrequency(FAR struct spi_dev_s *dev,
+static int      ssp_lock(struct spi_dev_s *dev, bool lock);
+static uint32_t ssp_setfrequency(struct spi_dev_s *dev,
                                  uint32_t frequency);
-static void     ssp_setmode(FAR struct spi_dev_s *dev, enum spi_mode_e mode);
-static void     ssp_setbits(FAR struct spi_dev_s *dev, int nbits);
-static uint32_t ssp_send(FAR struct spi_dev_s *dev, uint32_t wd);
-static void     ssp_sndblock(FAR struct spi_dev_s *dev,
-                             FAR const void *buffer, size_t nwords);
-static void     ssp_recvblock(FAR struct spi_dev_s *dev, FAR void *buffer,
+static void     ssp_setmode(struct spi_dev_s *dev, enum spi_mode_e mode);
+static void     ssp_setbits(struct spi_dev_s *dev, int nbits);
+static uint32_t ssp_send(struct spi_dev_s *dev, uint32_t wd);
+static void     ssp_sndblock(struct spi_dev_s *dev,
+                             const void *buffer, size_t nwords);
+static void     ssp_recvblock(struct spi_dev_s *dev, void *buffer,
                               size_t nwords);
 
 /* Initialization */
 
 #ifdef CONFIG_LPC17_40_SSP0
-static inline FAR struct lpc17_40_sspdev_s *lpc17_40_ssp0initialize(void);
+static inline struct lpc17_40_sspdev_s *lpc17_40_ssp0initialize(void);
 #endif
 #ifdef CONFIG_LPC17_40_SSP1
-static inline FAR struct lpc17_40_sspdev_s *lpc17_40_ssp1initialize(void);
+static inline struct lpc17_40_sspdev_s *lpc17_40_ssp1initialize(void);
 #endif
 #ifdef CONFIG_LPC17_40_SSP2
-static inline FAR struct lpc17_40_sspdev_s *lpc17_40_ssp2initialize(void);
+static inline struct lpc17_40_sspdev_s *lpc17_40_ssp2initialize(void);
 #endif
 
 /****************************************************************************
@@ -179,13 +179,14 @@ static const struct spi_ops_s g_spi0ops =
 static struct lpc17_40_sspdev_s g_ssp0dev =
 {
   .spidev            =
-    {
-      &g_spi0ops
-    },
+  {
+    .ops             = &g_spi0ops,
+  },
   .sspbase           = LPC17_40_SSP0_BASE,
 #ifdef CONFIG_LPC17_40_SSP_INTERRUPTS
   .sspirq            = LPC17_40_IRQ_SSP0,
 #endif
+  .lock              = NXMUTEX_INITIALIZER,
 };
 #endif /* CONFIG_LPC17_40_SSP0 */
 
@@ -214,13 +215,14 @@ static const struct spi_ops_s g_spi1ops =
 static struct lpc17_40_sspdev_s g_ssp1dev =
 {
   .spidev            =
-    {
-      &g_spi1ops
-    },
+  {
+    .ops             = &g_spi1ops,
+  },
   .sspbase           = LPC17_40_SSP1_BASE,
 #ifdef CONFIG_LPC17_40_SSP_INTERRUPTS
   .sspirq            = LPC17_40_IRQ_SSP1,
 #endif
+  .lock              = NXMUTEX_INITIALIZER,
 };
 #endif /* CONFIG_LPC17_40_SSP1 */
 
@@ -249,13 +251,14 @@ static const struct spi_ops_s g_spi2ops =
 static struct lpc17_40_sspdev_s g_ssp2dev =
 {
   .spidev            =
-    {
-      &g_spi2ops
-    },
+  {
+    .ops             = &g_spi2ops,
+  },
   .sspbase           = LPC17_40_SSP2_BASE,
 #ifdef CONFIG_LPC17_40_SSP_INTERRUPTS
   .sspirq            = LPC17_40_IRQ_SSP2,
 #endif
+  .lock              = NXMUTEX_INITIALIZER,
 };
 #endif /* CONFIG_LPC17_40_SSP2 */
 
@@ -282,7 +285,7 @@ static struct lpc17_40_sspdev_s g_ssp2dev =
  *
  ****************************************************************************/
 
-static inline uint32_t ssp_getreg(FAR struct lpc17_40_sspdev_s *priv,
+static inline uint32_t ssp_getreg(struct lpc17_40_sspdev_s *priv,
                                   uint8_t offset)
 {
   return getreg32(priv->sspbase + (uint32_t)offset);
@@ -304,7 +307,7 @@ static inline uint32_t ssp_getreg(FAR struct lpc17_40_sspdev_s *priv,
  *
  ****************************************************************************/
 
-static inline void ssp_putreg(FAR struct lpc17_40_sspdev_s *priv,
+static inline void ssp_putreg(struct lpc17_40_sspdev_s *priv,
                               uint8_t offset, uint32_t value)
 {
   putreg32(value, priv->sspbase + (uint32_t)offset);
@@ -331,18 +334,18 @@ static inline void ssp_putreg(FAR struct lpc17_40_sspdev_s *priv,
  *
  ****************************************************************************/
 
-static int ssp_lock(FAR struct spi_dev_s *dev, bool lock)
+static int ssp_lock(struct spi_dev_s *dev, bool lock)
 {
-  FAR struct lpc17_40_sspdev_s *priv = (FAR struct lpc17_40_sspdev_s *)dev;
+  struct lpc17_40_sspdev_s *priv = (struct lpc17_40_sspdev_s *)dev;
   int ret;
 
   if (lock)
     {
-      ret = nxsem_wait_uninterruptible(&priv->exclsem);
+      ret = nxmutex_lock(&priv->lock);
     }
   else
     {
-      ret = nxsem_post(&priv->exclsem);
+      ret = nxmutex_unlock(&priv->lock);
     }
 
   return ret;
@@ -363,10 +366,10 @@ static int ssp_lock(FAR struct spi_dev_s *dev, bool lock)
  *
  ****************************************************************************/
 
-static uint32_t ssp_setfrequency(FAR struct spi_dev_s *dev,
+static uint32_t ssp_setfrequency(struct spi_dev_s *dev,
                                  uint32_t frequency)
 {
-  FAR struct lpc17_40_sspdev_s *priv = (FAR struct lpc17_40_sspdev_s *)dev;
+  struct lpc17_40_sspdev_s *priv = (struct lpc17_40_sspdev_s *)dev;
   uint32_t cpsdvsr;
   uint32_t scr;
   uint32_t regval;
@@ -469,9 +472,9 @@ static uint32_t ssp_setfrequency(FAR struct spi_dev_s *dev,
  *
  ****************************************************************************/
 
-static void ssp_setmode(FAR struct spi_dev_s *dev, enum spi_mode_e mode)
+static void ssp_setmode(struct spi_dev_s *dev, enum spi_mode_e mode)
 {
-  FAR struct lpc17_40_sspdev_s *priv = (FAR struct lpc17_40_sspdev_s *)dev;
+  struct lpc17_40_sspdev_s *priv = (struct lpc17_40_sspdev_s *)dev;
   uint32_t regval;
 
   /* Has the mode changed? */
@@ -529,9 +532,9 @@ static void ssp_setmode(FAR struct spi_dev_s *dev, enum spi_mode_e mode)
  *
  ****************************************************************************/
 
-static void ssp_setbits(FAR struct spi_dev_s *dev, int nbits)
+static void ssp_setbits(struct spi_dev_s *dev, int nbits)
 {
-  FAR struct lpc17_40_sspdev_s *priv = (FAR struct lpc17_40_sspdev_s *)dev;
+  struct lpc17_40_sspdev_s *priv = (struct lpc17_40_sspdev_s *)dev;
   uint32_t regval;
 
   /* Has the number of bits changed? */
@@ -571,9 +574,9 @@ static void ssp_setbits(FAR struct spi_dev_s *dev, int nbits)
  *
  ****************************************************************************/
 
-static uint32_t ssp_send(FAR struct spi_dev_s *dev, uint32_t wd)
+static uint32_t ssp_send(struct spi_dev_s *dev, uint32_t wd)
 {
-  FAR struct lpc17_40_sspdev_s *priv = (FAR struct lpc17_40_sspdev_s *)dev;
+  struct lpc17_40_sspdev_s *priv = (struct lpc17_40_sspdev_s *)dev;
   register uint32_t regval;
 
   /* Wait while the TX FIFO is full */
@@ -615,15 +618,15 @@ static uint32_t ssp_send(FAR struct spi_dev_s *dev, uint32_t wd)
  *
  ****************************************************************************/
 
-static void ssp_sndblock(FAR struct spi_dev_s *dev, FAR const void *buffer,
+static void ssp_sndblock(struct spi_dev_s *dev, const void *buffer,
                          size_t nwords)
 {
-  FAR struct lpc17_40_sspdev_s *priv = (FAR struct lpc17_40_sspdev_s *)dev;
+  struct lpc17_40_sspdev_s *priv = (struct lpc17_40_sspdev_s *)dev;
   union
   {
-    FAR const uint8_t  *p8;
-    FAR const uint16_t *p16;
-    FAR const void     *pv;
+    const uint8_t  *p8;
+    const uint16_t *p16;
+    const void     *pv;
   } u;
 
   uint32_t data;
@@ -708,15 +711,15 @@ static void ssp_sndblock(FAR struct spi_dev_s *dev, FAR const void *buffer,
  *
  ****************************************************************************/
 
-static void ssp_recvblock(FAR struct spi_dev_s *dev, FAR void *buffer,
+static void ssp_recvblock(struct spi_dev_s *dev, void *buffer,
                           size_t nwords)
 {
-  FAR struct lpc17_40_sspdev_s *priv = (FAR struct lpc17_40_sspdev_s *)dev;
+  struct lpc17_40_sspdev_s *priv = (struct lpc17_40_sspdev_s *)dev;
   union
   {
-    FAR uint8_t  *p8;
-    FAR uint16_t *p16;
-    FAR void     *pv;
+    uint8_t  *p8;
+    uint16_t *p16;
+    void     *pv;
   } u;
 
   uint32_t data;
@@ -782,7 +785,7 @@ static void ssp_recvblock(FAR struct spi_dev_s *dev, FAR void *buffer,
  ****************************************************************************/
 
 #ifdef CONFIG_LPC17_40_SSP0
-static inline FAR struct lpc17_40_sspdev_s *lpc17_40_ssp0initialize(void)
+static inline struct lpc17_40_sspdev_s *lpc17_40_ssp0initialize(void)
 {
   irqstate_t flags;
   uint32_t regval;
@@ -836,7 +839,7 @@ static inline FAR struct lpc17_40_sspdev_s *lpc17_40_ssp0initialize(void)
  ****************************************************************************/
 
 #ifdef CONFIG_LPC17_40_SSP1
-static inline FAR struct lpc17_40_sspdev_s *lpc17_40_ssp1initialize(void)
+static inline struct lpc17_40_sspdev_s *lpc17_40_ssp1initialize(void)
 {
   irqstate_t flags;
   uint32_t regval;
@@ -890,7 +893,7 @@ static inline FAR struct lpc17_40_sspdev_s *lpc17_40_ssp1initialize(void)
  ****************************************************************************/
 
 #ifdef CONFIG_LPC17_40_SSP2
-static inline FAR struct lpc17_40_sspdev_s *lpc17_40_ssp2initialize(void)
+static inline struct lpc17_40_sspdev_s *lpc17_40_ssp2initialize(void)
 {
   irqstate_t flags;
   uint32_t regval;
@@ -946,9 +949,9 @@ static inline FAR struct lpc17_40_sspdev_s *lpc17_40_ssp2initialize(void)
  *
  ****************************************************************************/
 
-FAR struct spi_dev_s *lpc17_40_sspbus_initialize(int port)
+struct spi_dev_s *lpc17_40_sspbus_initialize(int port)
 {
-  FAR struct lpc17_40_sspdev_s *priv;
+  struct lpc17_40_sspdev_s *priv;
   uint32_t regval;
   int i;
 
@@ -993,11 +996,7 @@ FAR struct spi_dev_s *lpc17_40_sspbus_initialize(int port)
 
   /* Select a default frequency of approx. 400KHz */
 
-  ssp_setfrequency((FAR struct spi_dev_s *)priv, 400000);
-
-  /* Initialize the SPI semaphore that enforces mutually exclusive access */
-
-  nxsem_init(&priv->exclsem, 0, 1);
+  ssp_setfrequency((struct spi_dev_s *)priv, 400000);
 
   /* Enable the SPI */
 
@@ -1026,9 +1025,9 @@ FAR struct spi_dev_s *lpc17_40_sspbus_initialize(int port)
  *
  ****************************************************************************/
 
-void ssp_flush(FAR struct spi_dev_s *dev)
+void ssp_flush(struct spi_dev_s *dev)
 {
-  FAR struct lpc17_40_sspdev_s *priv = (FAR struct lpc17_40_sspdev_s *)dev;
+  struct lpc17_40_sspdev_s *priv = (struct lpc17_40_sspdev_s *)dev;
 
   /* Wait for the TX FIFO not full indication */
 

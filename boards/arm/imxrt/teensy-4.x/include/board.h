@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/imxrt/teensy-4.x/include/board.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -18,8 +20,8 @@
  *
  ****************************************************************************/
 
-#ifndef __BOARDS_ARM_IMXRT_TEENSY_4_INCLUDE_BOARD_H
-#define __BOARDS_ARM_IMXRT_TEENSY_4_INCLUDE_BOARD_H
+#ifndef __BOARDS_ARM_IMXRT_TEENSY_4X_INCLUDE_BOARD_H
+#define __BOARDS_ARM_IMXRT_TEENSY_4X_INCLUDE_BOARD_H
 
 /****************************************************************************
  * Included Files
@@ -281,6 +283,14 @@
 #define GPIO_FLEXPWM2_MOD1_A (GPIO_FLEXPWM2_PWMA00_1|IOMUX_PWM_DEFAULT) /* GPIO_EMC_06 */
 #define GPIO_FLEXPWM2_MOD2_A (GPIO_FLEXPWM2_PWMA01_1|IOMUX_PWM_DEFAULT) /* GPIO_EMC_08 */
 
+/* FlexPWM setup for PMSM control - used in pikron-bb configuration */
+
+#define GPIO_FLEXPWM3_MOD2_A (GPIO_FLEXPWM3_PWMA01_1 | IOMUX_PWM_DEFAULT) /* GPIO_EMC_31 */
+#define GPIO_FLEXPWM2_MOD3_A (GPIO_FLEXPWM2_PWMA02_2 | IOMUX_PWM_DEFAULT) /* GPIO_B0_10 */
+#define GPIO_FLEXPWM1_MOD4_A (GPIO_FLEXPWM1_PWMA03_5 | IOMUX_PWM_DEFAULT) /* GPIO_B1_00 */
+
+#define GPIO_FLEXPWM4_MOD3_A (IOMUX_PWM_DEFAULT) /* PWM: ADC Trigger */
+
 /****************************************************************************
  * Public Types
  ****************************************************************************/
@@ -306,4 +316,4 @@ extern "C"
 #endif
 
 #endif /* __ASSEMBLY__ */
-#endif /* __BOARDS_ARM_IMXRT_TEENSY_4_INCLUDE_BOARD_H */
+#endif /* __BOARDS_ARM_IMXRT_TEENSY_4X_INCLUDE_BOARD_H */

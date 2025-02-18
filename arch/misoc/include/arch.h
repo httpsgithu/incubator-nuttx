@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/misoc/include/arch.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -29,23 +31,8 @@
  * Included Files
  ****************************************************************************/
 
-#include <nuttx/config.h>
-
 /****************************************************************************
  * Inline functions
  ****************************************************************************/
-
-/****************************************************************************
- * Name: up_getsp
- ****************************************************************************/
-
-static inline uint32_t up_getsp(void)
-{
-  register uint32_t sp;
-
-  __asm__ __volatile__("addi %0, sp, 0" : "=r" (sp));
-
-  return sp;
-}
 
 #endif /* __ARCH_MISOC_INCLUDE_ARCH_H */

@@ -1,6 +1,8 @@
 /****************************************************************************
  * libs/libc/stdio/lib_setvbuf.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -77,7 +79,7 @@
 int setvbuf(FAR FILE *stream, FAR char *buffer, int mode, size_t size)
 {
 #ifndef CONFIG_STDIO_DISABLE_BUFFERING
-  FAR unsigned char *newbuf = NULL;
+  FAR char *newbuf = NULL;
   uint8_t flags;
   int errcode;
 
@@ -125,31 +127,23 @@ int setvbuf(FAR FILE *stream, FAR char *buffer, int mode, size_t size)
 
   /* Make sure that we have exclusive access to the stream */
 
-  lib_take_semaphore(stream);
+  flockfile(stream);
 
   /* setvbuf() may only be called AFTER the stream has been opened and
    * BEFORE any operations have been performed on the stream.
    */
 
-  /* Return EBADF if the file is not open */
-
-  if (stream->fs_fd < 0)
-    {
-      errcode = EBADF;
-      goto errout_with_semaphore;
-    }
-
   /* Return EBUSY if operations have already been performed on the buffer.
    * Here we really only verify that there is no valid data in the existing
    * buffer.
    *
-   * REVIST:  There could be race conditions here, could there not?
+   * REVISIT:  There could be race conditions here, could there not?
    */
 
   if (stream->fs_bufpos != stream->fs_bufstart)
     {
       errcode = EBUSY;
-      goto errout_with_semaphore;
+      goto errout_with_lock;
     }
 
   /* Initialize by clearing related flags.  We try to avoid any permanent
@@ -182,7 +176,7 @@ int setvbuf(FAR FILE *stream, FAR char *buffer, int mode, size_t size)
 
             if (buffer != NULL)
               {
-                newbuf = (FAR unsigned char *)buffer;
+                newbuf = buffer;
 
                 /* Indicate that we have an I/O buffer managed by the caller
                  * of setvbuf.
@@ -192,11 +186,11 @@ int setvbuf(FAR FILE *stream, FAR char *buffer, int mode, size_t size)
               }
             else
               {
-                newbuf = (FAR unsigned char *)lib_malloc(size);
+                newbuf = lib_malloc(size);
                 if (newbuf == NULL)
                   {
                     errcode = ENOMEM;
-                    goto errout_with_semaphore;
+                    goto errout_with_lock;
                   }
               }
           }
@@ -245,13 +239,12 @@ int setvbuf(FAR FILE *stream, FAR char *buffer, int mode, size_t size)
   /* Update the stream flags and return success */
 
 reuse_buffer:
-
   stream->fs_flags    = flags;
-  lib_give_semaphore(stream);
+  funlockfile(stream);
   return OK;
 
-errout_with_semaphore:
-  lib_give_semaphore(stream);
+errout_with_lock:
+  funlockfile(stream);
 
 errout:
   set_errno(errcode);

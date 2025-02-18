@@ -1,6 +1,8 @@
 /****************************************************************************
  * libs/libc/stdio/lib_fgetpos.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -51,7 +53,7 @@
 
 int fgetpos(FAR FILE *stream, FAR fpos_t *pos)
 {
-  long position;
+  off_t position;
 
 #ifdef CONFIG_DEBUG_FEATURES
   if (!stream || !pos)
@@ -61,12 +63,12 @@ int fgetpos(FAR FILE *stream, FAR fpos_t *pos)
     }
 #endif
 
-  position = ftell(stream);
-  if (position == -1)
+  position = ftello(stream);
+  if (position == (off_t)-1)
     {
       return ERROR;
     }
 
-  *pos = (fpos_t)position;
+  *pos = position;
   return OK;
 }

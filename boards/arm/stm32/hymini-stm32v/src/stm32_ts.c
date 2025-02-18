@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/stm32/hymini-stm32v/src/stm32_ts.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -48,19 +50,19 @@
  * Private Function Prototypes
  ****************************************************************************/
 
-static int hymini_ts_irq_attach(FAR struct ads7843e_config_s *state,
+static int hymini_ts_irq_attach(struct ads7843e_config_s *state,
                                 xcpt_t isr);
-static void hymini_ts_irq_enable(FAR struct ads7843e_config_s *state,
+static void hymini_ts_irq_enable(struct ads7843e_config_s *state,
                                  bool enable);
-static void hymini_ts_irq_clear(FAR struct ads7843e_config_s *state);
-static bool hymini_ts_busy(FAR struct ads7843e_config_s *state);
-static bool hymini_ts_pendown(FAR struct ads7843e_config_s *state);
+static void hymini_ts_irq_clear(struct ads7843e_config_s *state);
+static bool hymini_ts_busy(struct ads7843e_config_s *state);
+static bool hymini_ts_pendown(struct ads7843e_config_s *state);
 
 /****************************************************************************
  * Private Data
  ****************************************************************************/
 
-static FAR struct ads7843e_config_s ts_cfg =
+static struct ads7843e_config_s ts_cfg =
 {
   .frequency = CONFIG_ADS7843E_FREQUENCY,
 
@@ -79,7 +81,7 @@ static xcpt_t tc_isr;
 
 /* Attach the ADS7843E interrupt handler to the GPIO interrupt */
 
-static int hymini_ts_irq_attach(FAR struct ads7843e_config_s *state,
+static int hymini_ts_irq_attach(struct ads7843e_config_s *state,
                                 xcpt_t isr)
 {
   iinfo("hymini_ts_irq_attach\n");
@@ -91,7 +93,7 @@ static int hymini_ts_irq_attach(FAR struct ads7843e_config_s *state,
 
 /* Enable or disable the GPIO interrupt */
 
-static void hymini_ts_irq_enable(FAR struct ads7843e_config_s *state,
+static void hymini_ts_irq_enable(struct ads7843e_config_s *state,
                                  bool enable)
 {
   iinfo("%d\n", enable);
@@ -102,14 +104,14 @@ static void hymini_ts_irq_enable(FAR struct ads7843e_config_s *state,
 
 /* Acknowledge/clear any pending GPIO interrupt */
 
-static void hymini_ts_irq_clear(FAR struct ads7843e_config_s *state)
+static void hymini_ts_irq_clear(struct ads7843e_config_s *state)
 {
   /* FIXME  Nothing to do ? */
 }
 
 /* As the busy line is not connected, we just wait a little bit here */
 
-static bool hymini_ts_busy(FAR struct ads7843e_config_s *state)
+static bool hymini_ts_busy(struct ads7843e_config_s *state)
 {
   up_mdelay(50);
   return false;
@@ -117,7 +119,7 @@ static bool hymini_ts_busy(FAR struct ads7843e_config_s *state)
 
 /* Return the state of the pen down GPIO input */
 
-static bool hymini_ts_pendown(FAR struct ads7843e_config_s *state)
+static bool hymini_ts_pendown(struct ads7843e_config_s *state)
 {
   bool pin_value = stm32_gpioread(GPIO_TS_IRQ);
   return !pin_value;
@@ -142,7 +144,7 @@ static bool hymini_ts_pendown(FAR struct ads7843e_config_s *state)
 
 int stm32_tsc_setup(int minor)
 {
-  FAR struct spi_dev_s *dev;
+  struct spi_dev_s *dev;
 
   iinfo("minor %d\n", minor);
 

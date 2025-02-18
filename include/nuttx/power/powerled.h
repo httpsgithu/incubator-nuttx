@@ -1,6 +1,8 @@
 /****************************************************************************
  * include/nuttx/power/powerled.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -18,8 +20,8 @@
  *
  ****************************************************************************/
 
-#ifndef __INCLUDE_NUTTX_DRIVERS_POWER_POWERLED_H
-#define __INCLUDE_NUTTX_DRIVERS_POWER_POWERLED_H
+#ifndef __INCLUDE_NUTTX_POWER_POWERLED_H
+#define __INCLUDE_NUTTX_POWER_POWERLED_H
 
 /* The powerled driver is split into two parts:
  *
@@ -37,7 +39,7 @@
 #include <nuttx/compiler.h>
 
 #include <nuttx/power/power_ioctl.h>
-#include <nuttx/semaphore.h>
+#include <nuttx/mutex.h>
 
 #ifdef CONFIG_DRIVERS_POWERLED
 
@@ -156,7 +158,7 @@ struct powerled_ops_s
   /* Set powerled parameters */
 
   CODE int (*params_set)(FAR struct powerled_dev_s *dev,
-                         struct powerled_params_s *param);
+                         FAR struct powerled_params_s *param);
 
   /* Set powerled operation mode */
 
@@ -203,7 +205,7 @@ struct powerled_dev_s
   uint8_t                     ocount;    /* The number of times the device
                                           * has been opened
                                           */
-  sem_t                       closesem;  /* Locks out new opens while close
+  mutex_t                     closelock; /* Locks out new opens while close
                                           * is in progress
                                           */
 
@@ -243,4 +245,4 @@ int powerled_register(FAR const char *path, FAR struct powerled_dev_s *dev,
 #endif
 
 #endif /* CONFIG_DRIVERS_POWERLED */
-#endif /* __INCLUDE_NUTTX_DRIVERS_POWER_POWERLED_H */
+#endif /* __INCLUDE_NUTTX_POWER_POWERLED_H */

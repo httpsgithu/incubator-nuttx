@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/cxd56xx/cxd56_i2c_bitbang.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -18,8 +20,8 @@
  *
  ****************************************************************************/
 
-#ifndef __ARCH_ARM_SRC_CXD56_CXD56_I2C_BITBANG_H
-#define __ARCH_ARM_SRC_CXD56_CXD56_I2C_BITBANG_H
+#ifndef __ARCH_ARM_SRC_CXD56XX_CXD56_I2C_BITBANG_H
+#define __ARCH_ARM_SRC_CXD56XX_CXD56_I2C_BITBANG_H
 
 /****************************************************************************
  * Included Files
@@ -48,4 +50,4 @@ struct i2c_master_s *cxd56_i2c_bitbang_initialize(uint32_t sda_pin,
 }
 #endif
 
-#endif /* __ARCH_ARM_SRC_CXD56_CXD56_I2C_BITBANG_H */
+#endif /* __ARCH_ARM_SRC_CXD56XX_CXD56_I2C_BITBANG_H */

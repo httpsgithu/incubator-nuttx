@@ -1,6 +1,8 @@
 /****************************************************************************
  * sched/group/group_waiter.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -70,14 +72,7 @@ void group_del_waiter(FAR struct task_group_s *group)
 {
   DEBUGASSERT(group->tg_nwaiters > 0);
   group->tg_nwaiters--;
-  if (group->tg_nwaiters == 0 && (group->tg_flags & GROUP_FLAG_DELETED) != 0)
-    {
-      /* Release the group container (all other resources have already been
-       * freed).
-       */
-
-      group_deallocate(group);
-    }
+  group_drop(group);
 }
 
 #endif /* CONFIG_SCHED_WAITPID && !CONFIG_SCHED_HAVE_PARENT */

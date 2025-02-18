@@ -1,11 +1,10 @@
 /****************************************************************************
  * include/nuttx/power/bq2429x.h
- * Lower half driver for BQ2429X battery charger
  *
- *   Copyright (C) 2017 Neil Hancock. All rights reserved.
- *
- *   Copyright (C) 2017 Haltian Ltd. All rights reserved.
- *   Author: Juha Niskanen <juha.niskanen@haltian.com>
+ * SPDX-License-Identifier: BSD-3-Clause
+ * SPDX-FileCopyrightText: 2017 Neil Hancock. All rights reserved.
+ * SPDX-FileCopyrightText: 2017 Haltian Ltd. All rights reserved.
+ * SPDX-FileContributor: Juha Niskanen <juha.niskanen@haltian.com>
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -36,8 +35,8 @@
  *
  ****************************************************************************/
 
-#ifndef __DRIVERS_POWER_BQ2429X_H
-#define __DRIVERS_POWER_BQ2429X_H
+#ifndef __INCLUDE_NUTTX_POWER_BQ2429X_H
+#define __INCLUDE_NUTTX_POWER_BQ2429X_H
 
 /****************************************************************************
  * Pre-processor Definitions
@@ -163,10 +162,10 @@
                                               /* Fast Charge Timer Settings */
 #define BQ2429XR5_CHG_TIMER_SHIFT     1
 #define BQ2429XR5_CHG_TIMER_MASK     (3 << BQ2429XR5_CHG_TIMER_SHIFT)
-# define BQ2429XR5_CHG_TIMER_05hrs   (0 << BQ2429XR5_CHG_TIMER_SHIFT)
-# define BQ2429XR5_CHG_TIMER_08hrs   (1 << BQ2429XR5_CHG_TIMER_SHIFT)
-# define BQ2429XR5_CHG_TIMER_12hrs   (2 << BQ2429XR5_CHG_TIMER_SHIFT)
-# define BQ2429XR5_CHG_TIMER_20hrs   (3 << BQ2429XR5_CHG_TIMER_SHIFT)
+#  define BQ2429XR5_CHG_TIMER_05hrs  (0 << BQ2429XR5_CHG_TIMER_SHIFT)
+#  define BQ2429XR5_CHG_TIMER_08hrs  (1 << BQ2429XR5_CHG_TIMER_SHIFT)
+#  define BQ2429XR5_CHG_TIMER_12hrs  (2 << BQ2429XR5_CHG_TIMER_SHIFT)
+#  define BQ2429XR5_CHG_TIMER_20hrs  (3 << BQ2429XR5_CHG_TIMER_SHIFT)
 #define BQ2429XR5_RESERVED0          (1 << 0)
 
 /* REG06 Boost Voltage/Thermal Regulation Control register */
@@ -242,4 +241,4 @@
 #define BQ24296M_VENDOR_ID              0x20 /* BQ24296M */
 #define BQ24297_VENDOR_ID               0x60 /* BQ24297 */
 
-#endif /* __DRIVERS_POWER_BQ2429X_H */
+#endif /* __INCLUDE_NUTTX_POWER_BQ2429X_H */

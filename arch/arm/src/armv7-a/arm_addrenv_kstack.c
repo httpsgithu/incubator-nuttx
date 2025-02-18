@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/armv7-a/arm_addrenv_kstack.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -22,7 +24,7 @@
  * Address Environment Interfaces
  *
  * Low-level interfaces used in binfmt/ to instantiate tasks with address
- * environments.  These interfaces all operate on type group_addrenv_t which
+ * environments.  These interfaces all operate on type arch_addrenv_t which
  * is an abstract representation of a task group's address environment and
  * must be defined in arch/arch.h if CONFIG_ARCH_ADDRENV is defined.
  *
@@ -34,7 +36,6 @@
  *                         address environment
  *   up_addrenv_heapsize - Returns the size of the initial heap allocation.
  *   up_addrenv_select   - Instantiate an address environment
- *   up_addrenv_restore  - Restore an address environment
  *   up_addrenv_clone    - Copy an address environment from one location to
  *                         another.
  *
@@ -129,7 +130,7 @@
  *
  ****************************************************************************/
 
-int up_addrenv_kstackalloc(FAR struct tcb_s *tcb)
+int up_addrenv_kstackalloc(struct tcb_s *tcb)
 {
   binfo("tcb=%p stacksize=%u\n", tcb, ARCH_KERNEL_STACKSIZE);
 
@@ -137,7 +138,7 @@ int up_addrenv_kstackalloc(FAR struct tcb_s *tcb)
 
   /* Allocate the kernel stack */
 
-  tcb->xcp.kstack = (FAR uint32_t *)kmm_memalign(8, ARCH_KERNEL_STACKSIZE);
+  tcb->xcp.kstack = kmm_memalign(8, ARCH_KERNEL_STACKSIZE);
   if (!tcb->xcp.kstack)
     {
       berr("ERROR: Failed to allocate the kernel stack\n");
@@ -162,7 +163,7 @@ int up_addrenv_kstackalloc(FAR struct tcb_s *tcb)
  *
  ****************************************************************************/
 
-int up_addrenv_kstackfree(FAR struct tcb_s *tcb)
+int up_addrenv_kstackfree(struct tcb_s *tcb)
 {
   binfo("tcb=%p\n", tcb);
   DEBUGASSERT(tcb);

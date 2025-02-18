@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/samd5e5/sam_tc.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -30,6 +32,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <assert.h>
+#include <nuttx/mutex.h>
 
 #include "sam_config.h"
 #include "sam_port.h"
@@ -101,7 +104,7 @@ struct sam_tc_dev_s
   uint32_t freq;                  /* TC freq  */
   uint32_t duty;                  /* TC duty cycle */
 
-  sem_t exclsem;              /* Only one thread can access at a time */
+  mutex_t lock;               /* Only one thread can access at a time */
   sem_t waitsem;              /* Wait for TC  */
 
   bool initialized;        /* True: Timer data has been initialized */
@@ -227,7 +230,7 @@ tc_handler_t sam_tc_attach(TC_HANDLE handle, tc_handler_t handler,
  * Name: sam_tc_getpending
  *
  * Description:
- *   Return the current contents of the interrutp status register, clearing
+ *   Return the current contents of the interrupt status register, clearing
  *   all pending interrupts.
  *
  * Input Parameters:

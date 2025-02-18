@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/sama5/sama5d3x-ek/src/nor_main.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -30,7 +32,7 @@
 #include <nuttx/cache.h>
 #include <arch/irq.h>
 
-#include "arm_arch.h"
+#include "arm_internal.h"
 #include "mmu.h"
 #include "cp15_cacheops.h"
 
@@ -75,7 +77,7 @@ typedef void (*nor_entry_t)(void);
  *
  ****************************************************************************/
 
-int nor_main(int argc, char *argv)
+int nor_main(int argc, char *argv[])
 {
   uint32_t regval;
 

@@ -1,6 +1,8 @@
 /****************************************************************************
  * sched/irq/irq_unexpectedisr.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -46,6 +48,9 @@
 
 int irq_unexpected_isr(int irq, FAR void *context, FAR void *arg)
 {
+  UNUSED(context);
+  UNUSED(arg);
+
   up_irq_save();
   _err("ERROR irq: %d\n", irq);
   PANIC();

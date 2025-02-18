@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/xtensa/esp32/common/src/esp32_ssd1306.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -41,7 +43,14 @@
 #include "esp32_i2c.h"
 #include "hardware/esp32_gpio_sigmap.h"
 
-#include "ttgo_lora_esp32.h"
+#define HAVE_SSD1306 1
+
+#if !defined(CONFIG_ESP32_I2C) || !defined(CONFIG_ESP32_I2C0) || \
+    !defined(CONFIG_LCD_SSD1306_I2C)
+#  undef HAVE_SSD1306
+#endif
+
+#define GPIO_SSD1306_RST 16
 
 #ifdef HAVE_SSD1306
 
@@ -55,7 +64,7 @@
  * Private Data
  ****************************************************************************/
 
-static FAR struct lcd_dev_s    *g_lcddev;
+static struct lcd_dev_s    *g_lcddev;
 
 /* Configuration ************************************************************/
 
@@ -69,7 +78,7 @@ static FAR struct lcd_dev_s    *g_lcddev;
 
 int board_lcd_initialize(void)
 {
-  FAR struct i2c_master_s *i2c;
+  struct i2c_master_s *i2c;
   const int busno = OLED_I2C_PORT;
   const int devno = 0;
   int ret = OK;
@@ -111,18 +120,6 @@ int board_lcd_initialize(void)
 
   g_lcddev->setpower(g_lcddev, CONFIG_LCD_MAXPOWER);
 
-#if defined(CONFIG_VIDEO_FB) && defined(CONFIG_LCD_FRAMEBUFFER)
-
-  /* Initialize and register the simulated framebuffer driver */
-
-  ret = fb_register(0, 0);
-  if (ret < 0)
-    {
-      syslog(LOG_ERR, "ERROR: fb_register() failed: %d\n", ret);
-      return -ENODEV;
-    }
-#endif
-
   return ret;
 }
 
@@ -130,7 +127,7 @@ int board_lcd_initialize(void)
  * Name:  board_lcd_getdev
  ****************************************************************************/
 
-FAR struct lcd_dev_s *board_lcd_getdev(int lcddev)
+struct lcd_dev_s *board_lcd_getdev(int lcddev)
 {
   if (lcddev == 0)
     {

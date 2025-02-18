@@ -1,6 +1,8 @@
 /****************************************************************************
  * binfmt/libnxflat/libnxflat_init.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -36,6 +38,8 @@
 #include <nuttx/fs/fs.h>
 #include <nuttx/binfmt/nxflat.h>
 
+#include "libnxflat.h"
+
 /****************************************************************************
  * Pre-processor Definitions
  ****************************************************************************/
@@ -49,9 +53,9 @@
 #endif
 
 #ifdef CONFIG_NXFLAT_DUMPBUFFER
-# define nxflat_dumpbuffer(m,b,n) binfodumpbuffer(m,b,n)
+#  define nxflat_dumpbuffer(m,b,n) binfodumpbuffer(m,b,n)
 #else
-# define nxflat_dumpbuffer(m,b,n)
+#  define nxflat_dumpbuffer(m,b,n)
 #endif
 
 /****************************************************************************
@@ -94,7 +98,7 @@ int nxflat_init(const char *filename, struct nxflat_loadinfo_s *loadinfo)
 
   /* Open the binary file */
 
-  ret = file_open(&loadinfo->file, filename, O_RDONLY);
+  ret = file_open(&loadinfo->file, filename, O_RDONLY | O_CLOEXEC);
   if (ret < 0)
     {
       berr("ERROR: Failed to open NXFLAT binary %s: %d\n", filename, ret);
@@ -137,9 +141,9 @@ int nxflat_init(const char *filename, struct nxflat_loadinfo_s *loadinfo)
    * network order.
    */
 
-  datastart             = ntohl(loadinfo->header.h_datastart);
-  dataend               = ntohl(loadinfo->header.h_dataend);
-  bssend                = ntohl(loadinfo->header.h_bssend);
+  datastart             = NTOHL(loadinfo->header.h_datastart);
+  dataend               = NTOHL(loadinfo->header.h_dataend);
+  bssend                = NTOHL(loadinfo->header.h_bssend);
 
   /* And put this information into the loadinfo structure as well.
    *
@@ -150,12 +154,12 @@ int nxflat_init(const char *filename, struct nxflat_loadinfo_s *loadinfo)
    *   bsssize    = the address range from dataend up to bssend.
    */
 
-  loadinfo->entryoffs   = ntohl(loadinfo->header.h_entry);
+  loadinfo->entryoffs   = NTOHL(loadinfo->header.h_entry);
   loadinfo->isize       = datastart;
 
   loadinfo->datasize    = dataend - datastart;
   loadinfo->bsssize     = bssend - dataend;
-  loadinfo->stacksize   = ntohl(loadinfo->header.h_stacksize);
+  loadinfo->stacksize   = NTOHL(loadinfo->header.h_stacksize);
 
   /* This is the initial dspace size.  We'll re-calculate this later
    * after the memory has been allocated.
@@ -167,8 +171,8 @@ int nxflat_init(const char *filename, struct nxflat_loadinfo_s *loadinfo)
    * this later).
    */
 
-  loadinfo->relocstart  = ntohl(loadinfo->header.h_relocstart);
-  loadinfo->reloccount  = ntohs(loadinfo->header.h_reloccount);
+  loadinfo->relocstart  = NTOHL(loadinfo->header.h_relocstart);
+  loadinfo->reloccount  = NTOHS(loadinfo->header.h_reloccount);
 
   return 0;
 }

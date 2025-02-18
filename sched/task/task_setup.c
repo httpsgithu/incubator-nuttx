@@ -1,6 +1,8 @@
 /****************************************************************************
  * sched/task/task_setup.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -25,6 +27,7 @@
 #include <nuttx/config.h>
 
 #include <sys/types.h>
+#include <ctype.h>
 #include <stdint.h>
 #include <sched.h>
 #include <string.h>
@@ -35,6 +38,7 @@
 #include <nuttx/arch.h>
 #include <nuttx/sched.h>
 #include <nuttx/signal.h>
+#include <nuttx/tls.h>
 
 #include "sched/sched.h"
 #include "pthread/pthread.h"
@@ -80,8 +84,10 @@ static const char g_noname[] = "<noname>";
 static int nxtask_assign_pid(FAR struct tcb_s *tcb)
 {
   FAR struct tcb_s **pidhash;
+  irqstate_t flags;
   pid_t next_pid;
   int   hash_ndx;
+  void *temp;
   int   i;
 
   /* NOTE:
@@ -89,15 +95,15 @@ static int nxtask_assign_pid(FAR struct tcb_s *tcb)
    * We cannot allow another task to be started.
    */
 
+  /* We'll try every allowable pid */
+
+retry:
+
   /* Protect the following operation with a critical section
    * because g_pidhash is accessed from an interrupt context
    */
 
-  irqstate_t flags = enter_critical_section();
-
-  /* We'll try every allowable pid */
-
-retry:
+  flags = enter_critical_section();
 
   /* Get the next process ID candidate */
 
@@ -137,11 +143,28 @@ retry:
    * expand space.
    */
 
+  temp = g_pidhash;
+
+  /* Calling malloc in a critical section may cause thread switching.
+   * Here we check whether other threads have applied successfully,
+   * and if successful, return directly
+   */
+
+  leave_critical_section(flags);
   pidhash = kmm_zalloc(g_npidhash * 2 * sizeof(*pidhash));
   if (pidhash == NULL)
     {
-      leave_critical_section(flags);
       return -ENOMEM;
+    }
+
+  /* Handle conner case: context siwtch happened when kmm_malloc */
+
+  flags = enter_critical_section();
+  if (temp != g_pidhash)
+    {
+      leave_critical_section(flags);
+      kmm_free(pidhash);
+      goto retry;
     }
 
   g_npidhash *= 2;
@@ -152,6 +175,16 @@ retry:
 
   for (i = 0; i < g_npidhash / 2; i++)
     {
+      if (g_pidhash[i] == NULL)
+        {
+          /* If the pid is not used, skip it.
+           * This may be triggered when a context switch occurs
+           * during zalloc and a thread is destroyed.
+           */
+
+          continue;
+        }
+
       hash_ndx = PIDHASH(g_pidhash[i]->pid);
       DEBUGASSERT(pidhash[hash_ndx] == NULL);
       pidhash[hash_ndx] = g_pidhash[i];
@@ -159,8 +192,9 @@ retry:
 
   /* Release resource for original g_pidhash, using new g_pidhash */
 
-  kmm_free(g_pidhash);
   g_pidhash = pidhash;
+  leave_critical_section(flags);
+  kmm_free(temp);
 
   /* Let's try every allowable pid again */
 
@@ -369,6 +403,8 @@ static int nxthread_setup_scheduler(FAR struct tcb_s *tcb, int priority,
                                     start_t start, CODE void *entry,
                                     uint8_t ttype)
 {
+  FAR struct tcb_s *rtcb = this_task();
+  irqstate_t flags;
   int ret;
 
   /* Assign a unique task ID to the task. */
@@ -404,12 +440,6 @@ static int nxthread_setup_scheduler(FAR struct tcb_s *tcb, int priority,
       tcb->flags         |= TCB_FLAG_SCHED_FIFO;
 #endif
 
-#ifdef CONFIG_CANCELLATION_POINTS
-      /* Set the deferred cancellation type */
-
-      tcb->flags         |= TCB_FLAG_CANCEL_DEFERRED;
-#endif
-
       /* Save the task ID of the parent task in the TCB and allocate
        * a child status structure.
        */
@@ -431,7 +461,7 @@ static int nxthread_setup_scheduler(FAR struct tcb_s *tcb, int priority,
        * inherit the signal mask of the parent thread.
        */
 
-      nxsig_procmask(SIG_SETMASK, NULL, &tcb->sigprocmask);
+      tcb->sigprocmask = rtcb->sigprocmask;
 
       /* Initialize the task state.  It does not get a valid state
        * until it is activated.
@@ -452,56 +482,32 @@ static int nxthread_setup_scheduler(FAR struct tcb_s *tcb, int priority,
 
       /* Add the task to the inactive task list */
 
-      sched_lock();
-      dq_addfirst((FAR dq_entry_t *)tcb, (FAR dq_queue_t *)&g_inactivetasks);
+      flags = enter_critical_section();
+      dq_addfirst((FAR dq_entry_t *)tcb, list_inactivetasks());
       tcb->task_state = TSTATE_TASK_INACTIVE;
-      sched_unlock();
+      leave_critical_section(flags);
     }
 
   return ret;
 }
 
 /****************************************************************************
- * Name: nxtask_setup_name
- *
- * Description:
- *   Assign the task name.
- *
- * Input Parameters:
- *   tcb  - Address of the new task's TCB
- *   name - Name of the new task
- *
- * Returned Value:
- *  None
- *
+ * Public Functions
  ****************************************************************************/
-
-#if CONFIG_TASK_NAME_SIZE > 0
-static void nxtask_setup_name(FAR struct task_tcb_s *tcb,
-                              FAR const char *name)
-{
-  /* Copy the name into the TCB */
-
-  strncpy(tcb->cmn.name, name, CONFIG_TASK_NAME_SIZE);
-  tcb->cmn.name[CONFIG_TASK_NAME_SIZE] = '\0';
-}
-#else
-#  define nxtask_setup_name(t,n)
-#endif /* CONFIG_TASK_NAME_SIZE */
 
 /****************************************************************************
  * Name: nxtask_setup_stackargs
  *
  * Description:
- *   This functions is called only from nxtask_setup_arguments()  It will
- *   allocate space on the new task's stack and will copy the argv[] array
+ *   Allocate space on the new task's stack and will copy the argv[] array
  *   and all strings to the task's stack where it is readily accessible to
  *   the task.  Data on the stack, on the other hand, is guaranteed to be
  *   accessible no matter what privilege mode the task runs in.
  *
  * Input Parameters:
  *   tcb  - Address of the new task's TCB
- *   argv - A pointer to an array of input parameters. The arrau should be
+ *   name - Name of the new task
+ *   argv - A pointer to an array of input parameters. The array should be
  *          terminated with a NULL argv[] value. If no parameters are
  *          required, argv may be NULL.
  *
@@ -510,9 +516,9 @@ static void nxtask_setup_name(FAR struct task_tcb_s *tcb,
  *
  ****************************************************************************/
 
-static int nxtask_setup_stackargs(FAR struct task_tcb_s *tcb,
-                                  FAR const char *name,
-                                  FAR char * const argv[])
+int nxtask_setup_stackargs(FAR struct task_tcb_s *tcb,
+                           FAR const char *name,
+                           FAR char * const argv[])
 {
   FAR char **stackargv;
   FAR char *str;
@@ -521,6 +527,13 @@ static int nxtask_setup_stackargs(FAR struct task_tcb_s *tcb,
   int nbytes;
   int argc;
   int i;
+
+  /* Give a name to the unnamed tasks */
+
+  if (!name)
+    {
+      name = (FAR char *)g_noname;
+    }
 
   /* Get the size of the task name (including the NUL terminator) */
 
@@ -544,6 +557,7 @@ static int nxtask_setup_stackargs(FAR struct task_tcb_s *tcb,
            */
 
           strtablen += (strlen(argv[argc]) + 1);
+          DEBUGASSERT(strtablen < tcb->cmn.adj_stack_size);
           if (strtablen >= tcb->cmn.adj_stack_size)
             {
               return -ENAMETOOLONG;
@@ -555,6 +569,7 @@ static int nxtask_setup_stackargs(FAR struct task_tcb_s *tcb,
            * happens in normal usage.
            */
 
+          DEBUGASSERT(argc <= MAX_STACK_ARGS);
           if (++argc > MAX_STACK_ARGS)
             {
               return -E2BIG;
@@ -588,8 +603,9 @@ static int nxtask_setup_stackargs(FAR struct task_tcb_s *tcb,
 
   stackargv[0] = str;
   nbytes       = strlen(name) + 1;
-  strcpy(str, name);
+  strlcpy(str, name, strtablen);
   str         += nbytes;
+  strtablen   -= nbytes;
 
   /* Copy each argument */
 
@@ -602,8 +618,9 @@ static int nxtask_setup_stackargs(FAR struct task_tcb_s *tcb,
 
       stackargv[i + 1] = str;
       nbytes           = strlen(argv[i]) + 1;
-      strcpy(str, argv[i]);
+      strlcpy(str, argv[i], strtablen);
       str             += nbytes;
+      strtablen       -= nbytes;
     }
 
   /* Put a terminator entry at the end of the argv[] array.  Then save the
@@ -612,14 +629,9 @@ static int nxtask_setup_stackargs(FAR struct task_tcb_s *tcb,
    */
 
   stackargv[argc + 1] = NULL;
-  tcb->argv = stackargv;
 
   return OK;
 }
-
-/****************************************************************************
- * Public Functions
- ****************************************************************************/
 
 /****************************************************************************
  * Name: nxtask_setup_scheduler
@@ -692,37 +704,26 @@ int pthread_setup_scheduler(FAR struct pthread_tcb_s *tcb, int priority,
 #endif
 
 /****************************************************************************
- * Name: nxtask_setup_arguments
+ * Name: nxtask_setup_name
  *
  * Description:
- *   This functions sets up parameters in the Task Control Block (TCB) in
- *   preparation for starting a new thread.
- *
- *   nxtask_setup_arguments() is called only from nxtask_init() and
- *   nxtask_start() to create a new task.  In the "normal" case, the argv[]
- *   array is a structure in the TCB, the arguments are cloned via strdup.
- *
- *   In the kernel build case, the argv[] array and all strings are copied
- *   to the task's stack.  This is done because the TCB (and kernel allocated
- *   strings) are only accessible in kernel-mode.  Data on the stack, on the
- *   other hand, is guaranteed to be accessible no matter what mode the
- *   task runs in.
+ *   Assign the task name.
  *
  * Input Parameters:
  *   tcb  - Address of the new task's TCB
- *   name - Name of the new task (not used)
- *   argv - A pointer to an array of input parameters.  The array should be
- *          terminated with a NULL argv[] value.  If no parameters are
- *          required, argv may be NULL.
+ *   name - Name of the new task
  *
  * Returned Value:
- *  OK
+ *  None
  *
  ****************************************************************************/
 
-int nxtask_setup_arguments(FAR struct task_tcb_s *tcb,
-                           FAR const char *name, FAR char * const argv[])
+#if CONFIG_TASK_NAME_SIZE > 0
+void nxtask_setup_name(FAR struct task_tcb_s *tcb, FAR const char *name)
 {
+  FAR char *dst = tcb->cmn.name;
+  int i;
+
   /* Give a name to the unnamed tasks */
 
   if (!name)
@@ -730,14 +731,20 @@ int nxtask_setup_arguments(FAR struct task_tcb_s *tcb,
       name = (FAR char *)g_noname;
     }
 
-  /* Setup the task name */
+  /* Copy the name into the TCB */
 
-  nxtask_setup_name(tcb, name);
+  for (i = 0; i < CONFIG_TASK_NAME_SIZE; i++)
+    {
+      char c = *name++;
 
-  /* Copy the argv[] array and all strings are to the task's stack.  Data on
-   * the stack is guaranteed to be accessible by the ask no matter what
-   * privilege mode the task runs in.
-   */
+      if (c == '\0')
+        {
+          break;
+        }
 
-  return nxtask_setup_stackargs(tcb, name, argv);
+      *dst++ = isspace(c) ? '_' : c;
+    }
+
+  *dst = '\0';
 }
+#endif /* CONFIG_TASK_NAME_SIZE */

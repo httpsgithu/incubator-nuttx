@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/xtensa/include/irq.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -34,9 +36,16 @@
 #include <nuttx/config.h>
 #include <nuttx/irq.h>
 
+#include <sys/types.h>
+#ifndef __ASSEMBLY__
+#  include <stdbool.h>
+#  include <arch/syscall.h>
+#endif
+
 #include <arch/types.h>
 #include <arch/chip/tie.h>
 #include <arch/chip/core-isa.h>
+#include <arch/xtensa/core.h>
 
 #include <arch/xtensa/xtensa_specregs.h>
 #include <arch/xtensa/xtensa_corebits.h>
@@ -85,8 +94,9 @@
 #define REG_SAR             (18)
 #define REG_EXCCAUSE        (19)
 #define REG_EXCVADDR        (20)
+#define REG_THREADPTR       (21)
 
-#define _REG_EXTRA_START    (21)
+#define _REG_EXTRA_START    (22)
 
 #if XCHAL_HAVE_S32C1I != 0
 #  define REG_SCOMPARE1       (_REG_EXTRA_START + 0)
@@ -105,27 +115,50 @@
 #endif
 
 #ifndef __XTENSA_CALL0_ABI__
-  /* Temporary space for saving stuff during window spill.
-   * REVISIT: I don't think that we need so many temporaries.
-   */
+  /* Temporary space for saving stuff during window spill. */
 
-#  define REG_TMP0          (_REG_WINDOW_TMPS + 0)
-#  define REG_TMP1          (_REG_WINDOW_TMPS + 1)
-#  define _REG_OVLY_START   (_REG_WINDOW_TMPS + 2)
+#  define REG_TMP0            (_REG_WINDOW_TMPS + 0)
+#  define _REG_INT_CTX_START  (_REG_WINDOW_TMPS + 1)
 #else
-#  define _REG_OVLY_START   _REG_WINDOW_TMPS
+#  define _REG_INT_CTX_START  _REG_WINDOW_TMPS
+#endif
+
+#ifndef CONFIG_BUILD_FLAT
+/* Temporary space for saving Interrupt Context information */
+
+#  define REG_INT_CTX       (_REG_INT_CTX_START + 0)
+#  define _REG_OVLY_START   (_REG_INT_CTX_START + 1)
+#else
+#  define _REG_OVLY_START   _REG_INT_CTX_START
 #endif
 
 #ifdef CONFIG_XTENSA_USE_OVLY
 /* Storage for overlay state */
 
 #  error Overlays not supported
-#  define XCPTCONTEXT_REGS  _REG_OVLY_START
+#  define _REG_CP_START  _REG_OVLY_START
 #else
-#  define XCPTCONTEXT_REGS  _REG_OVLY_START
+#  define _REG_CP_START  _REG_OVLY_START
 #endif
 
-#define XCPTCONTEXT_SIZE    ((4 * XCPTCONTEXT_REGS) + 0x20)
+#if XCHAL_CP_NUM > 0
+  /* FPU first address must align to CP align size.
+   * ESP32 3rd party redefine the ALIGN_UP, so define a new macro XALIGN_UP()
+   * instead use ALGIN_UP() in nuttx/nuttx.h
+   */
+
+#  define XALIGN_UP(x,a)    (((x) + ((a) - 1)) & ~((a) - 1))
+#  define COMMON_CTX_REGS   XALIGN_UP(_REG_CP_START, XCHAL_TOTAL_SA_ALIGN / 4)
+#  define COPROC_CTX_REGS   (XTENSA_CP_SA_SIZE / 4)
+#  define RESERVE_REGS      8
+#  define XCPTCONTEXT_REGS  (COMMON_CTX_REGS + COPROC_CTX_REGS + RESERVE_REGS)
+#else
+#  define COMMON_CTX_REGS   _REG_CP_START
+#  define RESERVE_REGS      8
+#  define XCPTCONTEXT_REGS  (COMMON_CTX_REGS + RESERVE_REGS)
+#endif
+
+#define XCPTCONTEXT_SIZE    (4 * XCPTCONTEXT_REGS)
 
 /****************************************************************************
  * Public Types
@@ -133,16 +166,22 @@
 
 #ifndef __ASSEMBLY__
 
+#ifdef CONFIG_LIB_SYSCALL
+/* This structure represents the return state from a system call */
+
+struct xcpt_syscall_s
+{
+  uintptr_t sysreturn;   /* The return PC */
+#ifndef CONFIG_BUILD_FLAT
+  uintptr_t int_ctx;     /* Interrupt context */
+#endif
+};
+#endif
+
 /* This struct defines the way the registers are stored. */
 
 struct xcptcontext
 {
-  /* The following function pointer is non-zero if there are pending signals
-   * to be processed.
-   */
-
-  void *sigdeliver; /* Actual type is sig_deliver_t */
-
   /* These are saved copies of registers used during signal processing.
    *
    * REVISIT:  Because there is only one copy of these save areas,
@@ -151,17 +190,18 @@ struct xcptcontext
    * another signal handler is executing will be ignored!
    */
 
-  uint32_t saved_pc;
-  uint32_t saved_ps;
+  uint32_t *saved_regs;
 
   /* Register save area */
 
-  uint32_t regs[XCPTCONTEXT_REGS];
+  uint32_t *regs;
 
-#if XCHAL_CP_NUM > 0
-  /* Co-processor save area */
+#ifndef CONFIG_BUILD_FLAT
+  /* This is the saved address to use when returning from a user-space
+   * signal handler.
+   */
 
-  struct xtensa_cpstate_s cpstate;
+  uintptr_t sigreturn;
 #endif
 
 #ifdef CONFIG_LIB_SYSCALL
@@ -180,7 +220,7 @@ struct xcptcontext
 
 /* Return the current value of the PS register */
 
-static inline uint32_t xtensa_getps(void)
+static inline_function uint32_t xtensa_getps(void)
 {
   uint32_t ps;
 
@@ -194,7 +234,8 @@ static inline uint32_t xtensa_getps(void)
 
 /* Set the value of the PS register */
 
-static inline void xtensa_setps(uint32_t ps)
+noinstrument_function static inline_function
+void xtensa_setps(uint32_t ps)
 {
   __asm__ __volatile__
   (
@@ -206,13 +247,29 @@ static inline void xtensa_setps(uint32_t ps)
   );
 }
 
+/* Return the current value of the stack pointer */
+
+static inline_function uint32_t up_getsp(void)
+{
+  register uint32_t sp;
+
+  __asm__ __volatile__
+  (
+    "mov %0, sp\n"
+    : "=r" (sp)
+  );
+
+  return sp;
+}
+
 /* Restore the value of the PS register */
 
-static inline void up_irq_restore(uint32_t ps)
+noinstrument_function static inline_function
+void up_irq_restore(uint32_t ps)
 {
   __asm__ __volatile__
   (
-    "wsr %0, PS \n"
+    "wsr %0, PS\n"
     "rsync \n"
     :
     : "r"(ps)
@@ -222,7 +279,7 @@ static inline void up_irq_restore(uint32_t ps)
 
 /* Disable interrupts and return the previous value of the PS register */
 
-static inline uint32_t up_irq_save(void)
+noinstrument_function static inline_function uint32_t up_irq_save(void)
 {
   uint32_t ps;
 
@@ -233,7 +290,7 @@ static inline uint32_t up_irq_save(void)
 
   __asm__ __volatile__
   (
-    "rsil %0, %1" : "=r"(ps) : "i"(XCHAL_EXCM_LEVEL)
+    "rsil %0, %1" : "=r"(ps) : "i"(XCHAL_IRQ_LEVEL)
   );
 
   /* Return the previous PS value so that it can be restored with
@@ -245,7 +302,7 @@ static inline uint32_t up_irq_save(void)
 
 /* Enable interrupts at all levels */
 
-static inline void up_irq_enable(void)
+static inline_function void up_irq_enable(void)
 {
 #ifdef __XTENSA_CALL0_ABI__
   xtensa_setps(PS_INTLEVEL(0) | PS_UM);
@@ -256,7 +313,7 @@ static inline void up_irq_enable(void)
 
 /* Disable low- and medium- priority interrupts */
 
-static inline void up_irq_disable(void)
+noinstrument_function static inline_function void up_irq_disable(void)
 {
 #ifdef __XTENSA_CALL0_ABI__
   xtensa_setps(PS_INTLEVEL(XCHAL_EXCM_LEVEL) | PS_UM);
@@ -269,12 +326,13 @@ static inline void up_irq_disable(void)
  * Name: xtensa_disable_all
  ****************************************************************************/
 
-static inline void xtensa_disable_all(void)
+static inline_function void xtensa_disable_all(void)
 {
   __asm__ __volatile__
   (
     "movi a2, 0\n"
     "xsr a2, INTENABLE\n"
+    "rsync\n"
     : : : "a2"
   );
 }
@@ -283,20 +341,17 @@ static inline void xtensa_disable_all(void)
  * Name: xtensa_intclear
  ****************************************************************************/
 
-static inline void xtensa_intclear(uint32_t mask)
+static inline_function void xtensa_intclear(uint32_t mask)
 {
   __asm__ __volatile__
   (
     "wsr %0, INTCLEAR\n"
+    "rsync\n"
     :
     : "r"(mask)
     :
   );
 }
-
-/****************************************************************************
- * Public Data
- ****************************************************************************/
 
 #ifdef __cplusplus
 #define EXTERN extern "C"
@@ -304,6 +359,16 @@ extern "C"
 {
 #else
 #define EXTERN extern
+#endif
+
+/****************************************************************************
+ * Public Data
+ ****************************************************************************/
+
+#ifndef __ASSEMBLY__
+/* g_interrupt_context store irq status */
+
+extern volatile bool g_interrupt_context[CONFIG_SMP_NCPUS];
 #endif
 
 /****************************************************************************
@@ -333,6 +398,86 @@ irqstate_t xtensa_enable_interrupts(irqstate_t mask);
  ****************************************************************************/
 
 irqstate_t xtensa_disable_interrupts(irqstate_t mask);
+
+/****************************************************************************
+ * Name: up_cpu_index
+ *
+ * Description:
+ *   Return the real core number regardless CONFIG_SMP setting
+ *
+ ****************************************************************************/
+
+#ifdef CONFIG_ARCH_HAVE_MULTICPU
+noinstrument_function
+static inline_function int up_cpu_index(void)
+{
+  return xtensa_cpu_index();
+}
+#endif /* CONFIG_ARCH_HAVE_MULTICPU */
+
+/****************************************************************************
+ * Name: up_set_interrupt_context
+ *
+ * Description:
+ *   Set the interrupt handler context.
+ *
+ ****************************************************************************/
+
+noinstrument_function
+static inline_function void up_set_interrupt_context(bool flag)
+{
+#ifdef CONFIG_SMP
+  g_interrupt_context[up_cpu_index()] = flag;
+#else
+  g_interrupt_context[0] = flag;
+#endif
+}
+
+/****************************************************************************
+ * Name: up_interrupt_context
+ *
+ * Description:
+ *   Return true is we are currently executing in the interrupt
+ *   handler context.
+ *
+ ****************************************************************************/
+
+#ifndef __ASSEMBLY__
+noinstrument_function static inline_function bool up_interrupt_context(void)
+{
+#ifdef CONFIG_SMP
+  irqstate_t flags = up_irq_save();
+  bool ret = g_interrupt_context[up_cpu_index()];
+  up_irq_restore(flags);
+  return ret;
+#else
+  return g_interrupt_context[0];
+#endif
+}
+#endif
+
+#define up_switch_context(tcb, rtcb)   \
+  do {                                 \
+    if (!up_interrupt_context())       \
+      {                                \
+        sys_call0(SYS_switch_context); \
+      }                                \
+    UNUSED(rtcb);                      \
+  } while (0)
+
+/****************************************************************************
+ * Name: up_getusrpc
+ ****************************************************************************/
+
+#define up_getusrpc(regs) \
+    (((uint32_t *)((regs) ? (regs) : running_regs()))[REG_PC])
+
+/****************************************************************************
+ * Name: up_getusrsp
+ ****************************************************************************/
+
+#define up_getusrsp(regs) \
+    (((uintptr_t*)(regs))[REG_A1])
 
 #undef EXTERN
 #ifdef __cplusplus

@@ -1,6 +1,8 @@
 /****************************************************************************
  * drivers/ioexpander/skeleton.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -29,7 +31,7 @@
 #include <debug.h>
 
 #include <nuttx/kmalloc.h>
-#include <nuttx/semaphore.h>
+#include <nuttx/mutex.h>
 #include <nuttx/ioexpander/ioexpander.h>
 #include <nuttx/ioexpander/skeleton.h>
 
@@ -63,7 +65,7 @@ struct skel_dev_s
 #ifdef CONFIG_skeleton_MULTIPLE
   FAR struct skel_dev_s *flink; /* Supports a singly linked list of drivers */
 #endif
-  sem_t exclsem;                /* Mutual exclusion */
+  mutex_t lock;                 /* Mutual exclusion */
 
 #ifdef CONFIG_IOEXPANDER_INT_ENABLE
   struct work_s work;           /* Supports the interrupt handling "bottom half" */
@@ -81,30 +83,35 @@ struct skel_dev_s
 static int skel_lock(FAR struct skel_dev_s *priv);
 
 static int skel_direction(FAR struct ioexpander_dev_s *dev, uint8_t pin,
-             int dir);
+                          int dir);
 static int skel_option(FAR struct ioexpander_dev_s *dev, uint8_t pin,
-             int opt, void *val);
+                       int opt, void *val);
 static int skel_writepin(FAR struct ioexpander_dev_s *dev, uint8_t pin,
-             bool value);
+                         bool value);
 static int skel_readpin(FAR struct ioexpander_dev_s *dev, uint8_t pin,
-             FAR bool *value);
+                        FAR bool *value);
 static int skel_readbuf(FAR struct ioexpander_dev_s *dev, uint8_t pin,
-             FAR bool *value);
+                        FAR bool *value);
 #ifdef CONFIG_IOEXPANDER_MULTIPIN
 static int skel_multiwritepin(FAR struct ioexpander_dev_s *dev,
-             FAR uint8_t *pins, FAR bool *values, int count);
+                              FAR const uint8_t *pins,
+                              FAR const bool *values, int count);
 static int skel_multireadpin(FAR struct ioexpander_dev_s *dev,
-             FAR uint8_t *pins, FAR bool *values, int count);
+                             FAR const uint8_t *pins,
+                             FAR bool *values, int count);
 static int skel_multireadbuf(FAR struct ioexpander_dev_s *dev,
-             FAR uint8_t *pins, FAR bool *values, int count);
+                             FAR const uint8_t *pins,
+                             FAR bool *values, int count);
 #endif
 #ifdef CONFIG_IOEXPANDER_INT_ENABLE
 static int skel_attach(FAR struct ioexpander_dev_s *dev,
-             ioe_pinset_t pinset, ioe_callback_t callback);
-#endif
+                       ioe_pinset_t pinset, ioe_callback_t callback);
+static int skel_detach(FAR struct ioexpander_dev_s *dev,
+                       FAR void *handle);
 
 static void skel_irqworker(void *arg);
 static void skel_interrupt(FAR void *arg);
+#endif
 
 /****************************************************************************
  * Private Data
@@ -134,27 +141,13 @@ static const struct ioexpander_ops_s g_skel_ops =
 #endif
 #ifdef CONFIG_IOEXPANDER_INT_ENABLE
   , skel_attach
+  , skel_detach
 #endif
 };
 
 /****************************************************************************
  * Private Functions
  ****************************************************************************/
-
-/****************************************************************************
- * Name: skel_lock
- *
- * Description:
- *   Get exclusive access to the I/O Expander
- *
- ****************************************************************************/
-
-static int skel_lock(FAR struct skel_dev_s *priv)
-{
-  return nxsem_wait_uninterruptible(&priv->exclsem);
-}
-
-#define skel_unlock(p) nxsem_post(&(p)->exclsem)
 
 /****************************************************************************
  * Name: skel_direction
@@ -191,7 +184,7 @@ static int skel_direction(FAR struct ioexpander_dev_s *dev, uint8_t pin,
 
   /* Get exclusive access to the I/O Expander */
 
-  ret = skel_lock(priv);
+  ret = nxmutex_lock(&priv->lock);
   if (ret < 0)
     {
       return ret;
@@ -200,7 +193,7 @@ static int skel_direction(FAR struct ioexpander_dev_s *dev, uint8_t pin,
   /* Set the pin direction in the I/O Expander */
 #warning Missing logic
 
-  skel_unlock(priv);
+  nxmutex_unlock(&priv->lock);
   return ret;
 }
 
@@ -224,7 +217,7 @@ static int skel_direction(FAR struct ioexpander_dev_s *dev, uint8_t pin,
  ****************************************************************************/
 
 static int skel_option(FAR struct ioexpander_dev_s *dev, uint8_t pin,
-                       int opt, FAR void *val)
+                       int opt, FAR void *value)
 {
   FAR struct skel_dev_s *priv = (FAR struct skel_dev_s *)dev;
   int ret = -ENOSYS;
@@ -239,7 +232,7 @@ static int skel_option(FAR struct ioexpander_dev_s *dev, uint8_t pin,
     {
       /* Get exclusive access to the I/O Expander */
 
-      ret = skel_lock(priv);
+      ret = nxmutex_lock(&priv->lock);
       if (ret < 0)
         {
           return ret;
@@ -248,7 +241,7 @@ static int skel_option(FAR struct ioexpander_dev_s *dev, uint8_t pin,
       /* Set the pin option */
 #warning Missing logic
 
-      skel_unlock(priv);
+      nxmutex_unlock(&priv->lock);
     }
 
   return ret;
@@ -283,7 +276,7 @@ static int skel_writepin(FAR struct ioexpander_dev_s *dev, uint8_t pin,
 
   /* Get exclusive access to the I/O Expander */
 
-  ret = skel_lock(priv);
+  ret = nxmutex_lock(&priv->lock);
   if (ret < 0)
     {
       return ret;
@@ -292,7 +285,7 @@ static int skel_writepin(FAR struct ioexpander_dev_s *dev, uint8_t pin,
   /* Write the pin value */
 #warning Missing logic
 
-  skel_unlock(priv);
+  nxmutex_unlock(&priv->lock);
   return ret;
 }
 
@@ -328,7 +321,7 @@ static int skel_readpin(FAR struct ioexpander_dev_s *dev, uint8_t pin,
 
   /* Get exclusive access to the I/O Expander */
 
-  ret = skel_lock(priv);
+  ret = nxmutex_lock(&priv->lock);
   if (ret < 0)
     {
       return ret;
@@ -340,7 +333,7 @@ static int skel_readpin(FAR struct ioexpander_dev_s *dev, uint8_t pin,
   /* Return the pin value via the value pointer */
 #warning Missing logic
 
-  skel_unlock(priv);
+  nxmutex_unlock(&priv->lock);
   return ret;
 }
 
@@ -369,7 +362,7 @@ static int skel_readbuf(FAR struct ioexpander_dev_s *dev, uint8_t pin,
 
   /* Get exclusive access to the I/O Expander */
 
-  ret = skel_lock(priv);
+  ret = nxmutex_lock(&priv->lock);
   if (ret < 0)
     {
       return ret;
@@ -378,7 +371,7 @@ static int skel_readbuf(FAR struct ioexpander_dev_s *dev, uint8_t pin,
   /* Read the buffered pin level */
 #warning Missing logic
 
-  skel_unlock(priv);
+  nxmutex_unlock(&priv->lock);
   return ret;
 }
 
@@ -412,7 +405,7 @@ static int skel_getmultibits(FAR struct skel_dev_s *priv, FAR uint8_t *pins,
           return -ENXIO;
         }
 
-      values[i] = ((pinset & (1 << pin) != 0);
+      values[i] = (((pinset >> pin) & 1) != 0);
     }
 
   return OK;
@@ -438,8 +431,8 @@ static int skel_getmultibits(FAR struct skel_dev_s *priv, FAR uint8_t *pins,
 
 #ifdef CONFIG_IOEXPANDER_MULTIPIN
 static int skel_multiwritepin(FAR struct ioexpander_dev_s *dev,
-                                 FAR uint8_t *pins, FAR bool *values,
-                                 int count)
+                              FAR const uint8_t *pins,
+                              FAR const bool *values, int count)
 {
   FAR struct skel_dev_s *priv = (FAR struct skel_dev_s *)dev;
   ioe_pinset_t pinset;
@@ -449,7 +442,7 @@ static int skel_multiwritepin(FAR struct ioexpander_dev_s *dev,
 
   /* Get exclusive access to the I/O Expander */
 
-  ret = skel_lock(priv);
+  ret = nxmutex_lock(&priv->lock);
   if (ret < 0)
     {
       return ret;
@@ -465,24 +458,24 @@ static int skel_multiwritepin(FAR struct ioexpander_dev_s *dev,
       pin = pins[i];
       if (pin >= CONFIG_IOEXPANDER_NPINS)
         {
-          skel_unlock(priv);
+          nxmutex_unlock(&priv->lock);
           return -ENXIO;
         }
 
       if (values[i])
         {
-          pinset |= (1 << pin);
+          pinset |= ((ioe_pinset_t)1 << pin);
         }
       else
         {
-          pinset &= ~(1 << pin);
+          pinset &= ~((ioe_pinset_t)1 << pin);
         }
     }
 
   /* Now write back the new pins states */
 #warning Missing logic
 
-  skel_unlock(priv);
+  nxmutex_unlock(&priv->lock);
   return ret;
 }
 #endif
@@ -506,8 +499,8 @@ static int skel_multiwritepin(FAR struct ioexpander_dev_s *dev,
 
 #ifdef CONFIG_IOEXPANDER_MULTIPIN
 static int skel_multireadpin(FAR struct ioexpander_dev_s *dev,
-                                FAR uint8_t *pins, FAR bool *values,
-                                int count)
+                             FAR const uint8_t *pins,
+                             FAR bool *values, int count)
 {
   FAR struct skel_dev_s *priv = (FAR struct skel_dev_s *)dev;
   int ret;
@@ -518,14 +511,14 @@ static int skel_multireadpin(FAR struct ioexpander_dev_s *dev,
 
   /* Get exclusive access to the I/O Expander */
 
-  ret = skel_lock(priv);
+  ret = nxmutex_lock(&priv->lock);
   if (ret < 0)
     {
       return ret;
     }
 
   ret = skel_getmultibits(priv, pins, values, count);
-  skel_unlock(priv);
+  nxmutex_unlock(&priv->lock);
   return ret;
 }
 #endif
@@ -549,8 +542,8 @@ static int skel_multireadpin(FAR struct ioexpander_dev_s *dev,
 
 #ifdef CONFIG_IOEXPANDER_MULTIPIN
 static int skel_multireadbuf(FAR struct ioexpander_dev_s *dev,
-                                FAR uint8_t *pins, FAR bool *values,
-                                int count)
+                             FAR const uint8_t *pins,
+                             FAR bool *values, int count)
 {
   FAR struct skel_dev_s *priv = (FAR struct skel_dev_s *)dev;
   int ret;
@@ -561,14 +554,14 @@ static int skel_multireadbuf(FAR struct ioexpander_dev_s *dev,
 
   /* Get exclusive access to the I/O Expander */
 
-  ret = skel_lock(priv);
+  ret = nxmutex_lock(&priv->lock);
   if (ret < 0)
     {
       return ret;
     }
 
   ret = skel_getmultibits(priv, pins, values, count);
-  skel_unlock(priv);
+  nxmutex_unlock(&priv->lock);
   return ret;
 }
 #endif
@@ -590,7 +583,7 @@ static int skel_multireadbuf(FAR struct ioexpander_dev_s *dev,
  *
  ****************************************************************************/
 
-#ifdef CONFIG_skeleton_INT_ENABLE
+#ifdef CONFIG_IOEXPANDER_INT_ENABLE
 static int skel_attach(FAR struct ioexpander_dev_s *dev, ioe_pinset_t pinset,
                        ioe_callback_t callback)
 {
@@ -600,7 +593,7 @@ static int skel_attach(FAR struct ioexpander_dev_s *dev, ioe_pinset_t pinset,
 
   /* Get exclusive access to the I/O Expander */
 
-  ret = skel_lock(priv);
+  ret = nxmutex_lock(&priv->lock);
   if (ret < 0)
     {
       return ret;
@@ -625,8 +618,43 @@ static int skel_attach(FAR struct ioexpander_dev_s *dev, ioe_pinset_t pinset,
 
   /* Add this callback to the table */
 
-  skel_unlock(priv);
+  nxmutex_unlock(&priv->lock);
   return ret;
+}
+#endif
+
+/****************************************************************************
+ * Name: skel_detach_detach
+ *
+ * Description:
+ *   Detach and disable a pin interrupt callback function.
+ *
+ * Input Parameters:
+ *   dev      - Device-specific state data
+ *   handle   - The non-NULL opaque value return by skel_attach_attch()
+ *
+ * Returned Value:
+ *   0 on success, else a negative error code
+ *
+ ****************************************************************************/
+
+#ifdef CONFIG_IOEXPANDER_INT_ENABLE
+static int skel_detach(FAR struct ioexpander_dev_s *dev, FAR void *handle)
+{
+  FAR struct skel_dev_s *priv = (FAR struct skel_dev_s *)dev;
+  FAR struct skel_callback_s *cb =
+    (FAR struct skel_callback_s *)handle;
+
+  DEBUGASSERT(priv != NULL && cb != NULL);
+  DEBUGASSERT((uintptr_t)cb >= (uintptr_t)&priv->cb[0] &&
+              (uintptr_t)cb <=
+              (uintptr_t)&priv->cb[CONFIG_SKELETON_INT_NCALLBACKS - 1]);
+  UNUSED(priv);
+
+  cb->pinset = 0;
+  cb->cbfunc = NULL;
+  cb->cbarg  = NULL;
+  return OK;
 }
 #endif
 
@@ -639,7 +667,7 @@ static int skel_attach(FAR struct ioexpander_dev_s *dev, ioe_pinset_t pinset,
  *
  ****************************************************************************/
 
-#ifdef CONFIG_skeleton_INT_ENABLE
+#ifdef CONFIG_IOEXPANDER_INT_ENABLE
 static void skel_irqworker(void *arg)
 {
   FAR struct skel_dev_s *priv = (FAR struct skel_dev_s *)arg;
@@ -697,7 +725,7 @@ static void skel_irqworker(void *arg)
  *
  ****************************************************************************/
 
-#ifdef CONFIG_skeleton_INT_ENABLE
+#ifdef CONFIG_IOEXPANDER_INT_ENABLE
 static void skel_interrupt(FAR void *arg)
 {
   FAR struct skel_dev_s *priv = (FAR struct skel_dev_s *)arg;
@@ -759,7 +787,7 @@ FAR struct ioexpander_dev_s *skel_initialize(void)
 #ifdef CONFIG_skeleton_MULTIPLE
   /* Allocate the device state structure */
 
-  priv = (FAR struct skel_dev_s *)kmm_zalloc(sizeof(struct skel_dev_s));
+  priv = kmm_zalloc(sizeof(struct skel_dev_s));
   if (!priv)
     {
       gpioerr("ERROR: Failed to allocate driver instance\n");
@@ -778,13 +806,13 @@ FAR struct ioexpander_dev_s *skel_initialize(void)
 
   priv->dev.ops = &g_skel_ops;
 
-#ifdef CONFIG_skeleton_INT_ENABLE
+#ifdef CONFIG_IOEXPANDER_INT_ENABLE
   /* Attach the I/O expander interrupt handler and enable interrupts */
 #warning Missing logic
 
 #endif
 
-  nxsem_init(&priv->exclsem, 0, 1);
+  nxmutex_init(&priv->lock);
   return &priv->dev;
 }
 

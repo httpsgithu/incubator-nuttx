@@ -1,6 +1,8 @@
 /****************************************************************************
  * libs/libc/misc/lib_glob.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -43,7 +45,7 @@
 struct match_s
 {
   FAR struct match_s *next;
-  char name[];
+  char name[1];
 };
 
 /****************************************************************************
@@ -71,8 +73,8 @@ static int sort(FAR const void *a, FAR const void *b);
 static int append(FAR struct match_s **tail, FAR const char *name,
                   size_t len, int mark)
 {
-  FAR struct match_s *new = lib_malloc(sizeof(struct match_s) + len + 2);
-  if (!new)
+  FAR struct match_s *new = lib_malloc(sizeof(struct match_s) + len + 1);
+  if (new == NULL)
     {
       return -1;
     }
@@ -83,7 +85,7 @@ static int append(FAR struct match_s **tail, FAR const char *name,
   if (mark && len && name[len - 1] != '/')
     {
       new->name[len] = '/';
-      new->name[len + 1] = 0;
+      new->name[len + 1] = '\0';
     }
 
   *tail = new;
@@ -247,7 +249,8 @@ static int do_glob(FAR char *buf, size_t pos, int type, FAR char *pat,
 
       if (!type && lstat(buf, &st))
         {
-          if (errno != ENOENT && (errfunc(buf, errno) || (flags & GLOB_ERR)))
+          if (get_errno() != ENOENT &&
+              (errfunc(buf, get_errno()) || (flags & GLOB_ERR) != 0))
             {
               return GLOB_ABORTED;
             }
@@ -287,7 +290,7 @@ static int do_glob(FAR char *buf, size_t pos, int type, FAR char *pat,
   dir = opendir(pos ? buf : ".");
   if (!dir)
     {
-      if (errfunc(buf, errno) || (flags & GLOB_ERR))
+      if (errfunc(buf, get_errno()) || (flags & GLOB_ERR) != 0)
         {
           return GLOB_ABORTED;
         }
@@ -295,8 +298,8 @@ static int do_glob(FAR char *buf, size_t pos, int type, FAR char *pat,
       return 0;
     }
 
-  old_errno = errno;
-  while (errno = 0, de = readdir(dir))
+  old_errno = get_errno();
+  while (get_errno() = 0, de = readdir(dir))
     {
       size_t l;
       int fnm_flags;
@@ -328,7 +331,7 @@ static int do_glob(FAR char *buf, size_t pos, int type, FAR char *pat,
           continue;
         }
 
-      memcpy(buf + pos, de->d_name, l + 1);
+      strlcpy(buf + pos, de->d_name, l + 1);
 
       if (p2)
         {
@@ -344,19 +347,19 @@ static int do_glob(FAR char *buf, size_t pos, int type, FAR char *pat,
         }
     }
 
-  readerr = errno;
+  readerr = get_errno();
   if (p2)
     {
       *p2 = saved_sep;
     }
 
   closedir(dir);
-  if (readerr && (errfunc(buf, errno) || (flags & GLOB_ERR)))
+  if (readerr && (errfunc(buf, get_errno()) || (flags & GLOB_ERR) != 0))
     {
       return GLOB_ABORTED;
     }
 
-  errno = old_errno;
+  set_errno(old_errno);
   return 0;
 }
 
@@ -366,6 +369,9 @@ static int do_glob(FAR char *buf, size_t pos, int type, FAR char *pat,
 
 static int ignore_err(FAR const char *path, int err)
 {
+  UNUSED(path);
+  UNUSED(err);
+
   return 0;
 }
 
@@ -405,17 +411,22 @@ int glob(FAR const char *pat, int flags,
          CODE int (*errfunc)(FAR const char *path, int err),
          FAR glob_t *g)
 {
-  struct match_s head =
-    {
-      .next = NULL
-    };
-
+  struct match_s head;
   FAR struct match_s *tail = &head;
   size_t cnt;
   size_t i;
   size_t offs = (flags & GLOB_DOOFFS) ? g->gl_offs : 0;
   int error = 0;
-  char buf[PATH_MAX];
+  FAR char *buf;
+
+  head.next = NULL;
+  head.name[0] = '\0';
+
+  buf = lib_get_pathbuffer();
+  if (buf == NULL)
+    {
+      return -ENOMEM;
+    }
 
   if (!errfunc)
     {
@@ -437,6 +448,7 @@ int glob(FAR const char *pat, int flags,
 
       if (!p)
         {
+          lib_put_pathbuffer(buf);
           return GLOB_NOSPACE;
         }
 
@@ -448,6 +460,7 @@ int glob(FAR const char *pat, int flags,
       lib_free(p);
     }
 
+  lib_put_pathbuffer(buf);
   if (error == GLOB_NOSPACE)
     {
       freelist(&head);

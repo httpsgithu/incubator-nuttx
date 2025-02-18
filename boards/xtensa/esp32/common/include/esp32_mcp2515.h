@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/xtensa/esp32/common/include/esp32_mcp2515.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -18,8 +20,8 @@
  *
  ****************************************************************************/
 
-#ifndef __BOARDS_XTENSA_ESP32_COMMON_INCLUDE_BOARD_MCP2515_H
-#define __BOARDS_XTENSA_ESP32_COMMON_INCLUDE_BOARD_MCP2515_H
+#ifndef __BOARDS_XTENSA_ESP32_COMMON_INCLUDE_ESP32_MCP2515_H
+#define __BOARDS_XTENSA_ESP32_COMMON_INCLUDE_ESP32_MCP2515_H
 
 /****************************************************************************
  * Included Files
@@ -80,4 +82,4 @@ int board_mcp2515_initialize(int devno);
 }
 #endif
 
-#endif /* __BOARDS_XTENSA_ESP32_COMMON_INCLUDE_BOARD_BMP180_H */
+#endif /* __BOARDS_XTENSA_ESP32_COMMON_INCLUDE_ESP32_MCP2515_H */

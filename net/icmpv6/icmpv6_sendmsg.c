@@ -1,6 +1,8 @@
 /****************************************************************************
  * net/icmpv6/icmpv6_sendmsg.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -55,15 +57,6 @@
 #ifdef CONFIG_NET_ICMPv6_SOCKET
 
 /****************************************************************************
- * Pre-processor Definitions
- ****************************************************************************/
-
-#define IPv6BUF \
-  ((struct ipv6_hdr_s *)&dev->d_buf[NET_LL_HDRLEN(dev)])
-#define ICMPv6BUF \
-  ((struct icmpv6_echo_request_s *)&dev->d_buf[NET_LL_HDRLEN(dev) + IPv6_HDRLEN])
-
-/****************************************************************************
  * Private Types
  ****************************************************************************/
 
@@ -105,8 +98,19 @@ struct icmpv6_sendto_s
 static void sendto_request(FAR struct net_driver_s *dev,
                            FAR struct icmpv6_sendto_s *pstate)
 {
-  FAR struct ipv6_hdr_s *ipv6;
   FAR struct icmpv6_echo_request_s *icmpv6;
+
+#ifdef CONFIG_NET_JUMBO_FRAME
+  netdev_iob_prepare_dynamic(dev, pstate->snd_buflen + IPv6_HDRLEN);
+#endif
+
+  /* Set-up to send that amount of data. */
+
+  devif_send(dev, pstate->snd_buf, pstate->snd_buflen, IPv6_HDRLEN);
+  if (dev->d_sndlen != pstate->snd_buflen)
+    {
+      return;
+    }
 
   IFF_SET_IPv6(dev->d_flags);
 
@@ -116,40 +120,27 @@ static void sendto_request(FAR struct net_driver_s *dev,
 
   dev->d_len = IPv6_HDRLEN + pstate->snd_buflen;
 
-  /* The total size of the data (including the size of the ICMPv6 header) */
-
-  dev->d_sndlen += pstate->snd_buflen;
-
-  /* Set up the IPv6 header (most is probably already in place) */
-
-  ipv6           = IPv6BUF;
-  ipv6->vtc      = 0x60;                       /* Version/traffic class (MS) */
-  ipv6->tcf      = 0;                          /* Traffic class(LS)/Flow label(MS) */
-  ipv6->flow     = 0;                          /* Flow label (LS) */
-  ipv6->len[0]   = (pstate->snd_buflen >> 8);  /* Length excludes the IPv6 header */
-  ipv6->len[1]   = (pstate->snd_buflen & 0xff);
-  ipv6->proto    = IP_PROTO_ICMP6;             /* Next header */
-  ipv6->ttl      = 255;                        /* Hop limit */
-
-  net_ipv6addr_hdrcopy(ipv6->srcipaddr, dev->d_ipv6addr);
-  net_ipv6addr_hdrcopy(ipv6->destipaddr, pstate->snd_toaddr.s6_addr16);
+  ipv6_build_header(IPv6BUF, pstate->snd_buflen, IP_PROTO_ICMP6,
+                    netdev_ipv6_srcaddr(dev, pstate->snd_toaddr.s6_addr16),
+                    pstate->snd_toaddr.s6_addr16, 255, 0);
 
   /* Copy the ICMPv6 request and payload into place after the IPv6 header */
 
-  icmpv6         = ICMPv6BUF;
-  memcpy(icmpv6, pstate->snd_buf, pstate->snd_buflen);
+  icmpv6 = IPBUF(IPv6_HDRLEN);
 
   /* Calculate the ICMPv6 checksum over the ICMPv6 header and payload. */
 
   icmpv6->chksum = 0;
+
+#ifdef CONFIG_NET_ICMPv6_CHECKSUMS
   icmpv6->chksum = ~icmpv6_chksum(dev, IPv6_HDRLEN);
   if (icmpv6->chksum == 0)
     {
       icmpv6->chksum = 0xffff;
     }
+#endif
 
-  ninfo("Outgoing ICMPv6 packet length: %d (%d)\n",
-        dev->d_len, (ipv6->len[0] << 8) | ipv6->len[1]);
+  ninfo("Outgoing ICMPv6 packet length: %d\n", dev->d_len);
 
 #ifdef CONFIG_NET_STATISTICS
   g_netstats.icmpv6.sent++;
@@ -168,7 +159,6 @@ static void sendto_request(FAR struct net_driver_s *dev,
  * Input Parameters:
  *   dev        The structure of the network driver that generated the
  *              event
- *   pvconn     The received packet, cast to (void *)
  *   pvpriv     An instance of struct icmpv6_sendto_s cast to (void *)
  *   flags      Set of events describing why the callback was invoked
  *
@@ -181,10 +171,9 @@ static void sendto_request(FAR struct net_driver_s *dev,
  ****************************************************************************/
 
 static uint16_t sendto_eventhandler(FAR struct net_driver_s *dev,
-                                    FAR void *pvconn,
                                     FAR void *pvpriv, uint16_t flags)
 {
-  FAR struct icmpv6_sendto_s *pstate = (struct icmpv6_sendto_s *)pvpriv;
+  FAR struct icmpv6_sendto_s *pstate = pvpriv;
 
   ninfo("flags: %04x\n", flags);
 
@@ -220,8 +209,11 @@ static uint16_t sendto_eventhandler(FAR struct net_driver_s *dev,
           ninfo("Send ICMPv6 ECHO request\n");
 
           sendto_request(dev, pstate);
-          pstate->snd_result = OK;
-          goto end_wait;
+          if (dev->d_sndlen > 0)
+            {
+              pstate->snd_result = OK;
+              goto end_wait;
+            }
         }
 
       /* Continue waiting */
@@ -304,8 +296,7 @@ ssize_t icmpv6_sendmsg(FAR struct socket *psock, FAR struct msghdr *msg,
 
   /* Some sanity checks */
 
-  DEBUGASSERT(psock != NULL && psock->s_conn != NULL &&
-              buf != NULL && to != NULL);
+  DEBUGASSERT(buf != NULL && to != NULL);
 
   if (len < ICMPv6_HDRLEN || tolen < sizeof(struct sockaddr_in6))
     {
@@ -317,8 +308,18 @@ ssize_t icmpv6_sendmsg(FAR struct socket *psock, FAR struct msghdr *msg,
 
   /* Get the device that will be used to route this ICMPv6 ECHO request */
 
-  dev = netdev_findby_ripv6addr(g_ipv6_unspecaddr,
-                               inaddr->sin6_addr.s6_addr16);
+#ifdef CONFIG_NET_BINDTODEVICE
+  if (conn->sconn.s_boundto != 0)
+    {
+      dev = netdev_findbyindex(conn->sconn.s_boundto);
+    }
+  else
+#endif
+    {
+      dev = netdev_findby_ripv6addr(g_ipv6_unspecaddr,
+                                    inaddr->sin6_addr.s6_addr16);
+    }
+
   if (dev == NULL)
     {
       nerr("ERROR: Not reachable\n");
@@ -326,6 +327,7 @@ ssize_t icmpv6_sendmsg(FAR struct socket *psock, FAR struct msghdr *msg,
       goto errout;
     }
 
+#ifndef CONFIG_NET_IPFRAG
   /* Sanity check if the request len is greater than the net payload len */
 
   if (len > NETDEV_PKTSIZE(dev) - (NET_LL_HDRLEN(dev) + IPv6_HDRLEN))
@@ -333,6 +335,7 @@ ssize_t icmpv6_sendmsg(FAR struct socket *psock, FAR struct msghdr *msg,
       nerr("ERROR: Invalid packet length\n");
       return -EINVAL;
     }
+#endif
 
   /* If we are no longer processing the same ping ID, then flush any pending
    * packets from the read-ahead buffer.
@@ -342,20 +345,19 @@ ssize_t icmpv6_sendmsg(FAR struct socket *psock, FAR struct msghdr *msg,
    */
 
   icmpv6 = (FAR struct icmpv6_echo_request_s *)buf;
-  if (icmpv6->type != ICMPv6_ECHO_REQUEST || icmpv6->id != conn->id ||
-      dev != conn->dev)
+  if (psock->s_type != SOCK_RAW && (icmpv6->type != ICMPv6_ECHO_REQUEST ||
+      icmpv6->id != conn->id || dev != conn->dev))
     {
-      conn->id    = 0;
-      conn->nreqs = 0;
-      conn->dev   = NULL;
+      conn->id  = 0;
+      conn->dev = NULL;
 
-      iob_free_queue(&conn->readahead, IOBUSER_NET_SOCK_ICMPv6);
+      iob_free_queue(&conn->readahead);
     }
 
 #ifdef CONFIG_NET_ICMPv6_NEIGHBOR
   /* Make sure that the IP address mapping is in the Neighbor Table */
 
-  ret = icmpv6_neighbor(inaddr->sin6_addr.s6_addr16);
+  ret = icmpv6_neighbor(dev, inaddr->sin6_addr.s6_addr16);
   if (ret < 0)
     {
       nerr("ERROR: Not reachable\n");
@@ -366,12 +368,7 @@ ssize_t icmpv6_sendmsg(FAR struct socket *psock, FAR struct msghdr *msg,
 
   /* Initialize the state structure */
 
-  /* This semaphore is used for signaling and, hence, should not have
-   * priority inheritance enabled.
-   */
-
   nxsem_init(&state.snd_sem, 0, 0);
-  nxsem_set_protocol(&state.snd_sem, SEM_PRIO_NONE);
 
   state.snd_result = -ENOMEM;           /* Assume allocation failure */
   state.snd_buf    = buf;               /* ICMPv6 header + data payload */
@@ -393,23 +390,23 @@ ssize_t icmpv6_sendmsg(FAR struct socket *psock, FAR struct msghdr *msg,
 
       /* Setup to receive ICMPv6 ECHO replies */
 
-      if (icmpv6->type == ICMPv6_ECHO_REQUEST)
+      if (psock->s_type != SOCK_RAW && icmpv6->type == ICMPv6_ECHO_REQUEST)
         {
-          conn->id    = icmpv6->id;
-          conn->nreqs = 1;
+          conn->id = icmpv6->id;
         }
 
-      conn->dev       = dev;
+      conn->dev = dev;
 
       /* Notify the device driver of the availability of TX data */
 
       netdev_txnotify_dev(dev);
 
       /* Wait for either the send to complete or for timeout to occur.
-       * net_timedwait will also terminate if a signal is received.
+       * net_sem_timedwait will also terminate if a signal is received.
        */
 
-      ret = net_timedwait(&state.snd_sem, _SO_TIMEOUT(psock->s_sndtimeo));
+      ret = net_sem_timedwait(&state.snd_sem,
+                          _SO_TIMEOUT(conn->sconn.s_sndtimeo));
       if (ret < 0)
         {
           if (ret == -ETIMEDOUT)
@@ -418,8 +415,7 @@ ssize_t icmpv6_sendmsg(FAR struct socket *psock, FAR struct msghdr *msg,
                * destination device.
                */
 
-              if (!net_ipv6addr_maskcmp(state.snd_toaddr.s6_addr16,
-                                        dev->d_ipv6addr, dev->d_ipv6netmask))
+              if (!NETDEV_V6ADDR_ONLINK(dev, state.snd_toaddr.s6_addr16))
                 {
                   /* Destination address was not on the local network served
                    * by this device.  If a timeout occurs, then the most
@@ -429,6 +425,10 @@ ssize_t icmpv6_sendmsg(FAR struct socket *psock, FAR struct msghdr *msg,
 
                   ret = -ENETUNREACH;
                 }
+              else
+                {
+                  ret = -EAGAIN;
+                }
             }
 
           state.snd_result = ret;
@@ -436,6 +436,8 @@ ssize_t icmpv6_sendmsg(FAR struct socket *psock, FAR struct msghdr *msg,
 
       icmpv6_callback_free(dev, conn, state.snd_cb);
     }
+
+  nxsem_destroy(&state.snd_sem);
 
   net_unlock();
 
@@ -453,11 +455,10 @@ ssize_t icmpv6_sendmsg(FAR struct socket *psock, FAR struct msghdr *msg,
   return len;
 
 errout:
-  conn->id    = 0;
-  conn->nreqs = 0;
-  conn->dev   = NULL;
+  conn->id  = 0;
+  conn->dev = NULL;
 
-  iob_free_queue(&conn->readahead, IOBUSER_NET_SOCK_ICMPv6);
+  iob_free_queue(&conn->readahead);
   return ret;
 }
 

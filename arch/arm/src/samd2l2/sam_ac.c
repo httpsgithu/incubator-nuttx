@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/samd2l2/sam_ac.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -33,8 +35,7 @@
 #include <assert.h>
 #include <errno.h>
 
-#include "arm_arch.h"
-
+#include "arm_internal.h"
 #include "sam_config.h"
 
 #include "sam_pm.h"
@@ -57,7 +58,7 @@
  * Private Functions
  ****************************************************************************/
 
-static int sam_ac_isr(int irq, FAR void *context, FAR void *arg)
+static int sam_ac_isr(int irq, void *context, void *arg)
 {
   return OK;
 }

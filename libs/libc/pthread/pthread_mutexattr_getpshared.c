@@ -1,6 +1,8 @@
 /****************************************************************************
  * libs/libc/pthread/pthread_mutexattr_getpshared.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -54,7 +56,7 @@ int pthread_mutexattr_getpshared(FAR const pthread_mutexattr_t *attr,
 {
   int ret = OK;
 
-  linfo("attr=0x%p pshared=0x%p\n", attr, pshared);
+  linfo("attr=%p pshared=%p\n", attr, pshared);
 
   if (!attr || !pshared)
     {

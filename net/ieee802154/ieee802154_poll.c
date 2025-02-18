@@ -1,6 +1,7 @@
 /****************************************************************************
  * net/ieee802154/ieee802154_poll.c
- * Poll for the availability of ougoing IEEE 802.15.4 frames
+ *
+ * SPDX-License-Identifier: Apache-2.0
  *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -85,7 +86,7 @@ void ieee802154_poll(FAR struct net_driver_s *dev,
        *  Need to pass the meta data and the IOB through the callback.
        */
 
-#warning Missing logic
+      /* #warning Missing logic */
 
       /* Perform the application callback */
 

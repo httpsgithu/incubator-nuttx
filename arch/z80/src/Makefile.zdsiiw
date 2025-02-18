@@ -1,6 +1,8 @@
 ############################################################################
 # arch/z80/src/Makefile.zdsiiw
 #
+# SPDX-License-Identifier: Apache-2.0
+#
 # Licensed to the Apache Software Foundation (ASF) under one or more
 # contributor license agreements.  See the NOTICE file distributed with
 # this work for additional information regarding copyright ownership.  The
@@ -117,7 +119,7 @@ nuttx$(EXEEXT): $(HEAD_OBJ) board$(DELIM)libboard$(LIBEXT) nuttx.linkcmd
 
 # This is part of the top-level export target
 
-export_startup: board$(DELIM)libboard$(LIBEXT) $(STARTUP_OBJS)
+export_startup: $(STARTUP_OBJS)
 	$(Q) if exist "$(EXPORT_DIR)$(DELIM)startup" ( copy $(STARTUP_OBJS) "$(EXPORT_DIR)$(DELIM)startup$(DELIM)." /b /y)
 
 # Dependencies

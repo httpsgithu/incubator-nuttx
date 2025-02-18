@@ -1,6 +1,8 @@
 /****************************************************************************
  * net/socket/getsockname.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -31,6 +33,7 @@
 #include <errno.h>
 #include <assert.h>
 
+#include <nuttx/fs/fs.h>
 #include <nuttx/net/net.h>
 
 #include "socket/socket.h"
@@ -88,15 +91,18 @@ int psock_getsockname(FAR struct socket *psock, FAR struct sockaddr *addr,
 
   /* Some sanity checking... */
 
-  if (addr == NULL || addrlen == NULL || *addrlen <= 0)
+  if (addr == NULL || addrlen == NULL)
     {
       return -EINVAL;
     }
 
   /* Let the address family's send() method handle the operation */
 
-  DEBUGASSERT(psock->s_sockif != NULL &&
-              psock->s_sockif->si_getsockname != NULL);
+  DEBUGASSERT(psock->s_sockif != NULL);
+  if (psock->s_sockif->si_getsockname == NULL)
+    {
+      return -EOPNOTSUPP;
+    }
 
   return psock->s_sockif->si_getsockname(psock, addr, addrlen);
 }
@@ -139,19 +145,29 @@ int psock_getsockname(FAR struct socket *psock, FAR struct sockaddr *addr,
 int getsockname(int sockfd, FAR struct sockaddr *addr,
                 FAR socklen_t *addrlen)
 {
-  FAR struct socket *psock = sockfd_socket(sockfd);
+  FAR struct socket *psock;
+  FAR struct file *filep;
   int ret;
+
+  /* Get the underlying socket structure */
+
+  ret = sockfd_socket(sockfd, &filep, &psock);
 
   /* Let psock_getsockname() do all of the work */
 
-  ret = psock_getsockname(psock, addr, addrlen);
-  if (ret < 0)
+  if (ret == OK)
     {
-      _SO_SETERRNO(psock, -ret);
-      return ERROR;
+      ret = psock_getsockname(psock, addr, addrlen);
+      fs_putfilep(filep);
     }
 
-  return OK;
+  if (ret < 0)
+    {
+      set_errno(-ret);
+      ret = ERROR;
+    }
+
+  return ret;
 }
 
 #endif /* CONFIG_NET */

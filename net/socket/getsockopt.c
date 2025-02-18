@@ -1,6 +1,8 @@
 /****************************************************************************
  * net/socket/getsockopt.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -32,11 +34,10 @@
 #include <assert.h>
 #include <errno.h>
 
+#include <nuttx/fs/fs.h>
+
 #include "socket/socket.h"
-#include "tcp/tcp.h"
-#include "usrsock/usrsock.h"
 #include "utils/utils.h"
-#include "can/can.h"
 
 /****************************************************************************
  * Private Functions
@@ -80,9 +81,11 @@ static int psock_socketlevel_option(FAR struct socket *psock, int option,
                                     FAR void *value,
                                     FAR socklen_t *value_len)
 {
+  FAR struct socket_conn_s *conn = psock->s_conn;
+
   /* Verify that the socket option if valid (but might not be supported ) */
 
-  if (!_SO_GETVALID(option) || !value || !value_len)
+  if (!value || !value_len)
     {
       return -EINVAL;
     }
@@ -113,51 +116,30 @@ static int psock_socketlevel_option(FAR struct socket *psock, int option,
 
           if (option == SO_RCVTIMEO)
             {
-              timeo = psock->s_rcvtimeo;
+              timeo = conn->s_rcvtimeo;
             }
           else
             {
-              timeo = psock->s_sndtimeo;
+              timeo = conn->s_sndtimeo;
             }
 
           /* Then return the timeout value to the caller */
 
-          net_dsec2timeval(timeo, (struct timeval *)value);
-          *value_len   = sizeof(struct timeval);
+          net_dsec2timeval(timeo, (FAR struct timeval *)value);
+          *value_len = sizeof(struct timeval);
+          return OK;
         }
 
-        return OK;
-    }
-
-#ifdef CONFIG_NET_USRSOCK
-    if (psock->s_type == SOCK_USRSOCK_TYPE)
-      {
-        if (option == SO_TYPE)
-          {
-            FAR struct usrsock_conn_s *conn = psock->s_conn;
-
-            /* Return the actual socket type */
-
-            *(FAR int *)value = conn->type;
-            *value_len        = sizeof(int);
-
-            return OK;
-          }
-
-          return -ENOPROTOOPT;
-      }
-#endif
-
-  switch (option)
-    {
       case SO_ACCEPTCONN: /* Reports whether socket listening is enabled */
-        if (*value_len < sizeof(int))
-          {
-            return -EINVAL;
-          }
+        {
+          if (*value_len < sizeof(int))
+            {
+              return -EINVAL;
+            }
 
-        *(FAR int *)value = _SS_ISLISTENING(psock->s_flags);
-        *value_len        = sizeof(int);
+          *(FAR int *)value = _SS_ISLISTENING(conn->s_flags);
+          *value_len        = sizeof(int);
+        }
         break;
 
       /* The following options take a point to an integer boolean value.
@@ -168,12 +150,13 @@ static int psock_socketlevel_option(FAR struct socket *psock, int option,
       case SO_BROADCAST:  /* Permits sending of broadcast messages */
       case SO_DEBUG:      /* Enables recording of debugging information */
       case SO_DONTROUTE:  /* Requests outgoing messages bypass standard routing */
-#ifndef CONFIG_NET_TCPPROTO_OPTIONS
       case SO_KEEPALIVE:  /* Verifies TCP connections active by enabling the
                            * periodic transmission of probes */
-#endif
       case SO_OOBINLINE:  /* Leaves received out-of-band data inline */
       case SO_REUSEADDR:  /* Allow reuse of local addresses */
+#ifdef CONFIG_NET_TIMESTAMP
+      case SO_TIMESTAMP:  /* Generates a timestamp for each incoming packet */
+#endif
         {
           sockopt_t optionset;
 
@@ -192,28 +175,11 @@ static int psock_socketlevel_option(FAR struct socket *psock, int option,
            * a macro will do.
            */
 
-          optionset         = psock->s_options;
+          optionset         = conn->s_options;
           *(FAR int *)value = _SO_GETOPT(optionset, option);
           *value_len        = sizeof(int);
         }
         break;
-
-#ifdef CONFIG_NET_TCPPROTO_OPTIONS
-      /* Any connection-oriented protocol could potentially support
-       * SO_KEEPALIVE.  However, this option is currently only available for
-       * TCP/IP.
-       *
-       * NOTE: SO_KEEPALIVE is not really a socket-level option; it is a
-       * protocol-level option.  A given TCP connection may service multiple
-       * sockets (via dup'ing of the socket).  There is, however, still only
-       * one connection to be monitored and that is a global attribute across
-       * all of the clones that may use the underlying connection.
-       */
-
-      case SO_KEEPALIVE:  /* Verifies TCP connections active by enabling the
-                           * periodic transmission of probes */
-        return tcp_getsockopt(psock, option, value, value_len);
-#endif
 
       case SO_TYPE:       /* Reports the socket type */
         {
@@ -240,33 +206,10 @@ static int psock_socketlevel_option(FAR struct socket *psock, int option,
               return -EINVAL;
             }
 
-          *(FAR int *)value = (int)psock->s_error;
-          psock->s_error = 0;
+          *(FAR int *)value = (int)conn->s_error;
+          conn->s_error = 0;
         }
         break;
-
-#ifdef CONFIG_NET_TIMESTAMP
-      case SO_TIMESTAMP:
-        {
-          if (*value_len != sizeof(int))
-            {
-              return -EINVAL;
-            }
-
-          *(FAR int *)value = (int)psock->s_timestamp;
-        }
-        break;
-#endif
-
-      /* The following are not yet implemented
-       * (return values other than {0,1})
-       */
-
-      case SO_LINGER:     /* Lingers on a close() if data is present */
-      case SO_RCVBUF:     /* Sets receive buffer size */
-      case SO_RCVLOWAT:   /* Sets the minimum number of bytes to input */
-      case SO_SNDBUF:     /* Sets send buffer size */
-      case SO_SNDLOWAT:   /* Sets the minimum number of bytes to output */
 
       default:
         return -ENOPROTOOPT;
@@ -326,7 +269,7 @@ static int psock_socketlevel_option(FAR struct socket *psock, int option,
 int psock_getsockopt(FAR struct socket *psock, int level, int option,
                      FAR void *value, FAR socklen_t *value_len)
 {
-  int ret;
+  int ret = -ENOPROTOOPT;
 
   /* Verify that the sockfd corresponds to valid, allocated socket */
 
@@ -335,49 +278,27 @@ int psock_getsockopt(FAR struct socket *psock, int level, int option,
       return -EBADF;
     }
 
-  /* Handle retrieval of the socket option according to the level at which
-   * option should be applied.
-   */
+  /* Perform the socket interface operation */
 
-  switch (level)
+  if (psock->s_sockif->si_getsockopt != NULL)
     {
-      case SOL_SOCKET:   /* Socket-level options (see include/sys/socket.h) */
-       ret = psock_socketlevel_option(psock, option, value, value_len);
-       break;
-
-#ifdef CONFIG_NET_TCPPROTO_OPTIONS
-      case IPPROTO_TCP:  /* TCP protocol socket options (see include/netinet/tcp.h) */
-       ret = tcp_getsockopt(psock, option, value, value_len);
-       break;
-#endif
-
-#ifdef CONFIG_NET_CANPROTO_OPTIONS
-      case SOL_CAN_RAW:/* CAN protocol socket options (see include/netpacket/can.h) */
-       ret = can_getsockopt(psock, option, value, value_len);
-       break;
-#endif
-
-      /* These levels are defined in sys/socket.h, but are not yet
-       * implemented.
-       */
-
-      case IPPROTO_IP:   /* TCP protocol socket options (see include/netinet/ip.h) */
-      case IPPROTO_IPV6: /* TCP protocol socket options (see include/netinet/ip6.h) */
-      case IPPROTO_UDP:  /* TCP protocol socket options (see include/netinit/udp.h) */
-      default:           /* The provided level is invalid */
-        ret = -ENOPROTOOPT;
-       break;
+      ret = psock->s_sockif->si_getsockopt(psock, level, option,
+                                           value, value_len);
     }
 
-#ifdef CONFIG_NET_USRSOCK
-  /* Try usrsock further if the protocol not available */
+  /* Try socket level if the socket interface operation is not available */
 
-  if (ret == -ENOPROTOOPT && psock->s_type == SOCK_USRSOCK_TYPE)
+  if (ret == -ENOPROTOOPT && level == SOL_SOCKET)
     {
-      ret = usrsock_getsockopt(psock->s_conn, level,
-                               option, value, value_len);
+      ret = psock_socketlevel_option(psock, option, value, value_len);
     }
-#endif
+
+  /* -ENOTTY really mean -ENOPROTOOPT, but skip the default action */
+
+  else if (ret == -ENOTTY)
+    {
+      ret = -ENOPROTOOPT;
+    }
 
   return ret;
 }
@@ -432,22 +353,28 @@ int getsockopt(int sockfd, int level, int option,
                void *value, socklen_t *value_len)
 {
   FAR struct socket *psock;
+  FAR struct file *filep;
   int ret;
 
   /* Get the underlying socket structure */
 
-  psock = sockfd_socket(sockfd);
+  ret = sockfd_socket(sockfd, &filep, &psock);
 
   /* Then let psock_getsockopt() do all of the work */
 
-  ret = psock_getsockopt(psock, level, option, value, value_len);
+  if (ret == OK)
+    {
+      ret = psock_getsockopt(psock, level, option, value, value_len);
+      fs_putfilep(filep);
+    }
+
   if (ret < 0)
     {
       set_errno(-ret);
-      return ERROR;
+      ret = ERROR;
     }
 
-  return OK;
+  return ret;
 }
 
 #endif /* CONFIG_NET && CONFIG_NET_SOCKOPTS */

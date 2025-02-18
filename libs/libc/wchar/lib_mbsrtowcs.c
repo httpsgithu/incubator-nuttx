@@ -1,14 +1,10 @@
 /****************************************************************************
  * libs/libc/wchar/lib_mbsrtowcs.c
  *
- *   Copyright (c) 2002-2004 Tim J. Robbins.
- *   All rights reserved.
- *
- *   Copyright (c) 2011 The FreeBSD Foundation
- *   All rights reserved.
- *
- * Portions of this software were developed by David Chisnall
- * under sponsorship from the FreeBSD Foundation.
+ * SPDX-License-Identifier: BSD-2-Clause
+ * SPDX-FileCopyrightText: 2002-2004 Tim J. Robbins. All rights reserved.
+ * SPDX-FileCopyrightText: 2011 The FreeBSD Foundation. All rights reserved.
+ * SPDX-FileContributor: David Chisnall
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -38,16 +34,7 @@
  * Included Files
  ****************************************************************************/
 
-#include <nuttx/config.h>
-
-#include <stdlib.h>
-#include <stdio.h>
-#include <errno.h>
-#include <string.h>
 #include <wchar.h>
-#include <stdint.h>
-
-#ifdef CONFIG_LIBC_WCHAR
 
 /****************************************************************************
  * Public Functions
@@ -66,5 +53,3 @@ size_t mbsrtowcs(FAR wchar_t *dst, FAR const char **src,
 {
   return mbsnrtowcs(dst, src, SIZE_MAX, len, ps);
 }
-
-#endif

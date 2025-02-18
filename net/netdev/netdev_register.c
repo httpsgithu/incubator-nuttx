@@ -1,6 +1,8 @@
 /****************************************************************************
  * net/netdev/netdev_register.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -40,6 +42,7 @@
 #include <nuttx/net/can.h>
 
 #include "utils/utils.h"
+#include "icmpv6/icmpv6.h"
 #include "igmp/igmp.h"
 #include "mld/mld.h"
 #include "netdev/netdev.h"
@@ -58,6 +61,7 @@
 #define NETDEV_WPAN_FORMAT  "wpan%d"
 #define NETDEV_WWAN_FORMAT  "wwan%d"
 #define NETDEV_CAN_FORMAT   "can%d"
+#define NETDEV_CELL_FORMAT  "cell%d"
 
 #if defined(CONFIG_DRIVERS_IEEE80211) /* Usually also has CONFIG_NET_ETHERNET */
 #  define NETDEV_DEFAULT_FORMAT NETDEV_WLAN_FORMAT
@@ -243,6 +247,7 @@ int netdev_register(FAR struct net_driver_s *dev, enum net_lltype_e lltype)
   FAR struct net_driver_s **last;
   FAR char devfmt_str[IFNAMSIZ];
   FAR const char *devfmt;
+  uint32_t flags   = 0;
   uint16_t pktsize = 0;
   uint8_t llhdrlen = 0;
   int devnum;
@@ -263,6 +268,7 @@ int netdev_register(FAR struct net_driver_s *dev, enum net_lltype_e lltype)
             llhdrlen = 0;
             pktsize  = NET_LO_PKTSIZE;
             devfmt   = NETDEV_LO_FORMAT;
+            flags    = IFF_LOOPBACK;
             break;
 #endif
 
@@ -271,6 +277,7 @@ int netdev_register(FAR struct net_driver_s *dev, enum net_lltype_e lltype)
             llhdrlen = ETH_HDRLEN;
             pktsize  = CONFIG_NET_ETH_PKTSIZE;
             devfmt   = NETDEV_ETH_FORMAT;
+            flags    = IFF_BROADCAST | IFF_MULTICAST;
             break;
 #endif
 
@@ -279,6 +286,7 @@ int netdev_register(FAR struct net_driver_s *dev, enum net_lltype_e lltype)
             llhdrlen = ETH_HDRLEN;
             pktsize  = CONFIG_NET_ETH_PKTSIZE;
             devfmt   = NETDEV_WLAN_FORMAT;
+            flags    = IFF_BROADCAST | IFF_MULTICAST;
             break;
 #endif
 
@@ -287,6 +295,7 @@ int netdev_register(FAR struct net_driver_s *dev, enum net_lltype_e lltype)
             dev->d_llhdrlen = 0;
             dev->d_pktsize  = NET_CAN_PKTSIZE;
             devfmt          = NETDEV_CAN_FORMAT;
+            flags           = IFF_NOARP;
             break;
 #endif
 
@@ -297,6 +306,7 @@ int netdev_register(FAR struct net_driver_s *dev, enum net_lltype_e lltype)
             pktsize  = CONFIG_NET_6LOWPAN_PKTSIZE;
 #endif
             devfmt   = NETDEV_BNEP_FORMAT;
+            flags    = IFF_BROADCAST | IFF_MULTICAST;
             break;
 #endif
 
@@ -308,6 +318,7 @@ int netdev_register(FAR struct net_driver_s *dev, enum net_lltype_e lltype)
             pktsize  = CONFIG_NET_6LOWPAN_PKTSIZE;
 #endif
             devfmt   = NETDEV_WPAN_FORMAT;
+            flags    = IFF_POINTOPOINT | IFF_NOARP | IFF_MULTICAST;
             break;
 #endif
 
@@ -316,6 +327,7 @@ int netdev_register(FAR struct net_driver_s *dev, enum net_lltype_e lltype)
             llhdrlen = 0;
             pktsize  = CONFIG_NET_SLIP_PKTSIZE;
             devfmt   = NETDEV_SLIP_FORMAT;
+            flags    = IFF_POINTOPOINT | IFF_NOARP | IFF_MULTICAST;
             break;
 #endif
 
@@ -325,6 +337,7 @@ int netdev_register(FAR struct net_driver_s *dev, enum net_lltype_e lltype)
                                    * if used as a TAP (layer 2) device */
             pktsize  = CONFIG_NET_TUN_PKTSIZE;
             devfmt   = NETDEV_TUN_FORMAT;
+            flags    = IFF_POINTOPOINT | IFF_NOARP | IFF_MULTICAST;
             break;
 #endif
 
@@ -333,6 +346,16 @@ int netdev_register(FAR struct net_driver_s *dev, enum net_lltype_e lltype)
             llhdrlen = 0;
             pktsize  = 1200;
             devfmt   = NETDEV_WWAN_FORMAT;
+            flags    = IFF_BROADCAST | IFF_NOARP | IFF_MULTICAST;
+            break;
+#endif
+
+#ifdef CONFIG_NET_CELLULAR
+          case NET_LL_CELL:
+            llhdrlen = 0;
+            pktsize  = CONFIG_NET_ETH_PKTSIZE;
+            devfmt   = NETDEV_CELL_FORMAT;
+            flags    = IFF_NOARP;
             break;
 #endif
 
@@ -357,6 +380,8 @@ int netdev_register(FAR struct net_driver_s *dev, enum net_lltype_e lltype)
           dev->d_pktsize = pktsize;
         }
 
+      dev->d_flags |= flags;
+
       /* Remember the verified link type */
 
       dev->d_lltype = (uint8_t)lltype;
@@ -375,6 +400,7 @@ int netdev_register(FAR struct net_driver_s *dev, enum net_lltype_e lltype)
       ifindex = get_ifindex();
       if (ifindex < 0)
         {
+          net_unlock();
           return ifindex;
         }
 
@@ -398,7 +424,7 @@ int netdev_register(FAR struct net_driver_s *dev, enum net_lltype_e lltype)
            */
 
           dev->d_ifname[IFNAMSIZ - 1] = '\0';
-          strncpy(devfmt_str, dev->d_ifname, IFNAMSIZ);
+          strlcpy(devfmt_str, dev->d_ifname, IFNAMSIZ);
 
           /* Then use the content of the temporary buffer as the format
            * string.
@@ -450,6 +476,12 @@ int netdev_register(FAR struct net_driver_s *dev, enum net_lltype_e lltype)
       /* Configure the device for MLD support */
 
       mld_devinit(dev);
+#endif
+
+#ifdef NET_ICMPv6_HAVE_STACK
+      /* Configure the device for ICMPv6 support */
+
+      icmpv6_devinit(dev);
 #endif
 
       net_unlock();

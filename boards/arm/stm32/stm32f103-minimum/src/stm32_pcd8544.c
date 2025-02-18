@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/stm32/stm32f103-minimum/src/stm32_pcd8544.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -48,15 +50,15 @@
 #define LCD_SPI_PORTNO 1   /* On SPI1 */
 
 #ifndef CONFIG_LCD_CONTRAST
-# define CONFIG_LCD_CONTRAST 60
+#  define CONFIG_LCD_CONTRAST 60
 #endif
 
 /****************************************************************************
  * Private Data
  ****************************************************************************/
 
-FAR struct spi_dev_s *g_spidev;
-FAR struct lcd_dev_s *g_lcddev;
+struct spi_dev_s *g_spidev;
+struct lcd_dev_s *g_lcddev;
 
 /****************************************************************************
  * Public Functions
@@ -93,7 +95,7 @@ int board_lcd_initialize(void)
  * Name: board_lcd_getdev
  ****************************************************************************/
 
-FAR struct lcd_dev_s *board_lcd_getdev(int lcddev)
+struct lcd_dev_s *board_lcd_getdev(int lcddev)
 {
   g_lcddev = pcd8544_initialize(g_spidev, lcddev);
   if (!g_lcddev)

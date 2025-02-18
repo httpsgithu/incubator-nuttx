@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/risc-v/src/bl602/bl602_start.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -33,10 +35,9 @@
 #include <syslog.h>
 
 #ifdef CONFIG_STACK_OVERFLOW_CHECK
-# include "sched/sched.h"
+#  include "sched/sched.h"
 #endif
 
-#include "riscv_arch.h"
 #include "riscv_internal.h"
 #include "chip.h"
 
@@ -53,36 +54,19 @@
 #define showprogress(c)
 #endif
 
-#define BL602_IDLESTACK_SIZE (CONFIG_IDLETHREAD_STACKSIZE)
-
 /****************************************************************************
  * Private Data
  ****************************************************************************/
-
-/* g_idle_topstack: _sbss is the start of the BSS region as defined by the
- * linker script. _ebss lies at the end of the BSS region. The idle task
- * stack starts at the end of BSS and is of size CONFIG_IDLETHREAD_STACKSIZE.
- * The IDLE thread is the thread that the system boots on and, eventually,
- * becomes the IDLE, do nothing task that runs only when there is nothing
- * else to run.  The heap continues from there until the end of memory.
- * g_idle_topstack is a read-only variable the provides this computed
- * address.
- */
-
-uint8_t g_idle_stack[BL602_IDLESTACK_SIZE]
-  locate_data(".noinit_idle_stack");
 
 /* Dont change the name of variable, since we refer this
  * g_boot2_partition_table in linker script
  */
 
-static struct boot2_partition_table_s g_boot2_partition_table unused_data;
+static struct boot2_partition_table_s g_boot2_partition_table used_data;
 
 /****************************************************************************
  * Public Data
  ****************************************************************************/
-
-uint32_t g_idle_topstack = 0;
 
 /****************************************************************************
  * Public Functions
@@ -98,9 +82,9 @@ extern void bl602_boardinitialize(void);
 
 uint32_t noinstrument_function boot2_get_flash_addr(void)
 {
-  extern uint8_t __boot2_flash_cfg_src;
+  extern uint8_t __boot2_flash_cfg_src[];
 
-  return (uint32_t)(&__boot2_flash_cfg_src +
+  return (uint32_t)(__boot2_flash_cfg_src +
                     (sizeof(g_boot2_partition_table.table.entries[0]) *
                      g_boot2_partition_table.table.table.entry_cnt));
 }
@@ -117,41 +101,31 @@ __cyg_profile_func_enter(void *this_fn, void *call_site)
 
   if (sp < stack_base)
     {
-#if CONFIG_TASK_NAME_SIZE > 0
       struct tcb_s *rtcb;
-#endif
+
       __asm volatile("csrc mstatus, 8");
       __asm__("li s11, 0");
 
-#if CONFIG_TASK_NAME_SIZE > 0
       /* get current task */
 
       rtcb = running_task();
 
       syslog(LOG_EMERG,
              "task %s stack overflow detected! base:0x%x >= sp:0x%x\n",
-             rtcb->name,
+             get_task_name(rtcb),
              stack_base,
              sp);
-#else
-      syslog(LOG_EMERG,
-             "stack overflow detected! base:0x%x >= sp:0x%x\n",
-             stack_base,
-             sp);
-#endif
+
       /* PANIC(); */
 
       while (1)
         ;
     }
-
-  return;
 }
 
 void noinstrument_function locate_code(".tcm_code")
 __cyg_profile_func_exit(void *this_fn, void *call_site)
 {
-  return;
 }
 #endif
 
@@ -161,13 +135,13 @@ __cyg_profile_func_exit(void *this_fn, void *call_site)
 
 void bfl_main(void)
 {
+  /* Configure FPU */
+
+  riscv_fpuconfig();
+
   /* set interrupt vector */
 
   asm volatile("csrw mtvec, %0" ::"r"((uintptr_t)exception_common + 2));
-
-  /* Configure IDLE stack */
-
-  g_idle_topstack = ((uint32_t)g_idle_stack + BL602_IDLESTACK_SIZE);
 
   /* Configure the UART so we can get debug output */
 

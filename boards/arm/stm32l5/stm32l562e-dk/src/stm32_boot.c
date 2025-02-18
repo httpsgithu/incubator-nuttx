@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/stm32l5/stm32l562e-dk/src/stm32_boot.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -28,7 +30,7 @@
 
 #include <nuttx/board.h>
 
-#include "arm_arch.h"
+#include "arm_internal.h"
 #include "stm32l562e-dk.h"
 #include "stm32l5_pwr.h"
 
@@ -85,6 +87,6 @@ void board_late_initialize(void)
 {
   /* Perform board-specific initialization here if so configured */
 
-  (void)stm32_bringup();
+  stm32_bringup();
 }
 #endif

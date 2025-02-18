@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/stm32l5/stm32l5_pwr.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -29,7 +31,7 @@
 #include <stdbool.h>
 #include <errno.h>
 
-#include "arm_arch.h"
+#include "arm_internal.h"
 #include "stm32l5_pwr.h"
 #include "stm32l5_rcc.h"
 
@@ -45,13 +47,6 @@ static inline uint16_t stm32l5_pwr_getreg(uint8_t offset)
 static inline void stm32l5_pwr_putreg(uint8_t offset, uint16_t value)
 {
   putreg32((uint32_t)value, STM32L5_PWR_BASE + (uint32_t)offset);
-}
-
-static inline void stm32l5_pwr_modifyreg(uint8_t offset, uint16_t clearbits,
-                                         uint16_t setbits)
-{
-  modifyreg32(STM32L5_PWR_BASE + (uint32_t)offset, (uint32_t)clearbits,
-              (uint32_t)setbits);
 }
 
 /****************************************************************************

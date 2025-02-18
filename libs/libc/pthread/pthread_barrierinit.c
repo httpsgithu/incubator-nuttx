@@ -1,6 +1,8 @@
 /****************************************************************************
  * libs/libc/pthread/pthread_barrierinit.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -75,6 +77,8 @@ int pthread_barrier_init(FAR pthread_barrier_t *barrier,
 {
   int ret = OK;
 
+  UNUSED(attr);
+
   if (!barrier || count == 0)
     {
       ret = EINVAL;
@@ -83,6 +87,8 @@ int pthread_barrier_init(FAR pthread_barrier_t *barrier,
     {
       sem_init(&barrier->sem, 0, 0);
       barrier->count = count;
+      barrier->wait_count = 0;
+      nxmutex_init(&barrier->mutex);
     }
 
   return ret;

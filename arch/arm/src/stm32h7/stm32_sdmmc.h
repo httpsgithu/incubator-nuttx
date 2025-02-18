@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/stm32h7/stm32_sdmmc.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -63,7 +65,7 @@ extern "C"
  ****************************************************************************/
 
 struct sdio_dev_s; /* See include/nuttx/sdio.h */
-FAR struct sdio_dev_s *sdio_initialize(int slotno);
+struct sdio_dev_s *sdio_initialize(int slotno);
 
 /****************************************************************************
  * Name: sdio_mediachange
@@ -84,7 +86,7 @@ FAR struct sdio_dev_s *sdio_initialize(int slotno);
  *
  ****************************************************************************/
 
-void sdio_mediachange(FAR struct sdio_dev_s *dev, bool cardinslot);
+void sdio_mediachange(struct sdio_dev_s *dev, bool cardinslot);
 
 /****************************************************************************
  * Name: sdio_wrprotect
@@ -102,7 +104,7 @@ void sdio_mediachange(FAR struct sdio_dev_s *dev, bool cardinslot);
  *
  ****************************************************************************/
 
-void sdio_wrprotect(FAR struct sdio_dev_s *dev, bool wrprotect);
+void sdio_wrprotect(struct sdio_dev_s *dev, bool wrprotect);
 
 /****************************************************************************
  * Name: sdio_set_sdio_card_isr
@@ -121,7 +123,7 @@ void sdio_wrprotect(FAR struct sdio_dev_s *dev, bool wrprotect);
  ****************************************************************************/
 
 #if defined(CONFIG_SDMMC1_SDIO_MODE) || defined(CONFIG_SDMMC2_SDIO_MODE)
-void sdio_set_sdio_card_isr(FAR struct sdio_dev_s *dev,
+void sdio_set_sdio_card_isr(struct sdio_dev_s *dev,
                             int (*func)(void *), void *arg);
 #endif
 

@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/s32k1xx/s32k1xx_progmem.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -18,8 +20,8 @@
  *
  ****************************************************************************/
 
-#ifndef __ARCH_ARM_SRC_S32K1XX_PROGMEM_H
-#define __ARCH_ARM_SRC_S32K1XX_PROGMEM_H
+#ifndef __ARCH_ARM_SRC_S32K1XX_S32K1XX_PROGMEM_H
+#define __ARCH_ARM_SRC_S32K1XX_S32K1XX_PROGMEM_H
 
 /****************************************************************************
  * Included Files
@@ -71,10 +73,12 @@
 
 #define S32K1XX_PROGMEM_DFLASH_WRITE_UNIT_SIZE 8
 
+#define S32K1XX_PROGMEM_ERASEDVAL             (0xffu)
+
 /****************************************************************************
  * Public Function Prototypes
  ****************************************************************************/
 
-void s32k1xx_progmem_init();
+void s32k1xx_progmem_init(void);
 
-#endif /* __ARCH_ARM_SRC_S32K1XX_PROGMEM_H */
+#endif /* __ARCH_ARM_SRC_S32K1XX_S32K1XX_PROGMEM_H */

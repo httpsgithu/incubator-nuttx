@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/sam34/sam_hsmci.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -79,7 +81,7 @@ extern "C"
  ****************************************************************************/
 
 struct sdio_dev_s; /* See include/nuttx/sdio.h */
-FAR struct sdio_dev_s *sdio_initialize(int slotno);
+struct sdio_dev_s *sdio_initialize(int slotno);
 
 /****************************************************************************
  * Name: sdio_mediachange
@@ -100,7 +102,7 @@ FAR struct sdio_dev_s *sdio_initialize(int slotno);
  *
  ****************************************************************************/
 
-void sdio_mediachange(FAR struct sdio_dev_s *dev, bool cardinslot);
+void sdio_mediachange(struct sdio_dev_s *dev, bool cardinslot);
 
 /****************************************************************************
  * Name: sdio_wrprotect
@@ -118,7 +120,7 @@ void sdio_mediachange(FAR struct sdio_dev_s *dev, bool cardinslot);
  *
  ****************************************************************************/
 
-void sdio_wrprotect(FAR struct sdio_dev_s *dev, bool wrprotect);
+void sdio_wrprotect(struct sdio_dev_s *dev, bool wrprotect);
 
 #undef EXTERN
 #if defined(__cplusplus)

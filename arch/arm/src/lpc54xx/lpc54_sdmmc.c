@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/lpc54xx/lpc54_sdmmc.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -41,7 +43,7 @@
 
 #include <nuttx/irq.h>
 
-#include "arm_arch.h"
+#include "arm_internal.h"
 #include "hardware/lpc54_pinmux.h"
 #include "hardware/lpc54_syscon.h"
 #include "lpc54_enableclk.h"
@@ -245,14 +247,12 @@ struct lpc54_dev_s
 static uint32_t lpc54_getreg(uint32_t addr);
 static void lpc54_putreg(uint32_t val, uint32_t addr);
 #else
-# define lpc54_getreg(addr)      getreg32(addr)
-# define lpc54_putreg(val,addr)  putreg32(val,addr)
+#  define lpc54_getreg(addr)     getreg32(addr)
+#  define lpc54_putreg(val,addr) putreg32(val,addr)
 #endif
 
 /* Low-level helpers ********************************************************/
 
-static int  lpc54_takesem(struct lpc54_dev_s *priv);
-#define     lpc54_givesem(priv) (nxsem_post(&priv->waitsem))
 static inline void lpc54_setclock(uint32_t clkdiv);
 static inline void lpc54_sdcard_clock(bool enable);
 static int  lpc54_ciu_sendcmd(uint32_t cmd, uint32_t arg);
@@ -277,68 +277,68 @@ static void lpc54_endtransfer(struct lpc54_dev_s *priv,
 
 /* Interrupt Handling *******************************************************/
 
-static int  lpc54_sdmmc_interrupt(int irq, void *context, FAR void *arg);
+static int  lpc54_sdmmc_interrupt(int irq, void *context, void *arg);
 
 /* SD Card Interface Methods ************************************************/
 
 /* Mutual exclusion */
 
 #ifdef CONFIG_SDIO_MUXBUS
-static int  lpc54_lock(FAR struct sdio_dev_s *dev, bool lock);
+static int  lpc54_lock(struct sdio_dev_s *dev, bool lock);
 #endif
 
 /* Initialization/setup */
 
-static void lpc54_reset(FAR struct sdio_dev_s *dev);
-static sdio_capset_t lpc54_capabilities(FAR struct sdio_dev_s *dev);
-static uint8_t lpc54_status(FAR struct sdio_dev_s *dev);
-static void lpc54_widebus(FAR struct sdio_dev_s *dev, bool enable);
-static void lpc54_clock(FAR struct sdio_dev_s *dev,
+static void lpc54_reset(struct sdio_dev_s *dev);
+static sdio_capset_t lpc54_capabilities(struct sdio_dev_s *dev);
+static uint8_t lpc54_status(struct sdio_dev_s *dev);
+static void lpc54_widebus(struct sdio_dev_s *dev, bool enable);
+static void lpc54_clock(struct sdio_dev_s *dev,
               enum sdio_clock_e rate);
-static int  lpc54_attach(FAR struct sdio_dev_s *dev);
+static int  lpc54_attach(struct sdio_dev_s *dev);
 
 /* Command/Status/Data Transfer */
 
-static int  lpc54_sendcmd(FAR struct sdio_dev_s *dev, uint32_t cmd,
+static int  lpc54_sendcmd(struct sdio_dev_s *dev, uint32_t cmd,
               uint32_t arg);
 #ifdef CONFIG_SDIO_BLOCKSETUP
-static void lpc54_blocksetup(FAR struct sdio_dev_s *dev,
+static void lpc54_blocksetup(struct sdio_dev_s *dev,
               unsigned int blocklen, unsigned int nblocks);
 #endif
-static int  lpc54_recvsetup(FAR struct sdio_dev_s *dev, FAR uint8_t *buffer,
+static int  lpc54_recvsetup(struct sdio_dev_s *dev, uint8_t *buffer,
               size_t nbytes);
-static int  lpc54_sendsetup(FAR struct sdio_dev_s *dev,
-              FAR const uint8_t *buffer, uint32_t nbytes);
-static int  lpc54_cancel(FAR struct sdio_dev_s *dev);
+static int  lpc54_sendsetup(struct sdio_dev_s *dev,
+              const uint8_t *buffer, uint32_t nbytes);
+static int  lpc54_cancel(struct sdio_dev_s *dev);
 
-static int  lpc54_waitresponse(FAR struct sdio_dev_s *dev, uint32_t cmd);
-static int  lpc54_recvshortcrc(FAR struct sdio_dev_s *dev, uint32_t cmd,
+static int  lpc54_waitresponse(struct sdio_dev_s *dev, uint32_t cmd);
+static int  lpc54_recvshortcrc(struct sdio_dev_s *dev, uint32_t cmd,
               uint32_t *rshort);
-static int  lpc54_recvlong(FAR struct sdio_dev_s *dev, uint32_t cmd,
+static int  lpc54_recvlong(struct sdio_dev_s *dev, uint32_t cmd,
               uint32_t rlong[4]);
-static int  lpc54_recvshort(FAR struct sdio_dev_s *dev, uint32_t cmd,
+static int  lpc54_recvshort(struct sdio_dev_s *dev, uint32_t cmd,
               uint32_t *rshort);
-static int  lpc54_recvnotimpl(FAR struct sdio_dev_s *dev, uint32_t cmd,
+static int  lpc54_recvnotimpl(struct sdio_dev_s *dev, uint32_t cmd,
               uint32_t *rnotimpl);
 
 /* EVENT handler */
 
-static void lpc54_waitenable(FAR struct sdio_dev_s *dev,
+static void lpc54_waitenable(struct sdio_dev_s *dev,
               sdio_eventset_t eventset, uint32_t timeout);
-static sdio_eventset_t lpc54_eventwait(FAR struct sdio_dev_s *dev);
-static void lpc54_callbackenable(FAR struct sdio_dev_s *dev,
+static sdio_eventset_t lpc54_eventwait(struct sdio_dev_s *dev);
+static void lpc54_callbackenable(struct sdio_dev_s *dev,
               sdio_eventset_t eventset);
 static void lpc54_callback(struct lpc54_dev_s *priv);
-static int  lpc54_registercallback(FAR struct sdio_dev_s *dev,
+static int  lpc54_registercallback(struct sdio_dev_s *dev,
               worker_t callback, void *arg);
 
 #ifdef CONFIG_LPC54_SDMMC_DMA
 /* DMA */
 
-static int  lpc54_dmarecvsetup(FAR struct sdio_dev_s *dev,
-              FAR uint8_t *buffer, size_t buflen);
-static int  lpc54_dmasendsetup(FAR struct sdio_dev_s *dev,
-              FAR const uint8_t *buffer, size_t buflen);
+static int  lpc54_dmarecvsetup(struct sdio_dev_s *dev,
+              uint8_t *buffer, size_t buflen);
+static int  lpc54_dmasendsetup(struct sdio_dev_s *dev,
+              const uint8_t *buffer, size_t buflen);
 #endif
 
 /****************************************************************************
@@ -382,6 +382,7 @@ struct lpc54_dev_s g_scard_dev =
     .dmasendsetup     = lpc54_dmasendsetup,
 #endif
   },
+  .waitsem = SEM_INITIALIZER(0),
 };
 
 #ifdef CONFIG_LPC54_SDMMC_DMA
@@ -492,27 +493,6 @@ static void lpc54_putreg(uint32_t val, uint32_t addr)
   putreg32(val, addr);
 }
 #endif
-
-/****************************************************************************
- * Name: lpc54_takesem
- *
- * Description:
- *   Take the wait semaphore (handling false alarm wakeups due to the receipt
- *   of signals).
- *
- * Input Parameters:
- *   dev - Instance of the SD card device driver state structure.
- *
- * Returned Value:
- *   Normally OK, but may return -ECANCELED in the rare event that the task
- *   has been canceled.
- *
- ****************************************************************************/
-
-static int lpc54_takesem(struct lpc54_dev_s *priv)
-{
-  return nxsem_wait_uninterruptible(&priv->waitsem);
-}
 
 /****************************************************************************
  * Name: lpc54_setclock
@@ -865,7 +845,7 @@ static void lpc54_endwait(struct lpc54_dev_s *priv,
 
   /* Wake up the waiting thread */
 
-  lpc54_givesem(priv);
+  nxsem_post(&priv->waitsem);
 }
 
 /****************************************************************************
@@ -929,7 +909,7 @@ static void lpc54_endtransfer(struct lpc54_dev_s *priv,
  *
  ****************************************************************************/
 
-static int lpc54_sdmmc_interrupt(int irq, void *context, FAR void *arg)
+static int lpc54_sdmmc_interrupt(int irq, void *context, void *arg)
 {
   struct lpc54_dev_s *priv = &g_scard_dev;
   uint32_t enabled;
@@ -1213,13 +1193,17 @@ static int lpc54_sdmmc_interrupt(int irq, void *context, FAR void *arg)
  ****************************************************************************/
 
 #ifdef CONFIG_SDIO_MUXBUS
-static int lpc54_lock(FAR struct sdio_dev_s *dev, bool lock)
+static int lpc54_lock(struct sdio_dev_s *dev, bool lock)
 {
   /* Single SD card instance so there is only one possibility.  The multiplex
    * bus is part of board support package.
    */
 
-  lpc54_muxbus_sdio_lock(lock);
+  /* FIXME: Implement the below function to support bus share:
+   *
+   * lpc54_muxbus_sdio_lock(lock);
+   */
+
   return OK;
 }
 #endif
@@ -1238,9 +1222,9 @@ static int lpc54_lock(FAR struct sdio_dev_s *dev, bool lock)
  *
  ****************************************************************************/
 
-static void lpc54_reset(FAR struct sdio_dev_s *dev)
+static void lpc54_reset(struct sdio_dev_s *dev)
 {
-  FAR struct lpc54_dev_s *priv = (FAR struct lpc54_dev_s *)dev;
+  struct lpc54_dev_s *priv = (struct lpc54_dev_s *)dev;
   irqstate_t flags;
   uint32_t regval;
 
@@ -1346,7 +1330,7 @@ static void lpc54_reset(FAR struct sdio_dev_s *dev)
  *
  ****************************************************************************/
 
-static sdio_capset_t lpc54_capabilities(FAR struct sdio_dev_s *dev)
+static sdio_capset_t lpc54_capabilities(struct sdio_dev_s *dev)
 {
   sdio_capset_t caps = 0;
 
@@ -1376,7 +1360,7 @@ static sdio_capset_t lpc54_capabilities(FAR struct sdio_dev_s *dev)
  *
  ****************************************************************************/
 
-static sdio_statset_t lpc54_status(FAR struct sdio_dev_s *dev)
+static sdio_statset_t lpc54_status(struct sdio_dev_s *dev)
 {
   struct lpc54_dev_s *priv = (struct lpc54_dev_s *)dev;
 
@@ -1413,7 +1397,7 @@ static sdio_statset_t lpc54_status(FAR struct sdio_dev_s *dev)
  *
  ****************************************************************************/
 
-static void lpc54_widebus(FAR struct sdio_dev_s *dev, bool wide)
+static void lpc54_widebus(struct sdio_dev_s *dev, bool wide)
 {
   mcinfo("wide=%d\n", wide);
 }
@@ -1433,7 +1417,7 @@ static void lpc54_widebus(FAR struct sdio_dev_s *dev, bool wide)
  *
  ****************************************************************************/
 
-static void lpc54_clock(FAR struct sdio_dev_s *dev, enum sdio_clock_e rate)
+static void lpc54_clock(struct sdio_dev_s *dev, enum sdio_clock_e rate)
 {
   struct lpc54_dev_s *priv = (struct lpc54_dev_s *)dev;
   uint8_t clkdiv;
@@ -1523,7 +1507,7 @@ static void lpc54_clock(FAR struct sdio_dev_s *dev, enum sdio_clock_e rate)
  *
  ****************************************************************************/
 
-static int lpc54_attach(FAR struct sdio_dev_s *dev)
+static int lpc54_attach(struct sdio_dev_s *dev)
 {
   int ret;
   uint32_t regval;
@@ -1578,7 +1562,7 @@ static int lpc54_attach(FAR struct sdio_dev_s *dev)
  *
  ****************************************************************************/
 
-static int lpc54_sendcmd(FAR struct sdio_dev_s *dev, uint32_t cmd,
+static int lpc54_sendcmd(struct sdio_dev_s *dev, uint32_t cmd,
                          uint32_t arg)
 {
   uint32_t regval = 0;
@@ -1662,7 +1646,7 @@ static int lpc54_sendcmd(FAR struct sdio_dev_s *dev, uint32_t cmd,
  ****************************************************************************/
 
 #ifdef CONFIG_SDIO_BLOCKSETUP
-static void lpc54_blocksetup(FAR struct sdio_dev_s *dev,
+static void lpc54_blocksetup(struct sdio_dev_s *dev,
                              unsigned int blocklen, unsigned int nblocks)
 {
   mcinfo("blocklen=%ld, total transfer=%ld (%ld blocks)\n",
@@ -1697,7 +1681,7 @@ static void lpc54_blocksetup(FAR struct sdio_dev_s *dev,
  *
  ****************************************************************************/
 
-static int lpc54_recvsetup(FAR struct sdio_dev_s *dev, FAR uint8_t *buffer,
+static int lpc54_recvsetup(struct sdio_dev_s *dev, uint8_t *buffer,
                            size_t nbytes)
 {
   struct lpc54_dev_s *priv = (struct lpc54_dev_s *)dev;
@@ -1766,8 +1750,8 @@ static int lpc54_recvsetup(FAR struct sdio_dev_s *dev, FAR uint8_t *buffer,
  *
  ****************************************************************************/
 
-static int lpc54_sendsetup(FAR struct sdio_dev_s *dev,
-                           FAR const uint8_t *buffer, size_t nbytes)
+static int lpc54_sendsetup(struct sdio_dev_s *dev,
+                           const uint8_t *buffer, size_t nbytes)
 {
   struct lpc54_dev_s *priv = (struct lpc54_dev_s *)dev;
 #ifdef CONFIG_LPC54_SDMMC_DMA
@@ -1832,7 +1816,7 @@ static int lpc54_sendsetup(FAR struct sdio_dev_s *dev,
  *
  ****************************************************************************/
 
-static int lpc54_cancel(FAR struct sdio_dev_s *dev)
+static int lpc54_cancel(struct sdio_dev_s *dev)
 {
   struct lpc54_dev_s *priv = (struct lpc54_dev_s *)dev;
 
@@ -1873,7 +1857,7 @@ static int lpc54_cancel(FAR struct sdio_dev_s *dev)
  *
  ****************************************************************************/
 
-static int lpc54_waitresponse(FAR struct sdio_dev_s *dev, uint32_t cmd)
+static int lpc54_waitresponse(struct sdio_dev_s *dev, uint32_t cmd)
 {
   volatile int32_t timeout;
   clock_t watchtime;
@@ -1965,7 +1949,7 @@ static int lpc54_waitresponse(FAR struct sdio_dev_s *dev, uint32_t cmd)
  *
  ****************************************************************************/
 
-static int lpc54_recvshortcrc(FAR struct sdio_dev_s *dev, uint32_t cmd,
+static int lpc54_recvshortcrc(struct sdio_dev_s *dev, uint32_t cmd,
                               uint32_t *rshort)
 {
   uint32_t regval;
@@ -2042,7 +2026,7 @@ static int lpc54_recvshortcrc(FAR struct sdio_dev_s *dev, uint32_t cmd,
   return ret;
 }
 
-static int lpc54_recvlong(FAR struct sdio_dev_s *dev, uint32_t cmd,
+static int lpc54_recvlong(struct sdio_dev_s *dev, uint32_t cmd,
                           uint32_t rlong[4])
 {
   uint32_t regval;
@@ -2100,7 +2084,7 @@ static int lpc54_recvlong(FAR struct sdio_dev_s *dev, uint32_t cmd,
   return ret;
 }
 
-static int lpc54_recvshort(FAR struct sdio_dev_s *dev, uint32_t cmd,
+static int lpc54_recvshort(struct sdio_dev_s *dev, uint32_t cmd,
                            uint32_t *rshort)
 {
   uint32_t regval;
@@ -2153,7 +2137,7 @@ static int lpc54_recvshort(FAR struct sdio_dev_s *dev, uint32_t cmd,
 
 /* MMC responses not supported */
 
-static int lpc54_recvnotimpl(FAR struct sdio_dev_s *dev, uint32_t cmd,
+static int lpc54_recvnotimpl(struct sdio_dev_s *dev, uint32_t cmd,
                              uint32_t *rnotimpl)
 {
   mcinfo("cmd=%04x\n", cmd);
@@ -2187,7 +2171,7 @@ static int lpc54_recvnotimpl(FAR struct sdio_dev_s *dev, uint32_t cmd,
  *
  ****************************************************************************/
 
-static void lpc54_waitenable(FAR struct sdio_dev_s *dev,
+static void lpc54_waitenable(struct sdio_dev_s *dev,
                              sdio_eventset_t eventset, uint32_t timeout)
 {
   struct lpc54_dev_s *priv = (struct lpc54_dev_s *)dev;
@@ -2274,7 +2258,7 @@ static void lpc54_waitenable(FAR struct sdio_dev_s *dev,
  *
  ****************************************************************************/
 
-static sdio_eventset_t lpc54_eventwait(FAR struct sdio_dev_s *dev)
+static sdio_eventset_t lpc54_eventwait(struct sdio_dev_s *dev)
 {
   struct lpc54_dev_s *priv = (struct lpc54_dev_s *)dev;
   sdio_eventset_t wkupevent = 0;
@@ -2304,7 +2288,7 @@ static sdio_eventset_t lpc54_eventwait(FAR struct sdio_dev_s *dev)
        * incremented and there will be no wait.
        */
 
-      ret = lpc54_takesem(priv);
+      ret = nxsem_wait_uninterruptible(&priv->waitsem);
       if (ret < 0)
         {
           /* Task canceled.  Cancel the wdog (assuming it was started) and
@@ -2363,7 +2347,7 @@ errout:
  *
  ****************************************************************************/
 
-static void lpc54_callbackenable(FAR struct sdio_dev_s *dev,
+static void lpc54_callbackenable(struct sdio_dev_s *dev,
                                  sdio_eventset_t eventset)
 {
   struct lpc54_dev_s *priv = (struct lpc54_dev_s *)dev;
@@ -2397,7 +2381,7 @@ static void lpc54_callbackenable(FAR struct sdio_dev_s *dev,
  *
  ****************************************************************************/
 
-static int lpc54_registercallback(FAR struct sdio_dev_s *dev,
+static int lpc54_registercallback(struct sdio_dev_s *dev,
                                   worker_t callback, void *arg)
 {
   struct lpc54_dev_s *priv = (struct lpc54_dev_s *)dev;
@@ -2435,8 +2419,8 @@ static int lpc54_registercallback(FAR struct sdio_dev_s *dev,
  ****************************************************************************/
 
 #ifdef CONFIG_LPC54_SDMMC_DMA
-static int lpc54_dmarecvsetup(FAR struct sdio_dev_s *dev,
-                              FAR uint8_t *buffer, size_t buflen)
+static int lpc54_dmarecvsetup(struct sdio_dev_s *dev,
+                              uint8_t *buffer, size_t buflen)
 {
   struct lpc54_dev_s *priv = (struct lpc54_dev_s *)dev;
   uint32_t regval;
@@ -2587,8 +2571,8 @@ static int lpc54_dmarecvsetup(FAR struct sdio_dev_s *dev,
  ****************************************************************************/
 
 #ifdef CONFIG_LPC54_SDMMC_DMA
-static int lpc54_dmasendsetup(FAR struct sdio_dev_s *dev,
-                              FAR const uint8_t *buffer, size_t buflen)
+static int lpc54_dmasendsetup(struct sdio_dev_s *dev,
+                              const uint8_t *buffer, size_t buflen)
 {
   struct lpc54_dev_s *priv = (struct lpc54_dev_s *)dev;
   uint32_t regval;
@@ -2783,7 +2767,7 @@ static void lpc54_callback(struct lpc54_dev_s *priv)
 
           mcinfo("Queuing callback to %p(%p)\n",
                  priv->callback, priv->cbarg);
-          work_queue(HPWORK, &priv->cbwork, (worker_t)priv->callback,
+          work_queue(HPWORK, &priv->cbwork, priv->callback,
                      priv->cbarg, 0);
         }
       else
@@ -2815,7 +2799,7 @@ static void lpc54_callback(struct lpc54_dev_s *priv)
  *
  ****************************************************************************/
 
-FAR struct sdio_dev_s *lpc54_sdmmc_initialize(int slotno)
+struct sdio_dev_s *lpc54_sdmmc_initialize(int slotno)
 {
   struct lpc54_dev_s *priv = &g_scard_dev;
   irqstate_t flags;
@@ -2849,16 +2833,6 @@ FAR struct sdio_dev_s *lpc54_sdmmc_initialize(int slotno)
   /* Enable clocking to the SD/MMC peripheral */
 
   lpc54_sdmmc_enableclk();
-
-  /* Initialize semaphores */
-
-  nxsem_init(&priv->waitsem, 0, 0);
-
-  /* The waitsem semaphore is used for signaling and, hence, should not have
-   * priority inheritance enabled.
-   */
-
-  nxsem_set_protocol(&priv->waitsem, SEM_PRIO_NONE);
 
   /* Configure GPIOs for 4-bit, wide-bus operation */
 

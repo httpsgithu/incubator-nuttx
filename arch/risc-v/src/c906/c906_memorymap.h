@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/risc-v/src/c906/c906_memorymap.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -18,13 +20,14 @@
  *
  ****************************************************************************/
 
-#ifndef _ARCH_RISCV_SRC_C906_C906_MEMORYMAP_H
-#define _ARCH_RISCV_SRC_C906_C906_MEMORYMAP_H
+#ifndef __ARCH_RISCV_SRC_C906_C906_MEMORYMAP_H
+#define __ARCH_RISCV_SRC_C906_C906_MEMORYMAP_H
 
 /****************************************************************************
  * Included Files
  ****************************************************************************/
 
+#include "riscv_common_memorymap.h"
 #include "hardware/c906_memorymap.h"
 #include "hardware/c906_uart.h"
 #include "hardware/c906_clint.h"
@@ -35,16 +38,15 @@
  * Pre-processor Definitions
  ****************************************************************************/
 
-/* Idle thread stack starts from _default_stack_limit */
+/* Idle thread stack starts from _ebss */
 
 #ifndef __ASSEMBLY__
-extern uintptr_t *_default_stack_limit;
-#define C906_IDLESTACK_BASE  (uintptr_t)&_default_stack_limit
+#define C906_IDLESTACK_BASE  (uintptr_t)_ebss
 #else
-#define C906_IDLESTACK_BASE  _default_stack_limit
+#define C906_IDLESTACK_BASE  _ebss
 #endif
 
-#define C906_IDLESTACK0_TOP  (C906_IDLESTACK_BASE + CONFIG_IDLETHREAD_STACKSIZE)
+#define C906_IDLESTACK0_TOP  (C906_IDLESTACK_BASE + SMP_STACK_SIZE)
 #define C906_IDLESTACK_TOP   (C906_IDLESTACK0_TOP)
 
-#endif /* _ARCH_RISCV_SRC_C906_C906_MEMORYMAP_H */
+#endif /* __ARCH_RISCV_SRC_C906_C906_MEMORYMAP_H */

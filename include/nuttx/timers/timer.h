@@ -1,6 +1,8 @@
 /****************************************************************************
  * include/nuttx/timers/timer.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -25,13 +27,16 @@
  * Included Files
  ****************************************************************************/
 
+#include <nuttx/clock.h>
 #include <nuttx/config.h>
 #include <nuttx/compiler.h>
 #include <nuttx/irq.h>
 #include <nuttx/fs/ioctl.h>
+#include <errno.h>
 #include <signal.h>
 #include <stdbool.h>
 #include <sys/types.h>
+#include <assert.h>
 
 #ifdef CONFIG_TIMER
 
@@ -88,6 +93,37 @@
 #define TCFLAGS_HANDLER    (1 << 1) /* 1=Call the user function when the
                                      *   timer expires */
 
+/* Method access helper macros **********************************************/
+
+#define TIMER_START(l) \
+  ((l)->ops->start ? (l)->ops->start(l) : -ENOTSUP)
+
+#define TIMER_STOP(l) \
+  ((l)->ops->stop ? (l)->ops->stop(l) : -ENOTSUP)
+
+#define TIMER_GETSTATUS(l,s) \
+  ((l)->ops->getstatus ? (l)->ops->getstatus(l,s) : timer_getstatus(l,s))
+
+#define TIMER_TICK_GETSTATUS(l,s) \
+  ((l)->ops->tick_getstatus ? (l)->ops->tick_getstatus(l,s) : timer_tick_getstatus(l,s))
+
+#define TIMER_SETTIMEOUT(l,t) \
+  ((l)->ops->settimeout ? (l)->ops->settimeout(l,t) : timer_settimeout(l,t))
+
+#define TIMER_TICK_SETTIMEOUT(l,t) \
+  ((l)->ops->tick_setttimeout ? (l)->ops->tick_setttimeout(l,t) : timer_tick_settimeout(l,t))
+
+#define TIMER_MAXTIMEOUT(l,t) \
+  ((l)->ops->maxtimeout ? (l)->ops->maxtimeout(l,t) : timer_maxtimeout(l,t))
+
+#define TIMER_TICK_MAXTIMEOUT(l,t) \
+  ((l)->ops->tick_maxtimeout ? (l)->ops->tick_maxtimeout(l,t) : timer_tick_maxtimeout(l,t))
+
+#define TIMER_SETCALLBACK(l,c,a)  ((l)->ops->setcallback(l,c,a))
+
+#define TIMER_IOCTL(l,c,a) \
+  ((l)->ops->ioctl ? (l)->ops->ioctl(l,c,a) : -ENOTTY)
+
 /****************************************************************************
  * Public Types
  ****************************************************************************/
@@ -96,7 +132,7 @@
  * function can modify the next interval if desired.
  */
 
-typedef CODE bool (*tccb_t)(FAR uint32_t *next_interval_us, FAR void *arg);
+typedef CODE bool (*tccb_t)(FAR uint32_t *next_interval, FAR void *arg);
 
 /* This is the type of the argument passed to the TCIOC_GETSTATUS ioctl and
  * and returned by the "lower half" getstatus() method.
@@ -116,6 +152,7 @@ struct timer_notify_s
 {
   struct sigevent event;    /* Describe the way a task is to be notified */
   pid_t           pid;      /* The ID of the task/thread to receive the signal */
+  bool            periodic; /* True for periodic notifications */
 };
 
 /* This structure provides the "lower-half" driver operations available to
@@ -164,6 +201,21 @@ struct timer_ops_s
 
   CODE int (*maxtimeout)(FAR struct timer_lowerhalf_s *lower,
                          FAR uint32_t *maxtimeout);
+
+  /* Get the current tick timer status */
+
+  CODE int (*tick_getstatus)(FAR struct timer_lowerhalf_s *lower,
+                             FAR struct timer_status_s *status);
+
+  /* Set a new tick timeout value of (and reset the timer) */
+
+  CODE int (*tick_setttimeout)(FAR struct timer_lowerhalf_s *lower,
+                               uint32_t timeout);
+
+  /* Get the maximum supported tick timeout value */
+
+  CODE int (*tick_maxtimeout)(FAR struct timer_lowerhalf_s *lower,
+                              FAR uint32_t *maxtimeout);
 };
 
 /* This structure provides the publicly visible representation of the
@@ -198,6 +250,112 @@ extern "C"
 #else
 #define EXTERN extern
 #endif
+
+static inline
+int timer_getstatus(FAR struct timer_lowerhalf_s *lower,
+                    FAR struct timer_status_s *status)
+{
+  int ret;
+
+  if (lower->ops->tick_getstatus == NULL)
+    {
+      return -ENOTSUP;
+    }
+
+  ret = lower->ops->tick_getstatus(lower, status);
+  if (ret >= 0)
+    {
+      status->timeout = TICK2USEC(status->timeout);
+      status->timeleft = TICK2USEC(status->timeleft);
+    }
+
+  return ret;
+}
+
+static inline
+int timer_settimeout(FAR struct timer_lowerhalf_s *lower,
+                     uint32_t timeout)
+{
+  if (lower->ops->tick_setttimeout == NULL)
+    {
+      return -ENOTSUP;
+    }
+
+  return lower->ops->tick_setttimeout(lower, USEC2TICK(timeout));
+}
+
+static inline
+int timer_maxtimeout(FAR struct timer_lowerhalf_s *lower,
+                     FAR uint32_t *maxtimeout)
+{
+  int ret;
+
+  if (lower->ops->tick_maxtimeout == NULL)
+    {
+      return -ENOTSUP;
+    }
+
+  ret = lower->ops->tick_maxtimeout(lower, maxtimeout);
+  if (ret >= 0)
+    {
+      *maxtimeout = TICK2USEC(*maxtimeout);
+    }
+
+  return ret;
+}
+
+static inline
+int timer_tick_getstatus(FAR struct timer_lowerhalf_s *lower,
+                         FAR struct timer_status_s *status)
+{
+  int ret;
+
+  if (lower->ops->getstatus == NULL)
+    {
+      return -ENOTSUP;
+    }
+
+  ret = lower->ops->getstatus(lower, status);
+  if (ret >= 0)
+    {
+      status->timeout = USEC2TICK(status->timeout);
+      status->timeleft = USEC2TICK(status->timeleft);
+    }
+
+  return ret;
+}
+
+static inline
+int timer_tick_settimeout(FAR struct timer_lowerhalf_s *lower,
+                          uint32_t timeout)
+{
+  if (lower->ops->settimeout == NULL)
+    {
+      return -ENOTSUP;
+    }
+
+  return lower->ops->settimeout(lower, TICK2USEC(timeout));
+}
+
+static inline
+int timer_tick_maxtimeout(FAR struct timer_lowerhalf_s *lower,
+                          FAR uint32_t *maxtimeout)
+{
+  int ret;
+
+  if (lower->ops->maxtimeout == NULL)
+    {
+      return -ENOTSUP;
+    }
+
+  ret = lower->ops->maxtimeout(lower, maxtimeout);
+  if (ret >= 0)
+    {
+      *maxtimeout = USEC2TICK(*maxtimeout);
+    }
+
+  return ret;
+}
 
 /****************************************************************************
  * "Upper-Half" Timer Driver Interfaces
@@ -271,8 +429,8 @@ void timer_unregister(FAR void *handle);
  *   arg      - Argument provided when the callback is called.
  *
  * Returned Value:
- *   Zero (OK), if the callback was successfully set, or -ENOSYS if the lower
- *   half driver does not support the operation.
+ *   Zero (OK), if the callback was successfully set, or -ENOTSUP if the
+ *   lower half driver does not support the operation.
  *
  ****************************************************************************/
 

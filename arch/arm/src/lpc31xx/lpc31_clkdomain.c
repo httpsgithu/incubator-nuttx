@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/lpc31xx/lpc31_clkdomain.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -19,7 +21,7 @@
  ****************************************************************************/
 
 /* References:
- *   - UM10314 LPC3130/31 User manual Rev. 1.01 — 9 September 2009
+ *   - UM10314 LPC3130/31 User manual Rev. 1.01 - 9 September 2009
  *   - lpc313x.cdl.drivers.zip example driver code
  */
 
@@ -30,7 +32,7 @@
 #include <nuttx/config.h>
 #include <stdint.h>
 
-#include "arm_arch.h"
+#include "arm_internal.h"
 #include "lpc31_cgudrvr.h"
 
 /****************************************************************************

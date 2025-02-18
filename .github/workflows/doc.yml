@@ -10,26 +10,44 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
+---
 name: "Build Documentation"
+
 on:
-  pull_request:
   push:
+    branches:
+      - master
+    paths:
+      - 'Documentation/**'
+
+  pull_request:
+    paths:
+      - 'Documentation/**'
+
+concurrency:
+  group: docs-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
 
 jobs:
   build-html:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
-      - uses: actions/setup-python@v2
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
         with:
           python-version: '3.8'
       - name: Generate Documentation
         run: |
           cd Documentation/
-          pip3 install pipenv==2021.5.29
+          pip3 install pipenv
           pipenv install
           pipenv run make html
-      - uses: actions/upload-artifact@v2
+      - uses: actions/upload-artifact@v4
         with:
           name: sphinx-docs
-          path: Documentation/_build/html/
+          path: |
+            Documentation/_build/html/
+            Documentation/_build/latex/*.pdf

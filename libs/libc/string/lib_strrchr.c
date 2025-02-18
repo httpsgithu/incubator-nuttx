@@ -1,6 +1,8 @@
 /****************************************************************************
  * libs/libc/string/lib_strrchr.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -26,6 +28,8 @@
 
 #include <string.h>
 
+#include "libc.h"
+
 /****************************************************************************
  * Public Functions
  ****************************************************************************/
@@ -34,20 +38,21 @@
  * occurrence of the character c in the string s.
  */
 
+#if !defined(CONFIG_LIBC_ARCH_STRRCHR) && defined(LIBC_BUILD_STRRCHR)
 #undef strrchr /* See mm/README.txt */
 FAR char *strrchr(FAR const char *s, int c)
 {
-  if (s)
+  FAR const char *r = NULL;
+
+  do
     {
-      const char *p = &s[strlen(s)];
-      for (; p >= s; p--)
+      if (*s == c)
         {
-          if (*p == c)
-            {
-              return (FAR char *)p;
-            }
+          r = s;
         }
     }
+  while (*s++ != '\0');
 
-  return NULL;
+  return (FAR char *)r;
 }
+#endif

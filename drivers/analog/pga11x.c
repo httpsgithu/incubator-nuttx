@@ -1,6 +1,8 @@
 /****************************************************************************
  * drivers/analog/pga11x.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -19,7 +21,7 @@
 
 /****************************************************************************
  * References:
- *   "PGA112, PGA113, PGA116, PGA117: Zerø-Drift PROGRAMMABLE GAIN AMPLIFIER
+ *   "PGA112, PGA113, PGA116, PGA117: ZerÃ¸-Drift PROGRAMMABLE GAIN AMPLIFIER
  *   with MUX", SBOS424B, March 2008, Revised September 2008, Texas
  *   Instruments Incorporated"
  *

@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/efm32/efm32_usbdev.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -24,6 +26,7 @@
 
 #include <nuttx/config.h>
 
+#include <sys/param.h>
 #include <sys/types.h>
 #include <stdint.h>
 #include <stdbool.h>
@@ -43,9 +46,7 @@
 #include <arch/board/board.h>
 
 #include "chip.h"
-#include "arm_arch.h"
 #include "arm_internal.h"
-
 #include "hardware/efm32_cmu.h"
 
 #include "efm32_usb.h"
@@ -260,16 +261,6 @@
 #define efm32_rqempty(ep)            ((ep)->head == NULL)
 #define efm32_rqpeek(ep)             ((ep)->head)
 
-/* Standard stuff ***********************************************************/
-
-#ifndef MIN
-#  define MIN(a,b) ((a) < (b) ? (a) : (b))
-#endif
-
-#ifndef MAX
-#  define MAX(a,b) ((a) > (b) ? (a) : (b))
-#endif
-
 /****************************************************************************
  * Private Types
  ****************************************************************************/
@@ -476,170 +467,170 @@ struct efm32_usbdev_s
 static uint32_t    efm32_getreg(uint32_t addr);
 static void        efm32_putreg(uint32_t val, uint32_t addr);
 #else
-# define efm32_getreg(addr)     getreg32(addr)
-# define efm32_putreg(val,addr) putreg32(val,addr)
+#  define efm32_getreg(addr)     getreg32(addr)
+#  define efm32_putreg(val,addr) putreg32(val,addr)
 #endif
 
 /* Request queue operations *************************************************/
 
-static FAR struct
-efm32_req_s *efm32_req_remfirst(FAR struct efm32_ep_s *privep);
-static bool       efm32_req_addlast(FAR struct efm32_ep_s *privep,
-                    FAR struct efm32_req_s *req);
+static struct
+efm32_req_s *efm32_req_remfirst(struct efm32_ep_s *privep);
+static bool       efm32_req_addlast(struct efm32_ep_s *privep,
+                    struct efm32_req_s *req);
 
 /* Low level data transfers and request operations **************************/
 
 /* Special endpoint 0 data transfer logic */
 
-static void        efm32_ep0in_setupresponse(FAR struct efm32_usbdev_s *priv,
-                     FAR uint8_t *data, uint32_t nbytes);
-static inline void efm32_ep0in_transmitzlp(FAR struct efm32_usbdev_s *priv);
+static void        efm32_ep0in_setupresponse(struct efm32_usbdev_s *priv,
+                     uint8_t *data, uint32_t nbytes);
+static inline void efm32_ep0in_transmitzlp(struct efm32_usbdev_s *priv);
 static void        efm32_ep0in_activate(void);
 
-static void        efm32_ep0out_ctrlsetup(FAR struct efm32_usbdev_s *priv);
+static void        efm32_ep0out_ctrlsetup(struct efm32_usbdev_s *priv);
 
 /* IN request and TxFIFO handling */
 
-static void        efm32_txfifo_write(FAR struct efm32_ep_s *privep,
-                     FAR uint8_t *buf, int nbytes);
-static void        efm32_epin_transfer(FAR struct efm32_ep_s *privep,
-                     FAR uint8_t *buf, int nbytes);
-static void        efm32_epin_request(FAR struct efm32_usbdev_s *priv,
-                     FAR struct efm32_ep_s *privep);
+static void        efm32_txfifo_write(struct efm32_ep_s *privep,
+                     uint8_t *buf, int nbytes);
+static void        efm32_epin_transfer(struct efm32_ep_s *privep,
+                     uint8_t *buf, int nbytes);
+static void        efm32_epin_request(struct efm32_usbdev_s *priv,
+                     struct efm32_ep_s *privep);
 
 /* OUT request and RxFIFO handling */
 
-static void        efm32_rxfifo_read(FAR struct efm32_ep_s *privep,
-                     FAR uint8_t *dest, uint16_t len);
-static void     efm32_rxfifo_discard(FAR struct efm32_ep_s *privep, int len);
-static void     efm32_epout_complete(FAR struct efm32_usbdev_s *priv,
-                                     FAR struct efm32_ep_s *privep);
+static void        efm32_rxfifo_read(struct efm32_ep_s *privep,
+                     uint8_t *dest, uint16_t len);
+static void     efm32_rxfifo_discard(struct efm32_ep_s *privep, int len);
+static void     efm32_epout_complete(struct efm32_usbdev_s *priv,
+                                     struct efm32_ep_s *privep);
 static inline void
-efm32_ep0out_receive(FAR struct efm32_ep_s *privep, int bcnt);
+efm32_ep0out_receive(struct efm32_ep_s *privep, int bcnt);
 static inline void
-efm32_epout_receive(FAR struct efm32_ep_s *privep, int bcnt);
-static void        efm32_epout_request(FAR struct efm32_usbdev_s *priv,
-                     FAR struct efm32_ep_s *privep);
+efm32_epout_receive(struct efm32_ep_s *privep, int bcnt);
+static void        efm32_epout_request(struct efm32_usbdev_s *priv,
+                     struct efm32_ep_s *privep);
 
 /* General request handling */
 
-static void        efm32_ep_flush(FAR struct efm32_ep_s *privep);
-static void        efm32_req_complete(FAR struct efm32_ep_s *privep,
+static void        efm32_ep_flush(struct efm32_ep_s *privep);
+static void        efm32_req_complete(struct efm32_ep_s *privep,
                      int16_t result);
-static void        efm32_req_cancel(FAR struct efm32_ep_s *privep,
+static void        efm32_req_cancel(struct efm32_ep_s *privep,
                      int16_t status);
 
 /* Interrupt handling *******************************************************/
 
 static struct    efm32_ep_s *efm32_ep_findbyaddr(struct efm32_usbdev_s *priv,
                      uint16_t eplog);
-static int         efm32_req_dispatch(FAR struct efm32_usbdev_s *priv,
-                     FAR const struct usb_ctrlreq_s *ctrl);
-static void        efm32_usbreset(FAR struct efm32_usbdev_s *priv);
+static int         efm32_req_dispatch(struct efm32_usbdev_s *priv,
+                     const struct usb_ctrlreq_s *ctrl);
+static void        efm32_usbreset(struct efm32_usbdev_s *priv);
 
 /* Second level OUT endpoint interrupt processing */
 
-static inline void efm32_ep0out_testmode(FAR struct efm32_usbdev_s *priv,
+static inline void efm32_ep0out_testmode(struct efm32_usbdev_s *priv,
                      uint16_t index);
 static inline void efm32_ep0out_stdrequest(struct efm32_usbdev_s *priv,
-                     FAR struct efm32_ctrlreq_s *ctrlreq);
+                     struct efm32_ctrlreq_s *ctrlreq);
 static inline void efm32_ep0out_setup(struct efm32_usbdev_s *priv);
-static inline void efm32_epout(FAR struct efm32_usbdev_s *priv,
+static inline void efm32_epout(struct efm32_usbdev_s *priv,
                      uint8_t epno);
-static inline void efm32_epout_interrupt(FAR struct efm32_usbdev_s *priv);
+static inline void efm32_epout_interrupt(struct efm32_usbdev_s *priv);
 
 /* Second level IN endpoint interrupt processing */
 
-static inline void efm32_epin_runtestmode(FAR struct efm32_usbdev_s *priv);
-static inline void efm32_epin(FAR struct efm32_usbdev_s *priv, uint8_t epno);
-static inline void efm32_epin_txfifoempty(FAR struct efm32_usbdev_s *priv,
+static inline void efm32_epin_runtestmode(struct efm32_usbdev_s *priv);
+static inline void efm32_epin(struct efm32_usbdev_s *priv, uint8_t epno);
+static inline void efm32_epin_txfifoempty(struct efm32_usbdev_s *priv,
                                           int epno);
-static inline void efm32_epin_interrupt(FAR struct efm32_usbdev_s *priv);
+static inline void efm32_epin_interrupt(struct efm32_usbdev_s *priv);
 
 /* Other second level interrupt processing */
 
-static inline void efm32_resumeinterrupt(FAR struct efm32_usbdev_s *priv);
-static inline void efm32_suspendinterrupt(FAR struct efm32_usbdev_s *priv);
-static inline void efm32_rxinterrupt(FAR struct efm32_usbdev_s *priv);
-static inline void efm32_enuminterrupt(FAR struct efm32_usbdev_s *priv);
+static inline void efm32_resumeinterrupt(struct efm32_usbdev_s *priv);
+static inline void efm32_suspendinterrupt(struct efm32_usbdev_s *priv);
+static inline void efm32_rxinterrupt(struct efm32_usbdev_s *priv);
+static inline void efm32_enuminterrupt(struct efm32_usbdev_s *priv);
 #ifdef CONFIG_USBDEV_ISOCHRONOUS
-static inline void efm32_isocininterrupt(FAR struct efm32_usbdev_s *priv);
-static inline void efm32_isocoutinterrupt(FAR struct efm32_usbdev_s *priv);
+static inline void efm32_isocininterrupt(struct efm32_usbdev_s *priv);
+static inline void efm32_isocoutinterrupt(struct efm32_usbdev_s *priv);
 #endif
 #ifdef CONFIG_USBDEV_VBUSSENSING
-static inline void efm32_sessioninterrupt(FAR struct efm32_usbdev_s *priv);
-static inline void efm32_otginterrupt(FAR struct efm32_usbdev_s *priv);
+static inline void efm32_sessioninterrupt(struct efm32_usbdev_s *priv);
+static inline void efm32_otginterrupt(struct efm32_usbdev_s *priv);
 #endif
 
 /* First level interrupt processing */
 
 static int         efm32_usbinterrupt(int irq,
-                                      FAR void *context, FAR void *arg);
+                                      void *context, void *arg);
 
 /* Endpoint operations ******************************************************/
 
 /* Global OUT NAK controls */
 
-static void        efm32_enablegonak(FAR struct efm32_ep_s *privep);
-static void        efm32_disablegonak(FAR struct efm32_ep_s *privep);
+static void        efm32_enablegonak(struct efm32_ep_s *privep);
+static void        efm32_disablegonak(struct efm32_ep_s *privep);
 
 /* Endpoint configuration */
 
-static int         efm32_epout_configure(FAR struct efm32_ep_s *privep,
+static int         efm32_epout_configure(struct efm32_ep_s *privep,
                      uint8_t eptype, uint16_t maxpacket);
-static int         efm32_epin_configure(FAR struct efm32_ep_s *privep,
+static int         efm32_epin_configure(struct efm32_ep_s *privep,
                      uint8_t eptype, uint16_t maxpacket);
-static int         efm32_ep_configure(FAR struct usbdev_ep_s *ep,
-                     FAR const struct usb_epdesc_s *desc, bool last);
-static void        efm32_ep0_configure(FAR struct efm32_usbdev_s *priv);
+static int         efm32_ep_configure(struct usbdev_ep_s *ep,
+                     const struct usb_epdesc_s *desc, bool last);
+static void        efm32_ep0_configure(struct efm32_usbdev_s *priv);
 
 /* Endpoint disable */
 
-static void        efm32_epout_disable(FAR struct efm32_ep_s *privep);
-static void        efm32_epin_disable(FAR struct efm32_ep_s *privep);
-static int         efm32_ep_disable(FAR struct usbdev_ep_s *ep);
+static void        efm32_epout_disable(struct efm32_ep_s *privep);
+static void        efm32_epin_disable(struct efm32_ep_s *privep);
+static int         efm32_ep_disable(struct usbdev_ep_s *ep);
 
 /* Endpoint request management */
 
-static FAR struct
-usbdev_req_s *efm32_ep_allocreq(FAR struct usbdev_ep_s *ep);
-static void        efm32_ep_freereq(FAR struct usbdev_ep_s *ep,
-                     FAR struct usbdev_req_s *);
+static struct
+usbdev_req_s *efm32_ep_allocreq(struct usbdev_ep_s *ep);
+static void        efm32_ep_freereq(struct usbdev_ep_s *ep,
+                     struct usbdev_req_s *);
 
 /* Endpoint buffer management */
 
 #ifdef CONFIG_USBDEV_DMA
-static void       *efm32_ep_allocbuffer(FAR struct usbdev_ep_s *ep,
+static void       *efm32_ep_allocbuffer(struct usbdev_ep_s *ep,
                                         unsigned bytes);
-static void        efm32_ep_freebuffer(FAR struct usbdev_ep_s *ep,
-                                       FAR void *buf);
+static void        efm32_ep_freebuffer(struct usbdev_ep_s *ep,
+                                       void *buf);
 #endif
 
 /* Endpoint request submission */
 
-static int         efm32_ep_submit(FAR struct usbdev_ep_s *ep,
+static int         efm32_ep_submit(struct usbdev_ep_s *ep,
                      struct usbdev_req_s *req);
 
 /* Endpoint request cancellation */
 
-static int         efm32_ep_cancel(FAR struct usbdev_ep_s *ep,
+static int         efm32_ep_cancel(struct usbdev_ep_s *ep,
                      struct usbdev_req_s *req);
 
 /* Stall handling */
 
-static int         efm32_epout_setstall(FAR struct efm32_ep_s *privep);
-static int         efm32_epin_setstall(FAR struct efm32_ep_s *privep);
-static int         efm32_ep_setstall(FAR struct efm32_ep_s *privep);
-static int         efm32_ep_clrstall(FAR struct efm32_ep_s *privep);
-static int         efm32_ep_stall(FAR struct usbdev_ep_s *ep, bool resume);
-static void        efm32_ep0_stall(FAR struct efm32_usbdev_s *priv);
+static int         efm32_epout_setstall(struct efm32_ep_s *privep);
+static int         efm32_epin_setstall(struct efm32_ep_s *privep);
+static int         efm32_ep_setstall(struct efm32_ep_s *privep);
+static int         efm32_ep_clrstall(struct efm32_ep_s *privep);
+static int         efm32_ep_stall(struct usbdev_ep_s *ep, bool resume);
+static void        efm32_ep0_stall(struct efm32_usbdev_s *priv);
 
 /* Endpoint allocation */
 
-static FAR struct usbdev_ep_s *efm32_ep_alloc(FAR struct usbdev_s *dev,
+static struct usbdev_ep_s *efm32_ep_alloc(struct usbdev_s *dev,
                      uint8_t epno, bool in, uint8_t eptype);
-static void        efm32_ep_free(FAR struct usbdev_s *dev,
-                     FAR struct usbdev_ep_s *ep);
+static void        efm32_ep_free(struct usbdev_s *dev,
+                     struct usbdev_ep_s *ep);
 
 /* USB device controller operations *****************************************/
 
@@ -654,8 +645,8 @@ static int         efm32_rxfifo_flush(void);
 
 /* Initialization ***********************************************************/
 
-static void        efm32_swinitialize(FAR struct efm32_usbdev_s *priv);
-static void        efm32_hwinitialize(FAR struct efm32_usbdev_s *priv);
+static void        efm32_swinitialize(struct efm32_usbdev_s *priv);
+static void        efm32_hwinitialize(struct efm32_usbdev_s *priv);
 
 /****************************************************************************
  * Private Data
@@ -887,10 +878,10 @@ static void efm32_putreg(uint32_t val, uint32_t addr)
  *
  ****************************************************************************/
 
-static FAR struct
-efm32_req_s *efm32_req_remfirst(FAR struct efm32_ep_s *privep)
+static struct
+efm32_req_s *efm32_req_remfirst(struct efm32_ep_s *privep)
 {
-  FAR struct efm32_req_s *ret = privep->head;
+  struct efm32_req_s *ret = privep->head;
 
   if (ret)
     {
@@ -914,8 +905,8 @@ efm32_req_s *efm32_req_remfirst(FAR struct efm32_ep_s *privep)
  *
  ****************************************************************************/
 
-static bool efm32_req_addlast(FAR struct efm32_ep_s *privep,
-                              FAR struct efm32_req_s *req)
+static bool efm32_req_addlast(struct efm32_ep_s *privep,
+                              struct efm32_req_s *req)
 {
   bool is_empty = !privep->head;
 
@@ -942,8 +933,8 @@ static bool efm32_req_addlast(FAR struct efm32_ep_s *privep,
  *
  ****************************************************************************/
 
-static void efm32_ep0in_setupresponse(FAR struct efm32_usbdev_s *priv,
-                                      FAR uint8_t *buf, uint32_t nbytes)
+static void efm32_ep0in_setupresponse(struct efm32_usbdev_s *priv,
+                                      uint8_t *buf, uint32_t nbytes)
 {
   efm32_epin_transfer(&priv->epin[EP0], buf, nbytes);
   priv->ep0state = EP0STATE_SETUPRESPONSE;
@@ -958,7 +949,7 @@ static void efm32_ep0in_setupresponse(FAR struct efm32_usbdev_s *priv,
  *
  ****************************************************************************/
 
-static inline void efm32_ep0in_transmitzlp(FAR struct efm32_usbdev_s *priv)
+static inline void efm32_ep0in_transmitzlp(struct efm32_usbdev_s *priv)
 {
   efm32_ep0in_setupresponse(priv, NULL, 0);
 }
@@ -1009,7 +1000,7 @@ static void efm32_ep0in_activate(void)
  *
  ****************************************************************************/
 
-static void efm32_ep0out_ctrlsetup(FAR struct efm32_usbdev_s *priv)
+static void efm32_ep0out_ctrlsetup(struct efm32_usbdev_s *priv)
 {
   uint32_t regval;
 
@@ -1035,8 +1026,8 @@ static void efm32_ep0out_ctrlsetup(FAR struct efm32_usbdev_s *priv)
  *
  ****************************************************************************/
 
-static void efm32_txfifo_write(FAR struct efm32_ep_s *privep,
-                               FAR uint8_t *buf, int nbytes)
+static void efm32_txfifo_write(struct efm32_ep_s *privep,
+                               uint8_t *buf, int nbytes)
 {
   uint32_t regaddr;
   uint32_t regval;
@@ -1078,8 +1069,8 @@ static void efm32_txfifo_write(FAR struct efm32_ep_s *privep,
  *
  ****************************************************************************/
 
-static void efm32_epin_transfer(FAR struct efm32_ep_s *privep,
-                                FAR uint8_t *buf, int nbytes)
+static void efm32_epin_transfer(struct efm32_ep_s *privep,
+                                uint8_t *buf, int nbytes)
 {
   uint32_t pktcnt;
   uint32_t regval;
@@ -1181,8 +1172,8 @@ static void efm32_epin_transfer(FAR struct efm32_ep_s *privep,
  *
  ****************************************************************************/
 
-static void efm32_epin_request(FAR struct efm32_usbdev_s *priv,
-                               FAR struct efm32_ep_s *privep)
+static void efm32_epin_request(struct efm32_usbdev_s *priv,
+                               struct efm32_ep_s *privep)
 {
   struct efm32_req_s *privreq;
   uint32_t regaddr;
@@ -1234,7 +1225,7 @@ static void efm32_epin_request(FAR struct efm32_usbdev_s *priv,
       return;
     }
 
-  uinfo("EP%d req=%p: len=%d xfrd=%d zlp=%d\n",
+  uinfo("EP%d req=%p: len=%zu xfrd=%zu zlp=%d\n",
         privep->epphy, privreq, privreq->req.len,
         privreq->req.xfrd, privep->zlp);
 
@@ -1347,6 +1338,19 @@ static void efm32_epin_request(FAR struct efm32_usbdev_s *priv,
           empmsk |= USB_DIEPEMPMSK(privep->epphy);
           efm32_putreg(empmsk, EFM32_USB_DIEPEMPMSK);
 
+#ifdef CONFIG_DEBUG_FEATURES
+          /* Check if the configured TXFIFO size is sufficient for a given
+           * request. If not, raise an assertion here.
+           */
+
+          regval = efm32_getreg(EFM32_USB_DIEPTXF(privep->epphy));
+          regval &= _USB_DIEPTXF1_INEPNTXFDEP_MASK;
+          regval >>= _USB_DIEPTXF1_INEPNTXFDEP_SHIFT;
+          uerr("EP%" PRId8 " TXLEN=%" PRId32 " nwords=%d\n",
+               privep->epphy, regval, nwords);
+          DEBUGASSERT(regval >= nwords);
+#endif
+
           /* Terminate the transfer.  We will try again when the TxFIFO empty
            * interrupt is received.
            */
@@ -1403,8 +1407,8 @@ static void efm32_epin_request(FAR struct efm32_usbdev_s *priv,
  *
  ****************************************************************************/
 
-static void efm32_rxfifo_read(FAR struct efm32_ep_s *privep,
-                              FAR uint8_t *dest, uint16_t len)
+static void efm32_rxfifo_read(struct efm32_ep_s *privep,
+                              uint8_t *dest, uint16_t len)
 {
   uint32_t regaddr;
   int i;
@@ -1448,7 +1452,7 @@ static void efm32_rxfifo_read(FAR struct efm32_ep_s *privep,
  *
  ****************************************************************************/
 
-static void efm32_rxfifo_discard(FAR struct efm32_ep_s *privep, int len)
+static void efm32_rxfifo_discard(struct efm32_ep_s *privep, int len)
 {
   if (len > 0)
     {
@@ -1481,8 +1485,8 @@ static void efm32_rxfifo_discard(FAR struct efm32_ep_s *privep, int len)
  *
  ****************************************************************************/
 
-static void efm32_epout_complete(FAR struct efm32_usbdev_s *priv,
-                                 FAR struct efm32_ep_s *privep)
+static void efm32_epout_complete(struct efm32_usbdev_s *priv,
+                                 struct efm32_ep_s *privep)
 {
   struct efm32_req_s *privreq;
 
@@ -1504,7 +1508,7 @@ static void efm32_epout_complete(FAR struct efm32_usbdev_s *priv,
       return;
     }
 
-  uinfo("EP%d: len=%d xfrd=%d\n",
+  uinfo("EP%d: len=%zu xfrd=%zu\n",
         privep->epphy, privreq->req.len, privreq->req.xfrd);
 
   /* Return the completed read request to the class driver and mark the state
@@ -1530,15 +1534,15 @@ static void efm32_epout_complete(FAR struct efm32_usbdev_s *priv,
  *
  ****************************************************************************/
 
-static inline void efm32_ep0out_receive(FAR struct efm32_ep_s *privep,
+static inline void efm32_ep0out_receive(struct efm32_ep_s *privep,
                                         int bcnt)
 {
-  FAR struct efm32_usbdev_s *priv;
+  struct efm32_usbdev_s *priv;
 
   /* Sanity Checking */
 
-  DEBUGASSERT(privep && privep->ep.priv);
-  priv = (FAR struct efm32_usbdev_s *)privep->ep.priv;
+  DEBUGASSERT(privep && privep->dev);
+  priv = (struct efm32_usbdev_s *)privep->dev;
 
   uinfo("EP0: bcnt=%d\n", bcnt);
   usbtrace(TRACE_READ(EP0), bcnt);
@@ -1589,7 +1593,7 @@ static inline void efm32_ep0out_receive(FAR struct efm32_ep_s *privep,
  *
  ****************************************************************************/
 
-static inline void efm32_epout_receive(FAR struct efm32_ep_s *privep,
+static inline void efm32_epout_receive(struct efm32_ep_s *privep,
                                        int bcnt)
 {
   struct efm32_req_s *privreq;
@@ -1636,7 +1640,7 @@ static inline void efm32_epout_receive(FAR struct efm32_ep_s *privep,
       return;
     }
 
-  uinfo("EP%d: len=%d xfrd=%d\n",
+  uinfo("EP%d: len=%zu xfrd=%zu\n",
         privep->epphy, privreq->req.len, privreq->req.xfrd);
   usbtrace(TRACE_READ(privep->epphy), bcnt);
 
@@ -1675,8 +1679,8 @@ static inline void efm32_epout_receive(FAR struct efm32_ep_s *privep,
  *
  ****************************************************************************/
 
-static void efm32_epout_request(FAR struct efm32_usbdev_s *priv,
-                                FAR struct efm32_ep_s *privep)
+static void efm32_epout_request(struct efm32_usbdev_s *priv,
+                                struct efm32_ep_s *privep)
 {
   struct efm32_req_s *privreq;
   uint32_t regaddr;
@@ -1842,7 +1846,7 @@ static void efm32_ep_flush(struct efm32_ep_s *privep)
 
 static void efm32_req_complete(struct efm32_ep_s *privep, int16_t result)
 {
-  FAR struct efm32_req_s *privreq;
+  struct efm32_req_s *privreq;
 
   /* Remove the request at the head of the request list */
 
@@ -1976,7 +1980,7 @@ static int efm32_req_dispatch(struct efm32_usbdev_s *priv,
 
 static void efm32_usbreset(struct efm32_usbdev_s *priv)
 {
-  FAR struct efm32_ep_s *privep;
+  struct efm32_ep_s *privep;
   uint32_t regval;
   int i;
 
@@ -2074,7 +2078,7 @@ static void efm32_usbreset(struct efm32_usbdev_s *priv)
  *
  ****************************************************************************/
 
-static inline void efm32_ep0out_testmode(FAR struct efm32_usbdev_s *priv,
+static inline void efm32_ep0out_testmode(struct efm32_usbdev_s *priv,
                                          uint16_t index)
 {
   uint8_t testmode;
@@ -2124,9 +2128,9 @@ static inline void efm32_ep0out_testmode(FAR struct efm32_usbdev_s *priv,
 
 static inline void
 efm32_ep0out_stdrequest(struct efm32_usbdev_s *priv,
-                        FAR struct efm32_ctrlreq_s *ctrlreq)
+                        struct efm32_ctrlreq_s *ctrlreq)
 {
-  FAR struct efm32_ep_s *privep;
+  struct efm32_ep_s *privep;
 
   /* Handle standard request */
 
@@ -2579,10 +2583,10 @@ static inline void efm32_ep0out_setup(struct efm32_usbdev_s *priv)
  *
  ****************************************************************************/
 
-static inline void efm32_epout(FAR struct efm32_usbdev_s *priv,
+static inline void efm32_epout(struct efm32_usbdev_s *priv,
                                uint8_t epno)
 {
-  FAR struct efm32_ep_s *privep;
+  struct efm32_ep_s *privep;
 
   /* Endpoint 0 is a special case. */
 
@@ -2636,7 +2640,7 @@ static inline void efm32_epout(FAR struct efm32_usbdev_s *priv,
  *
  ****************************************************************************/
 
-static inline void efm32_epout_interrupt(FAR struct efm32_usbdev_s *priv)
+static inline void efm32_epout_interrupt(struct efm32_usbdev_s *priv)
 {
   uint32_t daint;
   uint32_t regval;
@@ -2772,7 +2776,7 @@ static inline void efm32_epout_interrupt(FAR struct efm32_usbdev_s *priv)
  *
  ****************************************************************************/
 
-static inline void efm32_epin_runtestmode(FAR struct efm32_usbdev_s *priv)
+static inline void efm32_epin_runtestmode(struct efm32_usbdev_s *priv)
 {
   uint32_t regval = efm32_getreg(EFM32_USB_DCTL);
   regval &= ~_USB_DCTL_TSTCTL_MASK;
@@ -2792,9 +2796,9 @@ static inline void efm32_epin_runtestmode(FAR struct efm32_usbdev_s *priv)
  *
  ****************************************************************************/
 
-static inline void efm32_epin(FAR struct efm32_usbdev_s *priv, uint8_t epno)
+static inline void efm32_epin(struct efm32_usbdev_s *priv, uint8_t epno)
 {
-  FAR struct efm32_ep_s *privep = &priv->epin[epno];
+  struct efm32_ep_s *privep = &priv->epin[epno];
 
   /* Endpoint 0 is a special case. */
 
@@ -2849,10 +2853,10 @@ static inline void efm32_epin(FAR struct efm32_usbdev_s *priv, uint8_t epno)
  *
  ****************************************************************************/
 
-static inline void efm32_epin_txfifoempty(FAR struct efm32_usbdev_s *priv,
+static inline void efm32_epin_txfifoempty(struct efm32_usbdev_s *priv,
                                           int epno)
 {
-  FAR struct efm32_ep_s *privep = &priv->epin[epno];
+  struct efm32_ep_s *privep = &priv->epin[epno];
 
   /* Continue processing the write request queue.  This may mean sending
    * more data from the existing request or terminating the current requests
@@ -2875,7 +2879,7 @@ static inline void efm32_epin_txfifoempty(FAR struct efm32_usbdev_s *priv,
  *
  ****************************************************************************/
 
-static inline void efm32_epin_interrupt(FAR struct efm32_usbdev_s *priv)
+static inline void efm32_epin_interrupt(struct efm32_usbdev_s *priv)
 {
   uint32_t diepint;
   uint32_t daint;
@@ -3080,7 +3084,7 @@ static inline void efm32_epin_interrupt(FAR struct efm32_usbdev_s *priv)
  *
  ****************************************************************************/
 
-static inline void efm32_resumeinterrupt(FAR struct efm32_usbdev_s *priv)
+static inline void efm32_resumeinterrupt(struct efm32_usbdev_s *priv)
 {
   uint32_t regval;
 
@@ -3118,7 +3122,7 @@ static inline void efm32_resumeinterrupt(FAR struct efm32_usbdev_s *priv)
  *
  ****************************************************************************/
 
-static inline void efm32_suspendinterrupt(FAR struct efm32_usbdev_s *priv)
+static inline void efm32_suspendinterrupt(struct efm32_usbdev_s *priv)
 {
 #ifdef CONFIG_USBDEV_LOWPOWER
   uint32_t regval;
@@ -3162,7 +3166,7 @@ static inline void efm32_suspendinterrupt(FAR struct efm32_usbdev_s *priv)
    * state
    */
 
-  efm32_usbsuspend((FAR struct usbdev_s *)priv, false);
+  efm32_usbsuspend((struct usbdev_s *)priv, false);
 }
 
 /****************************************************************************
@@ -3174,9 +3178,9 @@ static inline void efm32_suspendinterrupt(FAR struct efm32_usbdev_s *priv)
  *
  ****************************************************************************/
 
-static inline void efm32_rxinterrupt(FAR struct efm32_usbdev_s *priv)
+static inline void efm32_rxinterrupt(struct efm32_usbdev_s *priv)
 {
-  FAR struct efm32_ep_s *privep;
+  struct efm32_ep_s *privep;
   uint32_t regval;
   int bcnt;
   int epphy;
@@ -3282,7 +3286,7 @@ static inline void efm32_rxinterrupt(FAR struct efm32_usbdev_s *priv)
          * last SETUP packet will be processed.
          */
 
-        efm32_rxfifo_read(&priv->epout[EP0], (FAR uint8_t *)&priv->ctrlreq,
+        efm32_rxfifo_read(&priv->epout[EP0], (uint8_t *)&priv->ctrlreq,
                          USB_SIZEOF_CTRLREQ);
 
         /* Was this an IN or an OUT SETUP packet.  If it is an OUT SETUP,
@@ -3342,7 +3346,7 @@ static inline void efm32_rxinterrupt(FAR struct efm32_usbdev_s *priv)
  *
  ****************************************************************************/
 
-static inline void efm32_enuminterrupt(FAR struct efm32_usbdev_s *priv)
+static inline void efm32_enuminterrupt(struct efm32_usbdev_s *priv)
 {
   uint32_t regval;
 
@@ -3371,7 +3375,7 @@ static inline void efm32_enuminterrupt(FAR struct efm32_usbdev_s *priv)
  ****************************************************************************/
 
 #ifdef CONFIG_USBDEV_ISOCHRONOUS
-static inline void efm32_isocininterrupt(FAR struct efm32_usbdev_s *priv)
+static inline void efm32_isocininterrupt(struct efm32_usbdev_s *priv)
 {
   int i;
 
@@ -3443,10 +3447,10 @@ static inline void efm32_isocininterrupt(FAR struct efm32_usbdev_s *priv)
  ****************************************************************************/
 
 #ifdef CONFIG_USBDEV_ISOCHRONOUS
-static inline void efm32_isocoutinterrupt(FAR struct efm32_usbdev_s *priv)
+static inline void efm32_isocoutinterrupt(struct efm32_usbdev_s *priv)
 {
-  FAR struct efm32_ep_s *privep;
-  FAR struct efm32_req_s *privreq;
+  struct efm32_ep_s *privep;
+  struct efm32_req_s *privreq;
   uint32_t regaddr;
   uint32_t doepctl;
   uint32_t dsts;
@@ -3526,7 +3530,7 @@ static inline void efm32_isocoutinterrupt(FAR struct efm32_usbdev_s *priv)
  ****************************************************************************/
 
 #ifdef CONFIG_USBDEV_VBUSSENSING
-static inline void efm32_sessioninterrupt(FAR struct efm32_usbdev_s *priv)
+static inline void efm32_sessioninterrupt(struct efm32_usbdev_s *priv)
 {
 #warning "Missing logic"
 }
@@ -3541,7 +3545,7 @@ static inline void efm32_sessioninterrupt(FAR struct efm32_usbdev_s *priv)
  ****************************************************************************/
 
 #ifdef CONFIG_USBDEV_VBUSSENSING
-static inline void efm32_otginterrupt(FAR struct efm32_usbdev_s *priv)
+static inline void efm32_otginterrupt(struct efm32_usbdev_s *priv)
 {
   uint32_t regval;
 
@@ -3567,7 +3571,7 @@ static inline void efm32_otginterrupt(FAR struct efm32_usbdev_s *priv)
  *
  ****************************************************************************/
 
-static int efm32_usbinterrupt(int irq, FAR void *context, FAR void *arg)
+static int efm32_usbinterrupt(int irq, void *context, void *arg)
 {
   /* At present, there is only a single OTG FS device support. Hence it is
    * pre-allocated as g_otgfsdev.  However, in most code, the private data
@@ -3576,7 +3580,7 @@ static int efm32_usbinterrupt(int irq, FAR void *context, FAR void *arg)
    * devices.
    */
 
-  FAR struct efm32_usbdev_s *priv = &g_otgfsdev;
+  struct efm32_usbdev_s *priv = &g_otgfsdev;
   uint32_t regval;
 
   usbtrace(TRACE_INTENTRY(EFM32_TRACEINTID_USB), 0);
@@ -3671,6 +3675,7 @@ static int efm32_usbinterrupt(int irq, FAR void *context, FAR void *arg)
           usbtrace(TRACE_INTDECODE(EFM32_TRACEINTID_SOF),
                   (uint16_t)regval);
           efm32_putreg(USB_GINTSTS_SOF, EFM32_USB_GINTSTS);
+          usbdev_sof_irq(&priv->usbdev, efm32_getframe(&priv->usbdev));
         }
 #endif
 
@@ -3780,7 +3785,7 @@ static int efm32_usbinterrupt(int irq, FAR void *context, FAR void *arg)
  *
  ****************************************************************************/
 
-static void efm32_enablegonak(FAR struct efm32_ep_s *privep)
+static void efm32_enablegonak(struct efm32_ep_s *privep)
 {
   uint32_t regval;
 
@@ -3826,7 +3831,7 @@ static void efm32_enablegonak(FAR struct efm32_ep_s *privep)
  *
  ****************************************************************************/
 
-static void efm32_disablegonak(FAR struct efm32_ep_s *privep)
+static void efm32_disablegonak(struct efm32_ep_s *privep)
 {
   uint32_t regval;
 
@@ -3850,7 +3855,7 @@ static void efm32_disablegonak(FAR struct efm32_ep_s *privep)
  *
  ****************************************************************************/
 
-static int efm32_epout_configure(FAR struct efm32_ep_s *privep,
+static int efm32_epout_configure(struct efm32_ep_s *privep,
                                  uint8_t eptype,
                                  uint16_t maxpacket)
 {
@@ -3946,7 +3951,7 @@ static int efm32_epout_configure(FAR struct efm32_ep_s *privep,
  *
  ****************************************************************************/
 
-static int efm32_epin_configure(FAR struct efm32_ep_s *privep,
+static int efm32_epin_configure(struct efm32_ep_s *privep,
                                 uint8_t eptype,
                                 uint16_t maxpacket)
 {
@@ -4047,11 +4052,11 @@ static int efm32_epin_configure(FAR struct efm32_ep_s *privep,
  *
  ****************************************************************************/
 
-static int efm32_ep_configure(FAR struct usbdev_ep_s *ep,
-                              FAR const struct usb_epdesc_s *desc,
+static int efm32_ep_configure(struct usbdev_ep_s *ep,
+                              const struct usb_epdesc_s *desc,
                               bool last)
 {
-  FAR struct efm32_ep_s *privep = (FAR struct efm32_ep_s *)ep;
+  struct efm32_ep_s *privep = (struct efm32_ep_s *)ep;
   uint16_t maxpacket;
   uint8_t  eptype;
   int ret;
@@ -4086,7 +4091,7 @@ static int efm32_ep_configure(FAR struct usbdev_ep_s *ep,
  *
  ****************************************************************************/
 
-static void efm32_ep0_configure(FAR struct efm32_usbdev_s *priv)
+static void efm32_ep0_configure(struct efm32_usbdev_s *priv)
 {
   /* Enable EP0 IN and OUT */
 
@@ -4104,7 +4109,7 @@ static void efm32_ep0_configure(FAR struct efm32_usbdev_s *priv)
  *
  ****************************************************************************/
 
-static void efm32_epout_disable(FAR struct efm32_ep_s *privep)
+static void efm32_epout_disable(struct efm32_ep_s *privep)
 {
   uint32_t regaddr;
   uint32_t regval;
@@ -4176,7 +4181,7 @@ static void efm32_epout_disable(FAR struct efm32_ep_s *privep)
  *
  ****************************************************************************/
 
-static void efm32_epin_disable(FAR struct efm32_ep_s *privep)
+static void efm32_epin_disable(struct efm32_ep_s *privep)
 {
   uint32_t regaddr;
   uint32_t regval;
@@ -4272,9 +4277,9 @@ static void efm32_epin_disable(FAR struct efm32_ep_s *privep)
  *
  ****************************************************************************/
 
-static int efm32_ep_disable(FAR struct usbdev_ep_s *ep)
+static int efm32_ep_disable(struct usbdev_ep_s *ep)
 {
-  FAR struct efm32_ep_s *privep = (FAR struct efm32_ep_s *)ep;
+  struct efm32_ep_s *privep = (struct efm32_ep_s *)ep;
 
 #ifdef CONFIG_DEBUG_FEATURES
   if (!ep)
@@ -4312,9 +4317,9 @@ static int efm32_ep_disable(FAR struct usbdev_ep_s *ep)
  *
  ****************************************************************************/
 
-static FAR struct usbdev_req_s *efm32_ep_allocreq(FAR struct usbdev_ep_s *ep)
+static struct usbdev_req_s *efm32_ep_allocreq(struct usbdev_ep_s *ep)
 {
-  FAR struct efm32_req_s *privreq;
+  struct efm32_req_s *privreq;
 
 #ifdef CONFIG_DEBUG_FEATURES
   if (!ep)
@@ -4324,9 +4329,9 @@ static FAR struct usbdev_req_s *efm32_ep_allocreq(FAR struct usbdev_ep_s *ep)
     }
 #endif
 
-  usbtrace(TRACE_EPALLOCREQ, ((FAR struct efm32_ep_s *)ep)->epphy);
+  usbtrace(TRACE_EPALLOCREQ, ((struct efm32_ep_s *)ep)->epphy);
 
-  privreq = (FAR struct efm32_req_s *)kmm_malloc(sizeof(struct efm32_req_s));
+  privreq = kmm_malloc(sizeof(struct efm32_req_s));
   if (!privreq)
     {
       usbtrace(TRACE_DEVERROR(EFM32_TRACEERR_ALLOCFAIL), 0);
@@ -4345,10 +4350,10 @@ static FAR struct usbdev_req_s *efm32_ep_allocreq(FAR struct usbdev_ep_s *ep)
  *
  ****************************************************************************/
 
-static void efm32_ep_freereq(FAR struct usbdev_ep_s *ep,
-                             FAR struct usbdev_req_s *req)
+static void efm32_ep_freereq(struct usbdev_ep_s *ep,
+                             struct usbdev_req_s *req)
 {
-  FAR struct efm32_req_s *privreq = (FAR struct efm32_req_s *)req;
+  struct efm32_req_s *privreq = (struct efm32_req_s *)req;
 
 #ifdef CONFIG_DEBUG_FEATURES
   if (!ep || !req)
@@ -4358,7 +4363,7 @@ static void efm32_ep_freereq(FAR struct usbdev_ep_s *ep,
     }
 #endif
 
-  usbtrace(TRACE_EPFREEREQ, ((FAR struct efm32_ep_s *)ep)->epphy);
+  usbtrace(TRACE_EPFREEREQ, ((struct efm32_ep_s *)ep)->epphy);
   kmm_free(privreq);
 }
 
@@ -4371,7 +4376,7 @@ static void efm32_ep_freereq(FAR struct usbdev_ep_s *ep,
  ****************************************************************************/
 
 #ifdef CONFIG_USBDEV_DMA
-static void *efm32_ep_allocbuffer(FAR struct usbdev_ep_s *ep, unsigned bytes)
+static void *efm32_ep_allocbuffer(struct usbdev_ep_s *ep, unsigned bytes)
 {
   usbtrace(TRACE_EPALLOCBUFFER, privep->epphy);
 
@@ -4392,7 +4397,7 @@ static void *efm32_ep_allocbuffer(FAR struct usbdev_ep_s *ep, unsigned bytes)
  ****************************************************************************/
 
 #ifdef CONFIG_USBDEV_DMA
-static void efm32_ep_freebuffer(FAR struct usbdev_ep_s *ep, FAR void *buf)
+static void efm32_ep_freebuffer(struct usbdev_ep_s *ep, void *buf)
 {
   usbtrace(TRACE_EPFREEBUFFER, privep->epphy);
 
@@ -4412,12 +4417,12 @@ static void efm32_ep_freebuffer(FAR struct usbdev_ep_s *ep, FAR void *buf)
  *
  ****************************************************************************/
 
-static int efm32_ep_submit(FAR struct usbdev_ep_s *ep,
-                           FAR struct usbdev_req_s *req)
+static int efm32_ep_submit(struct usbdev_ep_s *ep,
+                           struct usbdev_req_s *req)
 {
-  FAR struct efm32_req_s *privreq = (FAR struct efm32_req_s *)req;
-  FAR struct efm32_ep_s *privep = (FAR struct efm32_ep_s *)ep;
-  FAR struct efm32_usbdev_s *priv;
+  struct efm32_req_s *privreq = (struct efm32_req_s *)req;
+  struct efm32_ep_s *privep = (struct efm32_ep_s *)ep;
+  struct efm32_usbdev_s *priv;
   irqstate_t flags;
   int ret = OK;
 
@@ -4509,10 +4514,10 @@ static int efm32_ep_submit(FAR struct usbdev_ep_s *ep,
  *
  ****************************************************************************/
 
-static int efm32_ep_cancel(FAR struct usbdev_ep_s *ep,
-                           FAR struct usbdev_req_s *req)
+static int efm32_ep_cancel(struct usbdev_ep_s *ep,
+                           struct usbdev_req_s *req)
 {
-  FAR struct efm32_ep_s *privep = (FAR struct efm32_ep_s *)ep;
+  struct efm32_ep_s *privep = (struct efm32_ep_s *)ep;
   irqstate_t flags;
 
 #ifdef CONFIG_DEBUG_FEATURES
@@ -4546,7 +4551,7 @@ static int efm32_ep_cancel(FAR struct usbdev_ep_s *ep,
  *
  ****************************************************************************/
 
-static int efm32_epout_setstall(FAR struct efm32_ep_s *privep)
+static int efm32_epout_setstall(struct efm32_ep_s *privep)
 {
 #if 1
   /* This implementation follows the requirements from the EFM32 F4
@@ -4624,7 +4629,7 @@ static int efm32_epout_setstall(FAR struct efm32_ep_s *privep)
  *
  ****************************************************************************/
 
-static int efm32_epin_setstall(FAR struct efm32_ep_s *privep)
+static int efm32_epin_setstall(struct efm32_ep_s *privep)
 {
   uint32_t regaddr;
   uint32_t regval;
@@ -4653,7 +4658,7 @@ static int efm32_epin_setstall(FAR struct efm32_ep_s *privep)
  *
  ****************************************************************************/
 
-static int efm32_ep_setstall(FAR struct efm32_ep_s *privep)
+static int efm32_ep_setstall(struct efm32_ep_s *privep)
 {
   usbtrace(TRACE_EPSTALL, privep->epphy);
 
@@ -4677,7 +4682,7 @@ static int efm32_ep_setstall(FAR struct efm32_ep_s *privep)
  *
  ****************************************************************************/
 
-static int efm32_ep_clrstall(FAR struct efm32_ep_s *privep)
+static int efm32_ep_clrstall(struct efm32_ep_s *privep)
 {
   uint32_t regaddr;
   uint32_t regval;
@@ -4736,9 +4741,9 @@ static int efm32_ep_clrstall(FAR struct efm32_ep_s *privep)
  *
  ****************************************************************************/
 
-static int efm32_ep_stall(FAR struct usbdev_ep_s *ep, bool resume)
+static int efm32_ep_stall(struct usbdev_ep_s *ep, bool resume)
 {
-  FAR struct efm32_ep_s *privep = (FAR struct efm32_ep_s *)ep;
+  struct efm32_ep_s *privep = (struct efm32_ep_s *)ep;
   irqstate_t flags;
   int ret;
 
@@ -4767,7 +4772,7 @@ static int efm32_ep_stall(FAR struct usbdev_ep_s *ep, bool resume)
  *
  ****************************************************************************/
 
-static void efm32_ep0_stall(FAR struct efm32_usbdev_s *priv)
+static void efm32_ep0_stall(struct efm32_usbdev_s *priv)
 {
   efm32_epin_setstall(&priv->epin[EP0]);
   efm32_epout_setstall(&priv->epout[EP0]);
@@ -4796,11 +4801,11 @@ static void efm32_ep0_stall(FAR struct efm32_usbdev_s *priv)
  *
  ****************************************************************************/
 
-static FAR struct usbdev_ep_s *efm32_ep_alloc(FAR struct usbdev_s *dev,
+static struct usbdev_ep_s *efm32_ep_alloc(struct usbdev_s *dev,
                                               uint8_t eplog, bool in,
                                               uint8_t eptype)
 {
-  FAR struct efm32_usbdev_s *priv = (FAR struct efm32_usbdev_s *)dev;
+  struct efm32_usbdev_s *priv = (struct efm32_usbdev_s *)dev;
   uint8_t epavail;
   irqstate_t flags;
   int epphy;
@@ -4882,11 +4887,11 @@ static FAR struct usbdev_ep_s *efm32_ep_alloc(FAR struct usbdev_s *dev,
  *
  ****************************************************************************/
 
-static void efm32_ep_free(FAR struct usbdev_s *dev,
-                          FAR struct usbdev_ep_s *ep)
+static void efm32_ep_free(struct usbdev_s *dev,
+                          struct usbdev_ep_s *ep)
 {
-  FAR struct efm32_usbdev_s *priv = (FAR struct efm32_usbdev_s *)dev;
-  FAR struct efm32_ep_s *privep = (FAR struct efm32_ep_s *)ep;
+  struct efm32_usbdev_s *priv = (struct efm32_usbdev_s *)dev;
+  struct efm32_ep_s *privep = (struct efm32_ep_s *)ep;
   irqstate_t flags;
 
   usbtrace(TRACE_DEVFREEEP, (uint16_t)privep->epphy);
@@ -4931,7 +4936,7 @@ static int efm32_getframe(struct usbdev_s *dev)
 
 static int efm32_wakeup(struct usbdev_s *dev)
 {
-  FAR struct efm32_usbdev_s *priv = (FAR struct efm32_usbdev_s *)dev;
+  struct efm32_usbdev_s *priv = (struct efm32_usbdev_s *)dev;
   uint32_t regval;
   irqstate_t flags;
 
@@ -4979,7 +4984,7 @@ static int efm32_wakeup(struct usbdev_s *dev)
 
 static int efm32_selfpowered(struct usbdev_s *dev, bool selfpowered)
 {
-  FAR struct efm32_usbdev_s *priv = (FAR struct efm32_usbdev_s *)dev;
+  struct efm32_usbdev_s *priv = (struct efm32_usbdev_s *)dev;
 
   usbtrace(TRACE_DEVSELFPOWERED, (uint16_t)selfpowered);
 
@@ -5145,9 +5150,9 @@ static int efm32_rxfifo_flush(void)
  *
  ****************************************************************************/
 
-static void efm32_swinitialize(FAR struct efm32_usbdev_s *priv)
+static void efm32_swinitialize(struct efm32_usbdev_s *priv)
 {
-  FAR struct efm32_ep_s *privep;
+  struct efm32_ep_s *privep;
   int i;
 
   /* Initialize the device state structure */
@@ -5159,9 +5164,6 @@ static void efm32_swinitialize(FAR struct efm32_usbdev_s *priv)
 
   priv->epavail[0] = EFM32_EP_AVAILABLE;
   priv->epavail[1] = EFM32_EP_AVAILABLE;
-
-  priv->epin[EP0].ep.priv  = priv;
-  priv->epout[EP0].ep.priv = priv;
 
   /* Initialize the endpoint lists */
 
@@ -5227,7 +5229,7 @@ static void efm32_swinitialize(FAR struct efm32_usbdev_s *priv)
  *
  ****************************************************************************/
 
-static void efm32_hwinitialize(FAR struct efm32_usbdev_s *priv)
+static void efm32_hwinitialize(struct efm32_usbdev_s *priv)
 {
   uint32_t regval;
   uint32_t timeout;
@@ -5545,7 +5547,7 @@ void arm_usbinitialize(void)
    * devices.
    */
 
-  FAR struct efm32_usbdev_s *priv = &g_otgfsdev;
+  struct efm32_usbdev_s *priv = &g_otgfsdev;
   int ret;
 
   usbtrace(TRACE_DEVINIT, 0);
@@ -5636,7 +5638,7 @@ void arm_usbuninitialize(void)
    * devices.
    */
 
-  FAR struct efm32_usbdev_s *priv = &g_otgfsdev;
+  struct efm32_usbdev_s *priv = &g_otgfsdev;
   irqstate_t flags;
   int i;
 
@@ -5712,7 +5714,7 @@ int usbdev_register(struct usbdevclass_driver_s *driver)
    * devices.
    */
 
-  FAR struct efm32_usbdev_s *priv = &g_otgfsdev;
+  struct efm32_usbdev_s *priv = &g_otgfsdev;
   int ret;
 
   usbtrace(TRACE_DEVREGISTER, 0);
@@ -5785,7 +5787,7 @@ int usbdev_unregister(struct usbdevclass_driver_s *driver)
    * devices.
    */
 
-  FAR struct efm32_usbdev_s *priv = &g_otgfsdev;
+  struct efm32_usbdev_s *priv = &g_otgfsdev;
   irqstate_t flags;
 
   usbtrace(TRACE_DEVUNREGISTER, 0);

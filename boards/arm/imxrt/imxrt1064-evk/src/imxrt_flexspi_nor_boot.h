@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/imxrt/imxrt1064-evk/src/imxrt_flexspi_nor_boot.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -85,7 +87,7 @@
 #define LOCATE_IN_SRC(x)            (((uint32_t)(x)) - IMAGE_DEST + FLASH_BASE)
 
 #ifdef CONFIG_IMXRT1064_EVK_SDRAM
-#  define DCD_ADDRESS               &g_dcd_data
+#  define DCD_ADDRESS               g_dcd_data
 #else
 #  define DCD_ADDRESS               0
 #endif
@@ -95,7 +97,7 @@
 
 /* Located in Destination Memory */
 
-#define IMAGE_ENTRY_ADDRESS        ((uint32_t)&_vectors)
+#define IMAGE_ENTRY_ADDRESS        ((uint32_t)_vectors)
 #define IMAG_VECTOR_TABLE           LOCATE_IN_DEST(&g_image_vector_table)
 
 /****************************************************************************
@@ -163,6 +165,5 @@ extern const struct boot_data_s g_boot_data;
 #ifdef CONFIG_IMXRT1064_EVK_SDRAM
 extern const uint8_t g_dcd_data[];
 #endif
-extern  const uint32_t  _vectors[];
 
 #endif /* __BOARDS_ARM_IMXRT_IMXRT1060_EVK_SRC_IMXRT_FLEXSPI_NOR_BOOT_H */

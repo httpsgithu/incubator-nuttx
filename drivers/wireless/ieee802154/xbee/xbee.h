@@ -1,6 +1,8 @@
 /****************************************************************************
  * drivers/wireless/ieee802154/xbee/xbee.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -18,8 +20,8 @@
  *
  ****************************************************************************/
 
-#ifndef __DRIVERS_WIRELESS_IEEE802154_XBEE_H
-#define __DRIVERS_WIRELESS_IEEE802154_XBEE_H
+#ifndef __DRIVERS_WIRELESS_IEEE802154_XBEE_XBEE_H
+#define __DRIVERS_WIRELESS_IEEE802154_XBEE_XBEE_H
 
 /****************************************************************************
  * Included Files
@@ -31,6 +33,7 @@
 #include <stdbool.h>
 
 #include <nuttx/wqueue.h>
+#include <nuttx/mutex.h>
 #include <nuttx/semaphore.h>
 #include <nuttx/spi/spi.h>
 
@@ -147,20 +150,20 @@ struct xbee_priv_s
   struct work_s notifwork;        /* For deferring notifications to LPWORK queue */
   struct work_s attnwork;         /* For deferring interrupt work to work queue */
   volatile bool attn_latched;     /* Latched state of ATTN */
-  sem_t primitive_sem;            /* Exclusive access to the primitive queue */
+  mutex_t primitive_lock;         /* Exclusive access to the primitive queue */
   sq_queue_t primitive_queue;     /* Queue of primitives to pass via notify()
                                    * callback to registered receivers */
   struct wdog_s assocwd;          /* Association watchdog */
   struct work_s assocwork;        /* For polling for association status */
   bool associating;               /* Are we currently associating */
-  sem_t atquery_sem;              /* Only allow one AT query at a time */
+  mutex_t atquery_lock;           /* Only allow one AT query at a time */
   sem_t atresp_sem;               /* For signaling pending AT response received */
   char querycmd[2];               /* Stores the pending AT Query command */
   bool querydone;                 /* Used to tell waiting thread query is done */
   struct wdog_s atquery_wd;       /* Support AT Query timeout and retry */
   struct wdog_s reqdata_wd;       /* Support send timeout and retry */
   uint8_t frameid;                /* For differentiating AT request/response */
-  sem_t tx_sem;                   /* Support a single pending transmit */
+  mutex_t tx_lock;                /* Support a single pending transmit */
   sem_t txdone_sem;               /* For signalling tx is completed */
   bool txdone;
 #ifdef CONFIG_XBEE_LOCKUP_WORKAROUND
@@ -485,4 +488,4 @@ void xbee_enable_coord(FAR struct xbee_priv_s *priv, bool enable);
 
 void xbee_regdump(FAR struct xbee_priv_s *priv);
 
-#endif /* __DRIVERS_WIRELESS_IEEE802154_XBEE_H */
+#endif /* __DRIVERS_WIRELESS_IEEE802154_XBEE_XBEE_H */

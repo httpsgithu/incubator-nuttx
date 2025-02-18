@@ -1,6 +1,8 @@
 /****************************************************************************
  * mm/iob/iob_remove_queue.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -26,19 +28,13 @@
 
 #include <debug.h>
 
+#include <nuttx/irq.h>
+#include <nuttx/arch.h>
 #include <nuttx/mm/iob.h>
 
 #include "iob.h"
 
 #if CONFIG_IOB_NCHAINS > 0
-
-/****************************************************************************
- * Pre-processor Definitions
- ****************************************************************************/
-
-#ifndef NULL
-#  define NULL ((FAR void *)0)
-#endif
 
 /****************************************************************************
  * Public Functions

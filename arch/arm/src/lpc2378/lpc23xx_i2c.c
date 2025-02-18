@@ -1,23 +1,16 @@
 /****************************************************************************
  * arch/arm/src/lpc2378/lpc23xx_i2c.c
  *
- *   Copyright (C) 2013, 2016 Gregory Nutt. All rights reserved.
- *   Author: Gregory Nutt <gnutt@nuttx.org>
- *
- * Derived from arch/arm/src/lpc17xx_40xx/lpc17xx_40xx_i2c.c
- *
- *   Copyright (C) 2012, 2014-2016 Gregory Nutt. All rights reserved.
- *   Author: Gregory Nutt <gnutt@nuttx.org>
- *
- *   Copyright (C) 2011 Li Zhuoyi. All rights reserved.
- *   Author: Li Zhuoyi <lzyy.cn@gmail.com> (Original author)
- *
- * Derived from arch/arm/src/lpc31xx/lpc31_i2c.c
- *
- *   Author: David Hewson
- *
- *   Copyright (C) 2010-2011 Gregory Nutt. All rights reserved.
- *   Author: Gregory Nutt <gnutt@nuttx.org>
+ * SPDX-License-Identifier: BSD-3-Clause
+ * SPDX-FileCopyrightText: 2011 Li Zhuoyi. All rights reserved.
+ * SPDX-FileCopyrightText: 2010 Rommel Marcelo. All rights reserved.
+ * SPDX-FileCopyrightText: 2014-2016 Gregory Nutt. All rights reserved.
+ * SPDX-FileCopyrightText: 2012,2013 Gregory Nutt. All rights reserved.
+ * SPDX-FileCopyrightText: 2010-2011 Gregory Nutt. All rights reserved.
+ * SPDX-FileContributor: David Hewson
+ * SPDX-FileContributor: Rommel Marcelo
+ * SPDX-FileContributor: Gregory Nutt <gnutt@nuttx.org>
+ * SPDX-FileContributor: Li Zhuoyi <lzyy.cn@gmail.com> (Original author)
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -65,6 +58,7 @@
 
 #include <nuttx/arch.h>
 #include <nuttx/wdog.h>
+#include <nuttx/mutex.h>
 #include <nuttx/semaphore.h>
 #include <nuttx/i2c/i2c_master.h>
 
@@ -72,9 +66,7 @@
 #include <arch/board/board.h>
 
 #include "chip.h"
-#include "arm_arch.h"
 #include "arm_internal.h"
-
 #include "lpc23xx_pinsel.h"
 #include "lpc23xx_scb.h"
 #include "lpc23xx_i2c.h"
@@ -116,7 +108,7 @@ struct lpc2378_i2cdev_s
   unsigned int     base;       /* Base address of registers */
   uint16_t         irqid;      /* IRQ for this device */
 
-  sem_t            mutex;      /* Only one thread can access at a time */
+  mutex_t          lock;       /* Only one thread can access at a time */
   sem_t            wait;       /* Place to wait for state machine completion */
   volatile uint8_t state;      /* State of state machine */
   struct wdog_s    timeout;    /* Watchdog to timeout when bus hung */
@@ -135,7 +127,7 @@ struct lpc2378_i2cdev_s
 
 static int  lpc2378_i2c_start(struct lpc2378_i2cdev_s *priv);
 static void lpc2378_i2c_stop(struct lpc2378_i2cdev_s *priv);
-static int  lpc2378_i2c_interrupt(int irq, FAR void *context, FAR void *arg);
+static int  lpc2378_i2c_interrupt(int irq, void *context, void *arg);
 static void lpc2378_i2c_timeout(wdparm_t arg);
 static void lpc2378_i2c_setfrequency(struct lpc2378_i2cdev_s *priv,
               uint32_t frequency);
@@ -143,10 +135,10 @@ static void lpc2378_stopnext(struct lpc2378_i2cdev_s *priv);
 
 /* I2C device operations */
 
-static int  lpc2378_i2c_transfer(FAR struct i2c_master_s *dev,
-              FAR struct i2c_msg_s *msgs, int count);
+static int  lpc2378_i2c_transfer(struct i2c_master_s *dev,
+              struct i2c_msg_s *msgs, int count);
 #ifdef CONFIG_I2C_RESET
-static int  lpc2378_i2c_reset(FAR struct i2c_master_s * dev);
+static int  lpc2378_i2c_reset(struct i2c_master_s *dev);
 #endif
 
 /****************************************************************************
@@ -154,13 +146,25 @@ static int  lpc2378_i2c_reset(FAR struct i2c_master_s * dev);
  ****************************************************************************/
 
 #ifdef CONFIG_LPC2378_I2C0
-static struct lpc2378_i2cdev_s g_i2c0dev;
+static struct lpc2378_i2cdev_s g_i2c0dev =
+{
+  .lock = NXMUTEX_INITIALIZER,
+  .wait = SEM_INITIALIZER(0),
+};
 #endif
 #ifdef CONFIG_LPC2378_I2C1
-static struct lpc2378_i2cdev_s g_i2c1dev;
+static struct lpc2378_i2cdev_s g_i2c1dev =
+{
+  .lock = NXMUTEX_INITIALIZER,
+  .wait = SEM_INITIALIZER(0),
+};
 #endif
 #ifdef CONFIG_LPC2378_I2C2
-static struct lpc2378_i2cdev_s g_i2c2dev;
+static struct lpc2378_i2cdev_s g_i2c2dev =
+{
+  .lock = NXMUTEX_INITIALIZER,
+  .wait = SEM_INITIALIZER(0),
+};
 #endif
 
 struct i2c_ops_s lpc2378_i2c_ops =
@@ -298,7 +302,7 @@ static void lpc2378_stopnext(struct lpc2378_i2cdev_s *priv)
  *
  ****************************************************************************/
 
-static int lpc2378_i2c_interrupt(int irq, FAR void *context, FAR void *arg)
+static int lpc2378_i2c_interrupt(int irq, void *context, void *arg)
 {
   struct lpc2378_i2cdev_s *priv = (struct lpc2378_i2cdev_s *)arg;
   struct i2c_msg_s *msg;
@@ -396,8 +400,8 @@ static int lpc2378_i2c_interrupt(int irq, FAR void *context, FAR void *arg)
  *
  ****************************************************************************/
 
-static int lpc2378_i2c_transfer(FAR struct i2c_master_s *dev,
-                              FAR struct i2c_msg_s *msgs, int count)
+static int lpc2378_i2c_transfer(struct i2c_master_s *dev,
+                                struct i2c_msg_s *msgs, int count)
 {
   struct lpc2378_i2cdev_s *priv = (struct lpc2378_i2cdev_s *)dev;
   int ret;
@@ -406,7 +410,7 @@ static int lpc2378_i2c_transfer(FAR struct i2c_master_s *dev,
 
   /* Get exclusive access to the I2C bus */
 
-  nxsem_wait(&priv->mutex);
+  nxmutex_lock(&priv->lock);
 
   /* Set up for the transfer */
 
@@ -427,7 +431,7 @@ static int lpc2378_i2c_transfer(FAR struct i2c_master_s *dev,
 
   ret = lpc2378_i2c_start(priv);
 
-  nxsem_post(&priv->mutex);
+  nxmutex_unlock(&priv->lock);
   return ret;
 }
 
@@ -446,7 +450,7 @@ static int lpc2378_i2c_transfer(FAR struct i2c_master_s *dev,
  ****************************************************************************/
 
 #ifdef CONFIG_I2C_RESET
-static int lpc2378_i2c_reset(FAR struct i2c_master_s * dev)
+static int lpc2378_i2c_reset(struct i2c_master_s *dev)
 {
   return OK;
 }
@@ -573,23 +577,13 @@ struct i2c_master_s *lpc2378_i2cbus_initialize(int port)
   else
 #endif
     {
+      leave_critical_section(flags);
       return NULL;
     }
 
   leave_critical_section(flags);
 
   putreg32(I2C_CONSET_I2EN, priv->base + I2C_CONSET_OFFSET);
-
-  /* Initialize semaphores */
-
-  nxsem_init(&priv->mutex, 0, 1);
-  nxsem_init(&priv->wait, 0, 0);
-
-  /* The wait semaphore is used for signaling and, hence, should not have
-   * priority inheritance enabled.
-   */
-
-  nxsem_set_protocol(&priv->wait, SEM_PRIO_NONE);
 
   /* Attach Interrupt Handler */
 
@@ -613,18 +607,13 @@ struct i2c_master_s *lpc2378_i2cbus_initialize(int port)
  *
  ****************************************************************************/
 
-int lpc2378_i2cbus_uninitialize(FAR struct i2c_master_s * dev)
+int lpc2378_i2cbus_uninitialize(struct i2c_master_s *dev)
 {
-  struct lpc2378_i2cdev_s *priv = (struct lpc2378_i2cdev_s *) dev;
+  struct lpc2378_i2cdev_s *priv = (struct lpc2378_i2cdev_s *)dev;
 
   /* Disable I2C */
 
   putreg32(I2C_CONCLRT_I2ENC, priv->base + I2C_CONCLR_OFFSET);
-
-  /* Reset data structures */
-
-  nxsem_destroy(&priv->mutex);
-  nxsem_destroy(&priv->wait);
 
   /* Cancel the watchdog timer */
 

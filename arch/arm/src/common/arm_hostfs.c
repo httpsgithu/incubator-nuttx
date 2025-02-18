@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/common/arm_hostfs.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -23,6 +25,7 @@
  ****************************************************************************/
 
 #include <nuttx/config.h>
+#include <nuttx/cache.h>
 #include <nuttx/fs/hostfs.h>
 
 #include <errno.h>
@@ -49,8 +52,12 @@
  * Private Functions
  ****************************************************************************/
 
-static long host_call(unsigned int nbr, void *parm)
+static long host_call(unsigned int nbr, void *parm, size_t size)
 {
+#ifdef CONFIG_ARM_SEMIHOSTING_HOSTFS_CACHE_COHERENCE
+  up_clean_dcache((uintptr_t)parm, (uintptr_t)parm + size);
+#endif
+
   long ret = smh_call(nbr, parm);
   if (ret < 0)
     {
@@ -66,32 +73,34 @@ static long host_call(unsigned int nbr, void *parm)
 
 static ssize_t host_flen(long fd)
 {
-  return host_call(HOST_FLEN, &fd);
+  return host_call(HOST_FLEN, &fd, sizeof(long));
 }
 
 static int host_flags_to_mode(int flags)
 {
+  static const int modemasks = O_RDONLY | O_WRONLY | O_TEXT | O_RDWR |
+                               O_CREAT | O_TRUNC | O_APPEND;
   static const int modeflags[] =
   {
+    O_RDONLY | O_TEXT,
     O_RDONLY,
-    O_RDONLY | O_BINARY,
+    O_RDWR | O_TEXT,
     O_RDWR,
-    O_RDWR | O_BINARY,
+    O_WRONLY | O_CREAT | O_TRUNC | O_TEXT,
     O_WRONLY | O_CREAT | O_TRUNC,
-    O_WRONLY | O_CREAT | O_TRUNC | O_BINARY,
+    O_RDWR | O_CREAT | O_TRUNC | O_TEXT,
     O_RDWR | O_CREAT | O_TRUNC,
-    O_RDWR | O_CREAT | O_TRUNC | O_BINARY,
+    O_WRONLY | O_CREAT | O_APPEND | O_TEXT,
     O_WRONLY | O_CREAT | O_APPEND,
-    O_WRONLY | O_CREAT | O_APPEND | O_BINARY,
+    O_RDWR | O_CREAT | O_APPEND | O_TEXT,
     O_RDWR | O_CREAT | O_APPEND,
-    O_RDWR | O_CREAT | O_APPEND | O_BINARY,
     0,
   };
 
   int i;
   for (i = 0; modeflags[i] != 0; i++)
     {
-      if (modeflags[i] == flags)
+      if ((modemasks & flags) == modeflags[i])
         {
           return i;
         }
@@ -118,13 +127,17 @@ int host_open(const char *pathname, int flags, int mode)
     .len = strlen(pathname),
   };
 
-  return host_call(HOST_OPEN, &open);
+#ifdef CONFIG_ARM_SEMIHOSTING_HOSTFS_CACHE_COHERENCE
+  up_clean_dcache((uintptr_t)pathname, (uintptr_t)pathname + open.len + 1);
+#endif
+
+  return host_call(HOST_OPEN, &open, sizeof(open));
 }
 
 int host_close(int fd_)
 {
   long fd = fd_;
-  return host_call(HOST_CLOSE, &fd);
+  return host_call(HOST_CLOSE, &fd, sizeof(long));
 }
 
 ssize_t host_read(int fd, void *buf, size_t count)
@@ -141,7 +154,14 @@ ssize_t host_read(int fd, void *buf, size_t count)
     .count = count,
   };
 
-  ssize_t ret = host_call(HOST_READ, &read);
+  ssize_t ret;
+
+#ifdef CONFIG_ARM_SEMIHOSTING_HOSTFS_CACHE_COHERENCE
+  up_invalidate_dcache((uintptr_t)buf, (uintptr_t)buf + count);
+#endif
+
+  ret = host_call(HOST_READ, &read, sizeof(read));
+
   return ret < 0 ? ret : count - ret;
 }
 
@@ -159,11 +179,17 @@ ssize_t host_write(int fd, const void *buf, size_t count)
     .count = count,
   };
 
-  ssize_t ret = host_call(HOST_WRITE, &write);
+  ssize_t ret;
+
+#ifdef CONFIG_ARM_SEMIHOSTING_HOSTFS_CACHE_COHERENCE
+  up_clean_dcache((uintptr_t)buf, (uintptr_t)buf + count);
+#endif
+
+  ret = host_call(HOST_WRITE, &write, sizeof(write));
   return ret < 0 ? ret : count - ret;
 }
 
-off_t host_lseek(int fd, off_t offset, int whence)
+off_t host_lseek(int fd, off_t pos, off_t offset, int whence)
 {
   off_t ret = -ENOSYS;
 
@@ -175,6 +201,11 @@ off_t host_lseek(int fd, off_t offset, int whence)
           offset += ret;
           whence = SEEK_SET;
         }
+    }
+  else if (whence == SEEK_CUR)
+    {
+      offset += pos;
+      whence = SEEK_SET;
     }
 
   if (whence == SEEK_SET)
@@ -189,7 +220,7 @@ off_t host_lseek(int fd, off_t offset, int whence)
         .pos = offset,
       };
 
-      ret = host_call(HOST_SEEK, &seek);
+      ret = host_call(HOST_SEEK, &seek, sizeof(seek));
       if (ret >= 0)
         {
             ret = offset;
@@ -267,10 +298,15 @@ int host_unlink(const char *pathname)
     .pathname_len = strlen(pathname),
   };
 
-  return host_call(HOST_REMOVE, &remove);
+#ifdef CONFIG_ARM_SEMIHOSTING_HOSTFS_CACHE_COHERENCE
+  up_clean_dcache((uintptr_t)pathname, (uintptr_t)pathname +
+                  remove.pathname_len + 1);
+#endif
+
+  return host_call(HOST_REMOVE, &remove, sizeof(remove));
 }
 
-int host_mkdir(const char *pathname, mode_t mode)
+int host_mkdir(const char *pathname, int mode)
 {
   return -ENOSYS;
 }
@@ -296,7 +332,14 @@ int host_rename(const char *oldpath, const char *newpath)
     .newpath_len = strlen(newpath),
   };
 
-  return host_call(HOST_RENAME, &rename);
+#ifdef CONFIG_ARM_SEMIHOSTING_HOSTFS_CACHE_COHERENCE
+  up_clean_dcache((uintptr_t)oldpath,
+                  (uintptr_t)oldpath + rename.oldpath_len + 1);
+  up_clean_dcache((uintptr_t)newpath,
+                  (uintptr_t)newpath + rename.newpath_len + 1);
+#endif
+
+  return host_call(HOST_RENAME, &rename, sizeof(rename));
 }
 
 int host_stat(const char *path, struct stat *buf)

@@ -1,6 +1,8 @@
 ############################################################################
 # boards/arm/s32k1xx/s32k144evb/src/Makefile
 #
+# SPDX-License-Identifier: Apache-2.0
+#
 # Licensed to the Apache Software Foundation (ASF) under one or more
 # contributor license agreements.  See the NOTICE file distributed with
 # this work for additional information regarding copyright ownership.  The
@@ -35,6 +37,10 @@ endif
 
 ifeq ($(CONFIG_BOARDCTL),y)
 CSRCS += s32k1xx_appinit.c
+endif
+
+ifeq ($(CONFIG_BOARDCTL_UNIQUEID),y)
+CSRCS += s32k1xx_uid.c
 endif
 
 ifeq ($(CONFIG_S32K1XX_LPI2C),y)

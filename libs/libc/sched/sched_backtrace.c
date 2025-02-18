@@ -1,6 +1,8 @@
 /****************************************************************************
  * libs/libc/sched/sched_backtrace.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -24,14 +26,14 @@
 
 #include <nuttx/config.h>
 
+#ifndef CONFIG_ARCH_HAVE_BACKTRACE
+
 #include <sys/types.h>
 #include <unistd.h>
 #include <execinfo.h>
 #include <unwind.h>
 
-#include <nuttx/irq.h>
-
-#if !defined(CONFIG_ARCH_HAVE_BACKTRACE)
+#include <nuttx/sched.h>
 
 /****************************************************************************
  * Private Data Types
@@ -64,7 +66,7 @@ backtrace_helper(FAR struct _Unwind_Context *ctx, FAR void *a)
    * Skip it.
    */
 
-  if (arg->cnt != -1)
+  if (arg->cnt >= 0)
     {
       arg->array[arg->cnt] = (FAR void *)_Unwind_GetIP(ctx);
       if (arg->cnt > 0)
@@ -88,7 +90,7 @@ backtrace_helper(FAR struct _Unwind_Context *ctx, FAR void *a)
       arg->cfa = cfa;
     }
 
-  if (++arg->cnt == arg->size)
+  if (++arg->cnt >= arg->size)
     {
       return _URC_END_OF_STACK;
     }
@@ -108,11 +110,11 @@ backtrace_helper(FAR struct _Unwind_Context *ctx, FAR void *a)
  *
  ****************************************************************************/
 
-int sched_backtrace(pid_t tid, FAR void **buffer, int size)
+int sched_backtrace(pid_t tid, FAR void **buffer, int size, int skip)
 {
   struct trace_arg arg;
 
-  if (tid != gettid())
+  if (tid != _SCHED_GETTID())
     {
       return 0;
     }
@@ -120,7 +122,7 @@ int sched_backtrace(pid_t tid, FAR void **buffer, int size)
   arg.array = buffer;
   arg.cfa = 0;
   arg.size = size;
-  arg.cnt = -1;
+  arg.cnt = -skip - 1;
 
   if (size <= 0)
     {
@@ -138,7 +140,7 @@ int sched_backtrace(pid_t tid, FAR void **buffer, int size)
       --arg.cnt;
     }
 
-  return arg.cnt != -1 ? arg.cnt : 0;
+  return arg.cnt > 0 ? arg.cnt : 0;
 }
 
 #endif /* !CONFIG_ARCH_HAVE_BACKTRACE */

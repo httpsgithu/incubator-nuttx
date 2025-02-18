@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/z80/src/z8/z8_registerdump.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -33,14 +35,6 @@
 #include "chip/switch.h"
 #include "z80_internal.h"
 
-#ifdef CONFIG_ARCH_STACKDUMP
-
-/****************************************************************************
- * Private Data
- ****************************************************************************/
-
-static chipreg_t s_last_regs[XCPTCONTEXT_REGS];
-
 /****************************************************************************
  * Private Functions
  ****************************************************************************/
@@ -48,15 +42,15 @@ static chipreg_t s_last_regs[XCPTCONTEXT_REGS];
 static inline void z8_dumpregs(FAR chipret_t *regs)
 {
   _alert("REGS: %04x %04x %04x %04x %04x %04x %04x %04x\n",
-        regs[XCPT_RR0], regs[XCPT_RR2], regs[XCPT_RR4], regs[XCPT_RR6],
-        regs[XCPT_RR8], regs[XCPT_RR10], regs[XCPT_RR12], regs[XCPT_RR14]);
+         regs[XCPT_RR0], regs[XCPT_RR2], regs[XCPT_RR4], regs[XCPT_RR6],
+         regs[XCPT_RR8], regs[XCPT_RR10], regs[XCPT_RR12], regs[XCPT_RR14]);
 }
 
 static inline void z8_dumpstate(chipreg_t sp, chipreg_t pc, uint8_t irqctl,
                                 chipreg_t rpflags)
 {
   _alert("SP: %04x PC: %04x IRQCTL: %02x RP: %02x FLAGS: %02x\n",
-        sp, pc, irqctl & 0xff, rpflags >> 8, rpflags & 0xff);
+         sp, pc, irqctl & 0xff, rpflags >> 8, rpflags & 0xff);
 }
 
 /****************************************************************************
@@ -64,10 +58,10 @@ static inline void z8_dumpstate(chipreg_t sp, chipreg_t pc, uint8_t irqctl,
  ****************************************************************************/
 
 /****************************************************************************
- * Name: z8_registerdump
+ * Name: up_dump_register
  ****************************************************************************/
 
-void z8_registerdump(void)
+void up_dump_register(FAR void *dumpregs)
 {
   FAR chipret_t *regs;
   chipreg_t      sp;
@@ -106,7 +100,7 @@ void z8_registerdump(void)
 
       case Z8_IRQSTATE_NONE:
       default:
-        z8_saveusercontext(s_last_regs);
+        up_saveusercontext(s_last_regs);
         regs = s_last_regs;
         z8_dumpregs(regs);
         z8_dumpstate(regs[XCPT_SP], regs[XCPT_PC],
@@ -114,5 +108,3 @@ void z8_registerdump(void)
         break;
     }
 }
-
-#endif /* CONFIG_ARCH_STACKDUMP */

@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/mips/include/pic32mx/cp0.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -115,7 +117,7 @@
  *      CP0_STATUS_IMPL Bits 16-17: Implementation dependent
  *      CP0_STATUS_TS   Bit 21: TLB detected match on multiple entries
  *      CP0_STATUS_PX   Bit 23: Enables 64-bit operations (Not MIPS32)
- *      CP0_STATUS_MX   Bit 24: Enables MDMX™ (Not MIPS32)
+ *      CP0_STATUS_MX   Bit 24: Enables MDMXâ„¢ (Not MIPS32)
  */
 
 #undef CP0_STATUS_UX

@@ -1,6 +1,8 @@
 /****************************************************************************
  * sched/environ/env_setenv.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -47,7 +49,7 @@
  *
  * Description:
  *   The setenv() function adds the variable name to the environment with the
- *   specified 'value' if the varialbe 'name" does not exist. If the 'name'
+ *   specified 'value' if the variable 'name" does not exist. If the 'name'
  *   does exist in the environment, then its value is changed to 'value' if
  *   'overwrite' is non-zero; if 'overwrite' is zero, then the value of name
  *   unaltered.
@@ -70,10 +72,12 @@ int setenv(FAR const char *name, FAR const char *value, int overwrite)
   FAR struct tcb_s *rtcb;
   FAR struct task_group_s *group;
   FAR char *pvar;
-  FAR char *newenvp;
-  int newsize;
+  FAR char **envp;
+  ssize_t envc;
+  ssize_t envpc;
+  ssize_t ret = OK;
+  irqstate_t flags;
   int varlen;
-  int ret = OK;
 
   /* Verify input parameter */
 
@@ -107,14 +111,14 @@ int setenv(FAR const char *name, FAR const char *value, int overwrite)
 
   /* Get a reference to the thread-private environ in the TCB. */
 
-  sched_lock();
+  flags = enter_critical_section();
   rtcb  = this_task();
   group = rtcb->group;
   DEBUGASSERT(group);
 
   /* Check if the variable already exists */
 
-  if (group->tg_envp && (pvar = env_findvar(group, name)) != NULL)
+  if (group->tg_envp && (ret = env_findvar(group, name)) >= 0)
     {
       /* It does! Do we have permission to overwrite the existing value? */
 
@@ -122,7 +126,7 @@ int setenv(FAR const char *name, FAR const char *value, int overwrite)
         {
           /* No.. then just return success */
 
-          sched_unlock();
+          leave_critical_section(flags);
           return OK;
         }
 
@@ -131,8 +135,12 @@ int setenv(FAR const char *name, FAR const char *value, int overwrite)
        * the environment buffer; this will happen below.
        */
 
-      env_removevar(group, pvar);
+      env_removevar(group, ret);
     }
+
+  /* Check current envirments count */
+
+  DEBUGASSERT(group->tg_envc < SSIZE_MAX);
 
   /* Get the size of the new name=value string.
    * The +2 is for the '=' and for null terminator
@@ -142,44 +150,60 @@ int setenv(FAR const char *name, FAR const char *value, int overwrite)
 
   /* Then allocate or reallocate the environment buffer */
 
-  if (group->tg_envp)
+  pvar = group_malloc(group, varlen);
+  if (pvar == NULL)
     {
-      newsize = group->tg_envsize + varlen;
-      newenvp = (FAR char *)kumm_realloc(group->tg_envp, newsize);
-      if (!newenvp)
-        {
-          ret = ENOMEM;
-          goto errout_with_lock;
-        }
-
-      pvar = &newenvp[group->tg_envsize];
-    }
-  else
-    {
-      newsize = varlen;
-      newenvp = (FAR char *)kumm_malloc(varlen);
-      if (!newenvp)
-        {
-          ret = ENOMEM;
-          goto errout_with_lock;
-        }
-
-      pvar = newenvp;
+      ret = ENOMEM;
+      goto errout_with_lock;
     }
 
-  /* Save the new buffer and size */
+  envc = group->tg_envc;
 
-  group->tg_envp    = newenvp;
-  group->tg_envsize = newsize;
+  if (group->tg_envp == NULL)
+    {
+      envpc = SCHED_ENVIRON_RESERVED + 2;
+
+      envp = group_malloc(group, sizeof(*envp) * envpc);
+      if (envp == NULL)
+        {
+          ret = ENOMEM;
+          goto errout_with_var;
+        }
+
+      group->tg_envp  = envp;
+      group->tg_envpc = envpc;
+    }
+  else if (envc >= group->tg_envpc - 1)
+    {
+      envpc = envc + SCHED_ENVIRON_RESERVED + 2;
+
+      envp = group_realloc(group, group->tg_envp, sizeof(*envp) * envpc);
+      if (envp == NULL)
+        {
+          ret = ENOMEM;
+          goto errout_with_var;
+        }
+
+      group->tg_envp  = envp;
+      group->tg_envpc = envpc;
+    }
+
+  /* Save the new buffer and count */
+
+  group->tg_envp[envc++] = pvar;
+  group->tg_envp[envc]   = NULL;
+  group->tg_envc = envc;
 
   /* Now, put the new name=value string into the environment buffer */
 
-  sprintf(pvar, "%s=%s", name, value);
-  sched_unlock();
+  snprintf(pvar, varlen, "%s=%s", name, value);
+  leave_critical_section(flags);
   return OK;
 
+errout_with_var:
+  group_free(group, pvar);
 errout_with_lock:
-  sched_unlock();
+  leave_critical_section(flags);
 errout:
   set_errno(ret);
   return ERROR;

@@ -1,6 +1,8 @@
 ############################################################################
 # net/procfs/Make.defs
 #
+# SPDX-License-Identifier: Apache-2.0
+#
 # Licensed to the Apache Software Foundation (ASF) under one or more
 # contributor license agreements.  See the NOTICE file distributed with
 # this work for additional information regarding copyright ownership.  The
@@ -32,6 +34,12 @@ ifeq ($(CONFIG_NET_STATISTICS),y)
   NET_CSRCS += net_statistics.c
 ifeq ($(CONFIG_NET_MLD),y)
   NET_CSRCS += net_mld.c
+endif
+ifeq ($(CONFIG_NET_TCP),y)
+  NET_CSRCS += net_tcp.c
+endif
+ifeq ($(CONFIG_NET_UDP),y)
+  NET_CSRCS += net_udp.c
 endif
 endif
 

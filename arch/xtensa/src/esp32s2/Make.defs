@@ -18,56 +18,22 @@
 #
 ############################################################################
 
-include chip/Bootloader.mk
+include common/Make.defs
+
+STORAGETMP = $(if $(wildcard $(NXTMPDIR)/.*),y,)
 
 # The start-up, "head", file.  May be either a .S or a .c file.
 
-HEAD_ASRC  = xtensa_vectors.S xtensa_window_vector.S xtensa_windowspill.S
-HEAD_ASRC += xtensa_int_handlers.S  xtensa_user_handler.S
-HEAD_CSRC  = esp32s2_start.c esp32s2_wdt.c 
+HEAD_CSRC  = esp32s2_start.c esp32s2_wdt.c
 
-# Common XTENSA files (arch/xtensa/src/common)
+# Required ESP32-S2 files (arch/xtensa/src/esp32s2)
 
-CMN_ASRCS  = xtensa_context.S xtensa_coproc.S xtensa_cpuint.S xtensa_panic.S
-CMN_ASRCS += xtensa_sigtramp.S
+CHIP_CSRCS  = esp32s2_allocateheap.c esp32s2_clockconfig.c esp32s2_irq.c
+CHIP_CSRCS += esp32s2_gpio.c esp32s2_rtc_gpio.c esp32s2_region.c esp32s2_user.c
+CHIP_CSRCS += esp32s2_timerisr.c esp32s2_lowputc.c esp32s2_systemreset.c
+CHIP_CSRCS += esp32s2_dma.c esp32s2_libc_stubs.c
 
-CMN_CSRCS  = xtensa_assert.c xtensa_blocktask.c xtensa_copystate.c
-CMN_CSRCS += xtensa_cpenable.c xtensa_createstack.c xtensa_exit.c
-CMN_CSRCS += xtensa_initialize.c xtensa_initialstate.c xtensa_interruptcontext.c
-CMN_CSRCS += xtensa_irqdispatch.c xtensa_lowputs.c xtensa_mdelay.c
-CMN_CSRCS += xtensa_modifyreg8.c xtensa_modifyreg16.c xtensa_modifyreg32.c
-CMN_CSRCS += xtensa_puts.c xtensa_releasepending.c xtensa_releasestack.c
-CMN_CSRCS += xtensa_reprioritizertr.c xtensa_schedsigaction.c
-CMN_CSRCS += xtensa_sigdeliver.c xtensa_stackframe.c xtensa_udelay.c
-CMN_CSRCS += xtensa_unblocktask.c xtensa_usestack.c
-
-# Configuration-dependent common XTENSA files
-
-ifeq ($(CONFIG_DEBUG_ALERT),y)
-  CMN_CSRCS += xtensa_dumpstate.c
-endif
-
-ifeq ($(CONFIG_SPINLOCK),y)
-  CMN_CSRCS += xtensa_testset.c
-endif
-
-ifeq ($(CONFIG_STACK_COLORATION),y)
-  CMN_CSRCS += xtensa_checkstack.c
-endif
-
-ifeq ($(CONFIG_FS_HOSTFS),y)
-  CMN_ASRCS += xtensa_simcall.S
-  CMN_CSRCS += xtensa_hostfs.c
-endif
-
-# Required ESP32S2 files (arch/xtensa/src/lx7)
-
-CHIP_CSRCS  = esp32s2_allocateheap.c esp32s2_clockconfig.c esp32s2_cpuint.c
-CHIP_CSRCS += esp32s2_gpio.c esp32s2_intdecode.c esp32s2_irq.c esp32s2_region.c
-CHIP_CSRCS += esp32s2_timerisr.c esp32s2_user.c esp32s2_lowputc.c
-CHIP_CSRCS += esp32s2_systemreset.c
-
-# Configuration-dependent ESP32S2 files
+# Configuration-dependent ESP32-S2 files
 
 ifneq ($(CONFIG_ARCH_IDLE_CUSTOM),y)
 CHIP_CSRCS += esp32s2_idle.c
@@ -77,8 +43,43 @@ ifeq ($(CONFIG_ESP32S2_UART),y)
 CHIP_CSRCS += esp32s2_serial.c
 endif
 
+ifeq ($(CONFIG_ESP32S2_EFUSE),y)
+CHIP_CSRCS += esp32s2_efuse.c
+CHIP_CSRCS += esp32s2_efuse_table.c
+CHIP_CSRCS += esp32s2_efuse_lowerhalf.c
+endif
+
 ifeq ($(CONFIG_ESP32S2_RNG),y)
 CHIP_CSRCS += esp32s2_rng.c
+endif
+
+ifeq ($(CONFIG_ESP32S2_I2C),y)
+ifeq ($(CONFIG_ESPRESSIF_I2C_PERIPH),y)
+CHIP_CSRCS += esp32s2_i2c.c
+endif
+endif
+
+ifeq ($(CONFIG_ESP32S2_I2S),y)
+CHIP_CSRCS += esp32s2_i2s.c
+endif
+
+ifeq ($(CONFIG_ESP32S2_TWAI),y)
+CHIP_CSRCS += esp32s2_twai.c
+endif
+
+ifeq ($(CONFIG_ESP32S2_LEDC),y)
+CHIP_CSRCS += esp32s2_ledc.c
+endif
+
+ifeq ($(CONFIG_ESP32S2_SPI),y)
+CHIP_CSRCS += esp32s2_spi.c
+ifeq ($(CONFIG_SPI_SLAVE),y)
+CHIP_CSRCS += esp32s2_spi_slave.c
+endif
+endif
+
+ifeq ($(CONFIG_ESP32S2_PARTITION_TABLE),y)
+CHIP_CSRCS += esp32_partition.c
 endif
 
 ifeq ($(CONFIG_ESP32S2_TIMER),y)
@@ -86,6 +87,22 @@ CHIP_CSRCS += esp32s2_tim.c
 ifeq ($(CONFIG_TIMER),y)
 CHIP_CSRCS += esp32s2_tim_lowerhalf.c
 endif
+endif
+
+ifeq ($(CONFIG_WATCHDOG),y)
+CHIP_CSRCS += esp32s2_wdt_lowerhalf.c
+endif
+
+ifeq ($(CONFIG_ARCH_HAVE_EXTRA_HEAPS),y)
+CHIP_CSRCS += esp32s2_extraheaps.c
+endif
+
+ifeq ($(CONFIG_ESP32S2_RTC_HEAP),y)
+CHIP_CSRCS += esp32s2_rtcheap.c
+endif
+
+ifeq ($(CONFIG_ARCH_USE_TEXT_HEAP),y)
+CHIP_CSRCS += esp32s2_textheap.c
 endif
 
 ifeq ($(CONFIG_ESP32S2_FREERUN),y)
@@ -96,9 +113,88 @@ ifeq ($(CONFIG_ESP32S2_RT_TIMER),y)
 CHIP_CSRCS += esp32s2_rt_timer.c
 endif
 
+ifeq ($(CONFIG_ESP32S2_TOUCH),y)
+CHIP_CSRCS += esp32s2_touch.c
+endif
+
 ifeq ($(CONFIG_ESP32S2_ONESHOT),y)
 CHIP_CSRCS += esp32s2_oneshot.c
 ifeq ($(CONFIG_ONESHOT),y)
 CHIP_CSRCS += esp32s2_oneshot_lowerhalf.c
 endif
 endif
+
+ifeq ($(CONFIG_ESP32S2_SPIRAM),y)
+CHIP_CSRCS += esp32s2_spiram.c
+CHIP_CSRCS += esp32s2_psram.c
+endif
+
+CHIP_CSRCS += esp32s2_rtc.c
+
+ifeq ($(CONFIG_RTC_DRIVER),y)
+CHIP_CSRCS += esp32s2_rtc_lowerhalf.c
+endif
+
+ifeq ($(CONFIG_ESPRESSIF_WIFI),y)
+CHIP_CSRCS += esp32s2_wifi_adapter.c
+endif
+
+#############################################################################
+# Espressif HAL for 3rd Party Platforms
+#############################################################################
+
+# Fetch source files and add them to build
+
+ESP_HAL_3RDPARTY_REPO   = esp-hal-3rdparty
+ifndef ESP_HAL_3RDPARTY_VERSION
+	ESP_HAL_3RDPARTY_VERSION = 87ccbf88b6fd490dae1993524e70f51bb2ea181d
+endif
+
+ifndef ESP_HAL_3RDPARTY_URL
+	ESP_HAL_3RDPARTY_URL = https://github.com/espressif/esp-hal-3rdparty.git
+endif
+
+ifeq ($(STORAGETMP),y)
+define CLONE_ESP_HAL_3RDPARTY_REPO
+	$(call CHECK_COMMITSHA, $(NXTMPDIR)/$(ESP_HAL_3RDPARTY_REPO),$(ESP_HAL_3RDPARTY_VERSION))
+	$(call CLONE, $(ESP_HAL_3RDPARTY_URL),chip/$(ESP_HAL_3RDPARTY_REPO),$(NXTMPDIR)/$(ESP_HAL_3RDPARTY_REPO))
+endef
+else
+define CLONE_ESP_HAL_3RDPARTY_REPO
+	$(call CLONE, $(ESP_HAL_3RDPARTY_URL),chip/$(ESP_HAL_3RDPARTY_REPO))
+endef
+endif
+
+chip/$(ESP_HAL_3RDPARTY_REPO):
+	$(Q) echo "Cloning Espressif HAL for 3rd Party Platforms"
+	$(Q) $(call CLONE_ESP_HAL_3RDPARTY_REPO)
+	$(Q) echo "Espressif HAL for 3rd Party Platforms: ${ESP_HAL_3RDPARTY_VERSION}"
+	$(Q) git -C chip/$(ESP_HAL_3RDPARTY_REPO) checkout --quiet $(ESP_HAL_3RDPARTY_VERSION)
+
+# Silent preprocessor warnings
+
+CFLAGS += -Wno-undef -Wno-unused-variable -fno-jump-tables -fno-tree-switch-conversion
+
+# Enable strict volatile bitfield access
+
+CFLAGS += -fstrict-volatile-bitfields
+
+CHIP_SERIES = $(patsubst "%",%,$(CONFIG_ESPRESSIF_CHIP_SERIES))
+
+include chip/hal.mk
+
+include common/espressif/Make.defs
+
+include chip/Bootloader.mk
+
+context:: chip/$(ESP_HAL_3RDPARTY_REPO)
+ifeq ($(CONFIG_ESPRESSIF_WIRELESS),y)
+	$(Q) echo "Espressif HAL for 3rd Party Platforms: initializing submodules..."
+	$(Q) git -C chip/$(ESP_HAL_3RDPARTY_REPO) submodule --quiet update --init $(GIT_DEPTH_PARAMETER) components/mbedtls/mbedtls components/esp_phy/lib components/esp_wifi/lib
+	$(Q) git -C chip/$(ESP_HAL_3RDPARTY_REPO)/components/mbedtls/mbedtls reset --quiet --hard
+	$(Q) echo "Applying patches..."
+	$(Q) cd chip/$(ESP_HAL_3RDPARTY_REPO)/components/mbedtls/mbedtls && git apply ../../../nuttx/patches/components/mbedtls/mbedtls/*.patch
+endif
+
+distclean::
+	$(call DELDIR,chip/$(ESP_HAL_3RDPARTY_REPO))

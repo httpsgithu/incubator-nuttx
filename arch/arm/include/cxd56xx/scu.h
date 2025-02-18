@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/include/cxd56xx/scu.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -327,7 +329,7 @@ struct scuev_notify_s
 
   uint32_t               ctrl;   /* Event control */
 
-  FAR struct scuev_arg_s *arg;   /* Arguments for event raised */
+  struct scuev_arg_s     *arg;   /* Arguments for event raised */
 };
 
 /* Offset/gain adjustment parameter */
@@ -364,7 +366,7 @@ struct scufifo_wm_s
 
   /* Pointer to memory to be timestamp stored */
 
-  FAR struct scutimestamp_s *ts;
+  struct scutimestamp_s *ts;
 
   /* Watermark value. SCU notifies when
    * stored samples over watermark in FIFO.
@@ -389,14 +391,14 @@ struct seq_s;     /* The sequencer object */
  * return: struct seq_s pointer is success. NULL is failure.
  */
 
-FAR struct seq_s *seq_open(int type, int bustype);
+struct seq_s *seq_open(int type, int bustype);
 
 /* Close sequencer device
  *
  * param [in] seq : Sequencer instance
  */
 
-void seq_close(FAR struct seq_s *seq);
+void seq_close(struct seq_s *seq);
 
 /* Read sequencer FIFO data
  *
@@ -408,7 +410,7 @@ void seq_close(FAR struct seq_s *seq);
  * return : OK(0) is success. negative value is failure.
  */
 
-int seq_read(FAR struct seq_s *seq, int fifoid, char *buffer, int length);
+int seq_read(struct seq_s *seq, int fifoid, char *buffer, int length);
 
 /* Sequencer specific ioctl
  *
@@ -424,7 +426,7 @@ int seq_read(FAR struct seq_s *seq, int fifoid, char *buffer, int length);
  * return: OK(0) is success. negative value is failure.
  */
 
-int seq_ioctl(FAR struct seq_s *seq, int fifoid, int cmd, unsigned long arg);
+int seq_ioctl(struct seq_s *seq, int fifoid, int cmd, unsigned long arg);
 
 /* Set cyclic sequencer instruction
  *
@@ -435,7 +437,7 @@ int seq_ioctl(FAR struct seq_s *seq, int fifoid, int cmd, unsigned long arg);
  * return  OK(0) is success. negative value is failure.
  */
 
-int seq_setinstruction(FAR struct seq_s *seq, const uint16_t *inst,
+int seq_setinstruction(struct seq_s *seq, const uint16_t *inst,
                        uint16_t nr_insts);
 
 /* Set sample data format
@@ -443,13 +445,13 @@ int seq_setinstruction(FAR struct seq_s *seq, const uint16_t *inst,
  * param [in] seq      : Sequencer instance
  * param [in] sample   : Bytes per sample
  * param [in] offset   : Start offset of sampling data
- * param [in] elemsize : Bytes of 1 element in sample
+ * param [in] elemsize : Number of vector elements - 1 (e.g. 3 axis = 2)
  * param [in] swapbyte : Enable/Disable byte swapping
  *
  * return  OK(0) is success. negative value is failure.
  */
 
-void seq_setsample(FAR struct seq_s *seq, uint8_t sample, uint8_t offset,
+void seq_setsample(struct seq_s *seq, uint8_t sample, uint8_t offset,
                    uint8_t elemsize, bool swapbyte);
 
 /* Set slave ID or address
@@ -458,7 +460,7 @@ void seq_setsample(FAR struct seq_s *seq, uint8_t sample, uint8_t offset,
  * param [in] slave_addr : In SPI, slave select ID. In I2C, bus address.
  */
 
-void seq_setaddress(FAR struct seq_s *seq, uint32_t slave_addr);
+void seq_setaddress(struct seq_s *seq, uint32_t slave_addr);
 
 /* SPI data transfer via sequencer.
  *
@@ -477,7 +479,7 @@ void seq_setaddress(FAR struct seq_s *seq, uint32_t slave_addr);
  */
 
 int scu_spitransfer(int slavesel, uint16_t *inst, uint32_t nr_insts,
-                         uint8_t *buffer, int len);
+                    uint8_t *buffer, int len);
 
 /* I2C data transfer via sequencer
  *
@@ -497,7 +499,7 @@ int scu_spitransfer(int slavesel, uint16_t *inst, uint32_t nr_insts,
  */
 
 int scu_i2ctransfer(int port, int slave, uint16_t *inst, uint32_t nr_insts,
-                         uint8_t *buffer, int len);
+                    uint8_t *buffer, int len);
 
 /* Initialize SCU
  *

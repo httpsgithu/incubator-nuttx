@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/cxd56xx/cxd56_cpustart.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -32,11 +34,9 @@
 #include <errno.h>
 
 #include <nuttx/arch.h>
-#include <nuttx/spinlock.h>
 #include <nuttx/sched_note.h>
 
 #include "nvic.h"
-#include "arm_arch.h"
 #include "sched/sched.h"
 #include "init/init.h"
 #include "arm_internal.h"
@@ -71,10 +71,9 @@
  * Public Data
  ****************************************************************************/
 
-volatile static spinlock_t g_appdsp_boot;
+static volatile bool g_appdsp_boot;
 
-extern int arm_pause_handler(int irq, void *c, FAR void *arg);
-extern void fpuconfig(void);
+extern int cxd56_smp_call_handler(int irq, void *c, void *arg);
 
 /****************************************************************************
  * Private Functions
@@ -96,8 +95,14 @@ static void appdsp_boot(void)
 {
   int cpu;
 
-  cpu = up_cpu_index();
+  cpu = this_cpu();
   DPRINTF("cpu = %d\n", cpu);
+
+#if CONFIG_ARCH_INTERRUPTSTACK > 7
+  /* Initializes the stack pointer */
+
+  arm_initialize_stack();
+#endif
 
   /* Setup NVIC */
 
@@ -105,7 +110,7 @@ static void appdsp_boot(void)
 
   /* Setup FPU */
 
-  fpuconfig();
+  arm_fpuconfig();
 
   /* Clear SW_INT for APP_DSP(cpu) */
 
@@ -113,10 +118,10 @@ static void appdsp_boot(void)
 
   /* Enable SW_INT */
 
-  irq_attach(CXD56_IRQ_SW_INT, arm_pause_handler, NULL);
-  up_enable_irq(CXD56_IRQ_SW_INT);
+  irq_attach(CXD56_IRQ_SMP_CALL, cxd56_smp_call_handler, NULL);
+  up_enable_irq(CXD56_IRQ_SMP_CALL);
 
-  spin_unlock(&g_appdsp_boot);
+  g_appdsp_boot = true;
 
 #ifdef CONFIG_SCHED_INSTRUMENTATION
   /* Notify that this CPU has started */
@@ -180,10 +185,8 @@ int up_cpu_start(int cpu)
   /* Copy initial stack and reset vector for APP_DSP */
 
   putreg32((uint32_t)tcb->stack_base_ptr +
-           tcb->adj_stack_size, VECTOR_ISTACK);
+                     tcb->adj_stack_size, VECTOR_ISTACK);
   putreg32((uint32_t)appdsp_boot, VECTOR_RESETV);
-
-  spin_lock(&g_appdsp_boot);
 
   /* See 3.13.4.16.3 ADSP Startup */
 
@@ -228,15 +231,13 @@ int up_cpu_start(int cpu)
 
       /* Setup SW_INT for this APP_DSP0 */
 
-      irq_attach(CXD56_IRQ_SW_INT, arm_pause_handler, NULL);
-      up_enable_irq(CXD56_IRQ_SW_INT);
+      irq_attach(CXD56_IRQ_SMP_CALL, cxd56_smp_call_handler, NULL);
+      up_enable_irq(CXD56_IRQ_SMP_CALL);
     }
 
-  spin_lock(&g_appdsp_boot);
+  while (!g_appdsp_boot);
 
   /* APP_DSP(cpu) boot done */
-
-  spin_unlock(&g_appdsp_boot);
 
   return 0;
 }

@@ -1,6 +1,8 @@
 /****************************************************************************
  * graphics/nxterm/nxterm.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -29,7 +31,7 @@
 
 #include <stdint.h>
 
-#include <nuttx/semaphore.h>
+#include <nuttx/mutex.h>
 #include <nuttx/fs/fs.h>
 #include <nuttx/nx/nx.h>
 #include <nuttx/nx/nxtk.h>
@@ -54,7 +56,7 @@
 
 /* Semaphore protection */
 
-#define NO_HOLDER          (pid_t)-1
+#define NO_HOLDER          (INVALID_PROCESS_ID)
 
 /* VT100 escape sequence processing */
 
@@ -109,8 +111,8 @@ struct nxterm_state_s
 {
   FAR const struct nxterm_operations_s *ops; /* Window operations */
   FAR void *handle;                          /* The window handle */
-  FAR struct nxterm_window_s wndo;           /* Describes the window and font */
-  sem_t exclsem;                             /* Forces mutually exclusive access */
+  struct nxterm_window_s wndo;               /* Describes the window and font */
+  mutex_t lock;                              /* Forces mutually exclusive access */
 #ifdef CONFIG_DEBUG_GRAPHICS
   pid_t holder;                              /* Deadlock avoidance */
 #endif
@@ -157,7 +159,7 @@ struct nxterm_state_s
    * retained in the f_priv field of the 'struct file'.
    */
 
-  struct pollfd *fds[CONFIG_NXTERM_NPOLLWAITERS];
+  FAR struct pollfd *fds[CONFIG_NXTERM_NPOLLWAITERS];
 #endif /* CONFIG_NXTERM_NXKBDIN */
 };
 
@@ -173,22 +175,13 @@ extern const struct file_operations g_nxterm_drvrops;
  * Public Function Prototypes
  ****************************************************************************/
 
-/* Semaphore helpers */
-
-#ifdef CONFIG_DEBUG_GRAPHICS
-int nxterm_semwait(FAR struct nxterm_state_s *priv);
-int nxterm_sempost(FAR struct nxterm_state_s *priv);
-#else
-#  define nxterm_semwait(p) nxsem_wait(&p->exclsem)
-#  define nxterm_sempost(p) nxsem_post(&p->exclsem)
-#endif
-
 /* Common device registration/un-registration */
 
-FAR struct nxterm_state_s *nxterm_register(NXTERM handle,
-    FAR struct nxterm_window_s *wndo,
-    FAR const struct nxterm_operations_s *ops,
-    int minor);
+FAR struct nxterm_state_s *
+nxterm_register(NXTERM handle,
+                FAR struct nxterm_window_s *wndo,
+                FAR const struct nxterm_operations_s *ops,
+                int minor);
 #ifndef CONFIG_DISABLE_PSEUDOFS_OPERATIONS
 void nxterm_unregister(FAR struct nxterm_state_s *priv);
 #endif
@@ -223,7 +216,7 @@ FAR const
 struct nxterm_bitmap_s *nxterm_addchar(FAR struct nxterm_state_s *priv,
                                        uint8_t ch);
 int nxterm_hidechar(FAR struct nxterm_state_s *priv,
-    FAR const struct nxterm_bitmap_s *bm);
+                    FAR const struct nxterm_bitmap_s *bm);
 int nxterm_backspace(FAR struct nxterm_state_s *priv);
 void nxterm_fillchar(FAR struct nxterm_state_s *priv,
                      FAR const struct nxgl_rect_s *rect,

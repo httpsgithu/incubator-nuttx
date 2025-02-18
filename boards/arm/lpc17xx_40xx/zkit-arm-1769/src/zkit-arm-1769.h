@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/lpc17xx_40xx/zkit-arm-1769/src/zkit-arm-1769.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -18,8 +20,8 @@
  *
  ****************************************************************************/
 
-#ifndef __BOARDS_ARM_LPC17XX_40XX_ZKITARM_LPC1768_SRC_ZKITARM_H
-#define __BOARDS_ARM_LPC17XX_40XX_ZKITARM_LPC1768_SRC_ZKITARM_H
+#ifndef __BOARDS_ARM_LPC17XX_40XX_ZKIT_ARM_1768_SRC_ZKIT_ARM_1768_H
+#define __BOARDS_ARM_LPC17XX_40XX_ZKIT_ARM_1768_SRC_ZKIT_ARM_1768_H
 
 /****************************************************************************
  * Included Files
@@ -259,4 +261,4 @@ int zkit_can_setup(void);
 #endif
 
 #endif /* __ASSEMBLY__ */
-#endif /* __BOARDS_ARM_LPC17XX_40XX_ZKITARM_LPC1768_SRC_ZKITARM_H */
+#endif /* __BOARDS_ARM_LPC17XX_40XX_ZKIT_ARM_1768_SRC_ZKIT_ARM_1768_H */

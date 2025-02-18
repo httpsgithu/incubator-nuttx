@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/s32k1xx/s32k148evb/include/board.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -37,7 +39,9 @@
 
 #define BOARD_XTAL_FREQUENCY  8000000
 
-/* The S32K148 will run at 80 MHz */
+/* The S32K148 will run at 80 MHz in RUN mode */
+
+#define S32K148EVB_RUN_SYSCLK_FREQUENCY  80000000
 
 /* LED definitions **********************************************************/
 
@@ -129,4 +133,4 @@
 #define PIN_CAN0_RX       PIN_CAN0_RX_4      /* PTE4 */
 #define PIN_CAN0_TX       PIN_CAN0_TX_4      /* PTE5 */
 
-#endif  /* __BOARDS_ARM_S32K1XX_S32K148EVB_INCLUDE_BOARD_H */
+#endif /* __BOARDS_ARM_S32K1XX_S32K148EVB_INCLUDE_BOARD_H */

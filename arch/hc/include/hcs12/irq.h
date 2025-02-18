@@ -1,5 +1,7 @@
-/************************************************************************************
+/****************************************************************************
  * arch/hc/include/hcs12/irq.h
+ *
+ * SPDX-License-Identifier: Apache-2.0
  *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -16,7 +18,7 @@
  * License for the specific language governing permissions and limitations
  * under the License.
  *
- ************************************************************************************/
+ ****************************************************************************/
 
 /* This file should never be included directly but, rather,
  * only indirectly through nuttx/irq.h
@@ -25,21 +27,21 @@
 #ifndef __ARCH_HC_INCLUDE_HCS12_IRQ_H
 #define __ARCH_HC_INCLUDE_HCS12_IRQ_H
 
-/************************************************************************************
+/****************************************************************************
  * Included Files
- ************************************************************************************/
+ ****************************************************************************/
 
 #include <nuttx/config.h>
 #include <nuttx/irq.h>
 
-/************************************************************************************
+/****************************************************************************
  * Pre-processor Definitions
- ************************************************************************************/
+ ****************************************************************************/
 
 /* CCR bit definitions */
 
 #define HCS12_CCR_C (1 << 0) /* Bit 0: Carry/Borrow status bit */
-#define HCS12_CCR_V (1 << 1) /* Bit 1: Two’s complement overflow status bit */
+#define HCS12_CCR_V (1 << 1) /* Bit 1: Two's complement overflow status bit */
 #define HCS12_CCR_Z (1 << 2) /* Bit 2: Zero status bit */
 #define HCS12_CCR_N (1 << 3) /* Bit 3: Negative status bit */
 #define HCS12_CCR_I (1 << 4) /* Bit 4: Maskable interrupt control bit */
@@ -47,7 +49,7 @@
 #define HCS12_CCR_X (1 << 6) /* Bit 6: Non-maskable interrupt control bit */
 #define HCS12_CCR_S (1 << 7) /* Bit 7: STOP instruction control bit */
 
-/************************************************************************************
+/****************************************************************************
  * Register state save strucure
  *   Low Address        <-- SP after state save
  *                [PPAGE]
@@ -71,7 +73,7 @@
  *                PCH
  *   High Address PCL    <-- SP before interrupt
  *
- ************************************************************************************/
+ ****************************************************************************/
 
 /* Byte offsets */
 
@@ -116,8 +118,8 @@
 #  define REG_SPH            (REG_FIRST_HARDREG+8)
 #  define REG_SPL            (REG_FIRST_HARDREG+9)
 
-/* On entry into an I- or X-interrupt, into an SWI, or into an undefined instruction
- * interrupt, the stack frame created by hardware looks like:
+/* On entry into an I- or X-interrupt, into an SWI, or into an undefined
+ * instruction interrupt, the stack frame created by hardware looks like:
  *
  * Low Address       <-- SP after interrupt
  *              CCR
@@ -149,9 +151,9 @@
 #define INTFRAME_SIZE        9
 #define XCPTCONTEXT_REGS     TOTALFRAME_SIZE
 
-/************************************************************************************
+/****************************************************************************
  * Public Types
- ************************************************************************************/
+ ****************************************************************************/
 
 /* This structure defines the way the registers are stored. */
 
@@ -161,9 +163,9 @@ struct xcptcontext
   uint8_t regs[XCPTCONTEXT_REGS];
 };
 
-/************************************************************************************
+/****************************************************************************
  * Inline functions
- ************************************************************************************/
+ ****************************************************************************/
 
 /* Name: up_irq_save, up_irq_restore, and friends.
  *
@@ -183,7 +185,7 @@ struct xcptcontext
 
 /* Get the current value of the CCR */
 
-static inline irqstate_t up_getccr(void)
+static inline_function irqstate_t up_getccr(void)
 {
   irqstate_t ccr;
   __asm__
@@ -197,7 +199,7 @@ static inline irqstate_t up_getccr(void)
 
 /* Save the current interrupt enable state & disable IRQs */
 
-static inline irqstate_t up_irq_save(void)
+static inline_function irqstate_t up_irq_save(void)
 {
   irqstate_t ccr;
   __asm__
@@ -212,7 +214,7 @@ static inline irqstate_t up_irq_save(void)
 
 /* Restore saved interrupt state */
 
-static inline void up_irq_restore(irqstate_t flags)
+static inline_function void up_irq_restore(irqstate_t flags)
 {
   /* Should interrupts be enabled? */
 
@@ -226,17 +228,18 @@ static inline void up_irq_restore(irqstate_t flags)
 
 /* System call */
 
-static inline void system_call3(unsigned int nbr, uintptr_t parm1,
-                                uintptr_t parm2, uintptr_t parm3)
+static inline_function
+void system_call3(unsigned int nbr, uintptr_t parm1,
+                  uintptr_t parm2, uintptr_t parm3)
 {
   /* To be provided */
 
   /* __asm("swi") */
 }
 
-/************************************************************************************
+/****************************************************************************
  * Public Data
- ************************************************************************************/
+ ****************************************************************************/
 
 #ifdef __cplusplus
 #define EXTERN extern "C"
@@ -246,9 +249,9 @@ extern "C"
 #define EXTERN extern
 #endif
 
-/************************************************************************************
+/****************************************************************************
  * Public Functions Prototypes
- ************************************************************************************/
+ ****************************************************************************/
 
 #undef EXTERN
 #ifdef __cplusplus

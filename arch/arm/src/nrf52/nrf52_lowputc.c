@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/nrf52/nrf52_lowputc.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -27,9 +29,7 @@
 #include <stdbool.h>
 #include <assert.h>
 
-#include "arm_arch.h"
 #include "arm_internal.h"
-
 #include "hardware/nrf52_memorymap.h"
 #include "hardware/nrf52_uarte.h"
 
@@ -76,12 +76,6 @@ static const struct uart_config_s g_console_config =
   .parity    = CONSOLE_PARITY,
   .bits      = CONSOLE_BITS,
   .stopbits2 = CONSOLE_2STOP,
-#ifdef CONFIG_SERIAL_IFLOWCONTROL
-  .iflow     = CONSOLE_IFLOW,
-#endif
-#ifdef CONFIG_SERIAL_OFLOWCONTROL
-  .oflow     = CONSOLE_OFLOW,
-#endif
   .txpin     = CONSOLE_TX_PIN,
   .rxpin     = CONSOLE_RX_PIN,
 };
@@ -212,9 +206,15 @@ static void nrf52_setbaud(uintptr_t base, const struct uart_config_s *config)
           break;
         }
 
+      case 1000000:
+        {
+          br = UART_BAUDRATE_1000000;
+          break;
+        }
+
       default:
         {
-          DEBUGASSERT(0);
+          DEBUGPANIC();
           break;
         }
     }
@@ -406,7 +406,7 @@ void nrf52_usart_disable(uintptr_t base, const struct uart_config_s *config)
  ****************************************************************************/
 
 void nrf52_usart_setformat(uintptr_t base,
-                           FAR const struct uart_config_s *config)
+                           const struct uart_config_s *config)
 {
   /* Configure baud */
 

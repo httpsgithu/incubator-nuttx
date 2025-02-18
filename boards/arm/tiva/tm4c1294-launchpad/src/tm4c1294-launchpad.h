@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/tiva/tm4c1294-launchpad/src/tm4c1294-launchpad.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -41,7 +43,7 @@
 
 #if !defined(CONFIG_TIVA_HCIUART) || !defined(CONFIG_BLUETOOTH_UART)
 #  undef HAVE_HCIUART
-#elif defined(CONFIG_TIVA_UART0_HCIUART)
+#elif defined(CONFIG_TIVA_UART0_HCIUART) && !defined(TM4C1294_LAUNCHPAD_JUMPERS_CAN)
 #  define HCIUART_SERDEV HCIUART0
 #elif defined(CONFIG_TIVA_UART1_HCIUART)
 #  define HCIUART_SERDEV HCIUART1
@@ -76,6 +78,10 @@
 #if !defined(CONFIG_SYSTEM_I2CTOOL) || !defined(CONFIG_I2C_DRIVER)
 #  undef HAVE_I2CTOOL
 #endif
+
+/* Define the procfs mounting point */
+
+#define TIVA_PROCFS_MOUNTPOINT "/proc"
 
 /* LED definitions **********************************************************/
 
@@ -209,6 +215,18 @@ int tm4c_bringup(void);
 
 #ifdef CONFIG_TM4C1294_LAUNCHPAD_TIMER
 int tiva_timer_configure(void);
+#endif
+
+/****************************************************************************
+ * Name: tm4c_can_setup
+ *
+ * Description:
+ *   Initialize CAN modules and register the CAN driver.
+ *
+ ****************************************************************************/
+
+#ifdef CONFIG_TIVA_CAN
+int tm4c_can_setup(void);
 #endif
 
 /****************************************************************************

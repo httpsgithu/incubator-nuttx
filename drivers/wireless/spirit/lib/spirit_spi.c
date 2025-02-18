@@ -1,6 +1,8 @@
 /******************************************************************************
  * drivers/wireless/spirit/lib/spirit_spi.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -87,7 +89,7 @@ static void spirit_dump_buffer(FAR const uint8_t *buffer, unsigned int buflen)
               *ptr++ = ' ';
             }
 
-          sprintf(ptr, "%02x ", *buffer++);
+          snprintf(ptr, sizeof(outbuf) - (ptr - outbuf), "%02x ", *buffer++);
           ptr += 3;
         }
 
@@ -634,7 +636,7 @@ int spirit_waitstatus(FAR struct spirit_library_s *spirit,
    * resulting delay in ticks is greater than or equal to the requested time
    * in MSEC.
    *
-   * REVIST: If USEC_PER_TICK and 'msec' are large, then the second
+   * REVISIT: If USEC_PER_TICK and 'msec' are large, then the second
    * computation may overflow!
    */
 

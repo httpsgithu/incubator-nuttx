@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/sama5/sama5d2x_pio.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -34,8 +36,6 @@
 #include <arch/board/board.h>
 
 #include "arm_internal.h"
-#include "arm_arch.h"
-
 #include "hardware/_sama5d2x_pio.h"
 
 #include "chip.h"
@@ -214,9 +214,9 @@ static uint32_t sam_configcommon(pio_pinset_t cfgset)
 
   if ((cfgset & PIO_CFG_DEGLITCH) != 0)
     {
-      if ((cfgset & PIO_CFG_DEGLITCH) != 0)
+      if ((cfgset & PIO_CFG_SLOWCLK) != 0)
         {
-          regval |= (PIO_CFGR_IFEN | PIO_CFGR_IFSCEN);
+          regval |= (PIO_CFGR_IFEN | PIO_CFG_SLOWCLK);
         }
       else
         {
@@ -264,6 +264,32 @@ static uint32_t sam_configcommon(pio_pinset_t cfgset)
       break;
     }
 
+  /* Select Input Event selection.
+   * NOTE: Only applies to input pins
+   */
+
+  switch (cfgset & PIO_INT_MASK)
+    {
+      default:
+      case PIO_INT_NONE:
+        break;
+      case PIO_INT_FALLING:
+        regval |= PIO_CFGR_EVTSEL_FALLING;
+        break;
+      case PIO_INT_RISING:
+        regval |= PIO_CFGR_EVTSEL_RISING;
+        break;
+      case PIO_INT_BOTHEDGES:
+        regval |= PIO_CFGR_EVTSEL_BOTH;
+        break;
+      case PIO_INT_LOWLEVEL:
+        regval |= PIO_CFGR_EVTSEL_LOW;
+        break;
+      case PIO_INT_HIGHLEVEL:
+        regval |= PIO_CFGR_EVTSEL_HIGH;
+        break;
+    }
+
   return regval;
 }
 
@@ -287,7 +313,7 @@ static inline int sam_configinput(uintptr_t base, uint32_t pin,
   /* Select GPIO input */
 
   regval = sam_configcommon(cfgset);
-  regval = (PIO_CFGR_FUNC_GPIO | PIO_CFGR_DIR_INPUT);
+  regval |= (PIO_CFGR_FUNC_GPIO | PIO_CFGR_DIR_INPUT);
 
   /* Clear some output only bits.  Mostly this just simplifies debug. */
 

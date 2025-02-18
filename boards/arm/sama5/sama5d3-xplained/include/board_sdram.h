@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/sama5/sama5d3-xplained/include/board_sdram.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -26,7 +28,6 @@
  ****************************************************************************/
 
 #include <nuttx/config.h>
-#include "sam_pmc.h"
 
 /****************************************************************************
  * Pre-processor Definitions
@@ -92,11 +93,7 @@
 #  define BOARD_CKGR_UCKR_UPLLCOUNT  (15)  /* Maximum value */
 #  define BOARD_CKGR_UCKR_BIASCOUNT  (15)  /* Maximum value */
 
-/* REVISIT:  The divisor of 10 produces a rate that is too high. Division
- * by 5, however, seems to work just fine.  No idea why?
- */
-
-#  define BOARD_UPLL_OHCI_DIV        (5)   /* Divide by 5 */
+#  define BOARD_UPLL_OHCI_DIV        (10)   /* Divide by 10 */
 #endif
 
 /* ADC Configuration
@@ -111,7 +108,7 @@
 
 #define BOARD_ADC_PRESCAL          (7)
 #define BOARD_TSD_STARTUP          (40)        /* 40 nanoseconds */
-#define BOARD_TSD_TRACKTIM         (2000)      /* Min 1µs at 8MHz */
+#define BOARD_TSD_TRACKTIM         (2000)      /* Min 1Âµs at 8MHz */
 #define BOARD_TSD_DEBOUNCE         (10000000)  /* 10 milliseconds (units nanoseconds) */
 
 /* HSMCI clocking

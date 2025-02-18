@@ -1,6 +1,8 @@
 /****************************************************************************
  * libs/libnx/nxfonts/nxfonts.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -18,8 +20,8 @@
  *
  ****************************************************************************/
 
-#ifndef __LIBNX_NXFONTS_NXFONTS_H
-#define __LIBNX_NXFONTS_NXFONTS_H
+#ifndef __LIBS_LIBNX_NXFONTS_NXFONTS_H
+#define __LIBS_LIBNX_NXFONTS_NXFONTS_H
 
 /****************************************************************************
  * Included Files
@@ -45,11 +47,11 @@
 
 #undef EXTERN
 #if defined(__cplusplus)
-# define EXTERN extern "C"
+#  define EXTERN extern "C"
 extern "C"
 {
 #else
-# define EXTERN extern
+#  define EXTERN extern
 #endif
 
 EXTERN struct nx_fontset_s g_7bitfonts;
@@ -67,4 +69,4 @@ EXTERN struct nx_font_s g_fonts;
 }
 #endif
 
-#endif /* __LIBNX_NXFONTS_NXFONTS_H */
+#endif /* __LIBS_LIBNX_NXFONTS_NXFONTS_H */

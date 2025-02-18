@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/s32k1xx/s32k1xx_eeeprom.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -18,8 +20,8 @@
  *
  ****************************************************************************/
 
-#ifndef __ARCH_ARM_SRC_S32K1XX_EEEPROM_H
-#define __ARCH_ARM_SRC_S32K1XX_EEEPROM_H
+#ifndef __ARCH_ARM_SRC_S32K1XX_S32K1XX_EEEPROM_H
+#define __ARCH_ARM_SRC_S32K1XX_S32K1XX_EEEPROM_H
 
 /****************************************************************************
  * Included Files
@@ -70,4 +72,4 @@ void s32k1xx_eeeprom_init(void);
  ****************************************************************************/
 
 int s32k1xx_eeeprom_register(int minor, uint32_t size);
-#endif /* __ARCH_ARM_SRC_S32K1XX_EEEPROM_H */
+#endif /* __ARCH_ARM_SRC_S32K1XX_S32K1XX_EEEPROM_H */

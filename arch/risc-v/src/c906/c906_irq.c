@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/risc-v/src/c906/c906_irq.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -30,18 +32,10 @@
 #include <debug.h>
 
 #include <nuttx/arch.h>
-#include <arch/irq.h>
+#include <nuttx/irq.h>
 
 #include "riscv_internal.h"
-#include "riscv_arch.h"
-
 #include "c906.h"
-
-/****************************************************************************
- * Public Data
- ****************************************************************************/
-
-volatile uint64_t *g_current_regs[1];
 
 /****************************************************************************
  * Public Functions
@@ -75,7 +69,7 @@ void up_irqinitialize(void)
 
 #if defined(CONFIG_STACK_COLORATION) && CONFIG_ARCH_INTERRUPTSTACK > 15
   size_t intstack_size = (CONFIG_ARCH_INTERRUPTSTACK & ~15);
-  riscv_stack_color((void *)&g_intstackalloc, intstack_size);
+  riscv_stack_color(g_intstackalloc, intstack_size);
 #endif
 
   /* Set priority for all global interrupts to 1 (lowest) */
@@ -91,17 +85,9 @@ void up_irqinitialize(void)
 
   putreg32(0, C906_PLIC_MTHRESHOLD);
 
-  /* currents_regs is non-NULL only while processing an interrupt */
+  /* Attach the common interrupt handler */
 
-  CURRENT_REGS = NULL;
-
-  /* Attach the ecall interrupt handler */
-
-  irq_attach(C906_IRQ_ECALLM, riscv_swint, NULL);
-
-#ifdef CONFIG_BUILD_PROTECTED
-  irq_attach(C906_IRQ_ECALLU, riscv_swint, NULL);
-#endif
+  riscv_exception_attach();
 
 #ifndef CONFIG_SUPPRESS_INTERRUPTS
 
@@ -122,19 +108,18 @@ void up_irqinitialize(void)
 void up_disable_irq(int irq)
 {
   int extirq = 0;
-  uint64_t oldstat = 0;
 
-  if (irq == C906_IRQ_MSOFT)
+  if (irq == RISCV_IRQ_MSOFT)
     {
       /* Read mstatus & clear machine software interrupt enable in mie */
 
-      asm volatile ("csrrc %0, mie, %1": "=r" (oldstat) : "r"(MIE_MSIE));
+      CLEAR_CSR(CSR_MIE, MIE_MSIE);
     }
-  else if (irq == C906_IRQ_MTIMER)
+  else if (irq == RISCV_IRQ_MTIMER)
     {
       /* Read mstatus & clear machine timer interrupt enable in mie */
 
-      asm volatile ("csrrc %0, mie, %1": "=r" (oldstat) : "r"(MIE_MTIE));
+      CLEAR_CSR(CSR_MIE, MIE_MTIE);
     }
   else if (irq >= C906_IRQ_PERI_START)
     {
@@ -149,7 +134,7 @@ void up_disable_irq(int irq)
         }
       else
         {
-          ASSERT(false);
+          PANIC();
         }
     }
 }
@@ -165,19 +150,18 @@ void up_disable_irq(int irq)
 void up_enable_irq(int irq)
 {
   int extirq;
-  uint64_t oldstat;
 
-  if (irq == C906_IRQ_MSOFT)
+  if (irq == RISCV_IRQ_MSOFT)
     {
       /* Read mstatus & set machine software interrupt enable in mie */
 
-      asm volatile ("csrrs %0, mie, %1": "=r" (oldstat) : "r"(MIE_MSIE));
+      SET_CSR(CSR_MIE, MIE_MSIE);
     }
-  else if (irq == C906_IRQ_MTIMER)
+  else if (irq == RISCV_IRQ_MTIMER)
     {
       /* Read mstatus & set machine timer interrupt enable in mie */
 
-      asm volatile ("csrrs %0, mie, %1": "=r" (oldstat) : "r"(MIE_MTIE));
+      SET_CSR(CSR_MIE, MIE_MTIE);
     }
   else if (irq >= C906_IRQ_PERI_START)
     {
@@ -192,34 +176,9 @@ void up_enable_irq(int irq)
         }
       else
         {
-          ASSERT(false);
+          PANIC();
         }
     }
-}
-
-/****************************************************************************
- * Name: riscv_get_newintctx
- *
- * Description:
- *   Return initial mstatus when a task is created.
- *
- ****************************************************************************/
-
-uint32_t riscv_get_newintctx(void)
-{
-  /* Set machine previous privilege mode to machine mode. Reegardless of
-   * how NuttX is configured and of what kind of thread is being started.
-   * That is because all threads, even user-mode threads will start in
-   * kernel trampoline at nxtask_start() or pthread_start().
-   * The thread's privileges will be dropped before transitioning to
-   * user code. Also set machine previous interrupt enable.
-   */
-
-#ifdef CONFIG_ARCH_FPU
-  return (MSTATUS_FS_INIT | MSTATUS_MPPM | MSTATUS_MPIE);
-#else
-  return (MSTATUS_MPPM | MSTATUS_MPIE);
-#endif
 }
 
 /****************************************************************************
@@ -244,16 +203,16 @@ void riscv_ack_irq(int irq)
 
 irqstate_t up_irq_enable(void)
 {
-  uint64_t oldstat;
+  irqstate_t oldstat;
 
   /* Enable MEIE (machine external interrupt enable) */
 
   /* TODO: should move to up_enable_irq() */
 
-  asm volatile ("csrrs %0, mie, %1": "=r" (oldstat) : "r"(MIE_MEIE));
+  SET_CSR(CSR_MIE, MIE_MEIE);
 
   /* Read mstatus & set machine interrupt enable (MIE) in mstatus */
 
-  asm volatile ("csrrs %0, mstatus, %1": "=r" (oldstat) : "r"(MSTATUS_MIE));
+  oldstat = READ_AND_SET_CSR(CSR_MSTATUS, MSTATUS_MIE);
   return oldstat;
 }

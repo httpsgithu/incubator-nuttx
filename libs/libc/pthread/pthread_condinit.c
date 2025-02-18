@@ -1,6 +1,8 @@
 /****************************************************************************
  * libs/libc/pthread/pthread_condinit.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -54,7 +56,7 @@ int pthread_cond_init(FAR pthread_cond_t *cond,
 {
   int ret = OK;
 
-  sinfo("cond=0x%p attr=0x%p\n", cond, attr);
+  sinfo("cond=%p attr=%p\n", cond, attr);
 
   if (cond == NULL)
     {
@@ -71,13 +73,8 @@ int pthread_cond_init(FAR pthread_cond_t *cond,
     }
   else
     {
-      /* The contained semaphore is used for signaling and, hence, should
-       * not have priority inheritance enabled.
-       */
-
-      sem_setprotocol(&cond->sem, SEM_PRIO_NONE);
-
       cond->clockid = attr ? attr->clockid : CLOCK_REALTIME;
+      cond->wait_count = 0;
     }
 
   sinfo("Returning %d\n", ret);

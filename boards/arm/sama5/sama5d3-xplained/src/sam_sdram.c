@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/sama5/sama5d3-xplained/src/sam_sdram.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -26,8 +28,7 @@
 
 #include <debug.h>
 
-#include "arm_arch.h"
-
+#include "arm_internal.h"
 #include "sam_periphclks.h"
 #include "hardware/sam_memorymap.h"
 #include "hardware/sam_pmc.h"
@@ -138,8 +139,8 @@ static inline void sam_sdram_delay(unsigned int loops)
  *   Per the SAMA5D3-Xplained User guide:
  *   "Two DDR2/SDRAM (MT47H64M16HR) used as main system memory (256 MByte).
  *   The board includes 2 Gbits of on-board soldered DDR2 (double data rate)
- *   SDRAM. The footprints can also host two DDR2(MT47H128M16RT) from Micron®
- *   for a total of 512 MBytes of DDR2 memory.
+ *   SDRAM. The footprints can also host two DDR2(MT47H128M16RT) from
+ *   MicronÂ® for a total of 512 MBytes of DDR2 memory.
  *   The memory bus is 32 bits wide and operates with a frequency of up
  *   to 166 MHz."
  *

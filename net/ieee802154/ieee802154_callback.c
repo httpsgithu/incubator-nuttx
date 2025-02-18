@@ -1,6 +1,7 @@
 /****************************************************************************
  * net/ieee802154/ieee802154_callback.c
- * Forward events to waiting PF_IEEE802154 sockets.
+ *
+ * SPDX-License-Identifier: Apache-2.0
  *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -66,7 +67,7 @@ uint16_t ieee802154_callback(FAR struct radio_driver_s *radio,
     {
       /* Perform the callback */
 
-      flags = devif_conn_event(&radio->r_dev, conn, flags, conn->list);
+      flags = devif_conn_event(&radio->r_dev, flags, conn->sconn.list);
     }
 
   return flags;

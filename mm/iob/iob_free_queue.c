@@ -1,6 +1,8 @@
 /****************************************************************************
  * mm/iob/iob_free_queue.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -33,14 +35,6 @@
 #if CONFIG_IOB_NCHAINS > 0
 
 /****************************************************************************
- * Pre-processor Definitions
- ****************************************************************************/
-
-#ifndef NULL
-#  define NULL ((FAR void *)0)
-#endif
-
-/****************************************************************************
  * Public Functions
  ****************************************************************************/
 
@@ -52,8 +46,7 @@
  *
  ****************************************************************************/
 
-void iob_free_queue(FAR struct iob_queue_s *qhead,
-                    enum iob_user_e producerid)
+void iob_free_queue(FAR struct iob_queue_s *qhead)
 {
   FAR struct iob_qentry_s *iobq;
   FAR struct iob_qentry_s *nextq;
@@ -85,7 +78,7 @@ void iob_free_queue(FAR struct iob_queue_s *qhead,
 
       /* Free the I/O chain */
 
-      iob_free_chain(iob, producerid);
+      iob_free_chain(iob);
     }
 }
 

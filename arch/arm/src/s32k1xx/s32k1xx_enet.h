@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/s32k1xx/s32k1xx_enet.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -54,32 +56,6 @@ extern "C"
 #define EXTERN extern
 #endif
 
-#if !defined(CONFIG_NETDEV_LATEINIT)
-
-/****************************************************************************
- * Function: arm_netinitialize
- *
- * Description:
- *   Initialize the first network interface.  If there are more than one
- *   interface in the chip, then board-specific logic will have to provide
- *   this function to determine which, if any, Ethernet controllers should
- *   be initialized.  Also prototyped in arm_internal.h.
- *
- * Input Parameters:
- *   None
- *
- * Returned Value:
- *   OK on success; Negated errno on failure.
- *
- * Assumptions:
- *   Called very early in the initialization sequence.
- *
- ****************************************************************************/
-
-void arm_netinitialize(void);
-
-#else
-
 /****************************************************************************
  * Function: s32k1xx_netinitialize
  *
@@ -97,8 +73,8 @@ void arm_netinitialize(void);
  *
  ****************************************************************************/
 
+#ifdef CONFIG_NETDEV_LATEINIT
 int s32k1xx_netinitialize(int intf);
-
 #endif
 
 /****************************************************************************

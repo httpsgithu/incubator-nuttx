@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/lpc31xx/lpc31_cgudrvr.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -19,7 +21,7 @@
  ****************************************************************************/
 
 /* References:
- *   - NXP UM10314 LPC3130/31 User manual Rev. 1.01 — 9 September 2009
+ *   - NXP UM10314 LPC3130/31 User manual Rev. 1.01 - 9 September 2009
  *   - NXP lpc313x.cdl.drivers.zip example driver code
  */
 
@@ -35,7 +37,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 
-#include "arm_arch.h"
+#include "arm_internal.h"
 #include "lpc31_cgu.h"
 
 /****************************************************************************
@@ -492,7 +494,8 @@ struct lpc31_clkinit_s
   {
     uint16_t  sel;
     struct lpc31_fdivconfig_s cfg;
-  } dynfdiv[CGU_NDYNFRACDIV];
+  }
+  dynfdiv[CGU_NDYNFRACDIV];
 #endif
 };
 

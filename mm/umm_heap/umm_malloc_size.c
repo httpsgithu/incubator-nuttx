@@ -1,6 +1,8 @@
 /****************************************************************************
  * mm/umm_heap/umm_malloc_size.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -28,6 +30,8 @@
 
 #include <nuttx/mm/mm.h>
 
+#include "umm_heap.h"
+
 /****************************************************************************
  * Public Functions
  ****************************************************************************/
@@ -35,5 +39,5 @@
 #undef malloc_size /* See mm/README.txt */
 size_t malloc_size(FAR void *mem)
 {
-  return mm_malloc_size(mem);
+  return mm_malloc_size(USR_HEAP, mem);
 }

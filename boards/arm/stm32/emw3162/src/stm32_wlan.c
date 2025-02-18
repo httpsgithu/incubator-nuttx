@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/stm32/emw3162/src/stm32_wlan.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -31,6 +33,7 @@
 
 #include <arch/board/board.h>
 
+#include "stm32.h"
 #include "stm32_gpio.h"
 #include "stm32_sdio.h"
 
@@ -124,6 +127,15 @@ void bcmf_board_setup_oob_irq(int minor, int (*func)(void *), void *arg)
     {
       sdio_set_sdio_card_isr(g_sdio_dev, func, arg);
     }
+}
+
+/****************************************************************************
+ * Name: bcmf_board_etheraddr
+ ****************************************************************************/
+
+bool bcmf_board_etheraddr(struct ether_addr *ethaddr)
+{
+  return false;
 }
 
 /****************************************************************************

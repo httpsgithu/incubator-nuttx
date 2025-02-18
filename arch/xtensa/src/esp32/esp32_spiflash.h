@@ -45,8 +45,49 @@ extern "C"
 #endif
 
 /****************************************************************************
+ * Pre-processor Definitions
+ ****************************************************************************/
+
+#define CACHE_BLOCKSIZE (32*1024)
+
+/****************************************************************************
  * Public Function Prototypes
  ****************************************************************************/
+
+#ifdef CONFIG_ESP32_SPIRAM
+
+/****************************************************************************
+ * Name: esp32_set_bank
+ *
+ * Description:
+ *   Set Ext-SRAM-Cache mmu mapping.
+ *
+ * Input Parameters:
+ *   virt_bank - Beginning of the virtual bank
+ *   phys_bank - Beginning of the physical bank
+ *   ct        - Number of banks
+ *
+ * Returned Value:
+ *   None.
+ *
+ ****************************************************************************/
+
+void esp32_set_bank(int virt_bank, int phys_bank, int ct);
+
+#endif
+
+/****************************************************************************
+ * Name: esp32_spiflash_init
+ *
+ * Description:
+ *   Initialize ESP32 SPI flash driver.
+ *
+ * Returned Value:
+ *   OK if success or a negative value if fail.
+ *
+ ****************************************************************************/
+
+int esp32_spiflash_init(void);
 
 /****************************************************************************
  * Name: esp32_spiflash_alloc_mtdpart
@@ -57,6 +98,8 @@ extern "C"
  * Input Parameters:
  *   mtd_offset - MTD Partition offset from the base address in SPI Flash.
  *   mtd_size   - Size for the MTD partition.
+ *   encrypted  - Flag indicating whether the newly allocated partition will
+ *                have its content encrypted.
  *
  * Returned Value:
  *   ESP32 SPI Flash MTD data pointer if success or NULL if fail.
@@ -64,7 +107,8 @@ extern "C"
  ****************************************************************************/
 
 struct mtd_dev_s *esp32_spiflash_alloc_mtdpart(uint32_t mtd_offset,
-                                                   uint32_t mtd_size);
+                                               uint32_t mtd_size,
+                                               bool encrypted);
 
 /****************************************************************************
  * Name: esp32_spiflash_get_mtd
@@ -97,6 +141,22 @@ struct mtd_dev_s *esp32_spiflash_get_mtd(void);
  ****************************************************************************/
 
 struct mtd_dev_s *esp32_spiflash_encrypt_get_mtd(void);
+
+/****************************************************************************
+ * Name: esp32_flash_encryption_enabled
+ *
+ * Description:
+ *   Check if ESP32 enables SPI Flash encryption.
+ *
+ * Input Parameters:
+ *   None
+ *
+ * Returned Value:
+ *   True: SPI Flash encryption is enable, False if not.
+ *
+ ****************************************************************************/
+
+bool esp32_flash_encryption_enabled(void);
 
 #ifdef __cplusplus
 }

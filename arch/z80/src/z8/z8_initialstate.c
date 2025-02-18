@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/z80/src/z8/z8_initialstate.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -31,7 +33,6 @@
 
 #include "chip.h"
 #include "z80_internal.h"
-#include "z80_arch.h"
 
 /****************************************************************************
  * Pre-processor Definitions

@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/cxd56xx/cxd56_gnss.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -82,7 +84,7 @@ extern "C"
  *
  ****************************************************************************/
 
-int cxd56_gnssinitialize(FAR const char *devpath);
+int cxd56_gnssinitialize(const char *devpath);
 
 #undef EXTERN
 #if defined(__cplusplus)

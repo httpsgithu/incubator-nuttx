@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/samd5e5/sam_usbhost.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -257,7 +259,7 @@ int samd_usbhost_initialize(void);
  ****************************************************************************/
 
 struct usbhost_connection_s;
-FAR struct usbhost_connection_s *sam_usbhost_initialize(int controller);
+struct usbhost_connection_s *sam_usbhost_initialize(int controller);
 
 /****************************************************************************
  * Name: sam_usbhost_vbusdrive

@@ -43,10 +43,19 @@ extern "C"
 #define EXTERN extern
 #endif
 
+#ifdef CONFIG_ESP32_I2C0
+#  define ESP32_I2C0 0
+#endif /* CONFIG_ESP32_I2C0 */
+
+#ifdef CONFIG_ESP32_I2C1
+#  define ESP32_I2C1 1
+#endif /* CONFIG_ESP32_I2C1 */
+
 /****************************************************************************
  * Public Function Prototypes
  ****************************************************************************/
 
+#ifdef CONFIG_ESPRESSIF_I2C_PERIPH
 /****************************************************************************
  * Name: esp32_i2cbus_initialize
  *
@@ -82,6 +91,7 @@ struct i2c_master_s *esp32_i2cbus_initialize(int port);
  ****************************************************************************/
 
 int esp32_i2cbus_uninitialize(struct i2c_master_s *dev);
+#endif /* CONFIG_ESPRESSIF_I2C_PERIPH */
 
 #ifdef __cplusplus
 }

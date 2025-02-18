@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/mips/src/pic32mz/pic32mz_timerisr.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -33,8 +35,6 @@
 
 #include "clock/clock.h"
 #include "mips_internal.h"
-#include "mips_arch.h"
-
 #include "pic32mz_config.h"
 #include "hardware/pic32mz_timer.h"
 #include "hardware/pic32mz_int.h"
@@ -127,7 +127,7 @@ static int pc32mz_timerisr(int irq, uint32_t *regs, void *arg)
 {
   /* Clear the pending timer interrupt */
 
-  up_clrpend_irq(PIC32MZ_IRQ_T1);
+  mips_clrpend_irq(PIC32MZ_IRQ_T1);
 
   /* Process timer interrupt */
 
@@ -162,7 +162,7 @@ void up_timer_initialize(void)
 
   /* Configure the timer interrupt */
 
-  up_clrpend_irq(PIC32MZ_IRQ_T1);
+  mips_clrpend_irq(PIC32MZ_IRQ_T1);
 
   /* Attach the timer interrupt vector */
 

@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/stm32/nucleo-f429zi/src/stm32_userleds.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -27,6 +29,8 @@
 #include <stdbool.h>
 #include <debug.h>
 
+#include <sys/param.h>
+
 #include <nuttx/board.h>
 #include <arch/board/board.h>
 
@@ -34,12 +38,6 @@
 #include "nucleo-144.h"
 
 #ifndef CONFIG_ARCH_LEDS
-
-/****************************************************************************
- * Pre-processor Definitions
- ****************************************************************************/
-
-#define ARRAYSIZE(x) (sizeof((x)) / sizeof((x)[0]))
 
 /****************************************************************************
  * Private Data
@@ -77,7 +75,7 @@ uint32_t board_userled_initialize(void)
 
   /* Configure LED1-3 GPIOs for output */
 
-  for (i = 0; i < ARRAYSIZE(g_ledcfg); i++)
+  for (i = 0; i < nitems(g_ledcfg); i++)
     {
       stm32_configgpio(g_ledcfg[i]);
     }
@@ -97,7 +95,7 @@ uint32_t board_userled_initialize(void)
 
 void board_userled(int led, bool ledon)
 {
-  if ((unsigned)led < ARRAYSIZE(g_ledcfg))
+  if ((unsigned)led < nitems(g_ledcfg))
     {
       stm32_gpiowrite(g_ledcfg[led], ledon);
     }
@@ -121,7 +119,7 @@ void board_userled_all(uint32_t ledset)
 
   /* Configure LED1-3 GPIOs for output */
 
-  for (i = 0; i < ARRAYSIZE(g_ledcfg); i++)
+  for (i = 0; i < nitems(g_ledcfg); i++)
     {
       stm32_gpiowrite(g_ledcfg[i], (ledset & (1 << i)) != 0);
     }

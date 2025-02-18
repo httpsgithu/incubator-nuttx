@@ -1,6 +1,8 @@
 /****************************************************************************
  * net/socket/recvmsg.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -28,6 +30,7 @@
 #include <errno.h>
 
 #include <nuttx/cancelpt.h>
+#include <nuttx/fs/fs.h>
 #include <nuttx/net/net.h>
 
 #include "socket/socket.h"
@@ -69,6 +72,10 @@
 ssize_t psock_recvmsg(FAR struct socket *psock, FAR struct msghdr *msg,
                        int flags)
 {
+  unsigned long msg_controllen;
+  FAR void *msg_control;
+  int ret;
+
   /* Verify that non-NULL pointers were passed */
 
   if (msg == NULL || msg->msg_iov == NULL || msg->msg_iov->iov_base == NULL)
@@ -79,11 +86,6 @@ ssize_t psock_recvmsg(FAR struct socket *psock, FAR struct msghdr *msg,
   if (msg->msg_name != NULL && msg->msg_namelen <= 0)
     {
       return -EINVAL;
-    }
-
-  if (msg->msg_iovlen != 1)
-    {
-      return -ENOTSUP;
     }
 
   /* Verify that the sockfd corresponds to valid, allocated socket */
@@ -100,46 +102,19 @@ ssize_t psock_recvmsg(FAR struct socket *psock, FAR struct msghdr *msg,
   DEBUGASSERT(psock->s_sockif != NULL &&
               psock->s_sockif->si_recvmsg != NULL);
 
-  return psock->s_sockif->si_recvmsg(psock, msg, flags);
-}
+  /* Save the original cmsg information */
 
-/****************************************************************************
- * Name: nx_recvmsg
- *
- * Description:
- *   nx_recvmsg() receives messages from a socket, and may be used to
- *   receive data on a socket whether or not it is connection-oriented.
- *   This is an internal OS interface.  It is functionally equivalent to
- *   recvmsg() except that:
- *
- *   - It is not a cancellation point, and
- *   - It does not modify the errno variable.
- *
- * Input Parameters:
- *   sockfd  - Socket descriptor of socket
- *   msg      Buffer to receive the message
- *   flags   - Receive flags
- *
- * Returned Value:
- *   On success, returns the number of characters received.  If no data is
- *   available to be received and the peer has performed an orderly shutdown,
- *   nx_recvmsg() will return 0.  Otherwise, on any failure, a negated errno
- *   value is returned (see comments with recvmsg() for a list of appropriate
- *   errno values).
- *
- ****************************************************************************/
+  msg_control         = msg->msg_control;
+  msg_controllen      = msg->msg_controllen;
 
-ssize_t nx_recvmsg(int sockfd, FAR struct msghdr *msg, int flags)
-{
-  FAR struct socket *psock;
+  ret = psock->s_sockif->si_recvmsg(psock, msg, flags);
 
-  /* Get the underlying socket structure */
+  /* Recover the pointer and calculate the cmsg's true data length */
 
-  psock = sockfd_socket(sockfd);
+  msg->msg_control    = msg_control;
+  msg->msg_controllen = msg_controllen - msg->msg_controllen;
 
-  /* Then let psock_recvmsg() do all of the work */
-
-  return psock_recvmsg(psock, msg, flags);
+  return ret;
 }
 
 /****************************************************************************
@@ -187,18 +162,29 @@ ssize_t nx_recvmsg(int sockfd, FAR struct msghdr *msg, int flags)
 
 ssize_t recvmsg(int sockfd, FAR struct msghdr *msg, int flags)
 {
+  FAR struct socket *psock;
+  FAR struct file *filep;
   ssize_t ret;
 
   /* recvmsg() is a cancellation point */
 
   enter_cancellation_point();
 
-  /* Let nx_recvmsg() do all of the work */
+  /* Get the underlying socket structure */
 
-  ret = nx_recvmsg(sockfd, msg, flags);
+  ret = sockfd_socket(sockfd, &filep, &psock);
+
+  /* Let psock_recvmsg() do all of the work */
+
+  if (ret == OK)
+    {
+      ret = psock_recvmsg(psock, msg, flags);
+      fs_putfilep(filep);
+    }
+
   if (ret < 0)
     {
-      _SO_SETERRNO(sockfd_socket(sockfd), -ret);
+      set_errno(-ret);
       ret = ERROR;
     }
 

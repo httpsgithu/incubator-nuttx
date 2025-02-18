@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/tiva/tiva_gpio.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -122,7 +124,7 @@ void tiva_gpio_lockport(pinconfig_t pinconfig, bool lock);
 #ifdef CONFIG_DEBUG_GPIO_INFO
 void tiva_gpio_dumpconfig(pinconfig_t pinconfig);
 #else
-# define tiva_gpio_dumpconfig(p)
+#  define tiva_gpio_dumpconfig(p)
 #endif
 
 #ifdef CONFIG_TIVA_GPIO_IRQS

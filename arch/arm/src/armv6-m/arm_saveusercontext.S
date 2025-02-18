@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/armv6-m/arm_saveusercontext.S
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -23,67 +25,84 @@
  ****************************************************************************/
 
 #include <nuttx/config.h>
-#include <arch/irq.h>
-
-#include "nvic.h"
-#include "svcall.h"
-
-/****************************************************************************
- * Pre-processor Definitions
- ****************************************************************************/
-
-/****************************************************************************
- * Public Symbols
- ****************************************************************************/
+#include <nuttx/irq.h>
 
 	.file	"arm_saveusercontext.S"
 
-/****************************************************************************
- * Macros
- ****************************************************************************/
+	.text
+	.syntax	unified
+	.thumb
 
 /****************************************************************************
  * Public Functions
  ****************************************************************************/
 
 /****************************************************************************
- * Name: arm_saveusercontext
+ * Name: up_saveusercontext
  *
  * Description:
- *   Save the current thread context.  Full prototype is:
+ *   Save the current context.  Full prototype is:
  *
- *   int  arm_saveusercontext(uint32_t *saveregs);
+ *   int up_saveusercontext(void *saveregs);
+ *
+ *   R0 = saveregs = pinter saved array
  *
  * Returned Value:
- *   0: Normal return
- *   1: Context switch return
+ *   None
  *
  ****************************************************************************/
 
-	.text
-	.align	2
-	.code	16
-	.thumb_func
-	.globl	arm_saveusercontext
-	.type	arm_saveusercontext, function
-arm_saveusercontext:
+	.globl	up_saveusercontext
+	.globl	up_saveusercontext
+	.type	up_saveusercontext, %function
 
-	/* Perform the System call with R0=0 and R1=regs */
+up_saveusercontext:
 
-	mov		r1, r0			/* R1: regs */
-	mov		r0, #SYS_save_context	/* R0: save context (also return value) */
-	svc		#SYS_syscall		/* Force synchronous SVCall (or Hard Fault) */
+	/* Save r0~r3 */
 
-	/* There are two return conditions.  On the first return, R0 (the
-	 * return value will be zero.  On the second return we need to
-	 * force R0 to be 1.
-	 */
+	str		r0, [r0, #(4*REG_R0)]
+	str		r1, [r0, #(4*REG_R1)]
+	str		r2, [r0, #(4*REG_R2)]
+	str		r3, [r0, #(4*REG_R3)]
 
-	mov		r3, #(4*REG_R0)		/* R3=Offset to R0 storage */
-	add		r2, r1, r3		/* R2=Address of R0 storage */
-	mov		r3, #1			/* R3=Return value of one */
-	str		r3, [r2, #0]		/* Save return value */
-	bx		lr			/* "normal" return with r0=0 or
-						 * context switch with r0=1 */
-	.size	arm_saveusercontext, .-arm_saveusercontext
+	/* Save r12, r14, pc */
+
+	mov		r1, r12
+	mov		r2, r14
+	str		r1, [r0, #(4*REG_R12)]
+	str		r2, [r0, #(4*REG_R14)]
+	str		r2, [r0, #(4*REG_R15)]
+
+	/* Save xpsr */
+
+	mrs		r1, XPSR
+	str		r1, [r0, #(4*REG_XPSR)]
+
+	/* Save r13, primask, r4~r7 */
+
+	mov		r2, sp
+	mrs		r3, primask
+	stmia		r0!, {r2-r7}
+
+	/* Save r8~r10 */
+
+	mov		r1, r8
+	mov		r2, r9
+	mov		r3, r10
+	stmia		r0!, {r1-r3}
+
+	/* Save r11 and EXC_RETURN */
+
+	mov		r1, r11
+
+	/* Save EXC_RETURN to 0xffffffff */
+
+	movs		r2, #0
+	subs		r2, #1
+	stmia		r0!, {r1-r2}
+
+	movs		r0, #0
+	bx		lr
+
+	.size	up_saveusercontext, . - up_saveusercontext
 	.end

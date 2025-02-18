@@ -1,6 +1,8 @@
 /****************************************************************************
  * libs/libc/stdio/lib_puts.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -23,6 +25,9 @@
  ****************************************************************************/
 
 #include <stdio.h>
+#include <unistd.h>
+#include <sys/uio.h>
+
 #include "libc.h"
 
 /****************************************************************************
@@ -39,6 +44,7 @@
 
 int puts(FAR const IPTR char *s)
 {
+#ifdef CONFIG_FILE_STREAM
   FILE *stream = stdout;
   int nwritten;
   int nput = EOF;
@@ -46,17 +52,17 @@ int puts(FAR const IPTR char *s)
 
   /* Write the string (the next two steps must be atomic) */
 
-  lib_take_semaphore(stream);
+  flockfile(stream);
 
   /* Write the string without its trailing '\0' */
 
-  nwritten = fputs(s, stream);
-  if (nwritten > 0)
+  nwritten = fputs_unlocked(s, stream);
+  if (nwritten >= 0)
     {
       /* Followed by a newline */
 
       char newline = '\n';
-      ret = lib_fwrite(&newline, 1, stream);
+      ret = lib_fwrite_unlocked(&newline, 1, stream);
       if (ret > 0)
         {
           nput = nwritten + 1;
@@ -67,7 +73,7 @@ int puts(FAR const IPTR char *s)
 
           if ((stream->fs_flags & __FS_FLAG_LBF) != 0)
             {
-              ret = lib_fflush(stream, true);
+              ret = lib_fflush_unlocked(stream);
               if (ret < 0)
                 {
                   nput = EOF;
@@ -76,6 +82,17 @@ int puts(FAR const IPTR char *s)
         }
     }
 
-  lib_give_semaphore(stdout);
+  funlockfile(stdout);
   return nput;
+#else
+  size_t len = strlen(s);
+  struct iovec iov[2];
+
+  iov[0].iov_base = (FAR void *)s;
+  iov[0].iov_len  = len;
+  iov[1].iov_base = "\n";
+  iov[1].iov_len  = 1;
+
+  return writev(STDOUT_FILENO, iov, 2) == ++len ? len : EOF;
+#endif
 }

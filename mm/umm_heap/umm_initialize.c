@@ -1,6 +1,8 @@
 /****************************************************************************
  * mm/umm_heap/umm_initialize.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -26,6 +28,7 @@
 
 #include <assert.h>
 
+#include <nuttx/arch.h>
 #include <nuttx/mm/mm.h>
 
 #include "umm_heap/umm_heap.h"
@@ -43,8 +46,10 @@
  *
  *   CONFIG_BUILD_FLAT:
  *     There is only kernel mode "blob" containing both kernel and
- *     application code.  There is only one heap that is used by both the
- *     kernel and application logic.
+ *     application code. Depending upon the setting of CONFIG_MM_KERNEL_HEAP
+ *     there may be a single shared heap (used by both the kernel and
+ *     application logic) or there may be separate (although unprotected)
+ *     kernel and user heaps.
  *
  *     In this configuration, this function is called early in nx_start()
  *     to initialize the common heap.
@@ -81,7 +86,11 @@
 
 void umm_initialize(FAR void *heap_start, size_t heap_size)
 {
-  USR_HEAP = mm_initialize("Umem", heap_start, heap_size);
+#ifdef CONFIG_BUILD_KERNEL
+  USR_HEAP = mm_initialize_pool(NULL, heap_start, heap_size, NULL);
+#else
+  USR_HEAP = mm_initialize_pool("Umem", heap_start, heap_size, NULL);
+#endif
 }
 
 /****************************************************************************

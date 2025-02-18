@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/stm32/nucleo-l152re/include/board.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -30,10 +32,6 @@
 #ifndef __ASSEMBLY__
 #  include <stdint.h>
 #  include <stdbool.h>
-#endif
-
-#ifdef __KERNEL__
-#  include "stm32.h"
 #endif
 
 /****************************************************************************
@@ -220,5 +218,10 @@
 #define GPIO_SPI1_MOSI   GPIO_SPI1_MOSI_2
 #define GPIO_SPI1_MISO   GPIO_SPI1_MISO_2
 #define GPIO_SPI1_SCK    GPIO_SPI1_SCK_1
+
+/* I2C1 */
+
+#define GPIO_I2C1_SCL    GPIO_I2C1_SCL_2  /* PB8  CN5 pin 10, D15 */
+#define GPIO_I2C1_SDA    GPIO_I2C1_SDA_2  /* PB9  CN5 pin 9, D14 */
 
 #endif /* __BOARDS_ARM_STM32_NUCLEO_L152RE_INCLUDE_BOARD_H */

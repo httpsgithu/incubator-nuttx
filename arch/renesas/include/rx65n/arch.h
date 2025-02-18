@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/renesas/include/rx65n/arch.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -38,29 +40,6 @@
  ****************************************************************************/
 
 #ifndef __ASSEMBLY__
-
-/****************************************************************************
- * Inline functions
- ****************************************************************************/
-
-/****************************************************************************
- * Name: up_getsp
- ****************************************************************************/
-
-static inline uint16_t up_getsp(void)
-{
-  uint16_t sp;
-
-  __asm__ __volatile__
-    (
-      "\tmvfc usp, %0\n\t"
-      : "=r" (sp)
-      :
-      :"memory"
-    );
-
-  return sp;
-}
 
 /****************************************************************************
  * Public Variables

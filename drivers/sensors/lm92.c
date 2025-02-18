@@ -1,6 +1,8 @@
 /****************************************************************************
  * drivers/sensors/lm92.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -82,14 +84,12 @@ static int     lm92_writeconf(FAR struct lm92_dev_s *priv, uint8_t conf);
 
 /* Character driver methods */
 
-static int     lm92_open(FAR struct file *filep);
-static int     lm92_close(FAR struct file *filep);
 static ssize_t lm92_read(FAR struct file *filep, FAR char *buffer,
                          size_t buflen);
 static ssize_t lm92_write(FAR struct file *filep, FAR const char *buffer,
                           size_t buflen);
-static int     lm92_ioctl(FAR struct file *filep,
-                          int cmd, unsigned long arg);
+static int     lm92_ioctl(FAR struct file *filep, int cmd,
+                          unsigned long arg);
 
 /****************************************************************************
  * Private Data
@@ -97,13 +97,12 @@ static int     lm92_ioctl(FAR struct file *filep,
 
 static const struct file_operations g_lm92fops =
 {
-  lm92_open,
-  lm92_close,
-  lm92_read,
-  lm92_write,
-  NULL,
-  lm92_ioctl,
-  NULL
+  NULL,            /* open */
+  NULL,            /* close */
+  lm92_read,       /* read */
+  lm92_write,      /* write */
+  NULL,            /* seek */
+  lm92_ioctl,      /* ioctl */
 };
 
 /****************************************************************************
@@ -375,32 +374,6 @@ static int lm92_readid(FAR struct lm92_dev_s *priv, FAR uint16_t *id)
 }
 
 /****************************************************************************
- * Name: lm92_open
- *
- * Description:
- *   This function is called whenever the LM92 device is opened.
- *
- ****************************************************************************/
-
-static int lm92_open(FAR struct file *filep)
-{
-  return OK;
-}
-
-/****************************************************************************
- * Name: lm92_close
- *
- * Description:
- *   This function is called whenever the LM92 device is closed.
- *
- ****************************************************************************/
-
-static int lm92_close(FAR struct file *filep)
-{
-  return OK;
-}
-
-/****************************************************************************
  * Name: lm92_read
  ****************************************************************************/
 
@@ -481,7 +454,7 @@ static int lm92_ioctl(FAR struct file *filep, int cmd, unsigned long arg)
 
       case SNIOC_WRITECONF:
         ret = lm92_writeconf(priv, (uint8_t)arg);
-        sninfo("conf: %02x ret: %d\n", *(uint8_t *)arg, ret);
+        sninfo("conf: %02x ret: %d\n", *(FAR uint8_t *)arg, ret);
         break;
 
       /* Shutdown the LM92.  Arg:  None */
@@ -657,7 +630,7 @@ int lm92_register(FAR const char *devpath, FAR struct i2c_master_s *i2c,
 
   /* Initialize the LM92 device structure */
 
-  priv = (FAR struct lm92_dev_s *)kmm_malloc(sizeof(struct lm92_dev_s));
+  priv = kmm_malloc(sizeof(struct lm92_dev_s));
   if (priv == NULL)
     {
       snerr("ERROR: Failed to allocate instance\n");

@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/stm32h7/stm32_dtcm.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -61,7 +63,7 @@
  */
 
 #define dtcm_initialize() \
-  g_dtcm_heap = mm_initialize("dtcm", (FAR void *)DTCM_START, DTCM_END-DTCM_START)
+  g_dtcm_heap = mm_initialize("dtcm", (void *)DTCM_START, DTCM_END-DTCM_START)
 
 /* The dtcm_addregion interface could be used if, for example, you want to
  * add some other memory region to the DTCM heap.  I don't really know why
@@ -99,7 +101,7 @@ extern "C"
 #define EXTERN extern
 #endif
 
-EXTERN FAR struct mm_heap_s *g_dtcm_heap;
+EXTERN struct mm_heap_s *g_dtcm_heap;
 
 /****************************************************************************
  * Public Function Prototypes

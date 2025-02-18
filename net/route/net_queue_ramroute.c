@@ -1,6 +1,8 @@
 /****************************************************************************
  * net/route/net_queue_ramroute.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -102,7 +104,7 @@ void ramroute_ipv6_addlast(FAR struct net_route_ipv6_entry_s *entry,
 
 #ifdef CONFIG_ROUTE_IPv4_RAMROUTE
 FAR struct net_route_ipv4_entry_s *
-  ramroute_ipv4_remfirst(struct net_route_ipv4_queue_s *list)
+ramroute_ipv4_remfirst(FAR struct net_route_ipv4_queue_s *list)
 {
   FAR struct net_route_ipv4_entry_s *ret = list->head;
 
@@ -123,7 +125,7 @@ FAR struct net_route_ipv4_entry_s *
 
 #ifdef CONFIG_ROUTE_IPv6_RAMROUTE
 FAR struct net_route_ipv6_entry_s *
-  ramroute_ipv6_remfirst(struct net_route_ipv6_queue_s *list)
+ramroute_ipv6_remfirst(FAR struct net_route_ipv6_queue_s *list)
 {
   FAR struct net_route_ipv6_entry_s *ret = list->head;
 
@@ -161,8 +163,8 @@ FAR struct net_route_ipv6_entry_s *
 
 #ifdef CONFIG_ROUTE_IPv4_RAMROUTE
 FAR struct net_route_ipv4_entry_s *
-  ramroute_ipv4_remafter(FAR struct net_route_ipv4_entry_s *entry,
-                         FAR struct net_route_ipv4_queue_s *list)
+ramroute_ipv4_remafter(FAR struct net_route_ipv4_entry_s *entry,
+                       FAR struct net_route_ipv4_queue_s *list)
 {
   FAR struct net_route_ipv4_entry_s *ret = entry->flink;
 
@@ -187,8 +189,8 @@ FAR struct net_route_ipv4_entry_s *
 
 #ifdef CONFIG_ROUTE_IPv6_RAMROUTE
 FAR struct net_route_ipv6_entry_s *
-  ramroute_ipv6_remafter(FAR struct net_route_ipv6_entry_s *entry,
-  struct net_route_ipv6_queue_s *list)
+ramroute_ipv6_remafter(FAR struct net_route_ipv6_entry_s *entry,
+                       FAR struct net_route_ipv6_queue_s *list)
 {
   FAR struct net_route_ipv6_entry_s *ret = entry->flink;
 

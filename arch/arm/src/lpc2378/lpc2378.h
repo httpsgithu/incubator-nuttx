@@ -1,13 +1,11 @@
 /****************************************************************************
  * arch/arm/src/lpc2378/lpc2378.h
  *
- *   Copyright (C) 2010, 2015 Rommel Marcelo. All rights reserved.
- *   Author: Rommel Marcelo
- *
- * This file is part of the NuttX RTOS and based on the lpc2148 port:
- *
- *   Copyright (C) 2010 Gregory Nutt. All rights reserved.
- *   Author: Gregory Nutt <gnutt@nuttx.org>
+ * SPDX-License-Identifier: BSD-3-Clause
+ * SPDX-FileCopyrightText: 2010,2015 Rommel Marcelo. All rights reserved.
+ * SPDX-FileCopyrightText: 2010 Gregory Nutt. All rights reserved.
+ * SPDX-FileContributor: Rommel Marcelo
+ * SPDX-FileContributor: Gregory Nutt <gnutt@nuttx.org>
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -38,8 +36,8 @@
  *
  ****************************************************************************/
 
-#ifndef __ARCH_ARM_SRC_LPC2378_LPC23XX_H
-#define __ARCH_ARM_SRC_LPC2378_LPC23XX_H
+#ifndef __ARCH_ARM_SRC_LPC2378_LPC2378_H
+#define __ARCH_ARM_SRC_LPC2378_LPC2378_H
 
 /****************************************************************************
  * Included Files
@@ -67,4 +65,4 @@ void lpc2378_statledon(void);
 
 #endif
 
-#endif /* __ARCH_ARM_SRC_LPC2378_LPC23XX_H */
+#endif /* __ARCH_ARM_SRC_LPC2378_LPC2378_H */

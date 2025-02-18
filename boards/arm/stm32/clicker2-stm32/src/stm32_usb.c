@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/stm32/clicker2-stm32/src/stm32_usb.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -30,6 +32,7 @@
 #include <debug.h>
 
 #include "stm32_otgfs.h"
+#include "stm32_gpio.h"
 #include "clicker2-stm32.h"
 
 #ifdef CONFIG_STM32_OTGFS
@@ -84,7 +87,7 @@ void stm32_usb_configure(void)
  ****************************************************************************/
 
 #ifdef CONFIG_USBDEV
-void stm32_usbsuspend(FAR struct usbdev_s *dev, bool resume)
+void stm32_usbsuspend(struct usbdev_s *dev, bool resume)
 {
   uinfo("resume: %d\n", resume);
 }

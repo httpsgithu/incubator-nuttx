@@ -1,6 +1,8 @@
 /****************************************************************************
  * libs/libc/stdio/lib_getchar.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -23,6 +25,7 @@
  ****************************************************************************/
 
 #include <stdio.h>
+#include <unistd.h>
 
 /****************************************************************************
  * Public Functions
@@ -30,5 +33,20 @@
 
 int getchar(void)
 {
+#ifdef CONFIG_FILE_STREAM
   return fgetc(stdin);
+#else
+  unsigned char c;
+  return read(STDIN_FILENO, &c, 1) == 1 ? c : EOF;
+#endif
+}
+
+int getchar_unlocked(void)
+{
+#ifdef CONFIG_FILE_STREAM
+  return fgetc_unlocked(stdin);
+#else
+  unsigned char c;
+  return read(STDIN_FILENO, &c, 1) == 1 ? c : EOF;
+#endif
 }

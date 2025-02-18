@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/imx6/imx_serial.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -42,13 +44,10 @@
 #include <nuttx/spinlock.h>
 #include <nuttx/init.h>
 #include <nuttx/fs/ioctl.h>
-#include <nuttx/semaphore.h>
 #include <nuttx/serial/serial.h>
 
 #include "chip.h"
-#include "arm_arch.h"
 #include "arm_internal.h"
-
 #include "gic.h"
 #include "hardware/imx_uart.h"
 #include "imx_config.h"
@@ -197,6 +196,7 @@ struct imx_uart_s
   uint32_t ucr1;        /* Saved UCR1 value */
   uint8_t  irq;         /* IRQ associated with this UART */
   uint8_t  parity;      /* 0=none, 1=odd, 2=even */
+  spinlock_t lock;      /* Spinlock */
   uint8_t  bits;        /* Number of bits (7 or 8) */
   uint8_t  stopbits2:1; /* 1: Configure with 2 stop bits vs 1 */
 #ifdef CONFIG_SERIAL_IFLOWCONTROL
@@ -225,7 +225,7 @@ static int  imx_setup(struct uart_dev_s *dev);
 static void imx_shutdown(struct uart_dev_s *dev);
 static int  imx_attach(struct uart_dev_s *dev);
 static void imx_detach(struct uart_dev_s *dev);
-static int  imx_interrupt(int irq, void *context, FAR void *arg);
+static int  imx_interrupt(int irq, void *context, void *arg);
 static int  imx_ioctl(struct file *filep, int cmd, unsigned long arg);
 static int  imx_receive(struct uart_dev_s *dev, unsigned int *status);
 static void imx_rxint(struct uart_dev_s *dev, bool enable);
@@ -238,10 +238,6 @@ static bool imx_txempty(struct uart_dev_s *dev);
 /****************************************************************************
  * Private Data
  ****************************************************************************/
-
-/* Used to assure mutually exclusive access up_putc() */
-
-static sem_t g_putc_lock = SEM_INITIALIZER(1);
 
 /* Serial driver UART operations */
 
@@ -300,6 +296,7 @@ static struct imx_uart_s g_uart1priv =
   .baud           = CONFIG_UART1_BAUD,
   .irq            = IMX_IRQ_UART1,
   .parity         = CONFIG_UART1_PARITY,
+  .lock           = SP_UNLOCKED,
   .bits           = CONFIG_UART1_BITS,
   .stopbits2      = CONFIG_UART1_2STOP,
 };
@@ -330,6 +327,7 @@ static struct imx_uart_s g_uart2priv =
   .baud           = CONFIG_UART2_BAUD,
   .irq            = IMX_IRQ_UART2,
   .parity         = CONFIG_UART2_PARITY,
+  .lock           = SP_UNLOCKED
   .bits           = CONFIG_UART2_BITS,
   .stopbits2      = CONFIG_UART2_2STOP,
 };
@@ -358,6 +356,7 @@ static struct imx_uart_s g_uart3priv =
   .baud           = IMX_UART3_VBASE,
   .irq            = IMX_IRQ_UART3,
   .parity         = CONFIG_UART3_PARITY,
+  .lock           = SP_UNLOCKED
   .bits           = CONFIG_UART3_BITS,
   .stopbits2      = CONFIG_UART3_2STOP,
 };
@@ -386,6 +385,7 @@ static struct imx_uart_s g_uart4priv =
   .baud           = IMX_UART4_VBASE,
   .irq            = IMX_IRQ_UART4,
   .parity         = CONFIG_UART4_PARITY,
+  .lock           = SP_UNLOCKED
   .bits           = CONFIG_UART4_BITS,
   .stopbits2      = CONFIG_UART4_2STOP,
 };
@@ -414,6 +414,7 @@ static struct imx_uart_s g_uart5priv =
   .baud           = IMX_UART5_VBASE,
   .irq            = IMX_IRQ_UART5,
   .parity         = CONFIG_UART5_PARITY,
+  .lock           = SP_UNLOCKED
   .bits           = CONFIG_UART5_BITS,
   .stopbits2      = CONFIG_UART5_2STOP,
 };
@@ -632,13 +633,15 @@ static void imx_detach(struct uart_dev_s *dev)
  * Name: imx_interrupt (and front-ends)
  *
  * Description:
- *   This is the common UART interrupt handler.  It should cal
- *   uart_transmitchars or uart_receivechar to perform the appropriate data
- *   transfers.
+ *   This is the UART interrupt handler.  It will be invoked when an
+ *   interrupt is received on the 'irq'.  It should call uart_xmitchars or
+ *   uart_recvchars to perform the appropriate data transfers.  The
+ *   interrupt handling logic must be able to map the 'arg' to the
+ *   appropriate uart_dev_s structure in order to call these functions.
  *
  ****************************************************************************/
 
-static int imx_interrupt(int irq, void *context, FAR void *arg)
+static int imx_interrupt(int irq, void *context, void *arg)
 {
   struct uart_dev_s *dev = (struct uart_dev_s *)arg;
   struct imx_uart_s *priv;
@@ -880,7 +883,7 @@ static int imx_ioctl(struct file *filep, int cmd, unsigned long arg)
              * implement TCSADRAIN / TCSAFLUSH
              */
 
-            flags  = spin_lock_irqsave(NULL);
+            flags  = spin_lock_irqsave(&priv->lock);
             imx_disableuartint(priv, &ie);
             ret = imx_setup(dev);
 
@@ -888,7 +891,7 @@ static int imx_ioctl(struct file *filep, int cmd, unsigned long arg)
 
             imx_restoreuartint(priv, ie);
             priv->ie = ie;
-            spin_unlock_irqrestore(NULL, flags);
+            spin_unlock_irqrestore(&priv->lock, flags);
           }
       }
       break;
@@ -1095,18 +1098,18 @@ void arm_serialinit(void)
 
 #ifdef TTYS0_DEV
   uart_register("/dev/ttyS0", &TTYS0_DEV);
-# ifdef TTYS1_DEV
+#  ifdef TTYS1_DEV
   uart_register("/dev/ttyS1", &TTYS1_DEV);
-#  ifdef TTYS2_DEV
+#    ifdef TTYS2_DEV
   uart_register("/dev/ttyS2", &TTYS2_DEV);
-#    ifdef TTYS3_DEV
+#      ifdef TTYS3_DEV
   uart_register("/dev/ttyS3", &TTYS2_DEV);
-#      ifdef TTYS4_DEV
+#        ifdef TTYS4_DEV
   uart_register("/dev/ttyS4", &TTYS2_DEV);
+#        endif
 #      endif
 #    endif
 #  endif
-# endif
 #endif
 }
 
@@ -1119,55 +1122,18 @@ void arm_serialinit(void)
  *
  ****************************************************************************/
 
-int up_putc(int ch)
+void up_putc(int ch)
 {
   struct imx_uart_s *priv = (struct imx_uart_s *)CONSOLE_DEV.priv;
   uint32_t ier;
-  bool locked;
-  int ret;
-
-  /* Only one thread may enter up_putc at a time. */
-
-  locked = false;
-
-  if (!up_interrupt_context() && g_nx_initstate >= OSINIT_HARDWARE)
-    {
-      ret = nxsem_wait(&g_putc_lock);
-      if (ret < 0)
-        {
-          return ret;
-        }
-
-      locked = true;
-    }
 
   /* Disable UART interrupts and wait until the hardware is ready to send
    * a byte.
    */
 
   imx_disableuartint(priv, &ier);
-  imx_waittxready(priv);
-
-  /* Check for LF */
-
-  if (ch == '\n')
-    {
-      /* Add CR */
-
-      imx_serialout(priv, UART_TXD_OFFSET, (uint32_t)'\r');
-      imx_waittxready(priv);
-    }
-
-  imx_serialout(priv, UART_TXD_OFFSET, (uint32_t)ch);
-  imx_waittxready(priv);
+  imx_lowputc(ch);
   imx_restoreuartint(priv, ier);
-
-  if (locked)
-    {
-      nxsem_post(&g_putc_lock);
-    }
-
-  return ch;
 }
 
 #else /* USE_SERIALDRIVER */
@@ -1216,25 +1182,12 @@ static inline void imx_waittxready(void)
  * Public Functions
  ****************************************************************************/
 
-int up_putc(int ch)
+void up_putc(int ch)
 {
 #ifdef IMX_CONSOLE_VBASE
   imx_waittxready();
-
-  /* Check for LF */
-
-  if (ch == '\n')
-    {
-      /* Add CR */
-
-      putreg32((uint16_t)'\r', IMX_CONSOLE_VBASE + UART_TXD_OFFSET);
-      imx_waittxready();
-    }
-
   putreg32((uint16_t)ch, IMX_CONSOLE_VBASE + UART_TXD_OFFSET);
 #endif
-
-  return ch;
 }
 
 #endif /* USE_SERIALDRIVER */

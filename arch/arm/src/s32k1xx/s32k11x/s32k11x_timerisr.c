@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/s32k1xx/s32k11x/s32k11x_timerisr.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -33,7 +35,6 @@
 #include <arch/board/board.h>
 
 #include "nvic.h"
-#include "arm_arch.h"
 #include "arm_internal.h"
 #include "clock/clock.h"
 #include "s32k1xx_clockconfig.h"

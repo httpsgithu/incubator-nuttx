@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/cxd56xx/spresense/include/board.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -29,6 +31,9 @@
 #include <nuttx/irq.h>
 #include <sys/boardctl.h>
 #include <stdbool.h>
+#include <arch/chip/pin.h>
+
+#include "board_lcdpins.h"
 
 #include "cxd56_clock.h"
 #include "cxd56_power.h"
@@ -39,11 +44,12 @@
 #include "cxd56_i2cdev.h"
 #include "cxd56_spidev.h"
 #include "cxd56_sdcard.h"
+#include "cxd56_automount.h"
 #include "cxd56_wdt.h"
 #include "cxd56_gpioif.h"
 
 #include "cxd56_audio.h"
-#include "cxd56_altmdm.h"
+#include "cxd56_alt1250.h"
 #include "cxd56_ak09912.h"
 #include "cxd56_apds9930.h"
 #include "cxd56_apds9960.h"
@@ -53,15 +59,23 @@
 #include "cxd56_bm1383glv.h"
 #include "cxd56_bm1422gmv.h"
 #include "cxd56_bmi160.h"
+#include "cxd56_bmi270.h"
 #include "cxd56_bmp280.h"
 #include "cxd56_emmcdev.h"
 #include "cxd56_spisd.h"
 #include "cxd56_kx022.h"
 #include "cxd56_lt1pa01.h"
 #include "cxd56_rpr0521rs.h"
+#include "cxd56_scd41.h"
 #include "cxd56_sensors.h"
+#include "cxd56_gnss_addon.h"
 
-#include "cxd56_isx012.h"
+#ifdef CONFIG_VIDEO_ISX012
+#  include "cxd56_isx012.h"
+#endif /* CONFIG_VIDEO_ISX012 */
+#ifdef CONFIG_VIDEO_ISX019
+#  include "cxd56_isx019.h"
+#endif /* CONFIG_VIDEO_ISX019 */
 
 /****************************************************************************
  * Pre-processor Definitions
@@ -123,7 +137,7 @@
 #define LED_CPU1                (101)
 #define LED_CPU2                (102)
 #define LED_CPU3                (103)
-#define LED_CPU                 (LED_CPU0 + up_cpu_index())
+#define LED_CPU                 (LED_CPU0 + this_cpu())
 #endif
 
 /* Buttons definitions ******************************************************/
@@ -157,11 +171,13 @@
 #define PMIC_TYPE_LSW       (1u << 8)
 #define PMIC_TYPE_GPO       (1u << 9)
 #define PMIC_TYPE_DDCLDO    (1u << 10)
+#define CHIP_TYPE_GPIO      (1u << 11)
 #define PMIC_GET_TYPE(v)    ((v) & 0xff00)
 #define PMIC_GET_CH(v)      ((v) & 0x00ff)
 #define PMIC_LSW(n)         (PMIC_TYPE_LSW | (1u << (n)))
 #define PMIC_GPO(n)         (PMIC_TYPE_GPO | (1u << (n)))
 #define PMIC_DDCLDO(n)      (PMIC_TYPE_DDCLDO | (1u << (n)))
+#define CHIP_GPIO(n)        (CHIP_TYPE_GPIO | (n))
 
 enum board_power_device
 {
@@ -187,9 +203,21 @@ enum board_power_device
   POWER_AUDIO_MUTE      = PMIC_GPO(6),
   POWER_IMAGE_SENSOR    = PMIC_GPO(4),
 
+#if defined(CONFIG_CXD56_BLE1507_RESET_PIN_I2S0_DATA_IN)
+  POWER_BTBLE           = CHIP_GPIO(PIN_I2S0_DATA_IN),
+#elif defined(CONFIG_CXD56_BLE1507_RESET_PIN_EMMC_DATA2)
+  POWER_BTBLE           = CHIP_GPIO(PIN_EMMC_DATA2),
+#else
   POWER_BTBLE           = PMIC_NONE,
+#endif
   POWER_SENSOR          = PMIC_NONE,
+#if defined(CONFIG_CXD56_EMMC_POWER_PIN_I2S0_BCK)
+  POWER_EMMC            = CHIP_GPIO(PIN_I2S0_BCK),
+#elif defined(CONFIG_CXD56_EMMC_POWER_PIN_UART2_CTS)
+  POWER_EMMC            = CHIP_GPIO(PIN_UART2_CTS),
+#else
   POWER_EMMC            = PMIC_NONE,
+#endif
   POWER_LTE             = PMIC_GPO(2),
 };
 
@@ -197,6 +225,11 @@ enum board_power_device
 
 #define BOARD_POWEROFF_DEEP (0)
 #define BOARD_POWEROFF_COLD (1)
+
+/* Power domain definitions *************************************************/
+
+#define BOARD_PM_IDLE       (0)
+#define BOARD_PM_APPS       (1)
 
 /* CXD5247 audio control definitions ****************************************/
 
@@ -212,9 +245,6 @@ enum board_power_device
 
 #if defined(CONFIG_LCD_ON_MAIN_BOARD) /* Display connected to main board. */
 
-#define DISPLAY_RST     PIN_I2S0_BCK
-#define DISPLAY_DC      PIN_I2S0_LRCK
-
 #define DISPLAY_SPI     5
 
 #define DISPLAY_DMA_TXCH       (4)
@@ -224,10 +254,22 @@ enum board_power_device
 #define DISPLAY_DMA_TX_MAXSIZE (192000)
 #define DISPLAY_DMA_RX_MAXSIZE (192000)
 
-#else /* Display is connected through extension board. */
+#elif defined(CONFIG_LCD_ON_LTE_EXTENSION_BOARD)
 
-#define DISPLAY_RST     PIN_SPI2_MISO
-#define DISPLAY_DC      PIN_PWM2
+/* Display connected to LTE extension board. */
+
+#define DISPLAY_SPI     3
+
+/* Specify invalid channels because DMA cannot be used */
+
+#define DISPLAY_DMA_TXCH       (-1)
+#define DISPLAY_DMA_RXCH       (-1)
+#define DISPLAY_DMA_TXCH_CFG   (-1)
+#define DISPLAY_DMA_RXCH_CFG   (-1)
+#define DISPLAY_DMA_TX_MAXSIZE (192000)
+#define DISPLAY_DMA_RX_MAXSIZE (192000)
+
+#else /* Display is connected through extension board. */
 
 #define DISPLAY_SPI     4
 
@@ -239,6 +281,9 @@ enum board_power_device
 #define DISPLAY_DMA_RX_MAXSIZE (192000)
 
 #endif
+
+#define DISPLAY_RST     ILI934X_RST_PIN
+#define DISPLAY_DC      ILI934X_DC_PIN
 
 /* Sensor device bus definitions ********************************************/
 
@@ -263,11 +308,11 @@ enum board_power_device
 
 /* Altair modem device pin definitions **************************************/
 
-#define ALTMDM_SLAVE_REQ          PIN_SPI2_SCK
-#define ALTMDM_MASTER_REQ         PIN_RTC_IRQ_OUT
-#define ALTMDM_WAKEUP             PIN_SPI2_MOSI
-#define ALTMDM_SHUTDOWN           PIN_SPI2_MISO
-#define ALTMDM_LTE_POWER_BUTTON   PIN_AP_CLK
+#define ALT1250_SLAVE_REQ          PIN_SPI2_SCK
+#define ALT1250_MASTER_REQ         PIN_RTC_IRQ_OUT
+#define ALT1250_WAKEUP             PIN_SPI2_MOSI
+#define ALT1250_SHUTDOWN           PIN_SPI2_MISO
+#define ALT1250_LTE_POWER_BUTTON   PIN_AP_CLK
 
 /****************************************************************************
  * Public Types

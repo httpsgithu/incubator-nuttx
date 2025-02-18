@@ -1,6 +1,8 @@
 /****************************************************************************
  * fs/nxffs/nxffs.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -27,12 +29,14 @@
 
 #include <nuttx/config.h>
 
+#include <sys/param.h>
 #include <sys/types.h>
 #include <stdint.h>
 #include <stdbool.h>
 
 #include <nuttx/mtd/mtd.h>
 #include <nuttx/fs/nxffs.h>
+#include <nuttx/mutex.h>
 #include <nuttx/semaphore.h>
 
 /****************************************************************************
@@ -153,7 +157,7 @@
 
 /* Number of bytes in an the NXFFS magic sequences */
 
-#define NXFFS_MAGICSIZE	          4
+#define NXFFS_MAGICSIZE           4
 
 /* When we allocate FLASH for a new inode data block, we will require that
  * space is available to hold this minimum number of data bytes in addition
@@ -169,16 +173,6 @@
  */
 
 #define NXFFS_NERASED             128
-
-/* Quasi-standard definitions */
-
-#ifndef MIN
-#  define MIN(a,b)                ((a) < (b) ? (a) : (b))
-#endif
-
-#ifndef MAX
-#  define MAX(a,b)                ((a) > (b) ? (a) : (b))
-#endif
 
 /****************************************************************************
  * Public Types
@@ -274,7 +268,7 @@ struct nxffs_wrfile_s
 struct nxffs_volume_s
 {
   FAR struct mtd_dev_s     *mtd;       /* Supports FLASH access */
-  sem_t                     exclsem;   /* Used to assure thread-safe access */
+  mutex_t                   lock;      /* Used to assure thread-safe access */
   sem_t                     wrsem;     /* Enforces single writer restriction */
   struct mtd_geometry_s     geo;       /* Device geometry */
   uint8_t                   blkper;    /* R/W blocks per erase block */
@@ -563,8 +557,8 @@ int nxffs_getc(FAR struct nxffs_volume_s *volume, uint16_t reserve);
  *   to dispose of that memory when the inode entry is no longer needed.
  *
  *   Note that the nxffs_entry_s containing structure is not freed.  The
- *   caller may call kmm_free upon return of this function if necessary to
- *   free the entry container.
+ *   caller may call fs_heap_free upon return of this function if necessary
+ *   to free the entry container.
  *
  * Input Parameters:
  *   entry  - The entry to be freed.
@@ -699,7 +693,7 @@ int nxffs_verifyblock(FAR struct nxffs_volume_s *volume, off_t block);
  *
  ****************************************************************************/
 
-int nxffs_validblock(struct nxffs_volume_s *volume, off_t *block);
+int nxffs_validblock(FAR struct nxffs_volume_s *volume, FAR off_t *block);
 
 /****************************************************************************
  * Name: nxffs_blockstats
@@ -1108,8 +1102,12 @@ int nxffs_truncate(FAR struct file *filep, off_t length);
 #endif
 
 int nxffs_opendir(FAR struct inode *mountpt, FAR const char *relpath,
-                  FAR struct fs_dirent_s *dir);
-int nxffs_readdir(FAR struct inode *mountpt, FAR struct fs_dirent_s *dir);
+                  FAR struct fs_dirent_s **dir);
+int nxffs_closedir(FAR struct inode *mountpt,
+                   FAR struct fs_dirent_s *dir);
+int nxffs_readdir(FAR struct inode *mountpt,
+                  FAR struct fs_dirent_s *dir,
+                  FAR struct dirent *entry);
 int nxffs_rewinddir(FAR struct inode *mountpt, FAR struct fs_dirent_s *dir);
 
 int nxffs_bind(FAR struct inode *blkdriver, FAR const void *data,

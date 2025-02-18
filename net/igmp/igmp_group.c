@@ -1,6 +1,7 @@
 /****************************************************************************
  * net/igmp/igmp_group.c
- * IGMP group data structure management logic
+ *
+ * SPDX-License-Identifier: BSD-3-Clause
  *
  *   Copyright (C) 2010, 2013-2014, 2016, 2018 Gregory Nutt.
  *   All rights reserved.
@@ -50,7 +51,6 @@
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
-#include <queue.h>
 #include <assert.h>
 #include <debug.h>
 
@@ -59,6 +59,7 @@
 #include <nuttx/arch.h>
 #include <nuttx/wdog.h>
 #include <nuttx/kmalloc.h>
+#include <nuttx/queue.h>
 #include <nuttx/semaphore.h>
 #include <nuttx/net/net.h>
 #include <nuttx/net/ip.h>
@@ -66,6 +67,7 @@
 
 #include "devif/devif.h"
 #include "igmp/igmp.h"
+#include "utils/utils.h"
 
 #ifdef CONFIG_NET_IGMP
 
@@ -110,7 +112,7 @@ FAR struct igmp_group_s *igmp_grpalloc(FAR struct net_driver_s *dev,
   FAR struct igmp_group_s *group;
 
   ninfo("addr: %08" PRIx32 " dev: %p\n", (uint32_t)*addr, dev);
-  group = (FAR struct igmp_group_s *)kmm_zalloc(sizeof(struct igmp_group_s));
+  group = kmm_zalloc(sizeof(struct igmp_group_s));
 
   grpinfo("group: %p\n", group);
 
@@ -121,13 +123,7 @@ FAR struct igmp_group_s *igmp_grpalloc(FAR struct net_driver_s *dev,
       /* Initialize the non-zero elements of the group structure */
 
       net_ipv4addr_copy(group->grpaddr, *addr);
-
-      /* This semaphore is used for signaling and, hence, should not have
-       * priority inheritance enabled.
-       */
-
       nxsem_init(&group->sem, 0, 0);
-      nxsem_set_protocol(&group->sem, SEM_PRIO_NONE);
 
       /* Save the interface index */
 
@@ -217,11 +213,23 @@ FAR struct igmp_group_s *igmp_grpallocfind(FAR struct net_driver_s *dev,
 void igmp_grpfree(FAR struct net_driver_s *dev,
                   FAR struct igmp_group_s *group)
 {
+  unsigned int count;
+  int blresult;
+
   grpinfo("Free: %p flags: %02x\n", group, group->flags);
 
   /* Cancel the wdog */
 
   wd_cancel(&group->wdog);
+
+  /* Cancel the workqueue */
+
+  blresult = net_breaklock(&count);
+  work_cancel_sync(LPWORK, &group->work);
+  if (blresult >= 0)
+    {
+      net_restorelock(count);
+    }
 
   /* Remove the group structure from the group list in the device structure */
 

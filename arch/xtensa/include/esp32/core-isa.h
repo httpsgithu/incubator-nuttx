@@ -1,8 +1,8 @@
 /****************************************************************************
  * arch/xtensa/include/esp32/core-isa.h
- * Xtensa processor CORE configuration
  *
- * Customer ID=11657; Build=0x5fe96; Copyright (c) 1999-2016 Tensilica Inc.
+ * SPDX-License-Identifier: MIT
+ * SPDX-FileCopyrightText: 1999-2016 Tensilica Inc.
  *
  * Permission is hereby granted, free of charge, to any person obtaining
  * a copy of this software and associated documentation files (the
@@ -354,6 +354,7 @@
                                               /* (always 1 in XEA1;
                                                * levels 2 .. EXCM_LEVEL are
                                                * "medium priority") */
+#define XCHAL_SYSCALL_LEVEL              2
 
 /* Masks of interrupts at each interrupt level: */
 
@@ -464,11 +465,13 @@
 
 #define XTHAL_TIMER_UNCONFIGURED         -1    /* REVISIT: should be in hal.h */
 #define XCHAL_TIMER0_INTERRUPT           6     /* CCOMPARE0 */
+#define XCHAL_SOFTWARE0_INTERRUPT        7     /* software interrupt 0 */
 #define XCHAL_TIMER1_INTERRUPT           15    /* CCOMPARE1 */
 #define XCHAL_TIMER2_INTERRUPT           16    /* CCOMPARE2 */
 #define XCHAL_TIMER3_INTERRUPT           XTHAL_TIMER_UNCONFIGURED
 #define XCHAL_NMI_INTERRUPT              14    /* non-maskable interrupt */
 #define XCHAL_PROFILING_INTERRUPT        11    /* profiling interrupt */
+#define XCHAL_SOFTWARE1_INTERRUPT        29    /* software interrupt 1 */
 
 /* Interrupt numbers for levels at which only one interrupt is configured: */
 
@@ -551,6 +554,7 @@
                                               * 0 == XEAX (extern) or TX */
 #define XCHAL_HAVE_XEA1                0    /* Exception Architecture 1 */
 #define XCHAL_HAVE_XEA2                1    /* Exception Architecture 2 */
+#define XCHAL_HAVE_XEA3                0    /* Exception Architecture 3 */
 #define XCHAL_HAVE_XEAX                0    /* External Exception Arch. */
 #define XCHAL_HAVE_EXCEPTIONS          1    /* exception option */
 #define XCHAL_HAVE_HALT                0    /* halt architecture option */

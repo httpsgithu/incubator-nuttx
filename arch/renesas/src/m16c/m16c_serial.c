@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/renesas/src/m16c/m16c_serial.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -38,8 +40,7 @@
 #include <nuttx/serial/serial.h>
 
 #include "chip.h"
-#include "up_arch.h"
-#include "up_internal.h"
+#include "renesas_internal.h"
 #include "m16c_uart.h"
 
 /* Is there any serial support?  This might be the case if the board does
@@ -749,11 +750,11 @@ static void up_detach(struct uart_dev_s *dev)
  * Name: up_recvinterrupt
  *
  * Description:
- *   This is the UART receive interrupt handler.  It will be invoked when an
- *   interrupt received on the 'irq'  It should call uart_receivechar to
- *   perform the appropriate data transfer.  The interrupt handling logic
- *   must be able to map the 'irq' number into the appropriate up_dev_s
- *   structure in order to call these functions.
+ *   This is the UART interrupt handler.  It will be invoked when an
+ *   interrupt is received on the 'irq'.  It should call uart_xmitchars or
+ *   uart_recvchars to perform the appropriate data transfers.  The
+ *   interrupt handling logic must be able to map the 'arg' to the
+ *   appropriate uart_dev_s structure in order to call these functions.
  *
  ****************************************************************************/
 
@@ -843,6 +844,7 @@ static void m16c_rxint(struct up_dev_s *dev, bool enable)
 #endif
     {
       _err("ERROR: Invalid UART #\n");
+      leave_critical_section(flags);
       return;
     }
 
@@ -891,12 +893,11 @@ static bool up_rxavailable(struct uart_dev_s *dev)
  * Name: up_xmtvinterrupt
  *
  * Description:
- *   This is the UART receive interrupt handler.  It will be invoked
- *   when an interrupt received on the 'irq'  It should call
- *   uart_transmitchars or uart_receivechar to perform the
- *   appropriate data transfers.  The interrupt handling logic
- *   must be able to map the 'irq' number into the appropriate
- *   up_dev_s structure in order to call these functions.
+ *   This is the UART interrupt handler.  It will be invoked when an
+ *   interrupt is received on the 'irq'.  It should call uart_xmitchars or
+ *   uart_recvchars to perform the appropriate data transfers.  The
+ *   interrupt handling logic must be able to map the 'arg' to the
+ *   appropriate uart_dev_s structure in order to call these functions.
  *
  ****************************************************************************/
 
@@ -975,6 +976,7 @@ static void m16c_txint(struct up_dev_s *dev, bool enable)
 #endif
     {
       _err("ERROR: Invalid UART #\n");
+      leave_critical_section(flags);
       return;
     }
 
@@ -1021,16 +1023,16 @@ static bool up_txready(struct uart_dev_s *dev)
  ****************************************************************************/
 
 /****************************************************************************
- * Name: up_earlyconsoleinit
+ * Name: renesas_earlyconsoleinit
  *
  * Description:
  *   Performs the low level UART initialization early in
  *   debug so that the serial console will be available
- *   during bootup.  This must be called before up_consoleinit.
+ *   during bootup.  This must be called before renesas_consoleinit.
  *
  ****************************************************************************/
 
-void up_earlyconsoleinit(void)
+void renesas_earlyconsoleinit(void)
 {
   /* NOTE:  All GPIO configuration for the UARTs was performed in
    * up_lowsetup
@@ -1057,15 +1059,15 @@ void up_earlyconsoleinit(void)
 }
 
 /****************************************************************************
- * Name: up_consoleinit
+ * Name: renesas_consoleinit
  *
  * Description:
  *   Register serial console and serial ports.  This assumes
- *   that up_earlyconsoleinit was called previously.
+ *   that renesas_earlyconsoleinit was called previously.
  *
  ****************************************************************************/
 
-void up_consoleinit(void)
+void renesas_consoleinit(void)
 {
   /* Register the console */
 
@@ -1094,31 +1096,19 @@ void up_consoleinit(void)
  *
  ****************************************************************************/
 
-int up_putc(int ch)
+void up_putc(int ch)
 {
 #ifdef HAVE_SERIALCONSOLE
   struct up_dev_s *priv = (struct up_dev_s *)CONSOLE_DEV.priv;
   uint8_t  ucon;
 
   up_disableuartint(priv, &ucon);
-
-  /* Check for LF */
-
-  if (ch == '\n')
-    {
-      /* Add CR */
-
-      up_waittxready(priv);
-      up_serialout16(priv, M16C_UART_TB, (uint16_t)'\r');
-    }
-
   up_waittxready(priv);
   up_serialout16(priv, M16C_UART_TB, (uint16_t)ch);
 
   up_waittxready(priv);
   up_restoreuartint(priv, ucon);
 #endif
-  return ch;
 }
 
 #else /* USE_SERIALDRIVER */
@@ -1131,21 +1121,11 @@ int up_putc(int ch)
  *
  ****************************************************************************/
 
-int up_putc(int ch)
+void up_putc(int ch)
 {
 #ifdef HAVE_SERIALCONSOLE
-  /* Check for LF */
-
-  if (ch == '\n')
-    {
-      /* Add CR */
-
-      up_lowputc('\r');
-    }
-
-  up_lowputc(ch);
+  renesas_lowputc(ch);
 #endif
-  return ch;
 }
 
 #endif /* USE_SERIALDRIVER */

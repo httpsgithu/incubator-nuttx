@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/stm32/stm32f4discovery/src/stm32_spi.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -32,7 +34,7 @@
 #include <nuttx/spi/spi.h>
 #include <arch/board/board.h>
 
-#include "arm_arch.h"
+#include "arm_internal.h"
 #include "chip.h"
 #include "stm32.h"
 
@@ -61,9 +63,20 @@ void weak_function stm32_spidev_initialize(void)
   stm32_configgpio(GPIO_ENC28J60_INTR);
 #endif
 
-#ifdef CONFIG_STM32_SPI1
+#ifdef CONFIG_NET_W5500
+  stm32_configgpio(GPIO_W5500_CS);
+  stm32_configgpio(GPIO_W5500_RESET);
+  stm32_configgpio(GPIO_W5500_INTR);
+#endif
+
+#if defined(CONFIG_STM32_SPI1) && defined(CONFIG_SENSORS_LIS3MDL)
   stm32_configgpio(GPIO_CS_MEMS);    /* MEMS chip select */
 #endif
+
+#if defined(CONFIG_STM32_SPI1) && defined(CONFIG_CL_MFRC522)
+  stm32_configgpio(GPIO_CS_MFRC522);  /* MFRC522 chip select */
+#endif
+
 #if defined(CONFIG_STM32_SPI2) && defined(CONFIG_SENSORS_MAX31855)
   stm32_configgpio(GPIO_MAX31855_CS); /* MAX31855 chip select */
 #endif
@@ -83,12 +96,12 @@ void weak_function stm32_spidev_initialize(void)
 #if defined(CONFIG_LCD_UG2864AMBAG01) || defined(CONFIG_LCD_UG2864HSWEG01) || \
     defined(CONFIG_LCD_SSD1351)
   stm32_configgpio(GPIO_OLED_CS);    /* OLED chip select */
-# if defined(CONFIG_LCD_UG2864AMBAG01)
+#  if defined(CONFIG_LCD_UG2864AMBAG01)
   stm32_configgpio(GPIO_OLED_A0);    /* OLED Command/Data */
-# endif
-# if defined(CONFIG_LCD_UG2864HSWEG01) || defined(CONFIG_LCD_SSD1351)
+#  endif
+#  if defined(CONFIG_LCD_UG2864HSWEG01) || defined(CONFIG_LCD_SSD1351)
   stm32_configgpio(GPIO_OLED_DC);    /* OLED Command/Data */
-# endif
+#  endif
 #endif
 }
 
@@ -119,7 +132,7 @@ void weak_function stm32_spidev_initialize(void)
  ****************************************************************************/
 
 #ifdef CONFIG_STM32_SPI1
-void stm32_spi1select(FAR struct spi_dev_s *dev, uint32_t devid,
+void stm32_spi1select(struct spi_dev_s *dev, uint32_t devid,
                       bool selected)
 {
   spiinfo("devid: %d CS: %s\n", (int)devid, selected ? "assert" :
@@ -131,6 +144,15 @@ void stm32_spi1select(FAR struct spi_dev_s *dev, uint32_t devid,
       /* Set the GPIO low to select and high to de-select */
 
       stm32_gpiowrite(GPIO_ENC28J60_CS, !selected);
+    }
+#endif
+
+#ifdef CONFIG_NET_W5500
+  if (devid == SPIDEV_ETHERNET(0))
+    {
+      /* Set the GPIO low to select and high to de-select */
+
+      stm32_gpiowrite(GPIO_W5500_CS, !selected);
     }
 #endif
 
@@ -161,14 +183,24 @@ void stm32_spi1select(FAR struct spi_dev_s *dev, uint32_t devid,
     {
       stm32_gpiowrite(GPIO_OLED_CS, !selected);
     }
-  else
 #endif
+
+#if defined (CONFIG_SENSORS_LIS3MDL)
+  if (devid == SPIDEV_ACCELEROMETER(0))
     {
       stm32_gpiowrite(GPIO_CS_MEMS, !selected);
     }
+#endif
+
+#if defined(CONFIG_CL_MFRC522)
+  if (devid == SPIDEV_CONTACTLESS(0))
+    {
+      stm32_gpiowrite(GPIO_CS_MFRC522, !selected);
+    }
+#endif
 }
 
-uint8_t stm32_spi1status(FAR struct spi_dev_s *dev, uint32_t devid)
+uint8_t stm32_spi1status(struct spi_dev_s *dev, uint32_t devid)
 {
   uint8_t status = 0;
 
@@ -184,7 +216,7 @@ uint8_t stm32_spi1status(FAR struct spi_dev_s *dev, uint32_t devid)
 #endif
 
 #ifdef CONFIG_STM32_SPI2
-void stm32_spi2select(FAR struct spi_dev_s *dev, uint32_t devid,
+void stm32_spi2select(struct spi_dev_s *dev, uint32_t devid,
                       bool selected)
 {
   spiinfo("devid: %d CS: %s\n", (int)devid, selected ? "assert" :
@@ -212,7 +244,7 @@ void stm32_spi2select(FAR struct spi_dev_s *dev, uint32_t devid,
 #endif
 }
 
-uint8_t stm32_spi2status(FAR struct spi_dev_s *dev, uint32_t devid)
+uint8_t stm32_spi2status(struct spi_dev_s *dev, uint32_t devid)
 {
   uint8_t ret = 0;
 #if defined(CONFIG_MMCSD_SPI)
@@ -229,7 +261,7 @@ uint8_t stm32_spi2status(FAR struct spi_dev_s *dev, uint32_t devid)
 #endif
 
 #ifdef CONFIG_STM32_SPI3
-void stm32_spi3select(FAR struct spi_dev_s *dev, uint32_t devid,
+void stm32_spi3select(struct spi_dev_s *dev, uint32_t devid,
                       bool selected)
 {
   spiinfo("devid: %d CS: %s\n", (int)devid, selected ? "assert" :
@@ -243,7 +275,7 @@ void stm32_spi3select(FAR struct spi_dev_s *dev, uint32_t devid,
 #endif
 }
 
-uint8_t stm32_spi3status(FAR struct spi_dev_s *dev, uint32_t devid)
+uint8_t stm32_spi3status(struct spi_dev_s *dev, uint32_t devid)
 {
   return 0;
 }
@@ -274,7 +306,7 @@ uint8_t stm32_spi3status(FAR struct spi_dev_s *dev, uint32_t devid)
 
 #ifdef CONFIG_SPI_CMDDATA
 #ifdef CONFIG_STM32_SPI1
-int stm32_spi1cmddata(FAR struct spi_dev_s *dev, uint32_t devid, bool cmd)
+int stm32_spi1cmddata(struct spi_dev_s *dev, uint32_t devid, bool cmd)
 {
 #if defined(CONFIG_LCD_ST7567) || defined(CONFIG_LCD_ST7789)
   if (devid == SPIDEV_DISPLAY(0))
@@ -301,12 +333,12 @@ int stm32_spi1cmddata(FAR struct spi_dev_s *dev, uint32_t devid, bool cmd)
        *       registers."
        */
 
-# if defined(CONFIG_LCD_UG2864AMBAG01)
+#  if defined(CONFIG_LCD_UG2864AMBAG01)
       stm32_gpiowrite(GPIO_OLED_A0, !cmd);
-# endif
-# if defined(CONFIG_LCD_UG2864HSWEG01) || defined(CONFIG_LCD_SSD1351)
+#  endif
+#  if defined(CONFIG_LCD_UG2864HSWEG01) || defined(CONFIG_LCD_SSD1351)
       stm32_gpiowrite(GPIO_OLED_DC, !cmd);
-# endif
+#  endif
       return OK;
     }
 #endif
@@ -316,14 +348,14 @@ int stm32_spi1cmddata(FAR struct spi_dev_s *dev, uint32_t devid, bool cmd)
 #endif
 
 #ifdef CONFIG_STM32_SPI2
-int stm32_spi2cmddata(FAR struct spi_dev_s *dev, uint32_t devid, bool cmd)
+int stm32_spi2cmddata(struct spi_dev_s *dev, uint32_t devid, bool cmd)
 {
   return -ENODEV;
 }
 #endif
 
 #ifdef CONFIG_STM32_SPI3
-int stm32_spi3cmddata(FAR struct spi_dev_s *dev, uint32_t devid, bool cmd)
+int stm32_spi3cmddata(struct spi_dev_s *dev, uint32_t devid, bool cmd)
 {
   return -ENODEV;
 }

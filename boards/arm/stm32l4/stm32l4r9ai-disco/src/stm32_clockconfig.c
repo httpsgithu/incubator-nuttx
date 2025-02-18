@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/stm32l4/stm32l4r9ai-disco/src/stm32_clockconfig.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -29,7 +31,7 @@
 #include <arch/board/board.h>
 #include <arch/board/stm32l4r9ai-disco-clocking.h>
 
-#include "arm_arch.h"
+#include "arm_internal.h"
 #include "stm32l4r9ai-disco.h"
 
 /****************************************************************************

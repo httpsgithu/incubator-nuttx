@@ -1,6 +1,8 @@
 //***************************************************************************
 // libs/libxx/libcxxmini/libxx_new.cxx
 //
+// SPDX-License-Identifier: Apache-2.0
+//
 // Licensed to the Apache Software Foundation (ASF) under one or more
 // contributor license agreements.  See the NOTICE file distributed with
 // this work for additional information regarding copyright ownership.  The
@@ -22,6 +24,7 @@
 //***************************************************************************
 
 #include <nuttx/config.h>
+#include <assert.h>
 #include <cstddef>
 #include <debug.h>
 
@@ -47,13 +50,6 @@
 
 FAR void *operator new(std::size_t nbytes)
 {
-  // We have to allocate something
-
-  if (nbytes < 1)
-    {
-      nbytes = 1;
-    }
-
   // Perform the allocation
 
   FAR void *alloc = lib_malloc(nbytes);
@@ -68,6 +64,8 @@ FAR void *operator new(std::size_t nbytes)
     }
 #endif
 
+  DEBUGASSERT(alloc != NULL);
+
   // Return the allocated value
 
   return alloc;
@@ -75,13 +73,7 @@ FAR void *operator new(std::size_t nbytes)
 
 FAR void *operator new(std::size_t nbytes, FAR void *ptr)
 {
-
-#ifdef CONFIG_DEBUG_ERROR
-  if (ptr == 0)
-    {
-      _err("ERROR: Failed to placement new\n");
-    }
-#endif
+  DEBUGASSERT(ptr != NULL);
 
   // Return the ptr pointer
 

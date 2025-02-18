@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/stm32l5/stm32l5_allocateheap.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -38,7 +40,6 @@
 
 #include "chip.h"
 #include "mpu.h"
-#include "arm_arch.h"
 #include "arm_internal.h"
 #include "stm32l5_mpuinit.h"
 
@@ -156,7 +157,7 @@
  ****************************************************************************/
 
 #ifdef CONFIG_HEAP_COLORATION
-static inline void up_heap_color(FAR void *start, size_t size)
+static inline void up_heap_color(void *start, size_t size)
 {
   memset(start, HEAP_COLOR, size);
 }
@@ -201,7 +202,7 @@ static inline void up_heap_color(FAR void *start, size_t size)
  *
  ****************************************************************************/
 
-void up_allocate_heap(FAR void **heap_start, size_t *heap_size)
+void up_allocate_heap(void **heap_start, size_t *heap_size)
 {
 #if defined(CONFIG_BUILD_PROTECTED) && defined(CONFIG_MM_KERNEL_HEAP)
   /* Get the unaligned size and position of the user-space heap.
@@ -230,12 +231,12 @@ void up_allocate_heap(FAR void **heap_start, size_t *heap_size)
   /* Return the user-space heap settings */
 
   board_autoled_on(LED_HEAPALLOCATE);
-  *heap_start = (FAR void *)ubase;
+  *heap_start = (void *)ubase;
   *heap_size  = usize;
 
   /* Colorize the heap for debug */
 
-  up_heap_color((FAR void *)ubase, usize);
+  up_heap_color((void *)ubase, usize);
 
   /* Allow user-mode access to the user heap memory */
 
@@ -245,7 +246,7 @@ void up_allocate_heap(FAR void **heap_start, size_t *heap_size)
   /* Return the heap settings */
 
   board_autoled_on(LED_HEAPALLOCATE);
-  *heap_start = (FAR void *)g_idle_topstack;
+  *heap_start = (void *)g_idle_topstack;
   *heap_size  = SRAM1_END - g_idle_topstack;
 
   /* Colorize the heap for debug */
@@ -265,7 +266,7 @@ void up_allocate_heap(FAR void **heap_start, size_t *heap_size)
  ****************************************************************************/
 
 #if defined(CONFIG_BUILD_PROTECTED) && defined(CONFIG_MM_KERNEL_HEAP)
-void up_allocate_kheap(FAR void **heap_start, size_t *heap_size)
+void up_allocate_kheap(void **heap_start, size_t *heap_size)
 {
   /* Get the unaligned size and position of the user-space heap.
    * This heap begins after the user-space .bss section at an offset
@@ -294,7 +295,7 @@ void up_allocate_kheap(FAR void **heap_start, size_t *heap_size)
    * that was not dedicated to the user heap).
    */
 
-  *heap_start = (FAR void *)USERSPACE->us_bssend;
+  *heap_start = (void *)USERSPACE->us_bssend;
   *heap_size  = ubase - (uintptr_t)USERSPACE->us_bssend;
 }
 #endif
@@ -323,11 +324,11 @@ void arm_addregion(void)
 
   /* Colorize the heap for debug */
 
-  up_heap_color((FAR void *)SRAM2_START, SRAM2_END - SRAM2_START);
+  up_heap_color((void *)SRAM2_START, SRAM2_END - SRAM2_START);
 
   /* Add the SRAM2 user heap region. */
 
-  kumm_addregion((FAR void *)SRAM2_START, SRAM2_END - SRAM2_START);
+  kumm_addregion((void *)SRAM2_START, SRAM2_END - SRAM2_START);
 
 #endif /* SRAM2 */
 
@@ -343,11 +344,11 @@ void arm_addregion(void)
 
   /* Colorize the heap for debug */
 
-  up_heap_color((FAR void *)SRAM3_START, SRAM3_END - SRAM3_START);
+  up_heap_color((void *)SRAM3_START, SRAM3_END - SRAM3_START);
 
   /* Add the SRAM3 user heap region. */
 
-  kumm_addregion((FAR void *)SRAM3_START, SRAM3_END - SRAM3_START);
+  kumm_addregion((void *)SRAM3_START, SRAM3_END - SRAM3_START);
 
 #endif /* SRAM3 */
 
@@ -362,11 +363,11 @@ void arm_addregion(void)
 
   /* Colorize the heap for debug */
 
-  up_heap_color((FAR void *)CONFIG_HEAP2_BASE, CONFIG_HEAP2_SIZE);
+  up_heap_color((void *)CONFIG_HEAP2_BASE, CONFIG_HEAP2_SIZE);
 
   /* Add the external FSMC SRAM user heap region. */
 
-  kumm_addregion((FAR void *)CONFIG_HEAP2_BASE, CONFIG_HEAP2_SIZE);
+  kumm_addregion((void *)CONFIG_HEAP2_BASE, CONFIG_HEAP2_SIZE);
 #endif
 }
 #endif

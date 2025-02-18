@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/include/armv8-m/nvicpri.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -18,8 +20,8 @@
  *
  ****************************************************************************/
 
-#ifndef __ARCH_ARM_INCLUDE_ARM8_M_NVICPRI_H
-#define __ARCH_ARM_INCLUDE_ARM8_M_NVICPRI_H
+#ifndef __ARCH_ARM_INCLUDE_ARMV8_M_NVICPRI_H
+#define __ARCH_ARM_INCLUDE_ARMV8_M_NVICPRI_H
 
 /****************************************************************************
  * Included Files
@@ -31,12 +33,7 @@
  * Pre-processor Prototypes
  ****************************************************************************/
 
-/* If CONFIG_ARMV8M_USEBASEPRI is selected, then interrupts will be disabled
- * by setting the BASEPRI register to NVIC_SYSH_DISABLE_PRIORITY so that most
- * interrupts will not have execution priority.  SVCall must have execution
- * priority in all cases.
- *
- * In the normal cases, interrupts are not nest-able and all interrupts run
+/* In the normal cases, interrupts are not nest-able and all interrupts run
  * at an execution priority between NVIC_SYSH_PRIORITY_MIN and
  * NVIC_SYSH_PRIORITY_MAX (with NVIC_SYSH_PRIORITY_MAX reserved for SVCall).
  *
@@ -78,4 +75,4 @@
 #define NVIC_SYSH_DISABLE_PRIORITY    NVIC_SYSH_PRIORITY_DEFAULT
 #define NVIC_SYSH_SVCALL_PRIORITY     (NVIC_SYSH_PRIORITY_DEFAULT - 1*NVIC_SYSH_PRIORITY_STEP)
 
-#endif /* __ARCH_ARM_INCLUDE_ARM8_M_NVICPRI_H */
+#endif /* __ARCH_ARM_INCLUDE_ARMV8_M_NVICPRI_H */

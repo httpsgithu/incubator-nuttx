@@ -1,6 +1,8 @@
 /****************************************************************************
  * include/nuttx/sensors/lsm6dsl.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -18,8 +20,8 @@
  *
  ****************************************************************************/
 
-#ifndef __INCLUDE_NUTTX_SENSORS_LSM6DSL
-#define __INCLUDE_NUTTX_SENSORS_LSM6DSL
+#ifndef __INCLUDE_NUTTX_SENSORS_LSM6DSL_H
+#define __INCLUDE_NUTTX_SENSORS_LSM6DSL_H
 
 /****************************************************************************
  * Included Files
@@ -880,4 +882,4 @@ int lsm6dsl_sensor_register(FAR const char *devpath,
 #endif
 
 #endif /* CONFIG_I2C && CONFIG_SENSORS_LSM9DS1 */
-#endif /* __INCLUDE_NUTTX_SENSORS_LSM9DS1 */
+#endif /* __INCLUDE_NUTTX_SENSORS_LSM6DSL_H */

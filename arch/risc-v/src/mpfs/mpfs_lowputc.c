@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/risc-v/src/mpfs/mpfs_lowputc.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -29,8 +31,6 @@
 #include <arch/board/board.h>
 
 #include "riscv_internal.h"
-#include "riscv_arch.h"
-
 #include "hardware/mpfs_memorymap.h"
 #include "hardware/mpfs_uart.h"
 #include "mpfs.h"
@@ -81,7 +81,7 @@
 #  elif defined(CONFIG_UART4_SERIAL_CONSOLE)
 #    define MPFS_CONSOLE_BASE        MPFS_UART4_BASE
 #    define MPFS_CONSOLE_BAUD        CONFIG_UART4_BAUD
-#    define MPFS_CONSOLE_BITS        CONFIG_UART4BITS
+#    define MPFS_CONSOLE_BITS        CONFIG_UART4_BITS
 #    define MPFS_CONSOLE_PARITY      CONFIG_UART4_PARITY
 #    define MPFS_CONSOLE_2STOP       CONFIG_UART4_2STOP
 #    define MPFS_CONSOLE_CLOCKBIT    SYSREG_SUBBLK_CLOCK_CR_MMUART4

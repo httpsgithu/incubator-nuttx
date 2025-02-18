@@ -1,6 +1,8 @@
 /****************************************************************************
  * sched/environ/environ.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -33,9 +35,11 @@
  ****************************************************************************/
 
 #ifdef CONFIG_DISABLE_ENVIRON
-#  define env_dup(group)     (0)
-#  define env_release(group) (0)
+#  define env_dup(group, envp) (0)
+#  define env_release(group)   (0)
 #else
+
+#  define SCHED_ENVIRON_RESERVED (4)
 
 /****************************************************************************
  * Public Data
@@ -65,6 +69,7 @@ extern "C"
  * Input Parameters:
  *   group - The child task group to receive the newly allocated copy of the
  *           parent task groups environment structure.
+ *   envp  - Pointer to the environment strings.
  *
  * Returned Value:
  *   zero on success
@@ -74,7 +79,7 @@ extern "C"
  *
  ****************************************************************************/
 
-int env_dup(FAR struct task_group_s *group);
+int env_dup(FAR struct task_group_s *group, FAR char * const *envp);
 
 /****************************************************************************
  * Name: env_release
@@ -111,7 +116,7 @@ void env_release(FAR struct task_group_s *group);
  *   pname - The variable name to find
  *
  * Returned Value:
- *   A pointer to the name=value string in the environment
+ *   A index to the name=value string in the environment
  *
  * Assumptions:
  *   - Not called from an interrupt handler
@@ -119,7 +124,7 @@ void env_release(FAR struct task_group_s *group);
  *
  ****************************************************************************/
 
-FAR char *env_findvar(FAR struct task_group_s *group, FAR const char *pname);
+ssize_t env_findvar(FAR struct task_group_s *group, FAR const char *pname);
 
 /****************************************************************************
  * Name: env_removevar
@@ -130,10 +135,10 @@ FAR char *env_findvar(FAR struct task_group_s *group, FAR const char *pname);
  * Input Parameters:
  *   group - The task group with the environment containing the name=value
  *           pair
- *   pvar  - A pointer to the name=value pair in the restroom
+ *   index - A index to the name=value pair in the restroom
  *
  * Returned Value:
- *   Zero on success
+ *   None
  *
  * Assumptions:
  *   - Not called from an interrupt handler
@@ -142,7 +147,7 @@ FAR char *env_findvar(FAR struct task_group_s *group, FAR const char *pname);
  *
  ****************************************************************************/
 
-int env_removevar(FAR struct task_group_s *group, FAR char *pvar);
+void env_removevar(FAR struct task_group_s *group, ssize_t index);
 
 #undef EXTERN
 #ifdef __cplusplus

@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/mips/src/mips32/mips_swint0.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -42,40 +44,6 @@
 /****************************************************************************
  * Private Functions
  ****************************************************************************/
-
-/****************************************************************************
- * Name: up_registerdump
- ****************************************************************************/
-
-#ifdef CONFIG_DEBUG_SYSCALL_INFO
-static void up_registerdump(const uint32_t *regs)
-{
-  svcinfo("MFLO:%08x MFHI:%08x EPC:%08x STATUS:%08x\n",
-          regs[REG_MFLO], regs[REG_MFHI], regs[REG_EPC], regs[REG_STATUS]);
-  svcinfo("AT:%08x V0:%08x V1:%08x A0:%08x A1:%08x A2:%08x A3:%08x\n",
-          regs[REG_AT], regs[REG_V0], regs[REG_V1], regs[REG_A0],
-          regs[REG_A1], regs[REG_A2], regs[REG_A3]);
-  svcinfo("T0:%08x T1:%08x T2:%08x T3:%08x "
-          "T4:%08x T5:%08x T6:%08x T7:%08x\n",
-          regs[REG_T0], regs[REG_T1], regs[REG_T2], regs[REG_T3],
-          regs[REG_T4], regs[REG_T5], regs[REG_T6], regs[REG_T7]);
-  svcinfo("S0:%08x S1:%08x S2:%08x S3:%08x "
-          "S4:%08x S5:%08x S6:%08x S7:%08x\n",
-          regs[REG_S0], regs[REG_S1], regs[REG_S2], regs[REG_S3],
-          regs[REG_S4], regs[REG_S5], regs[REG_S6], regs[REG_S7]);
-#ifdef MIPS32_SAVE_GP
-  svcinfo("T8:%08x T9:%08x GP:%08x SP:%08x FP:%08x RA:%08x\n",
-          regs[REG_T8], regs[REG_T9], regs[REG_GP], regs[REG_SP],
-          regs[REG_FP], regs[REG_RA]);
-#else
-  svcinfo("T8:%08x T9:%08x SP:%08x FP:%08x RA:%08x\n",
-          regs[REG_T8], regs[REG_T9], regs[REG_SP], regs[REG_FP],
-          regs[REG_RA]);
-#endif
-}
-#else
-#  define up_registerdump(regs)
-#endif
 
 /****************************************************************************
  * Name: dispatch_syscall
@@ -121,7 +89,7 @@ static void dispatch_syscall(void)
  ****************************************************************************/
 
 /****************************************************************************
- * Name: up_swint0
+ * Name: mips_swint0
  *
  * Description:
  *   This is software interrupt 0 exception handler that performs context
@@ -129,12 +97,12 @@ static void dispatch_syscall(void)
  *
  ****************************************************************************/
 
-int up_swint0(int irq, FAR void *context, FAR void *arg)
+int mips_swint0(int irq, void *context, void *arg)
 {
   uint32_t *regs = (uint32_t *)context;
   uint32_t cause;
 
-  DEBUGASSERT(regs && regs == CURRENT_REGS);
+  DEBUGASSERT(regs && regs == up_current_regs());
 
   /* Software interrupt 0 is invoked with REG_A0 (REG_R4) = system call
    * command and REG_A1-3 and REG_T0-2 (REG_R5-10) = variable number of
@@ -143,13 +111,33 @@ int up_swint0(int irq, FAR void *context, FAR void *arg)
 
 #ifdef CONFIG_DEBUG_SYSCALL_INFO
   svcinfo("Entry: regs: %p cmd: %d\n", regs, regs[REG_R4]);
-  up_registerdump(regs);
+  up_dump_register(regs);
 #endif
 
   /* Handle the SWInt according to the command in $4 */
 
   switch (regs[REG_R4])
     {
+      /* R4=SYS_save_context:  This is a save context command:
+       *
+       *   int up_saveusercontext(void *saveregs);
+       *
+       * At this point, the following values are saved in context:
+       *
+       *   R4 = SYS_save_context
+       *   R5 = saveregs
+       *
+       * In this case, we simply need to copy the current registers to the
+       * save register space references in the saved R1 and return.
+       */
+
+      case SYS_save_context:
+        {
+          DEBUGASSERT(regs[REG_A1] != 0);
+          mips_copystate((uint32_t *)regs[REG_A1], regs);
+        }
+        break;
+
       /* R4=SYS_restore_context: This a restore context command:
        *
        * void up_fullcontextrestore(uint32_t *restoreregs) noreturn_function;
@@ -169,13 +157,14 @@ int up_swint0(int irq, FAR void *context, FAR void *arg)
       case SYS_restore_context:
         {
           DEBUGASSERT(regs[REG_A1] != 0);
-          CURRENT_REGS = (uint32_t *)regs[REG_A1];
+          up_set_current_regs((uint32_t *)regs[REG_A1]);
         }
         break;
 
       /* R4=SYS_switch_context: This a switch context command:
        *
-       *   void up_switchcontext(uint32_t *saveregs, uint32_t *restoreregs);
+       *   void mips_switchcontext(uint32_t *saveregs,
+       *                           uint32_t *restoreregs);
        *
        * At this point, the following values are saved in context:
        *
@@ -192,8 +181,8 @@ int up_swint0(int irq, FAR void *context, FAR void *arg)
       case SYS_switch_context:
         {
           DEBUGASSERT(regs[REG_A1] != 0 && regs[REG_A2] != 0);
-          up_copystate((uint32_t *)regs[REG_A1], regs);
-          CURRENT_REGS = (uint32_t *)regs[REG_A2];
+          mips_copystate((uint32_t *)regs[REG_A1], regs);
+          up_set_current_regs((uint32_t *)regs[REG_A2]);
         }
         break;
 
@@ -212,7 +201,7 @@ int up_swint0(int irq, FAR void *context, FAR void *arg)
 #ifdef CONFIG_BUILD_KERNEL
       case SYS_syscall_return:
         {
-          struct tcb_s *rtcb = nxsched_self();
+          struct tcb_s *rtcb = this_task();
           int index = (int)rtcb->xcp.nsyscalls - 1;
 
           /* Make sure that there is a saved syscall return address. */
@@ -223,7 +212,7 @@ int up_swint0(int irq, FAR void *context, FAR void *arg)
            * the original mode.
            */
 
-          CURRENT_REGS[REG_EPC] = rtcb->xcp.syscall[index].sysreturn;
+          up_current_regs()[REG_EPC] = rtcb->xcp.syscall[index].sysreturn;
 #error "Missing logic -- need to restore the original mode"
           rtcb->xcp.nsyscalls     = index;
 
@@ -232,7 +221,7 @@ int up_swint0(int irq, FAR void *context, FAR void *arg)
            */
 
           rtcb->flags            &= ~TCB_FLAG_SYSCALL;
-          (void)nxsig_unmask_pendingsignal();
+          nxsig_unmask_pendingsignal();
         }
         break;
 #endif
@@ -245,12 +234,12 @@ int up_swint0(int irq, FAR void *context, FAR void *arg)
       default:
         {
 #ifdef CONFIG_BUILD_KERNEL
-          FAR struct tcb_s *rtcb = nxsched_self();
+          struct tcb_s *rtcb = this_task();
           int index = rtcb->xcp.nsyscalls;
 
           /* Verify that the SYS call number is within range */
 
-          DEBUGASSERT(CURRENT_REGS[REG_A0] < SYS_maxsyscall);
+          DEBUGASSERT(up_current_regs()[REG_A0] < SYS_maxsyscall);
 
           /* Make sure that we got here that there is a no saved syscall
            * return address.  We cannot yet handle nested system calls.
@@ -269,7 +258,7 @@ int up_swint0(int irq, FAR void *context, FAR void *arg)
 
           /* Offset R0 to account for the reserved values */
 
-          CURRENT_REGS[REG_R0] -= CONFIG_SYS_RESERVED;
+          up_current_regs()[REG_R0] -= CONFIG_SYS_RESERVED;
 
           /* Indicate that we are in a syscall handler. */
 
@@ -286,10 +275,10 @@ int up_swint0(int irq, FAR void *context, FAR void *arg)
    */
 
 #ifdef CONFIG_DEBUG_SYSCALL_INFO
-  if (regs != CURRENT_REGS)
+  if (regs != up_current_regs())
     {
       svcinfo("SWInt Return: Context switch!\n");
-      up_registerdump((const uint32_t *)CURRENT_REGS);
+      up_dump_register(up_current_regs());
     }
   else
     {
@@ -299,7 +288,7 @@ int up_swint0(int irq, FAR void *context, FAR void *arg)
 
   /* Clear the pending software interrupt 0 */
 
-  up_clrpend_sw0();
+  mips_clrpend_sw0();
 
   /* And reset the software interrupt bit in the MIPS CAUSE register */
 

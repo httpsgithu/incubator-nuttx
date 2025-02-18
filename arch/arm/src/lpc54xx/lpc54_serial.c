@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/lpc54xx/lpc54_serial.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -36,12 +38,11 @@
 #include <nuttx/irq.h>
 #include <nuttx/arch.h>
 #include <nuttx/serial/serial.h>
+#include <nuttx/spinlock.h>
 
 #include <arch/board/board.h>
 
-#include "arm_arch.h"
 #include "arm_internal.h"
-
 #include "chip.h"
 #include "lpc54_config.h"
 #include "hardware/lpc54_usart.h"
@@ -377,6 +378,7 @@ struct lpc54_dev_s
 {
   uintptr_t uartbase;  /* Base address of USART registers */
   uint8_t   irq;       /* IRQ associated with this USART */
+  spinlock_t lock;     /* Spinlock */
 
   /* USART configuration */
 
@@ -391,7 +393,7 @@ static int  lpc54_setup(struct uart_dev_s *dev);
 static void lpc54_shutdown(struct uart_dev_s *dev);
 static int  lpc54_attach(struct uart_dev_s *dev);
 static void lpc54_detach(struct uart_dev_s *dev);
-static int  lpc54_interrupt(int irq, void *context, FAR void *arg);
+static int  lpc54_interrupt(int irq, void *context, void *arg);
 static int  lpc54_ioctl(struct file *filep, int cmd, unsigned long arg);
 static int  lpc54_receive(struct uart_dev_s *dev, unsigned int *status);
 static void lpc54_rxint(struct uart_dev_s *dev, bool enable);
@@ -458,6 +460,7 @@ static struct lpc54_dev_s g_uart0priv =
 {
   .uartbase       = LPC54_FLEXCOMM0_BASE,
   .irq            = LPC54_IRQ_FLEXCOMM0,
+  .lock           = SP_UNLOCKED,
   .config         =
   {
     .baud         = CONFIG_USART0_BAUD,
@@ -500,6 +503,7 @@ static struct lpc54_dev_s g_uart1priv =
 {
   .uartbase       = LPC54_FLEXCOMM1_BASE,
   .irq            = LPC54_IRQ_FLEXCOMM1,
+  .lock           = SP_UNLOCKED,
   .config         =
   {
     .baud         = CONFIG_USART1_BAUD,
@@ -542,6 +546,7 @@ static struct lpc54_dev_s g_uart2priv =
 {
   .uartbase       = LPC54_FLEXCOMM2_BASE,
   .irq            = LPC54_IRQ_FLEXCOMM2,
+  .lock           = SP_UNLOCKED,
   .config         =
   {
     .baud         = CONFIG_USART2_BAUD,
@@ -584,6 +589,7 @@ static struct lpc54_dev_s g_uart3priv =
 {
   .uartbase       = LPC54_FLEXCOMM3_BASE,
   .irq            = LPC54_IRQ_FLEXCOMM3,
+  .lock           = SP_UNLOCKED,
   .config         =
   {
     .baud         = CONFIG_USART3_BAUD,
@@ -626,6 +632,7 @@ static struct lpc54_dev_s g_uart4priv =
 {
   .uartbase       = LPC54_FLEXCOMM4_BASE,
   .irq            = LPC54_IRQ_FLEXCOMM4,
+  .lock           = SP_UNLOCKED,
   .config         =
   {
     .baud         = CONFIG_USART4_BAUD,
@@ -668,6 +675,7 @@ static struct lpc54_dev_s g_uart5priv =
 {
   .uartbase       = LPC54_FLEXCOMM5_BASE,
   .irq            = LPC54_IRQ_FLEXCOMM5,
+  .lock           = SP_UNLOCKED,
   .config         =
   {
     .baud         = CONFIG_USART5_BAUD,
@@ -710,6 +718,7 @@ static struct lpc54_dev_s g_uart6priv =
 {
   .uartbase       = LPC54_FLEXCOMM6_BASE,
   .irq            = LPC54_IRQ_FLEXCOMM6,
+  .lock           = SP_UNLOCKED,
   .config         =
   {
     .baud         = CONFIG_USART6_BAUD,
@@ -752,6 +761,7 @@ static struct lpc54_dev_s g_uart7priv =
 {
   .uartbase       = LPC54_FLEXCOMM7_BASE,
   .irq            = LPC54_IRQ_FLEXCOMM7,
+  .lock           = SP_UNLOCKED,
   .config         =
   {
     .baud         = CONFIG_USART7_BAUD,
@@ -794,6 +804,7 @@ static struct lpc54_dev_s g_uart8priv =
 {
   .uartbase       = LPC54_FLEXCOMM8_BASE,
   .irq            = LPC54_IRQ_FLEXCOMM8,
+  .lock           = SP_UNLOCKED,
   .config         =
   {
     .baud         = CONFIG_USART8_BAUD,
@@ -836,6 +847,7 @@ static struct lpc54_dev_s g_uart9priv =
 {
   .uartbase       = LPC54_FLEXCOMM9_BASE,
   .irq            = LPC54_IRQ_FLEXCOMM9,
+  .lock           = SP_UNLOCKED,
   .config         =
   {
     .baud         = CONFIG_USART9_BAUD,
@@ -896,28 +908,6 @@ static inline void lpc54_serialout(struct lpc54_dev_s *priv,
 }
 
 /****************************************************************************
- * Name: lpc54_modifyreg
- ****************************************************************************/
-
-static inline void lpc54_modifyreg(struct lpc54_dev_s *priv,
-                                   unsigned int offset, uint32_t setbits,
-                                   uint32_t clrbits)
-{
-  irqstate_t flags;
-  uintptr_t regaddr = priv->uartbase + offset;
-  uint32_t regval;
-
-  flags   = enter_critical_section();
-
-  regval  = getreg32(regaddr);
-  regval &= ~clrbits;
-  regval |= setbits;
-  putreg32(regval, regaddr);
-
-  leave_critical_section(flags);
-}
-
-/****************************************************************************
  * Name: lpc54_fifoint_enable
  ****************************************************************************/
 
@@ -946,14 +936,14 @@ static void lpc54_fifoint_disableall(struct lpc54_dev_s *priv,
 {
   irqstate_t flags;
 
-  flags = enter_critical_section();
+  flags = spin_lock_irqsave(&priv->lock);
   if (intset)
     {
       *intset = lpc54_serialin(priv, LPC54_USART_FIFOINTENCLR_OFFSET);
     }
 
   lpc54_serialout(priv, LPC54_USART_FIFOINTENCLR_OFFSET, USART_FIFOINT_ALL);
-  leave_critical_section(flags);
+  spin_unlock_irqrestore(&priv->lock, flags);
 }
 
 /****************************************************************************
@@ -1065,15 +1055,15 @@ static void lpc54_detach(struct uart_dev_s *dev)
  * Name: lpc54_interrupt
  *
  * Description:
- *   This is the USART status interrupt handler.  It will be invoked when an
- *   interrupt received on the 'irq'  It should call uart_transmitchars or
- *   uart_receivechar to perform the appropriate data transfers.  The
- *   interrupt handling logic must be able to map the 'irq' number into the
+ *   This is the USART interrupt handler.  It will be invoked when an
+ *   interrupt is received on the 'irq'.  It should call uart_xmitchars or
+ *   uart_recvchars to perform the appropriate data transfers.  The
+ *   interrupt handling logic must be able to map the 'arg' to the
  *   appropriate uart_dev_s structure in order to call these functions.
  *
  ****************************************************************************/
 
-static int lpc54_interrupt(int irq, void *context, FAR void *arg)
+static int lpc54_interrupt(int irq, void *context, void *arg)
 {
   struct uart_dev_s *dev = (struct uart_dev_s *)arg;
   struct lpc54_dev_s *priv;
@@ -1150,9 +1140,8 @@ static int lpc54_ioctl(struct file *filep, int cmd, unsigned long arg)
   struct inode      *inode;
   struct uart_dev_s *dev;
   struct lpc54_dev_s   *priv;
-  int                ret = OK;
+  int                   ret = OK;
 
-  DEBUGASSERT(filep, filep->f_inode);
   inode = filep->f_inode;
   dev   = inode->i_private;
 
@@ -1198,7 +1187,7 @@ static int lpc54_receive(struct uart_dev_s *dev, unsigned int *status)
 
   if (status)
     {
-      *status = fiford && ~USART_FIFORD_RXDATA_MASK;
+      *status = fiford & ~USART_FIFORD_RXDATA_MASK;
     }
 
   /* Then return the actual received data. */
@@ -1464,28 +1453,16 @@ void arm_serialinit(void)
  *
  ****************************************************************************/
 
-int up_putc(int ch)
+void up_putc(int ch)
 {
 #ifdef HAVE_USART_CONSOLE
   struct lpc54_dev_s *priv = (struct lpc54_dev_s *)CONSOLE_DEV.priv;
   uint32_t intset;
 
   lpc54_fifoint_disableall(priv, &intset);
-
-  /* Check for LF */
-
-  if (ch == '\n')
-    {
-      /* Add CR */
-
-      arm_lowputc('\r');
-    }
-
   arm_lowputc(ch);
   lpc54_fifoint_enable(priv, intset);
 #endif
-
-  return ch;
 }
 
 #else /* USE_SERIALDRIVER */
@@ -1498,20 +1475,10 @@ int up_putc(int ch)
  *
  ****************************************************************************/
 
-int up_putc(int ch)
+void up_putc(int ch)
 {
 #ifdef HAVE_USART_CONSOLE
-  /* Check for LF */
-
-  if (ch == '\n')
-    {
-      /* Add CR */
-
-      arm_lowputc('\r');
-    }
-
   arm_lowputc(ch);
-  return ch;
 }
 #endif
 

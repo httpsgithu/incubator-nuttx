@@ -1,6 +1,8 @@
 /****************************************************************************
  * net/devif/devif_callback.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -31,19 +33,29 @@
 #include <debug.h>
 #include <assert.h>
 
+#include <nuttx/kmalloc.h>
 #include <nuttx/net/netconfig.h>
 #include <nuttx/net/net.h>
 #include <nuttx/net/netdev.h>
 
 #include "netdev/netdev.h"
+#include "utils/utils.h"
 #include "devif/devif.h"
+
+/****************************************************************************
+ * Pre-processor Definitions
+ ****************************************************************************/
+
+#define DEVIF_CB_DONT_FREE  (1 << 0)
+#define DEVIF_CB_PEND_FREE  (1 << 1)
 
 /****************************************************************************
  * Private Data
  ****************************************************************************/
 
-static struct devif_callback_s g_cbprealloc[CONFIG_NET_NACTIVESOCKETS];
-static FAR struct devif_callback_s *g_cbfreelist = NULL;
+NET_BUFPOOL_DECLARE(g_cbprealloc, sizeof(struct devif_callback_s),
+                    CONFIG_NET_PREALLOC_DEVIF_CALLBACKS,
+                    CONFIG_NET_ALLOC_DEVIF_CALLBACKS, 0);
 
 /****************************************************************************
  * Private Functions
@@ -75,7 +87,7 @@ static void devif_callback_free(FAR struct net_driver_s *dev,
 #ifdef CONFIG_DEBUG_FEATURES
       /* Check for double freed callbacks */
 
-      curr = g_cbfreelist;
+      curr = (FAR struct devif_callback_s *)g_cbprealloc.freebuffers.head;
 
       while (curr != NULL)
         {
@@ -83,35 +95,6 @@ static void devif_callback_free(FAR struct net_driver_s *dev,
           curr = curr->nxtconn;
         }
 #endif
-
-      /* Remove the callback structure from the device notification list if
-       * it is supposed to be in the device notification list.
-       */
-
-      if (dev != NULL)
-        {
-          /* Find the callback structure in the device event list */
-
-          for (prev = NULL, curr = dev->d_devcb;
-               curr != NULL && curr != cb;
-               prev = curr, curr = curr->nxtdev)
-            {
-            }
-
-          /* Remove the structure from the device event list */
-
-          if (curr != NULL)
-            {
-              if (prev)
-                {
-                  prev->nxtdev = cb->nxtdev;
-                }
-              else
-                {
-                  dev->d_devcb = cb->nxtdev;
-                }
-            }
-        }
 
       /* Remove the callback structure from the data notification list if
        * it is supposed to be in the data notification list.
@@ -161,11 +144,52 @@ static void devif_callback_free(FAR struct net_driver_s *dev,
             }
         }
 
-      /* Put the structure into the free list */
+      /* check if the callback structure has DEVIF_CB_DONT_FREE,it indicates
+       * the callback can't be free immediately,setting DEVIF_CB_PEND_FREE
+       * flag with the callback,it indicates the callback will be free
+       * finally
+       */
 
-      cb->nxtconn  = g_cbfreelist;
-      cb->nxtdev   = NULL;
-      g_cbfreelist = cb;
+      if (cb->free_flags & DEVIF_CB_DONT_FREE)
+        {
+          cb->free_flags |= DEVIF_CB_PEND_FREE;
+          net_unlock();
+          return;
+        }
+
+      /* Remove the callback structure from the device notification list if
+       * it is supposed to be in the device notification list.
+       */
+
+      if (dev != NULL)
+        {
+          /* Find the callback structure in the device event list */
+
+          for (prev = NULL, curr = dev->d_devcb;
+               curr != NULL && curr != cb;
+               prev = curr, curr = curr->nxtdev)
+            {
+            }
+
+          /* Remove the structure from the device event list */
+
+          if (curr != NULL)
+            {
+              if (prev)
+                {
+                  prev->nxtdev = cb->nxtdev;
+                }
+              else
+                {
+                  dev->d_devcb = cb->nxtdev;
+                }
+            }
+        }
+
+      /* Free the callback structure */
+
+      NET_BUFPOOL_FREE(g_cbprealloc, cb);
+
       net_unlock();
     }
 }
@@ -214,29 +238,6 @@ static bool devif_event_trigger(uint16_t events, uint16_t triggers)
  ****************************************************************************/
 
 /****************************************************************************
- * Name: devif_callback_init
- *
- * Description:
- *   Configure the pre-allocated callback structures into a free list.
- *
- * Assumptions:
- *   Called early in the initialization sequence so that no special
- *   protection is required.
- *
- ****************************************************************************/
-
-void devif_callback_init(void)
-{
-  int i;
-
-  for (i = 0; i < CONFIG_NET_NACTIVESOCKETS; i++)
-    {
-      g_cbprealloc[i].nxtconn = g_cbfreelist;
-      g_cbfreelist = &g_cbprealloc[i];
-    }
-}
-
-/****************************************************************************
  * Name: devif_callback_alloc
  *
  * Description:
@@ -259,39 +260,38 @@ FAR struct devif_callback_s *
 {
   FAR struct devif_callback_s *ret;
 
-  /* Check the head of the free list */
-
   net_lock();
-  ret  = g_cbfreelist;
+
+  /* Verify that the device pointer is valid, i.e., that it still
+   * points to a registered network device and also that the network
+   * device in the UP state.
+   */
+
+  /* Note: dev->d_flags may be asynchronously changed by netdev_ifdown()
+   * (in net/netdev/netdev_ioctl.c). Nevertheless, net_lock() / net_unlock()
+   * are not required in netdev_ifdown() to prevent dev->d_flags from
+   * asynchronous change here. There is not an issue because net_lock() and
+   * net_unlock() present inside of devif_dev_event(). That should be enough
+   * to de-allocate connection callbacks reliably on NETDEV_DOWN event.
+   */
+
+  if (dev && !(netdev_verify(dev) && (dev->d_flags & IFF_UP) != 0))
+    {
+      net_unlock();
+      return NULL;
+    }
+
+  /* Get a callback structure */
+
+  ret = NET_BUFPOOL_TRYALLOC(g_cbprealloc);
   if (ret)
     {
-      /* Remove the next instance from the head of the free list */
-
-      g_cbfreelist = ret->nxtconn;
-      memset(ret, 0, sizeof(struct devif_callback_s));
-
       /* Add the newly allocated instance to the head of the device event
        * list.
        */
 
       if (dev)
         {
-          /* Verify that the device pointer is valid, i.e., that it still
-           * points to a registered network device and also that the network
-           * device in in the UP state.
-           *
-           * And if it does, should that device also not be in the UP state?
-           */
-
-          if (!netdev_verify(dev) && (dev->d_flags & IFF_UP) != 0)
-            {
-              /* No.. release the callback structure and fail */
-
-              devif_callback_free(NULL, NULL, list_head, list_tail);
-              net_unlock();
-              return NULL;
-            }
-
           ret->nxtdev  = dev->d_devcb;
           dev->d_devcb = ret;
         }
@@ -435,9 +435,6 @@ void devif_dev_callback_free(FAR struct net_driver_s *dev,
  * Input Parameters:
  *   dev - The network device state structure associated with the network
  *     device that initiated the callback event.
- *   pvconn - Holds a reference to the TCP connection structure or the UDP
- *     port structure.  May be NULL if the even is not related to a TCP
- *     connection or UDP port.
  *   flags - The bit set of events to be notified.
  *   list - The list to traverse in performing the notifications
  *
@@ -449,8 +446,8 @@ void devif_dev_callback_free(FAR struct net_driver_s *dev,
  *
  ****************************************************************************/
 
-uint16_t devif_conn_event(FAR struct net_driver_s *dev, void *pvconn,
-                          uint16_t flags, FAR struct devif_callback_s *list)
+uint16_t devif_conn_event(FAR struct net_driver_s *dev, uint16_t flags,
+                          FAR struct devif_callback_s *list)
 {
   FAR struct devif_callback_s *next;
 
@@ -477,7 +474,7 @@ uint16_t devif_conn_event(FAR struct net_driver_s *dev, void *pvconn,
            * beginning of the list (which will be ignored on this pass)
            */
 
-          flags = list->event(dev, pvconn, list->priv, flags);
+          flags = list->event(dev, list->priv, flags);
         }
 
       /* Set up for the next time through the loop */
@@ -498,9 +495,6 @@ uint16_t devif_conn_event(FAR struct net_driver_s *dev, void *pvconn,
  * Input Parameters:
  *   dev - The network device state structure associated with the network
  *     device that initiated the callback event.
- *   pvconn - Holds a reference to the TCP connection structure or the UDP
- *     port structure.  May be NULL if the even is not related to a TCP
- *     connection or UDP port.
  *   flags - The bit set of events to be notified.
  *
  * Returned Value:
@@ -511,8 +505,7 @@ uint16_t devif_conn_event(FAR struct net_driver_s *dev, void *pvconn,
  *
  ****************************************************************************/
 
-uint16_t devif_dev_event(FAR struct net_driver_s *dev, void *pvconn,
-                         uint16_t flags)
+uint16_t devif_dev_event(FAR struct net_driver_s *dev, uint16_t flags)
 {
   FAR struct devif_callback_s *cb;
   FAR struct devif_callback_s *next;
@@ -535,12 +528,26 @@ uint16_t devif_dev_event(FAR struct net_driver_s *dev, void *pvconn,
 
       if (cb->event != NULL && devif_event_trigger(flags, cb->flags))
         {
+          cb->free_flags |= DEVIF_CB_DONT_FREE;
+
           /* Yes.. perform the callback.  Actions perform by the callback
            * may delete the current list entry or add a new list entry to
            * beginning of the list (which will be ignored on this pass)
            */
 
-          flags = cb->event(dev, pvconn, cb->priv, flags);
+          flags = cb->event(dev, cb->priv, flags);
+          cb->free_flags &= ~DEVIF_CB_DONT_FREE;
+
+          /* update the next callback to prevent previously recorded the
+           * next callback from being deleted
+           */
+
+          next = cb->nxtdev;
+          if ((cb->free_flags & DEVIF_CB_PEND_FREE) != 0)
+            {
+              cb->free_flags &= ~DEVIF_CB_PEND_FREE;
+              devif_callback_free(dev, cb, NULL, NULL);
+            }
         }
     }
 

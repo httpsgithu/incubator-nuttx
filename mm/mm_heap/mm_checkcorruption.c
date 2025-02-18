@@ -1,6 +1,8 @@
 /****************************************************************************
  * mm/mm_heap/mm_checkcorruption.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -34,6 +36,34 @@
 #include "mm_heap/mm.h"
 
 /****************************************************************************
+ * Private Functions
+ ****************************************************************************/
+
+static void checkcorruption_handler(FAR struct mm_allocnode_s *node,
+                                    FAR void *arg)
+{
+  size_t nodesize = MM_SIZEOF_NODE(node);
+
+  if (MM_NODE_IS_ALLOC(node))
+    {
+      ASSERT(nodesize >= MM_SIZEOF_ALLOCNODE);
+    }
+  else
+    {
+      FAR struct mm_freenode_s *fnode = (FAR void *)node;
+
+      ASSERT(nodesize >= MM_MIN_CHUNK);
+      ASSERT(fnode->blink->flink == fnode);
+      ASSERT(MM_SIZEOF_NODE(fnode->blink) <= nodesize);
+      ASSERT(fnode->flink == NULL ||
+             fnode->flink->blink == fnode);
+      ASSERT(fnode->flink == NULL ||
+             MM_SIZEOF_NODE(fnode->flink) == 0 ||
+             MM_SIZEOF_NODE(fnode->flink) >= nodesize);
+    }
+}
+
+/****************************************************************************
  * Public Functions
  ****************************************************************************/
 
@@ -47,62 +77,5 @@
 
 void mm_checkcorruption(FAR struct mm_heap_s *heap)
 {
-  FAR struct mm_allocnode_s *node;
-  FAR struct mm_allocnode_s *prev;
-
-#if CONFIG_MM_REGIONS > 1
-  int region;
-#else
-# define region 0
-#endif
-
-  /* Visit each region */
-
-#if CONFIG_MM_REGIONS > 1
-  for (region = 0; region < heap->mm_nregions; region++)
-#endif
-    {
-      prev = NULL;
-
-      /* Visit each node in the region
-       * Retake the semaphore for each region to reduce latencies
-       */
-
-      if (mm_takesemaphore(heap) == false)
-        {
-          return;
-        }
-
-      for (node = heap->mm_heapstart[region];
-           node < heap->mm_heapend[region];
-           node = (FAR struct mm_allocnode_s *)
-                  ((FAR char *)node + node->size))
-        {
-          if ((node->preceding & MM_ALLOC_BIT) != 0)
-            {
-              assert(node->size >= SIZEOF_MM_ALLOCNODE);
-            }
-          else
-            {
-              FAR struct mm_freenode_s *fnode = (FAR void *)node;
-
-              assert(node->size >= SIZEOF_MM_FREENODE);
-              assert(fnode->blink->flink == fnode);
-              assert(fnode->blink->size <= fnode->size);
-              assert(fnode->flink == NULL ||
-                     fnode->flink->blink == fnode);
-              assert(fnode->flink == NULL ||
-                     fnode->flink->size == 0 ||
-                     fnode->flink->size >= fnode->size);
-            }
-
-          assert(prev == NULL ||
-                 prev->size == (node->preceding & ~MM_ALLOC_BIT));
-          prev = node;
-        }
-
-      assert(node == heap->mm_heapend[region]);
-
-      mm_givesemaphore(heap);
-    }
+  mm_foreach(heap, checkcorruption_handler, NULL);
 }

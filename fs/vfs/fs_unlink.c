@@ -1,6 +1,8 @@
 /****************************************************************************
  * fs/vfs/fs_unlink.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -31,6 +33,7 @@
 
 #include <nuttx/fs/fs.h>
 
+#include "notify/notify.h"
 #include "inode/inode.h"
 
 /****************************************************************************
@@ -108,12 +111,6 @@ int nx_unlink(FAR const char *pathname)
 
     {
 #ifndef CONFIG_DISABLE_PSEUDOFS_OPERATIONS
-      ret = inode_semtake();
-      if (ret < 0)
-        {
-          goto errout_with_inode;
-        }
-
       /* Refuse to unlink the inode if it has children.  I.e., if it is
        * functioning as a directory and the directory is not empty.
        */
@@ -121,7 +118,7 @@ int nx_unlink(FAR const char *pathname)
       if (inode->i_child != NULL)
         {
           ret = -ENOTEMPTY;
-          goto errout_with_sem;
+          goto errout_with_inode;
         }
 
       /* Notify the driver that it has been unlinked.  If there are no
@@ -129,14 +126,15 @@ int nx_unlink(FAR const char *pathname)
        * release all resources because it is no longer accessible.
        */
 
-      if (INODE_IS_DRIVER(inode) && inode->u.i_ops->unlink)
+      if ((INODE_IS_DRIVER(inode) || INODE_IS_SHM(inode) ||
+          INODE_IS_PIPE(inode)) && inode->u.i_ops->unlink)
         {
           /* Notify the character driver that it has been unlinked */
 
           ret = inode->u.i_ops->unlink(inode);
           if (ret < 0)
             {
-              goto errout_with_sem;
+              goto errout_with_inode;
             }
         }
 #ifndef CONFIG_DISABLE_MOUNTPOINT
@@ -147,7 +145,7 @@ int nx_unlink(FAR const char *pathname)
           ret = inode->u.i_bops->unlink(inode);
           if (ret < 0)
             {
-              goto errout_with_sem;
+              goto errout_with_inode;
             }
         }
 #endif
@@ -165,7 +163,7 @@ int nx_unlink(FAR const char *pathname)
       else
         {
           ret = -ENXIO;
-          goto errout_with_sem;
+          goto errout_with_inode;
         }
 
       /* Remove the old inode.  Because we hold a reference count on the
@@ -175,8 +173,9 @@ int nx_unlink(FAR const char *pathname)
        * return -EBUSY to indicate that the inode was not deleted now.
        */
 
+      inode_lock();
       ret = inode_remove(pathname);
-      inode_semgive();
+      inode_unlock();
 
       if (ret < 0 && ret != -EBUSY)
         {
@@ -189,12 +188,11 @@ int nx_unlink(FAR const char *pathname)
 
   inode_release(inode);
   RELEASE_SEARCH(&desc);
+#ifdef CONFIG_FS_NOTIFY
+  notify_unlink(pathname);
+#endif
   return OK;
 
-#ifndef CONFIG_DISABLE_PSEUDOFS_OPERATIONS
-errout_with_sem:
-  inode_semgive();
-#endif
 #if !defined(CONFIG_DISABLE_MOUNTPOINT) || !defined(CONFIG_DISABLE_PSEUDOFS_OPERATIONS)
 errout_with_inode:
   inode_release(inode);

@@ -1,6 +1,8 @@
 /****************************************************************************
  * libs/libc/wqueue/wqueue.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -18,8 +20,8 @@
  *
  ****************************************************************************/
 
-#ifndef __LIBC_WQUEUE_WQUEUE_H
-#define __LIBC_WQUEUE_WQUEUE_H
+#ifndef __LIBS_LIBC_WQUEUE_WQUEUE_H
+#define __LIBS_LIBC_WQUEUE_WQUEUE_H
 
 /****************************************************************************
  * Included Files
@@ -27,9 +29,10 @@
 
 #include <nuttx/config.h>
 
-#include <semaphore.h>
 #include <pthread.h>
 
+#include <nuttx/mutex.h>
+#include <nuttx/semaphore.h>
 #include <nuttx/wqueue.h>
 
 #if defined(CONFIG_LIBC_USRWORK) && !defined(__KERNEL__)
@@ -46,8 +49,8 @@
 
 struct usr_wqueue_s
 {
-  struct sq_queue_s q;      /* The queue of pending work */
-  sem_t             lock;   /* exclusive access to user-mode work queue */
+  struct dq_queue_s q;      /* The queue of pending work */
+  mutex_t           lock;   /* exclusive access to user-mode work queue */
   sem_t             wake;   /* The wake-up semaphore of the  usrthread */
 };
 
@@ -64,4 +67,4 @@ extern struct usr_wqueue_s g_usrwork;
  ****************************************************************************/
 
 #endif /* CONFIG_LIBC_USRWORK && !__KERNEL__*/
-#endif /* __LIBC_WQUEUE_WQUEUE_H */
+#endif /* __LIBS_LIBC_WQUEUE_WQUEUE_H */

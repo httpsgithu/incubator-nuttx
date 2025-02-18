@@ -1,15 +1,12 @@
 /****************************************************************************
  * arch/arm/src/lpc54xx/lpc54_clockconfig.c
  *
- *   Copyright (C) 2017-2019 Gregory Nutt. All rights reserved.
- *   Author: Gregory Nutt <gnutt@nuttx.org>
- *
- * Parts of this file were adapted from sample code provided for the
- * LPC54xx family from NXP which has a compatible BSD license.
- *
- *   Copyright (c) 2016, Freescale Semiconductor, Inc.
- *   Copyright (c) 2016 - 2017 , NXP
- *   All rights reserved.
+ * SPDX-License-Identifier: BSD-3-Clause
+ * SPDX-FileCopyrightText: 2017-2019 Gregory Nutt. All rights reserved.
+ * SPDX-FileCopyrightText: 2016 Freescale Semiconductor Inc.
+ * SPDX-FileCopyrightText: 2016 - 2017, NXP
+ * SPDX-FileContributor: Gregory Nutt <gnutt@nuttx.org>
+ * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -52,9 +49,7 @@
 #include <nuttx/arch.h>
 #include <arch/board/board.h>
 
-#include "arm_arch.h"
 #include "arm_internal.h"
-
 #include "hardware/lpc54_syscon.h"
 #include "lpc54_power.h"
 #include "lpc54_clockconfig.h"
@@ -174,7 +169,7 @@ static void lpc54_set_flash_waitstates(uint32_t freq)
  *
  ****************************************************************************/
 
-static void lpc54_configure_pll(FAR const struct pll_setup_s *pllsetup)
+static void lpc54_configure_pll(const struct pll_setup_s *pllsetup)
 {
   uint32_t regval;
 
@@ -282,7 +277,7 @@ static void lpc54_configure_pll(FAR const struct pll_setup_s *pllsetup)
  *
  ****************************************************************************/
 
-void lpc54_clockconfig(FAR const struct pll_setup_s *pllsetup)
+void lpc54_clockconfig(const struct pll_setup_s *pllsetup)
 {
   uint32_t regval;
 

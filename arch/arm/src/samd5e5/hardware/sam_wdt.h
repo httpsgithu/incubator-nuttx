@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/samd5e5/hardware/sam_wdt.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -65,7 +67,7 @@
 
 /* Configuration register */
 
-#define WDT_CONFIG_PER_SHIFT       (0)                              /* Bits 0–3: Time-Out Period */
+#define WDT_CONFIG_PER_SHIFT       (0)                              /* Bits 0-3: Time-Out Period */
 #define WDT_CONFIG_PER_MASK        (15 << WDT_CONFIG_PER_SHIFT)
 #  define WDT_CONFIG_PER_8         (0  << WDT_CONFIG_PER_SHIFT)     /* 8 clock cycles */
 #  define WDT_CONFIG_PER_16        (1  << WDT_CONFIG_PER_SHIFT)     /* 16 clock cycles */

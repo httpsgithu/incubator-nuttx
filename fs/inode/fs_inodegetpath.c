@@ -1,6 +1,8 @@
 /****************************************************************************
  * fs/inode/fs_inodegetpath.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -42,30 +44,30 @@
  *
  ****************************************************************************/
 
-int inode_getpath(FAR struct inode *node, FAR char *path)
+int inode_getpath(FAR struct inode *inode, FAR char *path, size_t len)
 {
   if (path == NULL)
     {
       return -EINVAL;
     }
-  else if (node == NULL)
+  else if (inode == NULL)
     {
       path[0] = '\0';
       return OK;
     }
   else
     {
-      int ret = inode_getpath(node->i_parent, path);
+      int ret = inode_getpath(inode->i_parent, path, len);
       if (ret < 0)
         {
           return ret;
         }
     }
 
-  strcat(path, node->i_name);
-  if (node->i_child)
+  strlcat(path, inode->i_name, len);
+  if (inode->i_child || INODE_IS_MOUNTPT(inode))
     {
-      strcat(path, "/");
+      strlcat(path, "/", len);
     }
 
   return OK;

@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/s32k1xx/s32k1xx_progmem.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -28,13 +30,10 @@
 #include <assert.h>
 #include <errno.h>
 
-#include "arm_arch.h"
-
 #include "hardware/s32k1xx_ftfc.h"
 
 #include "s32k1xx_config.h"
 #include "s32k1xx_progmem.h"
-
 #include "arm_internal.h"
 
 #include <arch/board/board.h> /* Include last:  has dependencies */
@@ -53,13 +52,13 @@
 
 union fccob_flash_addr
 {
-    uint32_t addr;
-    struct
+  uint32_t addr;
+  struct
     {
-        uint8_t fccob3;
-        uint8_t fccob2;
-        uint8_t fccob1;
-        uint8_t pad;
+      uint8_t fccob3;
+      uint8_t fccob2;
+      uint8_t fccob1;
+      uint8_t pad;
     } fccobs;
 };
 
@@ -67,7 +66,7 @@ union fccob_flash_addr
  * Private Functions
  ****************************************************************************/
 
-static inline void wait_ftfc_ready()
+static inline void wait_ftfc_ready(void)
 {
   while ((getreg8(S32K1XX_FTFC_FSTAT) & FTTC_FSTAT_CCIF) == 0)
     {
@@ -75,10 +74,17 @@ static inline void wait_ftfc_ready()
     }
 }
 
-static uint32_t execute_ftfc_command()
+static uint32_t execute_ftfc_command(void)
 {
   uint8_t regval;
   uint32_t retval;
+
+  /* AN12003: only one FlexNVM operation can be executed at a time.
+   * Disable ISR during this time so an ISR doesn't cause a hardfault
+   * from a simultaneous read.
+   */
+
+  irqstate_t flags = enter_critical_section();
 
   /* Clear CCIF to launch command */
 
@@ -89,6 +95,8 @@ static uint32_t execute_ftfc_command()
   wait_ftfc_ready();
 
   retval = getreg8(S32K1XX_FTFC_FSTAT);
+
+  leave_critical_section(flags);
 
   if (retval & (FTTC_FSTAT_MGSTAT0 | FTTC_FSTAT_FPVIOL |
                 FTTC_FSTAT_ACCERR | FTTC_FSTAT_RDCOLERR))
@@ -291,7 +299,7 @@ ssize_t up_progmem_ispageerased(size_t page)
 
   for (i = 0; i < S32K1XX_PROGMEM_PAGE_SIZE; i++)
     {
-      if (p[i] != 0xff)
+      if (p[i] != S32K1XX_PROGMEM_ERASEDVAL)
         {
           break;
         }
@@ -331,7 +339,7 @@ ssize_t up_progmem_ispageerased(size_t page)
  *
  ****************************************************************************/
 
-ssize_t up_progmem_write(size_t addr, FAR const void *buf, size_t count)
+ssize_t up_progmem_write(size_t addr, const void *buf, size_t count)
 {
   union fccob_flash_addr dest;
   uint32_t i;
@@ -390,7 +398,20 @@ ssize_t up_progmem_write(size_t addr, FAR const void *buf, size_t count)
   return count;
 }
 
-void s32k1xx_progmem_init()
+/****************************************************************************
+ * Name: up_progmem_erasestate
+ *
+ * Description:
+ *   Return value of erase state.
+ *
+ ****************************************************************************/
+
+uint8_t up_progmem_erasestate(void)
+{
+  return S32K1XX_PROGMEM_ERASEDVAL;
+}
+
+void s32k1xx_progmem_init(void)
 {
   /* Disable D-Flash Cache */
 

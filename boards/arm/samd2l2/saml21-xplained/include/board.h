@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/samd2l2/saml21-xplained/include/board.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -429,7 +431,7 @@
 /* Main clock dividers
  *
  *     BOARD_CPU_DIVIDER        - See MCLK_CPUDIV_DIV* definitions
- *     BOARD_CPU_FRQUENCY       - In Hz
+ *     BOARD_CPU_FREQUENCY      - In Hz
  *     BOARD_CPU_FAILDECT       - Boolean (defined / not defined)
  *     BOARD_LOWPOWER_DIVIDER   - See MCLK_LPDIV_DIV_* definitions
  *     BOARD_LOWPOWER_FREQUENCY - In Hz

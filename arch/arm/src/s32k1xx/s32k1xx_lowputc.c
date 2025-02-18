@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/s32k1xx/s32k1xx_lowputc.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -29,8 +31,6 @@
 #include <assert.h>
 #include <errno.h>
 
-#include "arm_arch.h"
-
 #include "hardware/s32k1xx_pinmux.h"
 #include "hardware/s32k1xx_lpuart.h"
 
@@ -38,7 +38,6 @@
 #include "s32k1xx_pin.h"
 #include "s32k1xx_lowputc.h"
 #include "s32k1xx_periphclocks.h"
-
 #include "arm_internal.h"
 
 #include <arch/board/board.h> /* Include last:  has dependencies */
@@ -181,7 +180,7 @@ void s32k1xx_lowsetup(void)
 
 #ifdef HAVE_LPUART_DEVICE
 int s32k1xx_lpuart_configure(uint32_t base,
-                             FAR const struct uart_config_s *config)
+                             const struct uart_config_s *config)
 {
   enum clock_names_e clkname;
   uint32_t lpuart_freq = 0;
@@ -388,7 +387,7 @@ int s32k1xx_lpuart_configure(uint32_t base,
  *
  ****************************************************************************/
 
-#if defined(HAVE_LPUART_DEVICE) && defined(CONFIG_DEBUG_FEATURES)
+#if defined(HAVE_LPUART_CONSOLE) && defined(CONFIG_DEBUG_FEATURES)
 void s32k1xx_lowputc(int ch)
 {
   while ((getreg32(S32K1XX_CONSOLE_BASE + S32K1XX_LPUART_STAT_OFFSET) &

@@ -1,6 +1,8 @@
 /****************************************************************************
  * fs/nxffs/nxffs_truncate.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -57,7 +59,7 @@ int nxffs_truncate(FAR struct file *filep, off_t length)
 
   /* Sanity checks */
 
-  DEBUGASSERT(filep->f_priv != NULL && filep->f_inode != NULL);
+  DEBUGASSERT(filep->f_priv != NULL);
 
   /* Recover the open file state from the struct file instance */
 
@@ -65,17 +67,17 @@ int nxffs_truncate(FAR struct file *filep, off_t length)
 
   /* Recover the volume state from the open file */
 
-  volume = (FAR struct nxffs_volume_s *)filep->f_inode->i_private;
+  volume = filep->f_inode->i_private;
   DEBUGASSERT(volume != NULL);
 
-  /* Get exclusive access to the volume.  Note that the volume exclsem
+  /* Get exclusive access to the volume.  Note that the volume lock
    * protects the open file list.
    */
 
-  ret = nxsem_wait(&volume->exclsem);
+  ret = nxmutex_lock(&volume->lock);
   if (ret < 0)
     {
-      ferr("ERROR: nxsem_wait failed: %d\n", ret);
+      ferr("ERROR: nxmutex_lock failed: %d\n", ret);
       goto errout;
     }
 
@@ -85,7 +87,7 @@ int nxffs_truncate(FAR struct file *filep, off_t length)
     {
       ferr("ERROR: File not open for write access\n");
       ret = -EACCES;
-      goto errout_with_semaphore;
+      goto errout_with_lock;
     }
 
   /* Are we shrinking the file?  Or extending it? */
@@ -94,7 +96,7 @@ int nxffs_truncate(FAR struct file *filep, off_t length)
   if (oldsize == length)
     {
       ret = OK;
-      goto errout_with_semaphore;
+      goto errout_with_lock;
     }
   else if (oldsize > length)
     {
@@ -114,8 +116,8 @@ int nxffs_truncate(FAR struct file *filep, off_t length)
       ret = nxffs_wrextend(volume, wrfile, length);
     }
 
-errout_with_semaphore:
-  nxsem_post(&volume->exclsem);
+errout_with_lock:
+  nxmutex_unlock(&volume->lock);
 
 errout:
   return ret;

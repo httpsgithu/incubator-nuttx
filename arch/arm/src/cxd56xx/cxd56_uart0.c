@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/cxd56xx/cxd56_uart0.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -27,9 +29,8 @@
 #include <nuttx/kmalloc.h>
 #include <nuttx/fs/fs.h>
 #include <nuttx/irq.h>
-#include <nuttx/semaphore.h>
+#include <nuttx/mutex.h>
 
-#include <queue.h>
 #include <stdio.h>
 #include <stdint.h>
 #include <string.h>
@@ -37,7 +38,7 @@
 #include <debug.h>
 #include <errno.h>
 
-#include "arm_arch.h"
+#include "arm_internal.h"
 #include "chip.h"
 #include "cxd56_pinconfig.h"
 
@@ -66,15 +67,12 @@
  * Private Function Prototypes
  ****************************************************************************/
 
-static int uart0_open(FAR struct file *filep);
-static int uart0_close(FAR struct file *filep);
-static ssize_t uart0_read(FAR struct file *filep,
-                          FAR char *buffer, size_t len);
-static ssize_t uart0_write(FAR struct file *filep,
-                           FAR const char *buffer, size_t len);
-static int uart0_ioctl(FAR struct file *filep, int cmd, unsigned long arg);
-static int uart0_semtake(sem_t *id);
-static void uart0_semgive(sem_t *id);
+static int uart0_open(struct file *filep);
+static int uart0_close(struct file *filep);
+static ssize_t uart0_read(struct file *filep,
+                          char *buffer, size_t len);
+static ssize_t uart0_write(struct file *filep,
+                           const char *buffer, size_t len);
 
 /****************************************************************************
  * FarAPI prototypes
@@ -98,48 +96,28 @@ static const struct file_operations g_uart0fops =
   .open  = uart0_open,
   .close = uart0_close,
   .read  = uart0_read,
-  .write = uart0_write,
-  .seek  = 0,
-  .ioctl = uart0_ioctl,
+  .write = uart0_write
 };
 
-static sem_t g_lock;
+static mutex_t g_lock = NXMUTEX_INITIALIZER;
 
 /****************************************************************************
  * Private Functions
  ****************************************************************************/
 
 /****************************************************************************
- * Name: uart0_semtake
- ****************************************************************************/
-
-static int uart0_semtake(sem_t *id)
-{
-  return nxsem_wait_uninterruptible(id);
-}
-
-/****************************************************************************
- * Name: uart0_semgive
- ****************************************************************************/
-
-static void uart0_semgive(sem_t *id)
-{
-  nxsem_post(id);
-}
-
-/****************************************************************************
  * Name: uart0_open
  ****************************************************************************/
 
-static int uart0_open(FAR struct file *filep)
+static int uart0_open(struct file *filep)
 {
-  FAR struct inode *inode = filep->f_inode;
+  struct inode *inode = filep->f_inode;
   int flowctl;
   int bits;
   int stop;
   int ret;
 
-  if (inode->i_crefs > 1)
+  if (atomic_read(&inode->i_crefs) > 2)
     {
       return OK;
     }
@@ -192,11 +170,11 @@ static int uart0_open(FAR struct file *filep)
  * Name: uart0_close
  ****************************************************************************/
 
-static int uart0_close(FAR struct file *filep)
+static int uart0_close(struct file *filep)
 {
-  FAR struct inode *inode = filep->f_inode;
+  struct inode *inode = filep->f_inode;
 
-  if (inode->i_crefs == 1)
+  if (atomic_read(&inode->i_crefs) == 2)
     {
       fw_pd_uartdisable(0);
       fw_pd_uartuninit(0);
@@ -217,18 +195,17 @@ static int uart0_close(FAR struct file *filep)
  * Name: uart0_read
  ****************************************************************************/
 
-static ssize_t uart0_read(FAR struct file *filep,
-                          FAR char *buffer, size_t len)
+static ssize_t uart0_read(struct file *filep,
+                          char *buffer, size_t len)
 {
   int ret;
 
-  uart0_semtake(&g_lock);
+  nxmutex_lock(&g_lock);
 
   ret = fw_pd_uartreceive(0, buffer, len,
                           ((filep->f_oflags & O_NONBLOCK) != 0));
 
-  uart0_semgive(&g_lock);
-
+  nxmutex_unlock(&g_lock);
   return (ssize_t)ret;
 }
 
@@ -236,57 +213,36 @@ static ssize_t uart0_read(FAR struct file *filep,
  * Name: uart0_write
  ****************************************************************************/
 
-static ssize_t uart0_write(FAR struct file *filep,
-                           FAR const char *buffer, size_t len)
+static ssize_t uart0_write(struct file *filep,
+                           const char *buffer, size_t len)
 {
   int ret;
 
-  uart0_semtake(&g_lock);
+  nxmutex_lock(&g_lock);
 
-  ret = fw_pd_uartsend(0, (FAR void *)buffer, len,
+  ret = fw_pd_uartsend(0, (void *)buffer, len,
                        ((filep->f_oflags & O_NONBLOCK) != 0));
 
-  uart0_semgive(&g_lock);
-
+  nxmutex_unlock(&g_lock);
   return (ssize_t)ret;
-}
-
-/****************************************************************************
- * Name: uart0_ioctl
- ****************************************************************************/
-
-static int uart0_ioctl(FAR struct file *filep, int cmd, unsigned long arg)
-{
-  return -ENOTTY;
 }
 
 /****************************************************************************
  * Name: cxd56_uart0initialize
  ****************************************************************************/
 
-int cxd56_uart0initialize(FAR const char *devname)
+int cxd56_uart0initialize(const char *devname)
 {
-  int ret;
-
-  nxsem_init(&g_lock, 0, 1);
-
-  ret = register_driver(devname, &g_uart0fops, 0666, NULL);
-  if (ret != 0)
-    {
-      return ERROR;
-    }
-
-  return OK;
+  return register_driver(devname, &g_uart0fops, 0666, NULL);
 }
 
 /****************************************************************************
  * Name: cxd56_uart0uninitialize
  ****************************************************************************/
 
-void cxd56_uart0uninitialize(FAR const char *devname)
+void cxd56_uart0uninitialize(const char *devname)
 {
   unregister_driver(devname);
-  nxsem_destroy(&g_lock);
 }
 
 #endif /* CONFIG_CXD56_UART0 */

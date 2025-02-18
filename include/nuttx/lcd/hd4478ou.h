@@ -1,8 +1,7 @@
 /****************************************************************************
  * include/nuttx/lcd/hd4478ou.h
  *
- * Definitions for the Hitachi HD44780U LCD controller (as used in the
- * LCD1602).
+ * SPDX-License-Identifier: Apache-2.0
  *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -21,8 +20,8 @@
  *
  ****************************************************************************/
 
-#ifndef __INCLUDE_NUTTX_HD4478OU_H
-#define __INCLUDE_NUTTX_HD4478OU_H
+#ifndef __INCLUDE_NUTTX_LCD_HD4478OU_H
+#define __INCLUDE_NUTTX_LCD_HD4478OU_H
 
 /****************************************************************************
  * Included Files
@@ -121,4 +120,4 @@ int up_lcd1602_initialize(void);
 }
 #endif
 
-#endif /* __INCLUDE_NUTTX_HD4478OU_H */
+#endif /* __INCLUDE_NUTTX_LCD_HD4478OU_H */

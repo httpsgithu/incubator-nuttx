@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/kinetis/kinetis.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -686,7 +688,7 @@ void kinetis_clrpend(int irq);
 
 #ifdef CONFIG_KINETIS_SDHC
 struct sdio_dev_s;
-FAR struct sdio_dev_s *sdhc_initialize(int slotno);
+struct sdio_dev_s *sdhc_initialize(int slotno);
 #endif
 
 /****************************************************************************
@@ -709,7 +711,7 @@ FAR struct sdio_dev_s *sdhc_initialize(int slotno);
  ****************************************************************************/
 
 #ifdef CONFIG_KINETIS_SDHC
-void sdhc_mediachange(FAR struct sdio_dev_s *dev, bool cardinslot);
+void sdhc_mediachange(struct sdio_dev_s *dev, bool cardinslot);
 #endif
 
 /****************************************************************************
@@ -729,7 +731,7 @@ void sdhc_mediachange(FAR struct sdio_dev_s *dev, bool cardinslot);
  ****************************************************************************/
 
 #ifdef CONFIG_KINETIS_SDHC
-void sdhc_wrprotect(FAR struct sdio_dev_s *dev, bool wrprotect);
+void sdhc_wrprotect(struct sdio_dev_s *dev, bool wrprotect);
 #endif
 #undef EXTERN
 #if defined(__cplusplus)

@@ -1,6 +1,8 @@
 /****************************************************************************
  * libs/libc/string/lib_memmove.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -26,12 +28,15 @@
 #include <sys/types.h>
 #include <string.h>
 
+#include "libc.h"
+
 /****************************************************************************
  * Public Functions
  ****************************************************************************/
 
-#ifndef CONFIG_LIBC_ARCH_MEMMOVE
+#if !defined(CONFIG_LIBC_ARCH_MEMMOVE) && defined(LIBC_BUILD_MEMMOVE)
 #undef memmove /* See mm/README.txt */
+no_builtin("memmove")
 FAR void *memmove(FAR void *dest, FAR const void *src, size_t count)
 {
   FAR char *tmp;
@@ -39,13 +44,7 @@ FAR void *memmove(FAR void *dest, FAR const void *src, size_t count)
 
   if (dest <= src)
     {
-      tmp = (FAR char *) dest;
-      s   = (FAR char *) src;
-
-      while (count--)
-        {
-          *tmp++ = *s++;
-        }
+      memcpy(dest, src, count);
     }
   else
     {

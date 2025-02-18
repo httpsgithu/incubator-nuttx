@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/xtensa/esp32/esp32-wrover-kit/src/esp32_boot.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -94,7 +96,7 @@ void board_late_initialize(void)
    * SMP bringup is complete.
    */
 
-  umm_addregion((FAR void *)HEAP_REGION_ROMAPP_START,
+  umm_addregion((void *)HEAP_REGION_ROMAPP_START,
                 (size_t)(HEAP_REGION_ROMAPP_END - HEAP_REGION_ROMAPP_START));
 #endif
 }

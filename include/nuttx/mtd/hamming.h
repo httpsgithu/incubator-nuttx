@@ -1,7 +1,8 @@
 /****************************************************************************
  * include/nuttx/mtd/hamming.h
  *
- *   Copyright (c) 2011, Atmel Corporation
+ * SPDX-License-Identifier: BSD-3-Clause
+ * SPDX-FileCopyrightText: 2011, Atmel Corporation
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -32,8 +33,8 @@
  *
  ****************************************************************************/
 
-#ifndef __INCLUDE_NUTTX_HAMMING_H
-#define __INCLUDE_NUTTX_HAMMING_H
+#ifndef __INCLUDE_NUTTX_MTD_HAMMING_H
+#define __INCLUDE_NUTTX_MTD_HAMMING_H
 
 /****************************************************************************
  * Included Files
@@ -43,9 +44,6 @@
 
 #include <stdint.h>
 #include <stdbool.h>
-
-#include <nuttx/mtd/mtd.h>
-#include <nuttx/mtd/nand_raw.h>
 
 /****************************************************************************
  * Pre-processor Definitions
@@ -108,7 +106,7 @@ extern "C"
 
 void hamming_compute256x(FAR const uint8_t *data,
                          size_t size,
-                         uint8_t *code);
+                         FAR uint8_t *code);
 
 /****************************************************************************
  * Name: hamming_verify256x
@@ -139,4 +137,4 @@ int hamming_verify256x(FAR uint8_t *data,
 #endif
 
 #endif /* __ASSEMBLY__ */
-#endif /* __INCLUDE_NUTTX_HAMMING_H */
+#endif /* __INCLUDE_NUTTX_MTD_HAMMING_H */

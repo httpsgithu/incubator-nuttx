@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/tiva/tiva_eeprom.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -73,6 +75,6 @@ int tiva_eeprom_initialize(void);
  ****************************************************************************/
 
 struct mtd_dev_s; /* Forward reference */
-FAR struct mtd_dev_s *tiva_eeprom_instance(void);
+struct mtd_dev_s *tiva_eeprom_instance(void);
 
 #endif /* __ARCH_ARM_SRC_TIVA_TIVA_EEPROM_H */

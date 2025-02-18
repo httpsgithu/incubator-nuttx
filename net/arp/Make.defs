@@ -1,6 +1,8 @@
 ############################################################################
 # net/arp/Make.defs
 #
+# SPDX-License-Identifier: Apache-2.0
+#
 # Licensed to the Apache Software Foundation (ASF) under one or more
 # contributor license agreements.  See the NOTICE file distributed with
 # this work for additional information regarding copyright ownership.  The
@@ -21,7 +23,7 @@
 # ARP support is available for Ethernet only
 
 ifeq ($(CONFIG_NET_ARP),y)
-NET_CSRCS += arp_arpin.c arp_out.c arp_format.c arp_table.c
+NET_CSRCS += arp_input.c arp_out.c arp_format.c arp_table.c
 
 ifeq ($(CONFIG_NET_ARP_IPIN),y)
 NET_CSRCS += arp_ipin.c
@@ -33,6 +35,10 @@ endif
 
 ifeq ($(CONFIG_NET_ARP_DUMP),y)
 NET_CSRCS += arp_dump.c
+endif
+
+ifeq ($(CONFIG_NET_ARP_ACD),y)
+NET_CSRCS += arp_acd.c
 endif
 
 # Include arp build support

@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/misoc/src/minerva/minerva.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -41,9 +43,9 @@
  * only a referenced is passed to get the state from the TCB.
  */
 
-#define up_savestate(regs)      minerva_copystate(regs, (uint32_t*)g_current_regs)
-#define up_copystate(rega,regb) minerva_copystate(rega, regb)
-#define up_restorestate(regs)   (g_current_regs = regs)
+#define misoc_savestate(regs)      minerva_copystate(regs, up_current_regs())
+#define up_copystate(rega,regb)    minerva_copystate(rega, regb)
+#define misoc_restorestate(regs)   up_set_current_regs(regs)
 
 /* Determine which (if any) console driver to use.  If a console is enabled
  * and no other console device is specified, then a serial console is
@@ -63,6 +65,22 @@
 #  endif
 #endif
 
+/* MINERVA requires at least a 4-byte stack alignment.  For floating point
+ * use, however, the stack must be aligned to 8-byte addresses.
+ */
+
+#ifdef CONFIG_LIBC_FLOATINGPOINT
+#  define STACK_ALIGNMENT   8
+#else
+#  define STACK_ALIGNMENT   4
+#endif
+
+/* Stack alignment macros */
+
+#define STACK_ALIGN_MASK    (STACK_ALIGNMENT - 1)
+#define STACK_ALIGN_DOWN(a) ((a) & ~STACK_ALIGN_MASK)
+#define STACK_ALIGN_UP(a)   (((a) + STACK_ALIGN_MASK) & ~STACK_ALIGN_MASK)
+
 /****************************************************************************
  * Public Types
  ****************************************************************************/
@@ -73,7 +91,6 @@
 
 #ifndef __ASSEMBLY__
 
-extern volatile uint32_t *g_current_regs;
 extern uint32_t g_idle_topstack;
 
 /****************************************************************************
@@ -88,12 +105,6 @@ extern uint32_t g_idle_topstack;
 
 void minerva_board_initialize(void);
 
-/* Memory allocation ********************************************************/
-
-#if CONFIG_MM_REGIONS > 1
-void minerva_add_region(void);
-#endif
-
 /* Context switching ********************************************************/
 
 void minerva_copystate(uint32_t * dest, uint32_t * src);
@@ -105,19 +116,7 @@ uint32_t *minerva_doirq(int irq, uint32_t * regs);
 
 /* Software interrupts ******************************************************/
 
-int minerva_swint(int irq, FAR void *context, FAR void *arg);
-
-/* Rpmsg serial *************************************************************/
-
-#ifdef CONFIG_RPMSG_UART
-void rpmsg_serialinit(void);
-#else
-#  define rpmsg_serialinit()
-#endif
-
-/* System timer *************************************************************/
-
-void minerva_timer_initialize(void);
+int minerva_swint(int irq, void *context, void *arg);
 
 /* Signal handling **********************************************************/
 
@@ -127,10 +126,6 @@ void minerva_sigdeliver(void);
 
 void minerva_flush_dcache(void);
 void minerva_flush_icache(void);
-
-/* Debug ********************************************************************/
-
-void minerva_dumpstate(void);
 
 #endif /* __ASSEMBLY__ */
 #endif /* __ARCH_MISOC_SRC_MINERVA_MINERVA_H */

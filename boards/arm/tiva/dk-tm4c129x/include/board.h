@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/tiva/dk-tm4c129x/include/board.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -265,7 +267,7 @@
  ****************************************************************************/
 
 #if defined(CONFIG_I2C) && defined(CONFIG_LM75_I2C) && defined(CONFIG_TIVA_I2C6)
-int tiva_tmp100_initialize(FAR const char *devpath);
+int tiva_tmp100_initialize(const char *devpath);
 #endif
 
 #endif /* __ASSEMBLY__ */

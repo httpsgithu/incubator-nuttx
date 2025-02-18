@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/nrf52/nrf52_tickless_rtc.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -33,14 +35,19 @@
 
 #include <nuttx/arch.h>
 
-#include "arm_arch.h"
-
+#include "arm_internal.h"
 #include "hardware/nrf52_rtc.h"
 #include "nrf52_rtc.h"
 
 /****************************************************************************
  * Pre-processor Definitions
  ****************************************************************************/
+
+/* Check configuration */
+
+#ifdef CONFIG_TIMER_ARCH
+#  error CONFIG_TIMER_ARCH must be not set
+#endif
 
 /* Check corresponding RTC support */
 
@@ -80,10 +87,10 @@
 
 struct nrf52_tickless_dev_s
 {
-  FAR struct nrf52_rtc_dev_s *rtc;  /* nrf52 RTC driver */
-  uint32_t periods;                 /* how many times the timer overflowed */
-  bool alarm_set;                   /* is the alarm set? */
-  struct timespec alarm;            /* absolute time of alarm */
+  struct nrf52_rtc_dev_s *rtc; /* nrf52 RTC driver */
+  uint32_t periods;            /* how many times the timer overflowed */
+  bool alarm_set;              /* is the alarm set? */
+  struct timespec alarm;       /* absolute time of alarm */
 };
 
 /****************************************************************************
@@ -238,24 +245,21 @@ static int rtc_handler(int irq, void *context, void *arg)
  * Name: up_alarm_cancel
  ****************************************************************************/
 
-int up_alarm_cancel(FAR struct timespec *ts)
+int up_alarm_cancel(struct timespec *ts)
 {
-  if (g_tickless_dev.alarm_set)
-    {
-      uint32_t counter;
-      irqstate_t flags;
+  uint32_t counter;
+  irqstate_t flags;
 
-      flags = enter_critical_section();
+  flags = enter_critical_section();
 
-      NRF52_RTC_DISABLEINT(g_tickless_dev.rtc, NRF52_RTC_EVT_COMPARE0);
-      NRF52_RTC_GETCOUNTER(g_tickless_dev.rtc, &counter);
-      rtc_counter_to_ts(counter, ts);
+  NRF52_RTC_DISABLEINT(g_tickless_dev.rtc, NRF52_RTC_EVT_COMPARE0);
+  NRF52_RTC_GETCOUNTER(g_tickless_dev.rtc, &counter);
+  rtc_counter_to_ts(counter, ts);
 
-      NRF52_RTC_ACKINT(g_tickless_dev.rtc, NRF52_RTC_EVT_COMPARE0);
-      g_tickless_dev.alarm_set = false;
+  NRF52_RTC_ACKINT(g_tickless_dev.rtc, NRF52_RTC_EVT_COMPARE0);
+  g_tickless_dev.alarm_set = false;
 
-      leave_critical_section(flags);
-    }
+  leave_critical_section(flags);
 
   return OK;
 }
@@ -264,7 +268,7 @@ int up_alarm_cancel(FAR struct timespec *ts)
  * Name: up_alarm_start
  ****************************************************************************/
 
-int up_alarm_start(FAR const struct timespec *ts)
+int up_alarm_start(const struct timespec *ts)
 {
   irqstate_t flags;
   flags = enter_critical_section();
@@ -285,7 +289,7 @@ int up_alarm_start(FAR const struct timespec *ts)
  * Name: up_timer_gettime
  ****************************************************************************/
 
-int up_timer_gettime(FAR struct timespec *ts)
+int up_timer_gettime(struct timespec *ts)
 {
   uint32_t counter;
   irqstate_t flags;
@@ -308,9 +312,9 @@ void up_timer_initialize(void)
 {
   struct timespec ts;
 
+  memset(&g_tickless_dev, 0, sizeof(struct nrf52_tickless_dev_s));
+
   g_tickless_dev.rtc = nrf52_rtc_init(CONFIG_NRF52_SYSTIMER_RTC_INSTANCE);
-  g_tickless_dev.periods = 0;
-  g_tickless_dev.alarm_set = false;
 
   /* Ensure we have support for the selected RTC instance */
 

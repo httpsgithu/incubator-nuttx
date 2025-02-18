@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/stm32l4/stm32l4_pminitialize.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -23,7 +25,6 @@
  ****************************************************************************/
 
 #include <nuttx/config.h>
-
 #include <nuttx/power/pm.h>
 
 #include "arm_internal.h"
@@ -55,7 +56,7 @@
 
 void arm_pminitialize(void)
 {
-  /* Then initialize the NuttX power management subsystem proper */
+  /* Initialize the NuttX power management subsystem proper */
 
   pm_initialize();
 }

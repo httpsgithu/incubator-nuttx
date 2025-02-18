@@ -1,6 +1,8 @@
 /****************************************************************************
  * include/nuttx/nx/nxfonts.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -45,147 +47,147 @@
 /* Sans serif fonts */
 
 #if defined(CONFIG_NXFONT_SANS23X27)       /* The "legacy," tiny NuttX font */
-# define NXFONT_DEFAULT FONTID_SANS23X27
+#  define NXFONT_DEFAULT FONTID_SANS23X27
 
 #elif defined(CONFIG_NXFONT_SANS17X22)
-# define NXFONT_DEFAULT FONTID_SANS17X22
+#  define NXFONT_DEFAULT FONTID_SANS17X22
 
 #elif defined(CONFIG_NXFONT_SANS20X26)
-# define NXFONT_DEFAULT FONTID_SANS20X26
+#  define NXFONT_DEFAULT FONTID_SANS20X26
 
 #elif defined(CONFIG_NXFONT_SANS22X29)
-# define NXFONT_DEFAULT FONTID_SANS22X29
+#  define NXFONT_DEFAULT FONTID_SANS22X29
 
 #elif defined(CONFIG_NXFONT_SANS28X37)
-# define NXFONT_DEFAULT FONTID_SANS28X37
+#  define NXFONT_DEFAULT FONTID_SANS28X37
 
 #elif defined(CONFIG_NXFONT_SANS39X48)
-# define NXFONT_DEFAULT FONTID_SANS39X48
+#  define NXFONT_DEFAULT FONTID_SANS39X48
 
 /* Sans serif bold fonts */
 
 #elif defined(CONFIG_NXFONT_SANS17X23B)
-# define NXFONT_DEFAULT FONTID_SANS17X23B
+#  define NXFONT_DEFAULT FONTID_SANS17X23B
 
 #elif defined(CONFIG_NXFONT_SANS20X27B)
-# define NXFONT_DEFAULT FONTID_SANS20X27B
+#  define NXFONT_DEFAULT FONTID_SANS20X27B
 
 #elif defined(CONFIG_NXFONT_SANS22X29B)
-# define NXFONT_DEFAULT FONTID_SANS22X29B
+#  define NXFONT_DEFAULT FONTID_SANS22X29B
 
 #elif defined(CONFIG_NXFONT_SANS28X37B)
-# define NXFONT_DEFAULT FONTID_SANS28X37B
+#  define NXFONT_DEFAULT FONTID_SANS28X37B
 
 #elif defined(CONFIG_NXFONT_SANS40X49B)
-# define NXFONT_DEFAULT FONTID_SANS40X49B
+#  define NXFONT_DEFAULT FONTID_SANS40X49B
 
 /* Serif fonts */
 
 #elif defined(CONFIG_NXFONT_SERIF22X29)
-# define NXFONT_DEFAULT FONTID_SERIF22X29
+#  define NXFONT_DEFAULT FONTID_SERIF22X29
 
 #elif defined(CONFIG_NXFONT_SERIF29X37)
-# define NXFONT_DEFAULT FONTID_SERIF29X37
+#  define NXFONT_DEFAULT FONTID_SERIF29X37
 
 #elif defined(CONFIG_NXFONT_SERIF38X48)
-# define NXFONT_DEFAULT FONTID_SERIF38X48
+#  define NXFONT_DEFAULT FONTID_SERIF38X48
 
 /* Serif bold fonts */
 
 #elif defined(CONFIG_NXFONT_SERIF22X28B)
-# define NXFONT_DEFAULT FONTID_SERIF22X28B
+#  define NXFONT_DEFAULT FONTID_SERIF22X28B
 
 #elif defined(CONFIG_NXFONT_SERIF27X38B)
-# define NXFONT_DEFAULT FONTID_SERIF27X38B
+#  define NXFONT_DEFAULT FONTID_SERIF27X38B
 
 #elif defined(CONFIG_NXFONT_SERIF38X49B)
-# define NXFONT_DEFAULT FONTID_SERIF38X49B
+#  define NXFONT_DEFAULT FONTID_SERIF38X49B
 
 /* Pixel fonts */
 
 #elif defined(CONFIG_NXFONT_PIXEL_UNICODE)
-# define NXFONT_DEFAULT FONTID_PIXEL_UNICODE
+#  define NXFONT_DEFAULT FONTID_PIXEL_UNICODE
 
 #elif defined(CONFIG_NXFONT_PIXEL_LCD_MACHINE)
-# define NXFONT_DEFAULT FONTID_PIXEL_LCD_MACHINE
+#  define NXFONT_DEFAULT FONTID_PIXEL_LCD_MACHINE
 
 /* X11 misc fixed fonts */
 
 #elif defined(CONFIG_NXFONT_X11_MISC_FIXED_4X6)
-# define NXFONT_DEFAULT FONTID_X11_MISC_FIXED_4X6
+#  define NXFONT_DEFAULT FONTID_X11_MISC_FIXED_4X6
 
 #elif defined(CONFIG_NXFONT_X11_MISC_FIXED_5X7)
-# define NXFONT_DEFAULT FONTID_X11_MISC_FIXED_5X7
+#  define NXFONT_DEFAULT FONTID_X11_MISC_FIXED_5X7
 
 #elif defined(CONFIG_NXFONT_X11_MISC_FIXED_5X8)
-# define NXFONT_DEFAULT FONTID_X11_MISC_FIXED_5X8
+#  define NXFONT_DEFAULT FONTID_X11_MISC_FIXED_5X8
 
 #elif defined(CONFIG_NXFONT_X11_MISC_FIXED_6X9)
-# define NXFONT_DEFAULT FONTID_X11_MISC_FIXED_6X9
+#  define NXFONT_DEFAULT FONTID_X11_MISC_FIXED_6X9
 
 #elif defined(CONFIG_NXFONT_X11_MISC_FIXED_6X10)
-# define NXFONT_DEFAULT FONTID_X11_MISC_FIXED_6X10
+#  define NXFONT_DEFAULT FONTID_X11_MISC_FIXED_6X10
 
 #elif defined(CONFIG_NXFONT_X11_MISC_FIXED_6X12)
-# define NXFONT_DEFAULT FONTID_X11_MISC_FIXED_6X12
+#  define NXFONT_DEFAULT FONTID_X11_MISC_FIXED_6X12
 
 #elif defined(CONFIG_NXFONT_X11_MISC_FIXED_6X13)
-# define NXFONT_DEFAULT FONTID_X11_MISC_FIXED_6X13
+#  define NXFONT_DEFAULT FONTID_X11_MISC_FIXED_6X13
 
 #elif defined(CONFIG_NXFONT_X11_MISC_FIXED_6X13B)
-# define NXFONT_DEFAULT FONTID_X11_MISC_FIXED_6X13B
+#  define NXFONT_DEFAULT FONTID_X11_MISC_FIXED_6X13B
 
 #elif defined(CONFIG_NXFONT_X11_MISC_FIXED_6X13O)
-# define NXFONT_DEFAULT FONTID_X11_MISC_FIXED_6X13O
+#  define NXFONT_DEFAULT FONTID_X11_MISC_FIXED_6X13O
 
 #elif defined(CONFIG_NXFONT_X11_MISC_FIXED_7X13)
-# define NXFONT_DEFAULT FONTID_X11_MISC_FIXED_7X13
+#  define NXFONT_DEFAULT FONTID_X11_MISC_FIXED_7X13
 
 #elif defined(CONFIG_NXFONT_X11_MISC_FIXED_7X13B)
-# define NXFONT_DEFAULT FONTID_X11_MISC_FIXED_7X13B
+#  define NXFONT_DEFAULT FONTID_X11_MISC_FIXED_7X13B
 
 #elif defined(CONFIG_NXFONT_X11_MISC_FIXED_7X13O)
-# define NXFONT_DEFAULT FONTID_X11_MISC_FIXED_7X13O
+#  define NXFONT_DEFAULT FONTID_X11_MISC_FIXED_7X13O
 
 #elif defined(CONFIG_NXFONT_X11_MISC_FIXED_7X14)
-# define NXFONT_DEFAULT FONTID_X11_MISC_FIXED_7X14
+#  define NXFONT_DEFAULT FONTID_X11_MISC_FIXED_7X14
 
 #elif defined(CONFIG_NXFONT_X11_MISC_FIXED_7X14B)
-# define NXFONT_DEFAULT FONTID_X11_MISC_FIXED_7X14B
+#  define NXFONT_DEFAULT FONTID_X11_MISC_FIXED_7X14B
 
 #elif defined(CONFIG_NXFONT_X11_MISC_FIXED_8X13)
-# define NXFONT_DEFAULT FONTID_X11_MISC_FIXED_8X13
+#  define NXFONT_DEFAULT FONTID_X11_MISC_FIXED_8X13
 
 #elif defined(CONFIG_NXFONT_X11_MISC_FIXED_8X13B)
-# define NXFONT_DEFAULT FONTID_X11_MISC_FIXED_8X13B
+#  define NXFONT_DEFAULT FONTID_X11_MISC_FIXED_8X13B
 
 #elif defined(CONFIG_NXFONT_X11_MISC_FIXED_8X13O)
-# define NXFONT_DEFAULT FONTID_X11_MISC_FIXED_8X13O
+#  define NXFONT_DEFAULT FONTID_X11_MISC_FIXED_8X13O
 
 #elif defined(CONFIG_NXFONT_X11_MISC_FIXED_9X15)
-# define NXFONT_DEFAULT FONTID_X11_MISC_FIXED_9X15
+#  define NXFONT_DEFAULT FONTID_X11_MISC_FIXED_9X15
 
 #elif defined(CONFIG_NXFONT_X11_MISC_FIXED_9X15B)
-# define NXFONT_DEFAULT FONTID_X11_MISC_FIXED_9X15B
+#  define NXFONT_DEFAULT FONTID_X11_MISC_FIXED_9X15B
 
 #elif defined(CONFIG_NXFONT_X11_MISC_FIXED_9X18)
-# define NXFONT_DEFAULT FONTID_X11_MISC_FIXED_9X18
+#  define NXFONT_DEFAULT FONTID_X11_MISC_FIXED_9X18
 
 #elif defined(CONFIG_NXFONT_X11_MISC_FIXED_9X18B)
-# define NXFONT_DEFAULT FONTID_X11_MISC_FIXED_9X18B
+#  define NXFONT_DEFAULT FONTID_X11_MISC_FIXED_9X18B
 
 #elif defined(CONFIG_NXFONT_X11_MISC_FIXED_10X20)
-# define NXFONT_DEFAULT FONTID_X11_MISC_FIXED_10X20
+#  define NXFONT_DEFAULT FONTID_X11_MISC_FIXED_10X20
 
 /* Mono-space fonts */
 
 #elif defined(CONFIG_NXFONT_MONO5X8)
-# define NXFONT_DEFAULT FONTID_MONO5X8
+#  define NXFONT_DEFAULT FONTID_MONO5X8
 
 /* Tom Thumb mono-space 4x6 font */
 
 #elif defined(CONFIG_NXFONT_TOM_THUMB_4X6)
-# define NXFONT_DEFAULT FONTID_TOM_THUMB_4X6
+#  define NXFONT_DEFAULT FONTID_TOM_THUMB_4X6
 
 #endif
 
@@ -434,11 +436,11 @@ struct nx_font_s
 
 struct nx_fontpackage_s
 {
-  uint8_t id;                            /* The font ID */
-  FAR const struct nx_font_s    metrics; /* Font set metrics */
-  FAR const struct nx_fontset_s font7;   /* Fonts for 7-bit encoding */
+  uint8_t id;                        /* The font ID */
+  const struct nx_font_s    metrics; /* Font set metrics */
+  const struct nx_fontset_s font7;   /* Fonts for 7-bit encoding */
 #if CONFIG_NXFONTS_CHARBITS >= 8
-  FAR const struct nx_fontset_s font8;   /* Fonts for 8-bit encoding */
+  const struct nx_fontset_s font8;   /* Fonts for 8-bit encoding */
 #endif
 };
 
@@ -457,7 +459,7 @@ struct nxfonts_glyph_s
   uint8_t height;                      /* Height of this glyph (in rows) */
   uint8_t width;                       /* Width of this glyph (in pixels) */
   uint8_t stride;                      /* Width of the glyph row (in bytes) */
-  FAR uint8_t bitmap[1];               /* Bitmap memory, actual size varies */
+  uint8_t bitmap[1];                   /* Bitmap memory, actual size varies */
 };
 
 #define SIZEOF_NXFONTS_GLYPH_S(b) (sizeof(struct nxfonts_glyph_s) + (b) - 1)
@@ -468,11 +470,11 @@ struct nxfonts_glyph_s
 
 #undef EXTERN
 #if defined(__cplusplus)
-# define EXTERN extern "C"
+#  define EXTERN extern "C"
 extern "C"
 {
 #else
-# define EXTERN extern
+#  define EXTERN extern
 #endif
 
 /****************************************************************************

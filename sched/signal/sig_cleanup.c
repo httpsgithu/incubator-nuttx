@@ -1,6 +1,8 @@
 /****************************************************************************
  * sched/signal/sig_cleanup.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -61,8 +63,8 @@ void nxsig_cleanup(FAR struct tcb_s *stcb)
 
   /* Misc. signal-related clean-up */
 
-  stcb->sigprocmask  = ALL_SIGNAL_SET;
-  stcb->sigwaitmask  = NULL_SIGNAL_SET;
+  sigfillset(&stcb->sigprocmask);
+  sigemptyset(&stcb->sigwaitmask);
 }
 
 /****************************************************************************

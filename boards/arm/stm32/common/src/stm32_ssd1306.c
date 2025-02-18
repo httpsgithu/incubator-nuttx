@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/stm32/common/src/stm32_ssd1306.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -39,7 +41,7 @@
  * Private Data
  ****************************************************************************/
 
-static FAR struct lcd_dev_s    *g_lcddev;
+static struct lcd_dev_s    *g_lcddev;
 
 /****************************************************************************
  * Public Functions
@@ -61,7 +63,7 @@ static FAR struct lcd_dev_s    *g_lcddev;
 #ifdef CONFIG_LCD_SSD1306_I2C
 int board_ssd1306_initialize(int busno)
 {
-  FAR struct i2c_master_s *i2c;
+  struct i2c_master_s *i2c;
   const int devno = 0;
 
   /* Initialize I2C */
@@ -109,7 +111,7 @@ int board_ssd1306_initialize(int busno)
 #ifdef CONFIG_LCD_SSD1306_SPI
 int board_ssd1306_initialize(int busno)
 {
-  FAR struct spi_dev_s *spi;
+  struct spi_dev_s *spi;
   const int devno = 0;
 
   /* Initialize SPI */
@@ -152,7 +154,7 @@ int board_ssd1306_initialize(int busno)
  *
  ****************************************************************************/
 
-FAR struct lcd_dev_s *board_ssd1306_getdev(void)
+struct lcd_dev_s *board_ssd1306_getdev(void)
 {
   return g_lcddev;
 }

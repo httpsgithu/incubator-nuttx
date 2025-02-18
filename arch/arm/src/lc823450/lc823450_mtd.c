@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/lc823450/lc823450_mtd.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -36,7 +38,7 @@
 #include <nuttx/kmalloc.h>
 #include <nuttx/fs/ioctl.h>
 #include <nuttx/mtd/mtd.h>
-#include <nuttx/semaphore.h>
+#include <nuttx/mutex.h>
 #include <arch/board/board.h>
 
 #include "lc823450_mtd.h"
@@ -74,7 +76,7 @@ struct lc823450_mtd_dev_s
 
   /* Other implementation specific data may follow here */
 
-  sem_t sem;            /* Assures mutually exclusive access to the slot */
+  mutex_t lock;         /* Assures mutually exclusive access to the slot */
   uint32_t nblocks;     /* Number of blocks */
   uint32_t blocksize;   /* Size of one read/write blocks */
   uint32_t channel;     /* 0: eMMC, 1: SDC */
@@ -90,9 +92,9 @@ struct lc823450_partinfo_s
  * Private Data
  ****************************************************************************/
 
-static sem_t g_sem = SEM_INITIALIZER(1);
-static FAR struct mtd_dev_s *g_mtdpart[LC823450_NPARTS];
-static FAR struct mtd_dev_s *g_mtdmaster[CONFIG_MTD_DEV_MAX];   /* 0: eMMC, 1: SDC */
+static mutex_t g_lock = NXMUTEX_INITIALIZER;
+static struct mtd_dev_s *g_mtdpart[LC823450_NPARTS];
+static struct mtd_dev_s *g_mtdmaster[CONFIG_MTD_DEV_MAX];   /* 0: eMMC, 1: SDC */
 
 static const char g_mtdname[2][4] =
 {
@@ -119,24 +121,6 @@ static struct lc823450_partinfo_s partinfo[LC823450_NPARTS] =
  ****************************************************************************/
 
 /****************************************************************************
- * Name: mtd_semtake
- ****************************************************************************/
-
-static int mtd_semtake(FAR sem_t *sem)
-{
-  return nxsem_wait_uninterruptible(sem);
-}
-
-/****************************************************************************
- * Name: mtd_semgive
- ****************************************************************************/
-
-static void mtd_semgive(FAR sem_t *sem)
-{
-  nxsem_post(sem);
-}
-
-/****************************************************************************
  * Name: lc823450_erase
  *
  * Description:
@@ -144,7 +128,7 @@ static void mtd_semgive(FAR sem_t *sem)
  *
  ****************************************************************************/
 
-static int lc823450_erase(FAR struct mtd_dev_s *dev, off_t startblock,
+static int lc823450_erase(struct mtd_dev_s *dev, off_t startblock,
                           size_t nblocks)
 {
   finfo("dev=%p startblock=%jd nblocks=%zd\n",
@@ -160,11 +144,11 @@ static int lc823450_erase(FAR struct mtd_dev_s *dev, off_t startblock,
  *
  ****************************************************************************/
 
-static ssize_t lc823450_bread(FAR struct mtd_dev_s *dev, off_t startblock,
-                              size_t nblocks, FAR uint8_t *buf)
+static ssize_t lc823450_bread(struct mtd_dev_s *dev, off_t startblock,
+                              size_t nblocks, uint8_t *buf)
 {
   int ret;
-  FAR struct lc823450_mtd_dev_s *priv = (FAR struct lc823450_mtd_dev_s *)dev;
+  struct lc823450_mtd_dev_s *priv = (struct lc823450_mtd_dev_s *)dev;
 
   unsigned long type;
 
@@ -191,7 +175,7 @@ static ssize_t lc823450_bread(FAR struct mtd_dev_s *dev, off_t startblock,
       return -EINVAL;
     }
 
-  ret = mtd_semtake(&priv->sem);
+  ret = nxmutex_lock(&priv->lock);
   if (ret < 0)
     {
       return ret;
@@ -200,7 +184,7 @@ static ssize_t lc823450_bread(FAR struct mtd_dev_s *dev, off_t startblock,
   if (!g_mtdmaster[priv->channel])
     {
       finfo("device removed\n");
-      mtd_semgive(&priv->sem);
+      nxmutex_unlock(&priv->lock);
       return -ENODEV;
     }
 
@@ -211,8 +195,7 @@ static ssize_t lc823450_bread(FAR struct mtd_dev_s *dev, off_t startblock,
 
   ret = lc823450_sdc_readsector(priv->channel, (unsigned long)(startblock),
                                 (unsigned short)nblocks, buf, type);
-
-  mtd_semgive(&priv->sem);
+  nxmutex_unlock(&priv->lock);
 
   if (ret != OK)
     {
@@ -233,11 +216,11 @@ static ssize_t lc823450_bread(FAR struct mtd_dev_s *dev, off_t startblock,
  *
  ****************************************************************************/
 
-static ssize_t lc823450_bwrite(FAR struct mtd_dev_s *dev, off_t startblock,
-                               size_t nblocks, FAR const uint8_t *buf)
+static ssize_t lc823450_bwrite(struct mtd_dev_s *dev, off_t startblock,
+                               size_t nblocks, const uint8_t *buf)
 {
   int ret;
-  FAR struct lc823450_mtd_dev_s *priv = (FAR struct lc823450_mtd_dev_s *)dev;
+  struct lc823450_mtd_dev_s *priv = (struct lc823450_mtd_dev_s *)dev;
 
   unsigned long type;
 
@@ -264,7 +247,7 @@ static ssize_t lc823450_bwrite(FAR struct mtd_dev_s *dev, off_t startblock,
       return -EINVAL;
     }
 
-  ret = mtd_semtake(&priv->sem);
+  ret = nxmutex_lock(&priv->lock);
   if (ret < 0)
     {
       return ret;
@@ -273,7 +256,7 @@ static ssize_t lc823450_bwrite(FAR struct mtd_dev_s *dev, off_t startblock,
   if (!g_mtdmaster[priv->channel])
     {
       finfo("device removed\n");
-      mtd_semgive(&priv->sem);
+      nxmutex_unlock(&priv->lock);
       return -ENODEV;
     }
 
@@ -284,8 +267,7 @@ static ssize_t lc823450_bwrite(FAR struct mtd_dev_s *dev, off_t startblock,
 
   ret = lc823450_sdc_writesector(priv->channel, (unsigned long)(startblock),
                                  (unsigned short)nblocks, (void *)buf, type);
-
-  mtd_semgive(&priv->sem);
+  nxmutex_unlock(&priv->lock);
 
   if (ret != OK)
     {
@@ -302,17 +284,17 @@ static ssize_t lc823450_bwrite(FAR struct mtd_dev_s *dev, off_t startblock,
  * Name: lc823450_ioctl
  ****************************************************************************/
 
-static int lc823450_ioctl(FAR struct mtd_dev_s *dev, int cmd,
+static int lc823450_ioctl(struct mtd_dev_s *dev, int cmd,
                           unsigned long arg)
 {
   int ret;
-  FAR struct lc823450_mtd_dev_s *priv = (FAR struct lc823450_mtd_dev_s *)dev;
-  FAR struct mtd_geometry_s *geo;
-  FAR void **ppv;
+  struct lc823450_mtd_dev_s *priv = (struct lc823450_mtd_dev_s *)dev;
+  struct mtd_geometry_s *geo;
+  void **ppv;
 
   finfo("cmd=%xh, arg=%lxh\n", cmd, arg);
 
-  ret = mtd_semtake(&priv->sem);
+  ret = nxmutex_lock(&priv->lock);
   if (ret < 0)
     {
       return ret;
@@ -323,7 +305,7 @@ static int lc823450_ioctl(FAR struct mtd_dev_s *dev, int cmd,
   if (!g_mtdmaster[priv->channel])
     {
       finfo("device removed\n");
-      mtd_semgive(&priv->sem);
+      nxmutex_unlock(&priv->lock);
       return -ENODEV;
     }
 
@@ -331,9 +313,11 @@ static int lc823450_ioctl(FAR struct mtd_dev_s *dev, int cmd,
     {
       case MTDIOC_GEOMETRY:
         finfo("MTDIOC_GEOMETRY\n");
-        geo = (FAR struct mtd_geometry_s *)arg;
+        geo = (struct mtd_geometry_s *)arg;
         if (geo)
           {
+            memset(geo, 0, sizeof(*geo));
+
             /* Populate the geometry structure with information needed to
              * know the capacity and how to access the device.
              */
@@ -351,8 +335,8 @@ static int lc823450_ioctl(FAR struct mtd_dev_s *dev, int cmd,
 
       case BIOC_PARTINFO:
         {
-          FAR struct partition_info_s *info =
-            (FAR struct partition_info_s *)arg;
+          struct partition_info_s *info =
+            (struct partition_info_s *)arg;
           if (info != NULL)
             {
               info->numsectors  = priv->nblocks;
@@ -366,7 +350,7 @@ static int lc823450_ioctl(FAR struct mtd_dev_s *dev, int cmd,
 
       case BIOC_XIPBASE:
         finfo("BIOC_XIPBASE\n");
-        ppv = (FAR void**)arg;
+        ppv = (void**)arg;
         if (ppv)
           {
             /* If media is directly acccesible, return (void*) base address
@@ -389,7 +373,7 @@ static int lc823450_ioctl(FAR struct mtd_dev_s *dev, int cmd,
 
 #ifdef TODO
       case MTDIOC_CIDSTR:
-        ret = lc823450_sdc_getcid(priv->channel, (FAR char *)arg, 33);
+        ret = lc823450_sdc_getcid(priv->channel, (char *)arg, 33);
         break;
 #endif
 
@@ -399,7 +383,7 @@ static int lc823450_ioctl(FAR struct mtd_dev_s *dev, int cmd,
         break;
     }
 
-  mtd_semgive(&priv->sem);
+  nxmutex_unlock(&priv->lock);
   return ret;
 }
 
@@ -413,7 +397,7 @@ static int lc823450_ioctl(FAR struct mtd_dev_s *dev, int cmd,
  *   Semaphore has been taken.
  ****************************************************************************/
 
-static int mtd_mediainitialize(FAR struct lc823450_mtd_dev_s *dev)
+static int mtd_mediainitialize(struct lc823450_mtd_dev_s *dev)
 {
   int ret;
   unsigned long nblocks;
@@ -422,7 +406,7 @@ static int mtd_mediainitialize(FAR struct lc823450_mtd_dev_s *dev)
 
   finfo("enter\n");
 
-  ret = mtd_semtake(&dev->sem);
+  ret = nxmutex_lock(&dev->lock);
   if (ret < 0)
     {
       return ret;
@@ -452,7 +436,7 @@ static int mtd_mediainitialize(FAR struct lc823450_mtd_dev_s *dev)
       /* Try to change to High Speed DDR mode */
 
       ret = lc823450_sdc_changespeedmode(dev->channel, 4);
-      finfo("ch=%" PRId32 " DDR mode ret=%d \n", dev->channel, ret);
+      finfo("ch=%" PRId32 " DDR mode ret=%d\n", dev->channel, ret);
     }
   else
     {
@@ -463,7 +447,7 @@ static int mtd_mediainitialize(FAR struct lc823450_mtd_dev_s *dev)
 
       if (0 == ret)
         {
-          lldbg("ch=%d DDR50 mode ret=%d \n", dev->channel, ret);
+          lldbg("ch=%d DDR50 mode ret=%d\n", dev->channel, ret);
           goto get_card_size;
         }
 #endif
@@ -475,7 +459,7 @@ static int mtd_mediainitialize(FAR struct lc823450_mtd_dev_s *dev)
       if (0 == ret)
         {
           ret = lc823450_sdc_setclock(dev->channel, 40000000, sysclk);
-          finfo("ch=%" PRId32 " HS mode ret=%d \n", dev->channel, ret);
+          finfo("ch=%" PRId32 " HS mode ret=%d\n", dev->channel, ret);
         }
     }
 
@@ -504,11 +488,11 @@ get_card_size:
       lc823450_sdc_cachectl(dev->channel, 1);
     }
 
-  finfo("ch=%" PRId32 " size=%" PRId64 " \n",
+  finfo("ch=%" PRId32 " size=%" PRId64 "\n",
         dev->channel, (uint64_t)blocksize * (uint64_t)nblocks);
 
 exit_with_error:
-  mtd_semgive(&dev->sem);
+  nxmutex_unlock(&dev->lock);
   return ret;
 }
 
@@ -522,15 +506,15 @@ exit_with_error:
  *   Semaphore has been taken.
  ****************************************************************************/
 
-static FAR struct mtd_dev_s *lc823450_mtd_allocdev(uint32_t channel)
+static struct mtd_dev_s *lc823450_mtd_allocdev(uint32_t channel)
 {
   int ret;
   int mtype = lc823450_sdc_refmediatype(channel);
-  FAR struct lc823450_mtd_dev_s *priv;
+  struct lc823450_mtd_dev_s *priv;
 
   /* Create an instance of the LC823450 MTD device state structure */
 
-  priv = (FAR struct lc823450_mtd_dev_s *)
+  priv = (struct lc823450_mtd_dev_s *)
     kmm_zalloc(sizeof(struct lc823450_mtd_dev_s));
   if (!priv)
     {
@@ -538,7 +522,7 @@ static FAR struct mtd_dev_s *lc823450_mtd_allocdev(uint32_t channel)
       return NULL;
     }
 
-  nxsem_init(&priv->sem, 0, 1);
+  nxmutex_init(&priv->lock);
 
   priv->mtd.erase  = lc823450_erase;
   priv->mtd.bread  = lc823450_bread;
@@ -558,7 +542,7 @@ static FAR struct mtd_dev_s *lc823450_mtd_allocdev(uint32_t channel)
   if (ret != OK)
     {
       finfo("ERROR: Failed to initialize media\n");
-      nxsem_destroy(&priv->sem);
+      nxmutex_destroy(&priv->lock);
       kmm_free(priv);
       return NULL;
     }
@@ -588,7 +572,7 @@ int lc823450_mtd_initialize(uint32_t devno)
   int i;
   int partno;
   int ret;
-  FAR struct lc823450_mtd_dev_s *priv;
+  struct lc823450_mtd_dev_s *priv;
   off_t maxblock;
   uint32_t ch = (devno == CONFIG_MTD_DEVNO_EMMC)? 0 : 1;
 
@@ -608,7 +592,7 @@ int lc823450_mtd_initialize(uint32_t devno)
    *  /dev/mtdblock0pN : Nth child partition
    */
 
-  ret = mtd_semtake(&g_sem);
+  ret = nxmutex_lock(&g_lock);
   if (ret < 0)
     {
       return ret;
@@ -617,7 +601,7 @@ int lc823450_mtd_initialize(uint32_t devno)
   if (g_mtdmaster[ch])
     {
       finfo("Device already registered\n");
-      mtd_semgive(&g_sem);
+      nxmutex_unlock(&g_lock);
       return -EBUSY;
     }
 
@@ -627,7 +611,7 @@ int lc823450_mtd_initialize(uint32_t devno)
   if (!g_mtdmaster[ch])
     {
       finfo("Failed to create master partition: ch=%" PRId32 "\n", ch);
-      mtd_semgive(&g_sem);
+      nxmutex_unlock(&g_lock);
       return -ENODEV;
     }
 
@@ -639,16 +623,15 @@ int lc823450_mtd_initialize(uint32_t devno)
             ch);
       kmm_free(g_mtdmaster[ch]);
       g_mtdmaster[ch] = NULL;
-      mtd_semgive(&g_sem);
+      nxmutex_unlock(&g_lock);
       return -ENODEV;
     }
 
 #ifdef CONFIG_DEBUG
   finfo("/dev/mtdblock%d created\n", devno);
-  fflush(stdout);
 #endif
 
-  priv = (FAR struct lc823450_mtd_dev_s *)g_mtdmaster[ch];
+  priv = (struct lc823450_mtd_dev_s *)g_mtdmaster[ch];
 
   /* If SDC, create no child partition */
 
@@ -656,7 +639,7 @@ int lc823450_mtd_initialize(uint32_t devno)
   if (devno == CONFIG_MTD_DEVNO_SDC)
     {
       finfo("SDC has no child partitions.\n");
-      mtd_semgive(&g_sem);
+      nxmutex_unlock(&g_lock);
       return OK;
     }
 #endif
@@ -697,8 +680,8 @@ int lc823450_mtd_initialize(uint32_t devno)
           finfo("%s(): mtd_partition failed. startblock=%"
                 PRIuOFF " nblocks=%" PRIuOFF "\n", __func__,
                 partinfo[i].startblock, partinfo[i].nblocks);
-          mtd_semgive(&g_sem);
-          DEBUGASSERT(0);
+          nxmutex_unlock(&g_lock);
+          DEBUGPANIC();
           return -EIO;
         }
 
@@ -707,13 +690,13 @@ int lc823450_mtd_initialize(uint32_t devno)
         {
           finfo("%s(): mmcl_initialize part%d failed: %d\n",
                 __func__, partno, ret);
-          mtd_semgive(&g_sem);
-          DEBUGASSERT(0);
+          nxmutex_unlock(&g_lock);
+          DEBUGPANIC();
           return ret;
         }
     }
 
-  mtd_semgive(&g_sem);
+  nxmutex_unlock(&g_lock);
   return OK;
 }
 
@@ -788,43 +771,43 @@ int lc823450_mtd_uninitialize(uint32_t devno)
 {
   int ret;
   char devname[16];
-  FAR struct lc823450_mtd_dev_s *priv;
+  struct lc823450_mtd_dev_s *priv;
   const uint32_t ch = 1;   /* SDC */
   finfo("devno=%" PRId32 "\n", devno);
 
   DEBUGASSERT(devno == CONFIG_MTD_DEVNO_SDC);
 
-  ret = mtd_semtake(&g_sem);
+  ret = nxmutex_lock(&g_lock);
   if (ret < 0)
     {
       return ret;
     }
 
-  priv = (FAR struct lc823450_mtd_dev_s *)g_mtdmaster[ch];
+  priv = (struct lc823450_mtd_dev_s *)g_mtdmaster[ch];
   if (!priv)
     {
       finfo("SD card is not identified yet\n");
-      mtd_semgive(&g_sem);
+      nxmutex_unlock(&g_lock);
       return -ENODEV;
     }
 
-  snprintf(devname, 16, "/dev/mtdblock%" PRId32, devno);
+  snprintf(devname, sizeof(devname), "/dev/mtdblock%" PRId32, devno);
 
 #ifdef CONFIG_MTD_REGISTRATION
   mtd_unregister(g_mtdmaster[ch]);
 #endif
 
-  ret = mtd_semtake(&priv->sem);
+  ret = nxmutex_lock(&priv->lock);
   if (ret < 0)
     {
-      mtd_semgive(&g_sem);
+      nxmutex_unlock(&g_lock);
       return ret;
     }
 
   ret = lc823450_sdc_clearcardinfo(ch);
   DEBUGASSERT(ret == OK);
 
-  mtd_semgive(&priv->sem);
+  nxmutex_unlock(&priv->lock);
 
   ret = mmcl_uninitialize(devname);
   if (ret != OK)
@@ -835,17 +818,15 @@ int lc823450_mtd_uninitialize(uint32_t devno)
   ret = lc823450_sdc_finalize(ch);
   DEBUGASSERT(ret == OK);
 
-  nxsem_destroy(&priv->sem);
-
+  nxmutex_destroy(&priv->lock);
   kmm_free(g_mtdmaster[ch]);
 
   g_mtdmaster[ch] = NULL;
 
-  mtd_semgive(&g_sem);
+  nxmutex_unlock(&g_lock);
 
 #ifdef CONFIG_DEBUG
   finfo("/dev/mtdblock%d deleted\n", devno);
-  fflush(stdout);
 #endif
   return OK;
 }

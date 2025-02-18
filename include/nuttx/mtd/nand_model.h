@@ -1,7 +1,8 @@
 /****************************************************************************
  * include/nuttx/mtd/nand_model.h
  *
- *   Copyright (c) 2012, Atmel Corporation
+ * SPDX-License-Identifier: BSD-3-Clause
+ * SPDX-FileCopyrightText: 2012, Atmel Corporation
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -141,13 +142,13 @@ int nandmodel_find(FAR const struct nand_model_s *modeltab, size_t size,
  *   offset  Stores the byte offset inside the first accessed page.
  *
  * Returned Value:
- *   OK on success; -EPIPE on failure.
+ *   OK on success; -ESPIPE on failure.
  *
  ****************************************************************************/
 
 int nandmodel_translate(FAR const struct nand_model_s *model, off_t address,
-                        size_t size, FAR off_t *block, off_t *page,
-                        off_t *offset);
+                        size_t size, FAR off_t *block, FAR off_t *page,
+                        FAR off_t *offset);
 
 /****************************************************************************
  * Name: nandmodel_getscheme

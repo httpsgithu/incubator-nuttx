@@ -1,6 +1,8 @@
 /****************************************************************************
  * libs/libnx/nxfonts/nxfonts_tom-thumb-4x6.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -18,8 +20,8 @@
  *
  ****************************************************************************/
 
-#ifndef __LIBNX_NXFONTS_NXFONTS_TOM_THUMB_4X6_H
-#define __LIBNX_NXFONTS_NXFONTS_TOM_THUMB_4X6_H
+#ifndef __LIBS_LIBNX_NXFONTS_NXFONTS_TOM_THUMB_4X6_H
+#define __LIBS_LIBNX_NXFONTS_NXFONTS_TOM_THUMB_4X6_H
 
 /****************************************************************************
  * Included Files
@@ -806,4 +808,4 @@
 #define NXFONT_METRICS_255 {1, 4, 6, 0, 0, 0}
 #define NXFONT_BITMAP_255 {0xa0, 0x0, 0xa0, 0x60, 0x20, 0x40}
 
-#endif
+#endif /* __LIBS_LIBNX_NXFONTS_NXFONTS_TOM_THUMB_4X6_H */

@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/mips/src/pic32mz/pic32mz_irq.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -35,9 +37,7 @@
 #include <arch/irq.h>
 #include <arch/pic32mz/cp0.h>
 
-#include "mips_arch.h"
 #include "mips_internal.h"
-
 #include "hardware/pic32mz_int.h"
 #include "pic32mz_gpio.h"
 
@@ -56,22 +56,6 @@
 /* Number of interrupt enable/interrupt status registers */
 
 #define INT_NREGS ((NR_IRQS + 31) >> 5)
-
-/****************************************************************************
- * Public Data
- ****************************************************************************/
-
-/* g_current_regs holds a references to the current interrupt level
- * register storage structure.  It is non-NULL only during interrupt
- * processing.  Access to g_current_regs must be through the macro
- * CURRENT_REGS for portability.
- */
-
-volatile uint32_t *g_current_regs[1];
-
-/****************************************************************************
- * Private Data
- ****************************************************************************/
 
 /****************************************************************************
  * Private Functions
@@ -234,12 +218,8 @@ void up_irqinitialize(void)
 
   /* Attach and enable software interrupts */
 
-  irq_attach(PIC32MZ_IRQ_CS0, up_swint0, NULL);
+  irq_attach(PIC32MZ_IRQ_CS0, mips_swint0, NULL);
   up_enable_irq(PIC32MZ_IRQ_CS0);
-
-  /* currents_regs is non-NULL only while processing an interrupt */
-
-  CURRENT_REGS = NULL;
 
   /* And finally, enable interrupts */
 
@@ -320,14 +300,14 @@ void up_enable_irq(int irq)
 }
 
 /****************************************************************************
- * Name: up_pending_irq
+ * Name: mips_pending_irq
  *
  * Description:
  *   Return true if the interrupt is pending and unmasked.
  *
  ****************************************************************************/
 
-bool up_pending_irq(int irq)
+bool mips_pending_irq(int irq)
 {
   uintptr_t ifsaddr;
   uintptr_t iecaddr;
@@ -359,14 +339,14 @@ bool up_pending_irq(int irq)
 }
 
 /****************************************************************************
- * Name: up_clrpend_irq
+ * Name: mips_clrpend_irq
  *
  * Description:
  *   Clear any pending interrupt
  *
  ****************************************************************************/
 
-void up_clrpend_irq(int irq)
+void mips_clrpend_irq(int irq)
 {
   uintptr_t regaddr;
   int bitno;
@@ -390,16 +370,16 @@ void up_clrpend_irq(int irq)
 }
 
 /****************************************************************************
- * Name: up_clrpend_sw0
+ * Name: mips_clrpend_sw0
  *
  * Description:
  *   Clear a pending Software Interrupt.
  *
  ****************************************************************************/
 
-void up_clrpend_sw0(void)
+void mips_clrpend_sw0(void)
 {
-  up_clrpend_irq(PIC32MZ_IRQ_CS0);
+  mips_clrpend_irq(PIC32MZ_IRQ_CS0);
 }
 
 /****************************************************************************

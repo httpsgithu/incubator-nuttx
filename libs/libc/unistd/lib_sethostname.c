@@ -1,10 +1,11 @@
 /****************************************************************************
  * libs/libc/unistd/lib_sethostname.c
  *
- *   Copyright (C) 2015 Stavros Polymenis. All rights reserved.
- *   Copyright (C) 2015, 2016 Gregory Nutt. All rights reserved.
- *   Author: Stavros Polymenis <sp@orbitalfox.com>
- *           Gregory Nutt <gnutt@nuttx.org>
+ * SPDX-License-Identifier: BSD-3-Clause
+ * SPDX-FileCopyrightText: 2015 Stavros Polymenis. All rights reserved.
+ * SPDX-FileCopyrightText: 2015, 2016 Gregory Nutt. All rights reserved.
+ * SPDX-FileContributor: Stavros Polymenis <sp@orbitalfox.com>
+ * SPDX-FileContributor: Gregory Nutt <gnutt@nuttx.org>
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -42,6 +43,7 @@
 #include <nuttx/config.h>
 
 #include <string.h>
+#include <sys/param.h>
 #include <unistd.h>
 
 #include <nuttx/irq.h>
@@ -57,18 +59,6 @@
 /****************************************************************************
  * Pre-processor Definitions
  ****************************************************************************/
-
-/****************************************************************************
- * Pre-processor Definitions
- ****************************************************************************/
-
-#ifndef MIN
-#  define MIN(a,b) ((a) < (b) ? (a) : (b))
-#endif
-
-#ifndef MAX
-#  define MAX(a,b) ((a) > (b) ? (a) : (b))
-#endif
 
 /****************************************************************************
  * Public Functions
@@ -105,7 +95,7 @@ extern char g_hostname[HOST_NAME_MAX + 1];
  *
  ****************************************************************************/
 
-int sethostname(FAR const char *name, size_t size)
+int sethostname(FAR const char *name, size_t namelen)
 {
   irqstate_t flags;
 
@@ -116,8 +106,7 @@ int sethostname(FAR const char *name, size_t size)
    */
 
   flags = enter_critical_section();
-  strncpy(g_hostname, name, MIN(HOST_NAME_MAX, size));
-  g_hostname[HOST_NAME_MAX] = '\0';
+  strlcpy(g_hostname, name, sizeof(g_hostname));
   leave_critical_section(flags);
 
   return 0;

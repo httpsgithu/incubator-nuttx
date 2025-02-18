@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/lpc54xx/hardware/lpc54_iocon.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -18,8 +20,8 @@
  *
  ****************************************************************************/
 
-#ifndef __ARCH_ARM_SRC_LPC54XX_HARDWARE_LPC548X_IOCON_H
-#define __ARCH_ARM_SRC_LPC54XX_HARDWARE_LPC548X_IOCON_H
+#ifndef __ARCH_ARM_SRC_LPC54XX_HARDWARE_LPC54_IOCON_H
+#define __ARCH_ARM_SRC_LPC54XX_HARDWARE_LPC54_IOCON_H
 
 /****************************************************************************
  * Included Files
@@ -361,4 +363,4 @@
 #define IOCON_PIO4_TYPEA_MASK (0x00000000) /* None */
 #define IOCON_PIO5_TYPEA_MASK (0x00000000) /* None */
 
-#endif /* __ARCH_ARM_SRC_LPC54XX_HARDWARE_LPC548X_IOCON_H */
+#endif /* __ARCH_ARM_SRC_LPC54XX_HARDWARE_LPC54_IOCON_H */

@@ -1,5 +1,6 @@
+==========================
 Task Scheduling Interfaces
-**************************
+==========================
 
 By default, NuttX performs strict priority scheduling: Tasks of higher
 priority have exclusive access to the CPU until they become blocked. At
@@ -29,7 +30,7 @@ compliant interface to the NuttX scheduler:
   - :c:func:`sched_get_rr_interval`
 
 Functions
----------
+=========
 
 .. c:function:: int sched_setparam(pid_t pid, FAR const struct sched_param *param)
 
@@ -55,7 +56,7 @@ Functions
   name. Differences from the full POSIX implementation include:
 
     -  The range of priority values for the POSIX call is 0 to 255. The
-      priority 0 is the lowest priority and 255 is the highest priority.
+       priority 0 is the lowest priority and 255 is the highest priority.
 
   .. note:: Setting a task's priority to the same value has the similar effect
     to ``sched_yield()``: The task will be moved to after all other tasks

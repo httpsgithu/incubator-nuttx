@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/or1k/include/arch.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -57,7 +59,7 @@
 #  define ARCH_DATA_NSECTS    ARCH_PG2SECT(CONFIG_ARCH_DATA_NPAGES)
 #  define ARCH_HEAP_NSECTS    ARCH_PG2SECT(CONFIG_ARCH_HEAP_NPAGES)
 
-#  ifdef CONFIG_MM_SHM
+#  ifdef CONFIG_ARCH_VMA_MAPPING
 #    define ARCH_SHM_NSECTS   ARCH_PG2SECT(ARCH_SHM_MAXPAGES)
 #  endif
 
@@ -67,34 +69,13 @@
 #endif /* CONFIG_ARCH_ADDRENV */
 
 /****************************************************************************
- * Inline functions
- ****************************************************************************/
-
-/****************************************************************************
- * Name: up_getsp
- ****************************************************************************/
-
-static inline uint32_t up_getsp(void)
-{
-  uint32_t sp;
-
-  __asm__
-  (
-    "\tmov %0, sp\n\t"
-    : "=r"(sp)
-  );
-
-  return sp;
-}
-
-/****************************************************************************
  * Public Types
  ****************************************************************************/
 
 #ifdef CONFIG_ARCH_ADDRENV
 /* The task group resources are retained in a single structure, task_group_s
  * that is defined in the header file nuttx/include/nuttx/sched.h. The type
- * group_addrenv_t must be defined by platform specific logic in
+ * arch_addrenv_t must be defined by platform specific logic in
  * nuttx/arch/<architecture>/include/arch.h.
  *
  * These tables would hold the physical address of the level 2 page tables.
@@ -102,16 +83,16 @@ static inline uint32_t up_getsp(void)
  * memory until mappings in the level 2 page table are required.
  */
 
-struct group_addrenv_s
+struct arch_addrenv_s
 {
   /* Level 1 page table entries for each group section */
 
-  FAR uintptr_t *text[ARCH_TEXT_NSECTS];
-  FAR uintptr_t *data[ARCH_DATA_NSECTS];
+  uintptr_t *text[ARCH_TEXT_NSECTS];
+  uintptr_t *data[ARCH_DATA_NSECTS];
 #ifdef CONFIG_BUILD_KERNEL
-  FAR uintptr_t *heap[ARCH_HEAP_NSECTS];
-#ifdef CONFIG_MM_SHM
-  FAR uintptr_t *shm[ARCH_SHM_NSECTS];
+  uintptr_t *heap[ARCH_HEAP_NSECTS];
+#ifdef CONFIG_ARCH_VMA_MAPPING
+  uintptr_t *shm[ARCH_SHM_NSECTS];
 #endif
 
   /* Initial heap allocation (in bytes).  This exists only provide an
@@ -123,31 +104,6 @@ struct group_addrenv_s
   size_t heapsize;
 #endif
 };
-
-typedef struct group_addrenv_s group_addrenv_t;
-
-/* This type is used when the OS needs to temporarily instantiate a
- * different address environment.  Used in the implementation of
- *
- *   int up_addrenv_select(group_addrenv_t addrenv, save_addrenv_t *oldenv);
- *   int up_addrenv_restore(save_addrenv_t oldenv);
- *
- * In this case, the saved valued in the L1 page table are returned
- */
-
-struct save_addrenv_s
-{
-  FAR uint32_t text[ARCH_TEXT_NSECTS];
-  FAR uint32_t data[ARCH_DATA_NSECTS];
-#ifdef CONFIG_BUILD_KERNEL
-  FAR uint32_t heap[ARCH_HEAP_NSECTS];
-#ifdef CONFIG_MM_SHM
-  FAR uint32_t shm[ARCH_SHM_NSECTS];
-#endif
-#endif
-};
-
-typedef struct save_addrenv_s save_addrenv_t;
 #endif
 
 /****************************************************************************

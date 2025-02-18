@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/samv7/sam_hsmci_clkdiv.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -36,7 +38,7 @@
 #include "hardware/sam_hsmci.h"
 #include "sam_hsmci.h"
 
-#ifdef CONFIG_SAMV7_HSMCI0
+#ifdef CONFIG_SAMV7_HSMCI
 
 /****************************************************************************
  * Pre-processor Definitions

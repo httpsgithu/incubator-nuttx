@@ -1,6 +1,8 @@
 /****************************************************************************
  * sched/group/group_leave.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -29,10 +31,12 @@
 #include <errno.h>
 #include <debug.h>
 
+#include <nuttx/nuttx.h>
 #include <nuttx/irq.h>
 #include <nuttx/fs/fs.h>
 #include <nuttx/net/net.h>
-#include <nuttx/lib/lib.h>
+#include <nuttx/sched.h>
+#include <nuttx/spinlock.h>
 
 #ifdef CONFIG_BINFMT_LOADABLE
 #  include <nuttx/binfmt/binfmt.h>
@@ -43,69 +47,11 @@
 #include "pthread/pthread.h"
 #include "mqueue/mqueue.h"
 #include "group/group.h"
+#include "tls/tls.h"
 
 /****************************************************************************
  * Private Functions
  ****************************************************************************/
-
-/****************************************************************************
- * Name: group_remove
- *
- * Description:
- *   Remove a group from the list of groups.
- *
- * Input Parameters:
- *   group - The group to be removed.
- *
- * Returned Value:
- *   None.
- *
- * Assumptions:
- *   Called during task deletion in a safe context.  No special precautions
- *   are required here.
- *
- ****************************************************************************/
-
-#if defined(HAVE_GROUP_MEMBERS) || defined(CONFIG_ARCH_ADDRENV)
-static void group_remove(FAR struct task_group_s *group)
-{
-  FAR struct task_group_s *curr;
-  FAR struct task_group_s *prev;
-  irqstate_t flags;
-
-  /* Let's be especially careful while access the global task group list.
-   * This is probably un-necessary.
-   */
-
-  flags = enter_critical_section();
-
-  /* Find the task group structure */
-
-  for (prev = NULL, curr = g_grouphead;
-       curr && curr != group;
-       prev = curr, curr = curr->flink);
-
-  /* Did we find it?  If so, remove it from the list. */
-
-  if (curr)
-    {
-      /* Do we remove it from mid-list?  Or from the head of the list? */
-
-      if (prev)
-        {
-          prev->flink = curr->flink;
-        }
-      else
-        {
-          g_grouphead = curr->flink;
-        }
-
-      curr->flink = NULL;
-    }
-
-  leave_critical_section(flags);
-}
-#endif
 
 /****************************************************************************
  * Name: group_release
@@ -125,8 +71,15 @@ static void group_remove(FAR struct task_group_s *group)
  *
  ****************************************************************************/
 
-static inline void group_release(FAR struct task_group_s *group)
+static inline void
+group_release(FAR struct task_group_s *group, uint8_t ttype)
 {
+  /* Destroy the mutex */
+
+  nxrmutex_destroy(&group->tg_mutex);
+
+  task_uninit_info(group);
+
 #if defined(CONFIG_SCHED_HAVE_PARENT) && defined(CONFIG_SCHED_CHILD_STATUS)
   /* Free all un-reaped child exit status */
 
@@ -149,13 +102,7 @@ static inline void group_release(FAR struct task_group_s *group)
 
   /* Free resources held by the file descriptor list */
 
-  files_releaselist(&group->tg_filelist);
-
-#ifdef CONFIG_FILE_STREAM
-  /* Free resource held by the stream list */
-
-  lib_stream_release(group);
-#endif /* CONFIG_FILE_STREAM */
+  files_putlist(&group->tg_filelist);
 
 #ifndef CONFIG_DISABLE_ENVIRON
   /* Release all shared environment variables */
@@ -163,64 +110,9 @@ static inline void group_release(FAR struct task_group_s *group)
   env_release(group);
 #endif
 
-#if defined(CONFIG_BUILD_KERNEL) && defined(CONFIG_MM_SHM)
-  /* Release any resource held by shared memory virtual page allocator */
+  /* Destroy the mm_map list */
 
-  shm_group_release(group);
-#endif
-
-#ifdef CONFIG_ARCH_ADDRENV
-  /* Destroy the group address environment */
-
-  up_addrenv_destroy(&group->tg_addrenv);
-
-  /* Mark no address environment */
-
-  g_pid_current = INVALID_PROCESS_ID;
-#endif
-
-#if defined(HAVE_GROUP_MEMBERS) || defined(CONFIG_ARCH_ADDRENV)
-  /* Remove the group from the list of groups */
-
-  group_remove(group);
-#endif
-
-#ifdef HAVE_GROUP_MEMBERS
-  /* Release the members array */
-
-  if (group->tg_members)
-    {
-      kmm_free(group->tg_members);
-      group->tg_members = NULL;
-    }
-#endif
-
-#if defined(CONFIG_FILE_STREAM) && defined(CONFIG_MM_KERNEL_HEAP)
-  /* In a flat, single-heap build.  The stream list is part of the
-   * group structure and, hence will be freed when the group structure
-   * is freed.  Otherwise, it is separately allocated an must be
-   * freed here.
-   */
-
-#  ifdef CONFIG_BUILD_KERNEL
-  /* In the kernel build, the unprivileged process's stream list will be
-   * allocated from with its per-process, private user heap. But in that
-   * case, there is no reason to do anything here:  That allocation resides
-   * in the user heap which which be completely freed when we destroy the
-   * process's address environment.
-   */
-
-  if ((group->tg_flags & GROUP_FLAG_PRIVILEGED) != 0)
-#  endif
-    {
-      /* But kernel threads are different in this build configuration: Their
-       * stream lists were allocated from the common, global kernel heap and
-       * must explicitly freed here.
-       */
-
-      group_free(group, group->tg_streamlist);
-    }
-#endif
+  mm_map_destroy(&group->tg_mm_map);
 
 #ifdef CONFIG_BINFMT_LOADABLE
   /* If the exiting task was loaded into RAM from a file, then we need to
@@ -235,76 +127,19 @@ static inline void group_release(FAR struct task_group_s *group)
     }
 #endif
 
-#if defined(CONFIG_SCHED_WAITPID) && !defined(CONFIG_SCHED_HAVE_PARENT)
-  /* If there are threads waiting for this group to be freed, then we cannot
-   * yet free the memory resources.  Instead just mark the group deleted
-   * and wait for those threads complete their waits.
-   */
+  /* Then drop the group freeing the allocated memory */
 
-  if (group->tg_nwaiters > 0)
+#ifndef CONFIG_DISABLE_PTHREAD
+  if (ttype == TCB_FLAG_TTYPE_PTHREAD)
     {
+      /* Mark the group as deleted now */
+
       group->tg_flags |= GROUP_FLAG_DELETED;
+
+      group_drop(group);
     }
-  else
 #endif
-    {
-      /* Release the group container itself */
-
-      group_deallocate(group);
-    }
 }
-
-/****************************************************************************
- * Name: group_removemember
- *
- * Description:
- *   Remove a member from a group.
- *
- * Input Parameters:
- *   group - The group from which to remove the member.
- *   pid - The member to be removed.
- *
- * Returned Value:
- *   On success, returns the number of members remaining in the group (>=0).
- *   Can fail only if the member is not found in the group.  On failure,
- *   returns -ENOENT
- *
- * Assumptions:
- *   Called during task deletion and also from the reparenting logic, both
- *   in a safe context.  No special precautions are required here.
- *
- ****************************************************************************/
-
-#ifdef HAVE_GROUP_MEMBERS
-static inline void group_removemember(FAR struct task_group_s *group,
-                                      pid_t pid)
-{
-  irqstate_t flags;
-  int i;
-
-  DEBUGASSERT(group);
-
-  /* Find the member in the array of members and remove it */
-
-  for (i = 0; i < group->tg_nmembers; i++)
-    {
-      /* Does this member have the matching pid */
-
-      if (group->tg_members[i] == pid)
-        {
-          /* Remove the member from the array of members.  This must be an
-           * atomic operation because the member array may be accessed from
-           * interrupt handlers (read-only).
-           */
-
-          flags = enter_critical_section();
-          group->tg_members[i] = group->tg_members[group->tg_nmembers - 1];
-          group->tg_nmembers--;
-          leave_critical_section(flags);
-        }
-    }
-}
-#endif /* HAVE_GROUP_MEMBERS */
 
 /****************************************************************************
  * Public Functions
@@ -331,10 +166,12 @@ static inline void group_removemember(FAR struct task_group_s *group,
  *
  ****************************************************************************/
 
-#ifdef HAVE_GROUP_MEMBERS
 void group_leave(FAR struct tcb_s *tcb)
 {
   FAR struct task_group_s *group;
+#ifdef HAVE_GROUP_MEMBERS
+  irqstate_t flags;
+#endif
 
   DEBUGASSERT(tcb);
 
@@ -343,68 +180,81 @@ void group_leave(FAR struct tcb_s *tcb)
   group = tcb->group;
   if (group)
     {
-      /* Remove the member from group.  This function may be called
-       * during certain error handling before the PID has been
-       * added to the group.  In this case tcb->pid will be uninitialized
-       * group_removemember() will fail.
-       */
-
-      group_removemember(group, tcb->pid);
-
-      /* Have all of the members left the group? */
-
-      if (group->tg_nmembers == 0)
-        {
-          /* Yes.. Release all of the resource held by the task group */
-
-          group_release(group);
-        }
-
       /* In any event, we can detach the group from the TCB so that we won't
        * do this again.
        */
 
       tcb->group = NULL;
+
+      /* Remove the member from group. */
+
+#ifdef HAVE_GROUP_MEMBERS
+      flags = spin_lock_irqsave(&group->tg_lock);
+      sq_rem(&tcb->member, &group->tg_members);
+      spin_unlock_irqrestore(&group->tg_lock, flags);
+
+      /* Have all of the members left the group? */
+
+      if (sq_empty(&group->tg_members))
+#endif
+        {
+          /* Yes.. Release all of the resource held by the task group */
+
+          group_release(group, tcb->flags & TCB_FLAG_TTYPE_MASK);
+        }
     }
 }
 
-#else /* HAVE_GROUP_MEMBERS */
+/****************************************************************************
+ * Name: group_drop
+ *
+ * Description:
+ *   Release the group's memory. This function is called whenever a reference
+ *   to the group structure is released. It is not dependent on member count,
+ *   but rather external references, which include:
+ *   - Waiter list for waitpid()
+ *
+ * Input Parameters:
+ *   group - The group that is to be dropped
+ *
+ * Returned Value:
+ *   None.
+ *
+ * Assumptions:
+ *   Called during task deletion or context switch in a safe context.  No
+ *   special precautions are required here.
+ *
+ ****************************************************************************/
 
-void group_leave(FAR struct tcb_s *tcb)
+void group_drop(FAR struct task_group_s *group)
 {
-  FAR struct task_group_s *group;
+  FAR struct task_tcb_s *tcb;
 
-  DEBUGASSERT(tcb);
+#if defined(CONFIG_SCHED_WAITPID) && !defined(CONFIG_SCHED_HAVE_PARENT)
+  /* If there are threads waiting for this group to be freed, then we cannot
+   * yet free the memory resources.  Instead just mark the group deleted
+   * and wait for those threads complete their waits.
+   */
 
-  /* Make sure that we have a group */
-
-  group = tcb->group;
-  if (group)
+  if (group->tg_nwaiters > 0)
     {
-      /* Yes, we have a group.. Is this the last member of the group? */
+      /* Hold the group still */
 
-      if (group->tg_nmembers > 1)
+      sinfo("Keep group %p (waiters > 0)\n", group);
+    }
+  else
+#endif
+  /* Finally, if no one needs the group and it has been deleted, remove it */
+
+  if (group->tg_flags & GROUP_FLAG_DELETED)
+    {
+      tcb = container_of(group, struct task_tcb_s, group);
+
+      /* Release the group container itself */
+
+      if (tcb->cmn.flags & TCB_FLAG_FREE_TCB)
         {
-          /* No.. just decrement the number of members in the group */
-
-          group->tg_nmembers--;
+          kmm_free(tcb);
         }
-
-      /* Yes.. that was the last member remaining in the group */
-
-      else
-        {
-          /* Release all of the resource held by the task group */
-
-          group_release(group);
-        }
-
-      /* In any event, we can detach the group from the TCB so we won't do
-       * this again.
-       */
-
-      tcb->group = NULL;
     }
 }
-
-#endif /* HAVE_GROUP_MEMBERS */

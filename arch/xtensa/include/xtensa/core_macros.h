@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/xtensa/include/xtensa/core_macros.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -18,8 +20,8 @@
  *
  ****************************************************************************/
 
-#ifndef __ARCH_XTENSA_INCUDE_XTENSA_CORE_MACRO_H
-#define __ARCH_XTENSA_INCUDE_XTENSA_CORE_MACRO_H
+#ifndef __ARCH_XTENSA_INCUDE_XTENSA_CORE_MACROS_H
+#define __ARCH_XTENSA_INCUDE_XTENSA_CORE_MACROS_H
 
 /****************************************************************************
  * Included Files
@@ -36,8 +38,8 @@
                                         __asm__ __volatile__("rsr.ccount %0":\
                                         "=a"(__ccount)); __ccount; })
 
-# define XTHAL_SET_CCOUNT(v)             do { int __ccount = (int)(v); \
+#  define XTHAL_SET_CCOUNT(v)            do { int __ccount = (int)(v); \
                                          __asm__ __volatile__("wsr.ccount %0" :: "a"(__ccount):"memory");\
                                          } while(0)
 
-#endif /* __ARCH_XTENSA_INCUDE_XTENSA_CORE_H */
+#endif /* __ARCH_XTENSA_INCUDE_XTENSA_CORE_MACROS_H */

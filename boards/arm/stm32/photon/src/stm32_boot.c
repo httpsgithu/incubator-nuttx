@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/stm32/photon/src/stm32_boot.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -27,7 +29,7 @@
 #include <nuttx/board.h>
 #include <arch/board/board.h>
 
-#include "arm_arch.h"
+#include "arm_internal.h"
 #include "photon.h"
 
 /****************************************************************************
@@ -87,7 +89,7 @@ void stm32_boardinitialize(void)
  *   If CONFIG_BOARD_LATE_INITIALIZE is selected, then an additional
  *   initialization call will be performed in the boot-up sequence to a
  *   function called board_late_initialize().  board_late_initialize() will
- *   be called immediately after up_intitialize() is called and just before
+ *   be called immediately after up_initialize() is called and just before
  *   the initial application is started.  This additional initialization
  *   phase may be used, for example, to initialize board-specific device
  *   drivers.

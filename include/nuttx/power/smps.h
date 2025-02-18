@@ -1,6 +1,8 @@
 /****************************************************************************
  * include/nuttx/power/smps.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -18,8 +20,8 @@
  *
  ****************************************************************************/
 
-#ifndef __INCLUDE_NUTTX_DRIVERS_POWER_SMPS_H
-#define __INCLUDE_NUTTX_DRIVERS_POWER_SMPS_H
+#ifndef __INCLUDE_NUTTX_POWER_SMPS_H
+#define __INCLUDE_NUTTX_POWER_SMPS_H
 
 /* The SMPS (switched-mode power supply) driver is split into two parts:
  *
@@ -246,10 +248,10 @@ struct smps_dev_s
 {
   /* Fields managed by common upper half SMPS logic */
 
-  uint8_t                     ocount;   /* The number of times the device
+  uint8_t                    ocount;    /* The number of times the device
                                          * has been opened
                                          */
-  sem_t                       closesem; /* Locks out new opens while close
+  mutex_t                    closelock; /* Locks out new opens while close
                                          * is in progress
                                          */
 
@@ -289,4 +291,4 @@ int smps_register(FAR const char *path, FAR struct smps_dev_s *dev,
 #endif
 
 #endif /* CONFIG_DRIVERS_SMPS */
-#endif /* __INCLUDE_NUTTX_DRIVERS_POWER_SMPS_H */
+#endif /* __INCLUDE_NUTTX_POWER_SMPS_H */

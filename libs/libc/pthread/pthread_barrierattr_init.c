@@ -1,5 +1,7 @@
-/********************************************************************************
+/****************************************************************************
  * libs/libc/pthread/pthread_barrierattr_init.c
+ *
+ * SPDX-License-Identifier: Apache-2.0
  *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -16,11 +18,11 @@
  * License for the specific language governing permissions and limitations
  * under the License.
  *
- ********************************************************************************/
+ ****************************************************************************/
 
-/********************************************************************************
+/****************************************************************************
  * Included Files
- ********************************************************************************/
+ ****************************************************************************/
 
 #include <nuttx/config.h>
 
@@ -28,17 +30,17 @@
 #include <errno.h>
 #include <debug.h>
 
-/********************************************************************************
+/****************************************************************************
  * Public Functions
- ********************************************************************************/
+ ****************************************************************************/
 
-/********************************************************************************
+/****************************************************************************
  * Name: pthread_barrierattr_init
  *
  * Description:
- *   The pthread_barrierattr_init() function will initialize a barrier attribute
- *   object attr with the default value for all of the attributes defined by the
- *   implementation.
+ *   The pthread_barrierattr_init() function will initialize a barrier
+ *   attribute object attr with the default value for all of the attributes
+ *   defined by the implementation.
  *
  * Input Parameters:
  *   attr - barrier attributes to be initialized.
@@ -48,7 +50,7 @@
  *
  * Assumptions:
  *
- ********************************************************************************/
+ ****************************************************************************/
 
 int pthread_barrierattr_init(FAR pthread_barrierattr_t *attr)
 {

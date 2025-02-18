@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/risc-v/src/litex/litex_serial.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -36,12 +38,11 @@
 #include <nuttx/irq.h>
 #include <nuttx/arch.h>
 #include <nuttx/serial/serial.h>
+#include <nuttx/spinlock.h>
 
 #include <arch/board/board.h>
 
-#include "riscv_arch.h"
 #include "riscv_internal.h"
-
 #include "litex_config.h"
 #include "chip.h"
 #include "litex.h"
@@ -123,6 +124,7 @@ struct up_dev_s
   uintptr_t uartbase; /* Base address of UART registers */
   uint32_t  baud;     /* Configured baud */
   uint8_t   irq;      /* IRQ associated with this UART */
+  spinlock_t lock;    /* Spinlock */
   uint8_t   im;       /* Interrupt mask state */
 };
 
@@ -189,6 +191,7 @@ static struct up_dev_s g_uart0priv =
   .uartbase  = LITEX_UART0_BASE,
   .baud      = CONFIG_UART0_BAUD,
   .irq       = LITEX_IRQ_UART0,
+  .lock      = SP_UNLOCKED,
 };
 
 static uart_dev_t g_uart0port =
@@ -239,7 +242,7 @@ static void up_serialout(struct up_dev_s *priv, int offset, uint32_t value)
 
 static void up_restoreuartint(struct up_dev_s *priv, uint8_t im)
 {
-  irqstate_t flags = enter_critical_section();
+  irqstate_t flags = spin_lock_irqsave(&priv->lock);
 
   priv->im = im;
 
@@ -247,7 +250,7 @@ static void up_restoreuartint(struct up_dev_s *priv, uint8_t im)
                     LITEX_CONSOLE_BASE + UART_EV_PENDING_OFFSET);
   up_serialout(priv, UART_EV_ENABLE_OFFSET, im);
 
-  leave_critical_section(flags);
+  spin_unlock_irqrestore(&priv->lock, flags);
 }
 
 /****************************************************************************
@@ -256,7 +259,7 @@ static void up_restoreuartint(struct up_dev_s *priv, uint8_t im)
 
 static void up_disableuartint(struct up_dev_s *priv, uint8_t *im)
 {
-  irqstate_t flags = enter_critical_section();
+  irqstate_t flags = spin_lock_irqsave(&priv->lock);
 
   /* Return the current interrupt mask value */
 
@@ -273,7 +276,7 @@ static void up_disableuartint(struct up_dev_s *priv, uint8_t *im)
                     LITEX_CONSOLE_BASE + UART_EV_PENDING_OFFSET);
   up_serialout(priv, UART_EV_ENABLE_OFFSET, 0);
 
-  leave_critical_section(flags);
+  spin_unlock_irqrestore(&priv->lock, flags);
 }
 
 /****************************************************************************
@@ -379,9 +382,9 @@ static void up_detach(struct uart_dev_s *dev)
  *
  * Description:
  *   This is the UART interrupt handler.  It will be invoked when an
- *   interrupt received on the 'irq'  It should call uart_transmitchars or
- *   uart_receivechar to perform the appropriate data transfers.  The
- *   interrupt handling logic must be able to map the 'irq' number into the
+ *   interrupt is received on the 'irq'.  It should call uart_xmitchars or
+ *   uart_recvchars to perform the appropriate data transfers.  The
+ *   interrupt handling logic must be able to map the 'arg' to the
  *   appropriate uart_dev_s structure in order to call these functions.
  *
  ****************************************************************************/
@@ -686,27 +689,16 @@ void riscv_serialinit(void)
  *
  ****************************************************************************/
 
-int up_putc(int ch)
+void up_putc(int ch)
 {
 #ifdef HAVE_SERIAL_CONSOLE
   struct up_dev_s *priv = (struct up_dev_s *)CONSOLE_DEV.priv;
   uint8_t imr;
 
   up_disableuartint(priv, &imr);
-
-  /* Check for LF */
-
-  if (ch == '\n')
-    {
-      /* Add CR */
-
-      riscv_lowputc('\r');
-    }
-
   riscv_lowputc(ch);
   up_restoreuartint(priv, imr);
 #endif
-  return ch;
 }
 
 /****************************************************************************
@@ -729,9 +721,8 @@ void riscv_serialinit(void)
 {
 }
 
-int up_putc(int ch)
+void up_putc(int ch)
 {
-  return ch;
 }
 
 #endif /* HAVE_UART_DEVICE */
@@ -745,21 +736,11 @@ int up_putc(int ch)
  *
  ****************************************************************************/
 
-int up_putc(int ch)
+void up_putc(int ch)
 {
 #ifdef HAVE_SERIAL_CONSOLE
-  /* Check for LF */
-
-  if (ch == '\n')
-    {
-      /* Add CR */
-
-      riscv_lowputc('\r');
-    }
-
   riscv_lowputc(ch);
 #endif
-  return ch;
 }
 
 #endif /* USE_SERIALDRIVER */

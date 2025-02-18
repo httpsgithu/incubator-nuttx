@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/mips/pic32mz/pic32mz-starterkit/src/pic32mz_spi.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -31,8 +33,7 @@
 #include <nuttx/spi/spi.h>
 #include <arch/board/board.h>
 
-#include "mips_arch.h"
-
+#include "mips_internal.h"
 #include "pic32mz-starterkit.h"
 
 #ifdef CONFIG_PIC32MZ_SPI
@@ -91,7 +92,7 @@ void weak_function pic32mz_spidev_initialize(void)
 struct spi_dev_s;
 
 #ifdef CONFIG_PIC32MZ_SPI1
-void  pic32mz_spi1select(FAR struct spi_dev_s *dev, uint32_t devid,
+void  pic32mz_spi1select(struct spi_dev_s *dev, uint32_t devid,
                          bool selected)
 {
   spiinfo("devid: %d CS: %s\n",
@@ -99,7 +100,7 @@ void  pic32mz_spi1select(FAR struct spi_dev_s *dev, uint32_t devid,
 #warning "Missing logic"
 }
 
-uint8_t pic32mz_spi1status(FAR struct spi_dev_s *dev, uint32_t devid)
+uint8_t pic32mz_spi1status(struct spi_dev_s *dev, uint32_t devid)
 {
   spiinfo("Returning nothing\n");
 #warning "Missing logic"
@@ -107,7 +108,7 @@ uint8_t pic32mz_spi1status(FAR struct spi_dev_s *dev, uint32_t devid)
 }
 
 #ifdef CONFIG_SPI_CMDDATA
-int pic32mz_spi1cmddata(FAR struct spi_dev_s *dev, uint32_t devid, bool cmd)
+int pic32mz_spi1cmddata(struct spi_dev_s *dev, uint32_t devid, bool cmd)
 {
 #warning "Missing logic"
   return 0;
@@ -116,7 +117,7 @@ int pic32mz_spi1cmddata(FAR struct spi_dev_s *dev, uint32_t devid, bool cmd)
 #endif
 
 #ifdef CONFIG_PIC32MZ_SPI2
-void  pic32mz_spi2select(FAR struct spi_dev_s *dev, uint32_t devid,
+void  pic32mz_spi2select(struct spi_dev_s *dev, uint32_t devid,
                          bool selected)
 {
   spiinfo("devid: %d CS: %s\n",
@@ -124,7 +125,7 @@ void  pic32mz_spi2select(FAR struct spi_dev_s *dev, uint32_t devid,
 #warning "Missing logic"
 }
 
-uint8_t pic32mz_spi2status(FAR struct spi_dev_s *dev, uint32_t devid)
+uint8_t pic32mz_spi2status(struct spi_dev_s *dev, uint32_t devid)
 {
   spiinfo("Returning nothing\n");
 #warning "Missing logic"
@@ -132,7 +133,7 @@ uint8_t pic32mz_spi2status(FAR struct spi_dev_s *dev, uint32_t devid)
 }
 
 #ifdef CONFIG_SPI_CMDDATA
-int pic32mz_spi2cmddata(FAR struct spi_dev_s *dev, uint32_t devid, bool cmd)
+int pic32mz_spi2cmddata(struct spi_dev_s *dev, uint32_t devid, bool cmd)
 {
 #warning "Missing logic"
   return 0;
@@ -141,7 +142,7 @@ int pic32mz_spi2cmddata(FAR struct spi_dev_s *dev, uint32_t devid, bool cmd)
 #endif
 
 #ifdef CONFIG_PIC32MZ_SPI3
-void  pic32mz_spi3select(FAR struct spi_dev_s *dev, uint32_t devid,
+void  pic32mz_spi3select(struct spi_dev_s *dev, uint32_t devid,
                          bool selected)
 {
   spiinfo("devid: %d CS: %s\n",
@@ -149,7 +150,7 @@ void  pic32mz_spi3select(FAR struct spi_dev_s *dev, uint32_t devid,
 #warning "Missing logic"
 }
 
-uint8_t pic32mz_spi3status(FAR struct spi_dev_s *dev, uint32_t devid)
+uint8_t pic32mz_spi3status(struct spi_dev_s *dev, uint32_t devid)
 {
   spiinfo("Returning nothing\n");
 #warning "Missing logic"
@@ -157,7 +158,7 @@ uint8_t pic32mz_spi3status(FAR struct spi_dev_s *dev, uint32_t devid)
 }
 
 #ifdef CONFIG_SPI_CMDDATA
-int pic32mz_spi3cmddata(FAR struct spi_dev_s *dev, uint32_t devid, bool cmd)
+int pic32mz_spi3cmddata(struct spi_dev_s *dev, uint32_t devid, bool cmd)
 {
 #warning "Missing logic"
   return 0;
@@ -166,7 +167,7 @@ int pic32mz_spi3cmddata(FAR struct spi_dev_s *dev, uint32_t devid, bool cmd)
 #endif
 
 #ifdef CONFIG_PIC32MZ_SPI4
-void  pic32mz_spi4select(FAR struct spi_dev_s *dev, uint32_t devid,
+void  pic32mz_spi4select(struct spi_dev_s *dev, uint32_t devid,
                          bool selected)
 {
   spiinfo("devid: %d CS: %s\n",
@@ -174,7 +175,7 @@ void  pic32mz_spi4select(FAR struct spi_dev_s *dev, uint32_t devid,
 #warning "Missing logic"
 }
 
-uint8_t pic32mz_spi4status(FAR struct spi_dev_s *dev, uint32_t devid)
+uint8_t pic32mz_spi4status(struct spi_dev_s *dev, uint32_t devid)
 {
   spiinfo("Returning nothing\n");
 #warning "Missing logic"
@@ -182,7 +183,7 @@ uint8_t pic32mz_spi4status(FAR struct spi_dev_s *dev, uint32_t devid)
 }
 
 #ifdef CONFIG_SPI_CMDDATA
-int pic32mz_spi4cmddata(FAR struct spi_dev_s *dev, uint32_t devid, bool cmd)
+int pic32mz_spi4cmddata(struct spi_dev_s *dev, uint32_t devid, bool cmd)
 {
 #warning "Missing logic"
   return 0;
@@ -191,7 +192,7 @@ int pic32mz_spi4cmddata(FAR struct spi_dev_s *dev, uint32_t devid, bool cmd)
 #endif
 
 #ifdef CONFIG_PIC32MZ_SPI5
-void  pic32mz_spi5select(FAR struct spi_dev_s *dev, uint32_t devid,
+void  pic32mz_spi5select(struct spi_dev_s *dev, uint32_t devid,
                          bool selected)
 {
   spiinfo("devid: %d CS: %s\n",
@@ -199,7 +200,7 @@ void  pic32mz_spi5select(FAR struct spi_dev_s *dev, uint32_t devid,
 #warning "Missing logic"
 }
 
-uint8_t pic32mz_spi5status(FAR struct spi_dev_s *dev, uint32_t devid)
+uint8_t pic32mz_spi5status(struct spi_dev_s *dev, uint32_t devid)
 {
   spiinfo("Returning nothing\n");
 #warning "Missing logic"
@@ -207,7 +208,7 @@ uint8_t pic32mz_spi5status(FAR struct spi_dev_s *dev, uint32_t devid)
 }
 
 #ifdef CONFIG_SPI_CMDDATA
-int pic32mz_spi5cmddata(FAR struct spi_dev_s *dev, uint32_t devid,
+int pic32mz_spi5cmddata(struct spi_dev_s *dev, uint32_t devid,
                         bool cmd)
 {
 #warning "Missing logic"
@@ -217,7 +218,7 @@ int pic32mz_spi5cmddata(FAR struct spi_dev_s *dev, uint32_t devid,
 #endif
 
 #ifdef CONFIG_PIC32MZ_SPI6
-void  pic32mz_spi6select(FAR struct spi_dev_s *dev, uint32_t devid,
+void  pic32mz_spi6select(struct spi_dev_s *dev, uint32_t devid,
                          bool selected)
 {
   spiinfo("devid: %d CS: %s\n", (int)devid,
@@ -225,7 +226,7 @@ void  pic32mz_spi6select(FAR struct spi_dev_s *dev, uint32_t devid,
 #warning "Missing logic"
 }
 
-uint8_t pic32mz_spi6status(FAR struct spi_dev_s *dev, uint32_t devid)
+uint8_t pic32mz_spi6status(struct spi_dev_s *dev, uint32_t devid)
 {
   spiinfo("Returning nothing\n");
 #warning "Missing logic"
@@ -233,7 +234,7 @@ uint8_t pic32mz_spi6status(FAR struct spi_dev_s *dev, uint32_t devid)
 }
 
 #ifdef CONFIG_SPI_CMDDATA
-int pic32mz_spi6cmddata(FAR struct spi_dev_s *dev, uint32_t devid, bool cmd)
+int pic32mz_spi6cmddata(struct spi_dev_s *dev, uint32_t devid, bool cmd)
 {
 #warning "Missing logic"
   return 0;

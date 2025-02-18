@@ -1,6 +1,8 @@
 /****************************************************************************
  * libs/libc/signal/sig_fillset.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -23,6 +25,7 @@
  ****************************************************************************/
 
 #include <signal.h>
+#include <nuttx/signal.h>
 
 /****************************************************************************
  * Public Functions
@@ -45,6 +48,14 @@
 
 int sigfillset(FAR sigset_t *set)
 {
-  *set = ALL_SIGNAL_SET;
+  int ndx;
+
+  /* Add sll signals to the set */
+
+  for (ndx = 0; ndx < _SIGSET_NELEM; ndx++)
+    {
+      set->_elem[ndx] = _ALL_SIGNALS;
+    }
+
   return OK;
 }

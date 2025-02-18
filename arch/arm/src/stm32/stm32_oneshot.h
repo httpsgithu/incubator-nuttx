@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/stm32/stm32_oneshot.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -18,8 +20,8 @@
  *
  ****************************************************************************/
 
-#ifndef __ARCH_ARM_SRC_STM32_ONESHOT_H
-#define __ARCH_ARM_SRC_STM32_ONESHOT_H
+#ifndef __ARCH_ARM_SRC_STM32_STM32_ONESHOT_H
+#define __ARCH_ARM_SRC_STM32_STM32_ONESHOT_H
 
 /****************************************************************************
  * Included Files
@@ -77,7 +79,7 @@ struct stm32_oneshot_s
   uint8_t cbndx;                      /* Timer callback handler index */
 #endif
   volatile bool running;              /* True: the timer is running */
-  FAR struct stm32_tim_dev_s *tch;    /* Pointer returned by
+  struct stm32_tim_dev_s *tch;        /* Pointer returned by
                                        * stm32_tim_init() */
   volatile oneshot_handler_t handler; /* Oneshot expiration callback */
   volatile void *arg;                 /* The argument that will accompany
@@ -192,4 +194,4 @@ int stm32_oneshot_cancel(struct stm32_oneshot_s *oneshot,
 #endif
 
 #endif /* CONFIG_STM32_ONESHOT */
-#endif /* __ARCH_ARM_SRC_STM32_ONESHOT_H */
+#endif /* __ARCH_ARM_SRC_STM32_STM32_ONESHOT_H */

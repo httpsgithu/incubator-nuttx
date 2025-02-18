@@ -1,8 +1,9 @@
 /****************************************************************************
  * boards/arm/lpc17xx_40xx/u-blox-c027/src/lpc17_40_ubxmdm.c
  *
- *   Copyright (C) 2016 Vladimir Komendantskiy. All rights reserved.
- *   Author: Vladimir Komendantskiy <vladimir@moixaenergy.com>
+ * SPDX-License-Identifier: BSD-3-Clause
+ * SPDX-FileCopyrightText: 2016 Vladimir Komendantskiy. All rights reserved.
+ * SPDX-FileContributor: Vladimir Komendantskiy <vladimir@moixaenergy.com>
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -100,11 +101,11 @@ struct lpc17_40_ubxmdm_pins
 
 struct lpc17_40_ubxmdm_lower
 {
-  FAR const struct ubxmdm_ops * ops;  /* Lower half operations */
+  const struct ubxmdm_ops * ops;  /* Lower half operations */
 
   /* Private, architecture-specific information. */
 
-  FAR const struct lpc17_40_ubxmdm_pins * pins;
+  const struct lpc17_40_ubxmdm_pins * pins;
   bool usb_used;
 };
 
@@ -122,12 +123,12 @@ struct lpc17_40_name_pin
 
 /* "Lower half" driver methods **********************************************/
 
-static int lpc17_40_poweron  (FAR struct ubxmdm_lower * lower);
-static int lpc17_40_poweroff (FAR struct ubxmdm_lower * lower);
-static int lpc17_40_reset    (FAR struct ubxmdm_lower * lower);
-static int lpc17_40_getstatus(FAR struct ubxmdm_lower * lower,
-                              FAR struct ubxmdm_status * status);
-static int lpc17_40_ioctl    (FAR struct ubxmdm_lower * lower,
+static int lpc17_40_poweron  (struct ubxmdm_lower * lower);
+static int lpc17_40_poweroff (struct ubxmdm_lower * lower);
+static int lpc17_40_reset    (struct ubxmdm_lower * lower);
+static int lpc17_40_getstatus(struct ubxmdm_lower * lower,
+                              struct ubxmdm_status * status);
+static int lpc17_40_ioctl    (struct ubxmdm_lower * lower,
                               int cmd,
                               unsigned long arg);
 
@@ -163,85 +164,85 @@ static const struct lpc17_40_name_pin lpc17_40_ubxmdm_name_pins[] =
 {
   {
     {
-      'T','X','D'
+      'T', 'X', 'D'
     },
     GPIO_UART1_TXD
   },
   {
     {
-      'R','X','D'
+      'R', 'X', 'D'
     },
     GPIO_UART1_RXD
   },
   {
     {
-      'C','T','S'
+      'C', 'T', 'S'
     },
     GPIO_UART1_CTS
   },
   {
     {
-      'R','T','S'
+      'R', 'T', 'S'
     },
     GPIO_UART1_RTS
   },
   {
     {
-      'D','C','D'
+      'D', 'C', 'D'
     },
     GPIO_UART1_DCD
   },
   {
     {
-      'D','S','R'
+      'D', 'S', 'R'
     },
     GPIO_UART1_DSR
   },
   {
     {
-      'D','T','R'
+      'D', 'T', 'R'
     },
     GPIO_UART1_DTR
   },
   {
     {
-      'R','I',' '
+      'R', 'I', ' '
     },
     GPIO_UART1_RI
   },
   {
     {
-      'I','O','1'
+      'I', 'O', '1'
     },
     C027_MDMGPIO1
   },
   {
     {
-      'R','S','T'
+      'R', 'S', 'T'
     },
     C027_MDMRST
   },
   {
     {
-      'P','W','R'
+      'P', 'W', 'R'
     },
     C027_MDMPWR
   },
   {
     {
-      'D','E','T'
+      'D', 'E', 'T'
     },
     C027_MDMUSBDET
   },
   {
     {
-      'L','D','O'
+      'L', 'D', 'O'
     },
     C027_MDMLDOEN
   },
   {
     {
-      'L','V','L'
+      'L', 'V', 'L'
     },
     C027_MDMLVLOE
   },
@@ -251,10 +252,10 @@ static const struct lpc17_40_name_pin lpc17_40_ubxmdm_name_pins[] =
  * Private Functions
  ****************************************************************************/
 
-static int lpc17_40_poweron(FAR struct ubxmdm_lower * lower)
+static int lpc17_40_poweron(struct ubxmdm_lower * lower)
 {
-  FAR struct lpc17_40_ubxmdm_lower * priv =
-    (FAR struct lpc17_40_ubxmdm_lower *) lower;
+  struct lpc17_40_ubxmdm_lower * priv =
+    (struct lpc17_40_ubxmdm_lower *) lower;
   lpc17_40_pinset_t usb_detect_val;
 
   /* Modem not in reset */
@@ -299,10 +300,10 @@ static int lpc17_40_poweron(FAR struct ubxmdm_lower * lower)
   return OK;
 }
 
-static int lpc17_40_poweroff(FAR struct ubxmdm_lower * lower)
+static int lpc17_40_poweroff(struct ubxmdm_lower * lower)
 {
-  FAR struct lpc17_40_ubxmdm_lower * priv =
-    (FAR struct lpc17_40_ubxmdm_lower *) lower;
+  struct lpc17_40_ubxmdm_lower * priv =
+    (struct lpc17_40_ubxmdm_lower *) lower;
 
   /* LDO disabled */
 
@@ -327,10 +328,10 @@ static int lpc17_40_poweroff(FAR struct ubxmdm_lower * lower)
   return OK;
 }
 
-static int lpc17_40_reset(FAR struct ubxmdm_lower * lower)
+static int lpc17_40_reset(struct ubxmdm_lower * lower)
 {
-  FAR struct lpc17_40_ubxmdm_lower * priv =
-    (FAR struct lpc17_40_ubxmdm_lower *) lower;
+  struct lpc17_40_ubxmdm_lower * priv =
+    (struct lpc17_40_ubxmdm_lower *) lower;
 
   /* Modem in reset */
 
@@ -347,11 +348,11 @@ static int lpc17_40_reset(FAR struct ubxmdm_lower * lower)
   return OK;
 }
 
-static int lpc17_40_getstatus(FAR struct ubxmdm_lower * lower,
-                              FAR struct ubxmdm_status * status)
+static int lpc17_40_getstatus(struct ubxmdm_lower * lower,
+                              struct ubxmdm_status * status)
 {
-  FAR struct lpc17_40_ubxmdm_lower * priv =
-    (FAR struct lpc17_40_ubxmdm_lower *) lower;
+  struct lpc17_40_ubxmdm_lower * priv =
+    (struct lpc17_40_ubxmdm_lower *) lower;
   int i;
 
   status->on =
@@ -364,7 +365,7 @@ static int lpc17_40_getstatus(FAR struct ubxmdm_lower * lower,
 
   for (i = 0; i < UBXMDM_REGISTER_COUNT; i++)
     {
-      strncpy(status->register_values[i].name,
+      strlcpy(status->register_values[i].name,
               lpc17_40_ubxmdm_name_pins[i].name,
               3);
       status->register_values[i].val =
@@ -374,7 +375,7 @@ static int lpc17_40_getstatus(FAR struct ubxmdm_lower * lower,
   return OK;
 }
 
-static int lpc17_40_ioctl(FAR struct ubxmdm_lower * lower,
+static int lpc17_40_ioctl(struct ubxmdm_lower * lower,
                           int cmd, unsigned long arg)
 {
   /* No platform-specific IOCTL at the moment. */
@@ -403,7 +404,7 @@ static int lpc17_40_ioctl(FAR struct ubxmdm_lower * lower,
 
 void lpc17_40_ubxmdm_init(bool usb_used)
 {
-  FAR struct lpc17_40_ubxmdm_lower * priv = &lpc17_40_ubxmdm_lower;
+  struct lpc17_40_ubxmdm_lower * priv = &lpc17_40_ubxmdm_lower;
 
   DEBUGASSERT(priv->ops == NULL && priv->pins == NULL);
 
@@ -416,7 +417,7 @@ void lpc17_40_ubxmdm_init(bool usb_used)
   priv->pins     = &lpc17_40_ubxmdm_pins;
   priv->usb_used = usb_used;
 
-  lpc17_40_poweroff((FAR struct ubxmdm_lower *) priv);
+  lpc17_40_poweroff((struct ubxmdm_lower *) priv);
 
-  ubxmdm_register("/dev/ubxmdm", (FAR struct ubxmdm_lower *) priv);
+  ubxmdm_register("/dev/ubxmdm", (struct ubxmdm_lower *) priv);
 }

@@ -1,6 +1,8 @@
 ############################################################################
 # drivers/note/Make.defs
 #
+# SPDX-License-Identifier: Apache-2.0
+#
 # Licensed to the Apache Software Foundation (ASF) under one or more
 # contributor license agreements.  See the NOTICE file distributed with
 # this work for additional information regarding copyright ownership.  The
@@ -18,20 +20,43 @@
 #
 ############################################################################
 
-ifeq ($(CONFIG_DRIVER_NOTE),y)
+CFLAGS += ${INCDIR_PREFIX}${TOPDIR}/sched
+
+ifeq ($(CONFIG_DRIVERS_NOTE),y)
   CSRCS += note_driver.c
+  CSRCS += note_initialize.c
 endif
 
-ifeq ($(CONFIG_DRIVER_NOTERAM),y)
+ifneq ($(CONFIG_DRIVERS_NOTEFILE)$(CONFIG_DRIVERS_NOTELOWEROUT),)
+  CSRCS += notestream_driver.c
+endif
+
+ifeq ($(CONFIG_DRIVERS_NOTERAM),y)
   CSRCS += noteram_driver.c
 endif
 
-ifeq ($(CONFIG_DRIVER_NOTELOG),y)
+ifeq ($(CONFIG_DRIVERS_NOTELOG),y)
   CSRCS += notelog_driver.c
 endif
 
-ifeq ($(CONFIG_DRIVER_NOTECTL),y)
+ifeq ($(CONFIG_DRIVERS_NOTECTL),y)
   CSRCS += notectl_driver.c
+endif
+
+ifeq ($(CONFIG_DRIVERS_NOTESNAP),y)
+  CSRCS += notesnap_driver.c
+endif
+
+ifeq ($(CONFIG_DRIVERS_NOTERPMSG_SERVER),y)
+  CSRCS += noterpmsg_server.c
+endif
+
+ifeq ($(CONFIG_DRIVERS_NOTERPMSG),y)
+  CSRCS += noterpmsg_driver.c
+endif
+
+ifneq ($(CONFIG_DRIVERS_NOTERAM_SECTION),"")
+  CFLAGS += ${DEFINE_PREFIX}DRIVERS_NOTERAM_SECTION=CONFIG_DRIVERS_NOTERAM_SECTION
 endif
 
 DEPPATH += --dep-path note

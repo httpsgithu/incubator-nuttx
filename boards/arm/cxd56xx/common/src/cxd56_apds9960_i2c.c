@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/cxd56xx/common/src/cxd56_apds9960_i2c.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -40,10 +42,10 @@
 
 #if defined(CONFIG_CXD56_I2C) && defined(CONFIG_APDS9960)
 
-int board_apds9960_initialize(FAR const char *devpath, int bus)
+int board_apds9960_initialize(const char *devpath, int bus)
 {
   int ret;
-  FAR struct i2c_master_s *i2c;
+  struct i2c_master_s *i2c;
 
   sninfo("Initializing APDS9960...\n");
 

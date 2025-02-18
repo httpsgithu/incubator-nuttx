@@ -1,6 +1,8 @@
 /****************************************************************************
  * mm/iob/iob_dump.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -25,6 +27,7 @@
 #include <nuttx/config.h>
 
 #include <stdint.h>
+#include <sys/param.h>
 #include <debug.h>
 
 #include <nuttx/mm/iob.h>
@@ -36,10 +39,6 @@
 /****************************************************************************
  * Pre-processor definitions
  ****************************************************************************/
-
-#ifndef MIN
-#  define MIN(a,b) ((a) < (b) ? (a) : (b))
-#endif
 
 #define IOB_NITEMS   32                    /* 32 bytes displayed per line */
 #define IOB_LINESIZE (3 * IOB_NITEMS + 4)  /* 2 hex chars, ASCII char, 3 spaces, NUL */

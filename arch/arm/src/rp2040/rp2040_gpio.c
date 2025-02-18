@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/rp2040/rp2040_gpio.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -32,8 +34,7 @@
 
 #include <arch/board/board.h>
 
-#include "arm_arch.h"
-
+#include "arm_internal.h"
 #include "chip.h"
 #include "rp2040_gpio.h"
 
@@ -48,7 +49,7 @@ static bool g_gpio_irq_init = false;
 /* GPIO interrupt handlers information */
 
 static xcpt_t g_gpio_irq_handlers[RP2040_GPIO_NUM];
-static FAR void *g_gpio_irq_args[RP2040_GPIO_NUM];
+static void *g_gpio_irq_args[RP2040_GPIO_NUM];
 static int g_gpio_irq_modes[RP2040_GPIO_NUM];
 
 /* GPIO pins function assignment */
@@ -99,7 +100,7 @@ static const int g_gpio_function_mapping_pwm[8][3] =
  *
  ****************************************************************************/
 
-static int rp2040_gpio_interrupt(int irq, void *context, FAR void *arg)
+static int rp2040_gpio_interrupt(int irq, void *context, void *arg)
 {
   int i;
   int j;
@@ -288,7 +289,7 @@ void rp2040_gpio_init(uint32_t gpio)
  ****************************************************************************/
 
 int rp2040_gpio_irq_attach(uint32_t gpio, uint32_t intrmode,
-                           xcpt_t isr, FAR void *arg)
+                           xcpt_t isr, void *arg)
 {
   if (!g_gpio_irq_init)
     {
@@ -360,6 +361,31 @@ void rp2040_gpio_disable_irq(uint32_t gpio)
       reg = RP2040_IO_BANK0_PROC_INTE(gpio, 0);
       clrbits_reg32(0xf << ((gpio % 8) * 4), reg);
     }
+}
+
+/****************************************************************************
+ * Name: rp2040_gpio_clear_interrupt
+ *
+ * Description:
+ *   Clear the interrupt flags for a gpio pin.
+ *
+ ****************************************************************************/
+
+void rp2040_gpio_clear_interrupt(uint32_t gpio,
+                                 bool     edge_low,
+                                 bool     edge_high)
+{
+  uint32_t reg;
+  uint32_t bits = 0;
+
+  DEBUGASSERT(gpio < RP2040_GPIO_NUM);
+
+  reg = RP2040_IO_BANK0_INTR(gpio);
+
+  if (edge_low)  bits |= 0x04 << (gpio % 8);
+  if (edge_high) bits |= 0x08 << (gpio % 8);
+
+  clrbits_reg32(bits, reg);
 }
 
 /****************************************************************************

@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/risc-v/src/bl602/bl602_netdev.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -18,8 +20,8 @@
  *
  ****************************************************************************/
 
-#ifndef _BL602_NETDEV_H__
-#define _BL602_NETDEV_H__
+#ifndef __ARCH_RISCV_SRC_BL602_BL602_NETDEV_H
+#define __ARCH_RISCV_SRC_BL602_BL602_NETDEV_H
 
 /****************************************************************************
  * Included Files
@@ -132,4 +134,4 @@ void bl602_net_event(int evt, int val);
 #endif
 
 #endif /* __INCLUDE_ASSERT_H */
-#endif /* _BL602_NETDEV_H__ */
+#endif /* __ARCH_RISCV_SRC_BL602_BL602_NETDEV_H */

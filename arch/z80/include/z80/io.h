@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/z80/include/z80/io.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -22,8 +24,8 @@
  * through arch/io.h
  */
 
-#ifndef __ARCH_Z80_IO_H
-#define __ARCH_Z80_IO_H
+#ifndef __ARCH_Z80_INCLUDE_Z80_IO_H
+#define __ARCH_Z80_INCLUDE_Z80_IO_H
 
 /****************************************************************************
  * Included Files
@@ -67,4 +69,4 @@ char inp(char p);
 #endif
 #endif
 
-#endif /* __ARCH_Z80_IO_H */
+#endif /* __ARCH_Z80_INCLUDE_Z80_IO_H */

@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/nrf52/nrf52_uid.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -18,8 +20,8 @@
  *
  ****************************************************************************/
 
-#ifndef __ARCH_ARM_SRC_NRF52_UID_H
-#define __ARCH_ARM_SRC_NRF52_UID_H
+#ifndef __ARCH_ARM_SRC_NRF52_NRF52_UID_H
+#define __ARCH_ARM_SRC_NRF52_NRF52_UID_H
 
 /****************************************************************************
  * Included Files
@@ -31,6 +33,6 @@
  * Public Function Prototypes
  ****************************************************************************/
 
-void nrf52_get_uniqueid(uint8_t uniqueid[]);
+void nrf52_get_uniqueid(uint8_t uniqueid[8]);
 
-#endif /* __ARCH_ARM_SRC_NRF52_UID_H */
+#endif /* __ARCH_ARM_SRC_NRF52_NRF52_UID_H */

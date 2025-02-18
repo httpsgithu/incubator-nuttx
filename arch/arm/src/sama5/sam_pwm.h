@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/sama5/sam_pwm.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -86,7 +88,7 @@ extern "C"
  *
  ****************************************************************************/
 
-FAR struct pwm_lowerhalf_s *sam_pwminitialize(int channel);
+struct pwm_lowerhalf_s *sam_pwminitialize(int channel);
 
 #undef EXTERN
 #if defined(__cplusplus)

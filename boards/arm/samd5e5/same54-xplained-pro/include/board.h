@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/samd5e5/same54-xplained-pro/include/board.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -30,14 +32,6 @@
 /****************************************************************************
  * Pre-processor Definitions
  ****************************************************************************/
-
-#ifndef TRUE
-#  define TRUE  1
-#endif
-
-#ifndef FALSE
-#  define FALSE 0
-#endif
 
 /* Clocking *****************************************************************/
 

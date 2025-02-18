@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/cxd56xx/cxd56_sfc.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -43,7 +45,7 @@ extern "C"
  * Public Functions Prototypes
  ****************************************************************************/
 
-FAR struct mtd_dev_s *cxd56_sfc_initialize(void);
+struct mtd_dev_s *cxd56_sfc_initialize(void);
 
 #undef EXTERN
 #ifdef __cplusplus

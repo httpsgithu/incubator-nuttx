@@ -1,6 +1,8 @@
 ############################################################################
 # libs/libc/audio/libsrc/Make.defs
 #
+# SPDX-License-Identifier: Apache-2.0
+#
 # Licensed to the Apache Software Foundation (ASF) under one or more
 # contributor license agreements.  See the NOTICE file distributed with
 # this work for additional information regarding copyright ownership.  The
@@ -20,16 +22,23 @@
 
 ifeq ($(CONFIG_AUDIO_SRC),y)
 
-PACKAGE=libsamplerate
-VERSION=0.1.9
+PACKAGE = libsamplerate
+VERSION = 0.2.2
 
-libsamplerate:
-	$(Q) curl -L https://codeload.github.com/libsndfile/libsamplerate/zip/master -o libsamplerate.zip
-	$(Q) unzip -o libsamplerate.zip
-	$(Q) mv libsamplerate-master libsamplerate
-	$(Q) cp -rf libsamplerate/include/samplerate.h $(TOPDIR)$(DELIM)include$(DELIM)nuttx$(DELIM)audio$(DELIM)
+SRCPATH = audio/libsrc
 
-context:: libsamplerate
+# Download and unpack tarball if no git repo found
+$(SRCPATH)/libsamplerate:
+ifeq ($(wildcard $(SRCPATH)/libsamplerate/.git),)
+	$(call DOWNLOAD,https://codeload.github.com/libsndfile/libsamplerate/zip,master,$(SRCPATH)/libsamplerate.zip)
+	$(Q) unzip -o $(SRCPATH)/libsamplerate.zip -d $(SRCPATH)
+	$(Q) mv $(SRCPATH)/libsamplerate-master $(SRCPATH)/libsamplerate
+endif
+
+$(TOPDIR)/include/nuttx/audio/samplerate.h : $(SRCPATH)/libsamplerate
+	$(Q) cp -rf $(SRCPATH)/libsamplerate/include/samplerate.h $(TOPDIR)$(DELIM)include$(DELIM)nuttx$(DELIM)audio$(DELIM)
+
+context:: $(TOPDIR)/include/nuttx/audio/samplerate.h
 
 CSRCS += samplerate.c
 CSRCS += src_sinc.c
@@ -38,7 +47,9 @@ CSRCS += src_zoh.c
 
 CFLAGS += -DPACKAGE=\"$(PACKAGE)\" -DVERSION=\"$(VERSION)\"
 
-CFLAGS += ${shell $(INCDIR) "$(CC)" $(TOPDIR)$(DELIM)include$(DELIM)nuttx$(DELIM)audio}
+CFLAGS += ${INCDIR_PREFIX}$(TOPDIR)$(DELIM)include$(DELIM)nuttx$(DELIM)audio
+
+CFLAGS += -DCPU_CLIPS_NEGATIVE=0 -DCPU_CLIPS_POSITIVE=0
 
 ifeq ($(CONFIG_SINC_FAST_CONVERTER),y)
 CFLAGS += -DENABLE_SINC_FAST_CONVERTER
@@ -52,13 +63,15 @@ ifeq ($(CONFIG_SINC_BEST_CONVERTER),y)
 CFLAGS += -DENABLE_SINC_BEST_CONVERTER
 endif
 
-VPATH += libsamplerate/src
-SUBDIRS += libsamplerate/src
-DEPPATH += --dep-path libsamplerate/src
+VPATH += $(SRCPATH)/libsamplerate/src
+SUBDIRS += $(SRCPATH)/libsamplerate/src
+DEPPATH += --dep-path $(SRCPATH)/libsamplerate/src
 
 distclean::
 	$(call DELDIR, $(TOPDIR)$(DELIM)include$(DELIM)nuttx$(DELIM)audio$(DELIM)samplerate.h)
-	$(call DELDIR, libsamplerate)
-	$(call DELFILE, libsamplerate.zip)
+ifeq ($(wildcard $(SRCPATH)/libsamplerate/.git),)
+	$(call DELDIR, $(SRCPATH)/libsamplerate)
+	$(call DELFILE, $(SRCPATH)/libsamplerate.zip)
+endif
 
 endif

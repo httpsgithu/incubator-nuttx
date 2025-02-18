@@ -1,42 +1,9 @@
 /****************************************************************************
  * boards/arm/s32k1xx/ucans32k146/src/s32k1xx_clockconfig.c
  *
- *   Copyright (C) 2019 Gregory Nutt. All rights reserved.
- *   Author: Gregory Nutt <gnutt@nuttx.org>
- *
- * Redistribution and use in source and binary forms, with or without
- * modification, are permitted provided that the following conditions
- * are met:
- *
- * 1. Redistributions of source code must retain the above copyright
- *    notice, this list of conditions and the following disclaimer.
- * 2. Redistributions in binary form must reproduce the above copyright
- *    notice, this list of conditions and the following disclaimer in
- *    the documentation and/or other materials provided with the
- *    distribution.
- * 3. Neither the name NuttX nor the names of its contributors may be
- *    used to endorse or promote products derived from this software
- *    without specific prior written permission.
- *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
- * "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
- * LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS
- * FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE
- * COPYRIGHT OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT,
- * INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING,
- * BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS
- * OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED
- * AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
- * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN
- * ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
- * POSSIBILITY OF SUCH DAMAGE.
- *
- * Most of the settings within this file derives from NXP sample code for
- * the S32K1XX MCUs.  That sample code has this licensing information:
- *
- *   Copyright (c) 2013 - 2015, Freescale Semiconductor, Inc.
- *   Copyright 2016-2018 NXP
- *   All rights reserved.
+ * SPDX-License-Identifier: 0BSD
+ * SPDX-FileCopyrightText: 2013 - 2015, Freescale Semiconductor, Inc.
+ * SPDX-FileCopyrightText: 2016-2018 NXP. All rights reserved.
  *
  * THIS SOFTWARE IS PROVIDED BY NXP "AS IS" AND ANY EXPRESSED OR
  * IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES
@@ -108,10 +75,10 @@ const struct clock_configuration_s g_initial_clkconfig =
     .spll          =
     {
       .mode        = SCG_SPLL_MONITOR_DISABLE,         /* SPLLCM */
-      .div1        = SCG_ASYNC_CLOCK_DIV_BY_1,         /* SPLLDIV1 */
-      .div2        = SCG_ASYNC_CLOCK_DIV_BY_1,         /* SPLLDIV2 */
+      .div1        = SCG_ASYNC_CLOCK_DIV_BY_2,         /* SPLLDIV1 160 / 2 = 80Mhz */
+      .div2        = SCG_ASYNC_CLOCK_DIV_BY_4,         /* SPLLDIV2 160 / 4 = 40Mhz */
       .prediv      = 1,                                /* PREDIV */
-      .mult        = 40,                               /* MULT */
+      .mult        = 40,                               /* MULT 8 / 1 * 40 / 2 = 160Mhz */
       .src         = 0,                                /* SOURCE */
       .initialize  = true,                             /* Initialize */
       .locked      = false,                            /* LK */
@@ -130,7 +97,7 @@ const struct clock_configuration_s g_initial_clkconfig =
     {
       .rccr        =                                   /* RCCR - Run Clock Control Register */
       {
-        .src       = SCG_SYSTEM_CLOCK_SRC_SYS_PLL,     /* SCS */
+        .src       = SCG_SYSTEM_CLOCK_SRC_SYS_PLL,     /* SPLL 160MHz */
         .divslow   = 3,                                /* DIVSLOW, range 1..16 */
         .divbus    = 2,                                /* DIVBUS, range 1..16 */
         .divcore   = 2,                                /* DIVCORE, range 1..16 */
@@ -196,7 +163,6 @@ const struct clock_configuration_s g_initial_clkconfig =
   },
   .pcc             =
   {
-    .count         = NUM_OF_PERIPHERAL_CLOCKS_0,       /* Number peripheral clock configurations */
     .pclks         = g_peripheral_clockconfig0,        /* Peripheral clock configurations */
   },
   .pmc             =

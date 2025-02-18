@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/include/cxd56xx/timer.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -47,8 +49,8 @@
 
 struct timer_sethandler_s
 {
-  FAR void    *arg;            /* An argument */
-  CODE tccb_t handler;         /* The timer interrupt handler */
+  void   *arg;            /* An argument */
+  tccb_t handler;         /* The timer interrupt handler */
 };
 
 #endif /* __ARCH_ARM_INCLUDE_CXD56XX_TIMER_H */

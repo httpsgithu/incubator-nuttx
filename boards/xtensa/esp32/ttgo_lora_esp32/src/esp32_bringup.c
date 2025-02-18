@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/xtensa/esp32/ttgo_lora_esp32/src/esp32_bringup.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -31,14 +33,18 @@
 #include <sys/stat.h>
 #include <sys/ioctl.h>
 #include <sys/types.h>
-#include <syslog.h>
 #include <debug.h>
-#include <stdio.h>
 
 #include <errno.h>
+#if defined(CONFIG_ESP32_EFUSE)
+#include <nuttx/efuse/efuse.h>
+#endif
 #include <nuttx/fs/fs.h>
 #include <nuttx/himem/himem.h>
 
+#if defined(CONFIG_ESP32_EFUSE)
+#include "esp32_efuse.h"
+#endif
 #include "esp32_partition.h"
 
 #ifdef CONFIG_USERLED
@@ -69,7 +75,7 @@
 #  include "esp32_ble.h"
 #endif
 
-#ifdef CONFIG_ESP32_WIRELESS
+#ifdef CONFIG_ESP32_WIFI
 #  include "esp32_board_wlan.h"
 #endif
 
@@ -168,7 +174,7 @@ int esp32_bringup(void)
 #endif
 
 #ifdef CONFIG_ESP32_SPIFLASH
-  ret = esp32_spiflash_init();
+  ret = board_spiflash_init();
   if (ret)
     {
       syslog(LOG_ERR, "ERROR: Failed to initialize SPI Flash\n");
@@ -194,15 +200,25 @@ int esp32_bringup(void)
     }
 #endif
 
+#ifdef CONFIG_LPWAN_SX127X
+  ret = esp32_lpwaninitialize();
+  if (ret < 0)
+    {
+      syslog(LOG_ERR,
+             "ERROR: Failed to initialize wireless driver: %d\n",
+             ret);
+    }
+#endif /* CONFIG_LPWAN_SX127X */
+
 #ifdef CONFIG_ESP32_BLE
   ret = esp32_ble_initialize();
   if (ret)
     {
-      syslog(LOG_ERR, "ERROR: Failed to initialize BLE: %d \n", ret);
+      syslog(LOG_ERR, "ERROR: Failed to initialize BLE: %d\n", ret);
     }
 #endif
 
-#ifdef CONFIG_ESP32_WIRELESS
+#ifdef CONFIG_ESP32_WIFI
   ret = board_wlan_init();
   if (ret < 0)
     {

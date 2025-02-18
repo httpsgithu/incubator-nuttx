@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/imxrt/imxrt_rtc_lowerhalf.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -32,10 +34,10 @@
 #include <debug.h>
 
 #include <nuttx/arch.h>
+#include <nuttx/mutex.h>
 #include <nuttx/timers/rtc.h>
 
-#include "arm_arch.h"
-
+#include "arm_internal.h"
 #include "chip.h"
 #include "imxrt_lpsrtc.h"
 #include "imxrt_hprtc.h"
@@ -56,19 +58,19 @@ struct imxrt_lowerhalf_s
    * operations vtable (which may lie in FLASH or ROM)
    */
 
-  FAR const struct rtc_ops_s *ops;
+  const struct rtc_ops_s *ops;
 
   /* Data following is private to this driver and not visible outside of
    * this file.
    */
 
-  sem_t devsem;                      /* Threads can only exclusively access the RTC */
+  mutex_t devlock;                  /* Threads can only exclusively access the RTC */
 
 #ifdef CONFIG_RTC_ALARM
   /* Alarm callback information */
 
-  volatile rtc_alarm_callback_t cb;  /* Callback when the alarm expires */
-  volatile FAR void *priv;           /* Private argument to accompany callback */
+  volatile rtc_alarm_callback_t cb; /* Callback when the alarm expires */
+  volatile void *priv;              /* Private argument to accompany callback */
 #endif
 };
 
@@ -78,21 +80,21 @@ struct imxrt_lowerhalf_s
 
 /* Prototypes for static methods in struct rtc_ops_s */
 
-static int imxrt_rdtime(FAR struct rtc_lowerhalf_s *lower,
-                        FAR struct rtc_time *rtctime);
-static int imxrt_settime(FAR struct rtc_lowerhalf_s *lower,
-                         FAR const struct rtc_time *rtctime);
-static bool imxrt_havesettime(FAR struct rtc_lowerhalf_s *lower);
+static int imxrt_rdtime(struct rtc_lowerhalf_s *lower,
+                        struct rtc_time *rtctime);
+static int imxrt_settime(struct rtc_lowerhalf_s *lower,
+                         const struct rtc_time *rtctime);
+static bool imxrt_havesettime(struct rtc_lowerhalf_s *lower);
 
 #ifdef CONFIG_RTC_ALARM
-static int imxrt_setalarm(FAR struct rtc_lowerhalf_s *lower,
-                          FAR const struct lower_setalarm_s *alarminfo);
-static int imxrt_setrelative(FAR struct rtc_lowerhalf_s *lower,
-                            FAR const struct lower_setrelative_s *alarminfo);
-static int imxrt_cancelalarm(FAR struct rtc_lowerhalf_s *lower,
+static int imxrt_setalarm(struct rtc_lowerhalf_s *lower,
+                          const struct lower_setalarm_s *alarminfo);
+static int imxrt_setrelative(struct rtc_lowerhalf_s *lower,
+                            const struct lower_setrelative_s *alarminfo);
+static int imxrt_cancelalarm(struct rtc_lowerhalf_s *lower,
                              int alarmid);
-static int imxrt_rdalarm(FAR struct rtc_lowerhalf_s *lower,
-                         FAR struct lower_rdalarm_s *alarminfo);
+static int imxrt_rdalarm(struct rtc_lowerhalf_s *lower,
+                         struct lower_rdalarm_s *alarminfo);
 #endif
 
 /****************************************************************************
@@ -112,23 +114,14 @@ static const struct rtc_ops_s g_rtc_ops =
   .cancelalarm    = imxrt_cancelalarm,
   .rdalarm        = imxrt_rdalarm,
 #endif
-#ifdef CONFIG_RTC_PERIODIC
-  .setperiodic    = NULL,  /* Not implemented */
-  .cancelperiodic = NULL,
-#endif
-#ifdef CONFIG_RTC_IOCTL
-  .ioctl          = NULL,
-#endif
-#ifndef CONFIG_DISABLE_PSEUDOFS_OPERATIONS
-  .destroy        = NULL,
-#endif
 };
 
 /* i.MXRT RTC device state */
 
 static struct imxrt_lowerhalf_s g_rtc_lowerhalf =
 {
-  .ops         = &g_rtc_ops,
+  .ops     = &g_rtc_ops,
+  .devlock = NXMUTEX_INITIALIZER,
 };
 
 /****************************************************************************
@@ -153,14 +146,14 @@ static struct imxrt_lowerhalf_s g_rtc_lowerhalf =
 #ifdef CONFIG_RTC_ALARM
 static void imxrt_alarm_callback(void)
 {
-  FAR struct imxrt_lowerhalf_s *rtc = &g_rtc_lowerhalf;
+  struct imxrt_lowerhalf_s *rtc = &g_rtc_lowerhalf;
 
   /* Sample and clear the callback information to minimize the window in
    * time in which race conditions can occur.
    */
 
   rtc_alarm_callback_t cb = (rtc_alarm_callback_t)rtc->cb;
-  FAR void *arg           = (FAR void *)rtc->priv;
+  void *arg           = (void *)rtc->priv;
 
   rtc->cb                 = NULL;
   rtc->priv               = NULL;
@@ -190,8 +183,8 @@ static void imxrt_alarm_callback(void)
  *
  ****************************************************************************/
 
-static int imxrt_rdtime(FAR struct rtc_lowerhalf_s *lower,
-                        FAR struct rtc_time *rtctime)
+static int imxrt_rdtime(struct rtc_lowerhalf_s *lower,
+                        struct rtc_time *rtctime)
 {
   time_t timer;
 
@@ -201,7 +194,7 @@ static int imxrt_rdtime(FAR struct rtc_lowerhalf_s *lower,
 
   /* Convert the one second epoch time to a struct tm */
 
-  if (gmtime_r(&timer, (FAR struct tm *)rtctime) == 0)
+  if (gmtime_r(&timer, (struct tm *)rtctime) == 0)
     {
       int errcode = get_errno();
       DEBUGASSERT(errcode > 0);
@@ -229,8 +222,8 @@ static int imxrt_rdtime(FAR struct rtc_lowerhalf_s *lower,
  *
  ****************************************************************************/
 
-static int imxrt_settime(FAR struct rtc_lowerhalf_s *lower,
-                         FAR const struct rtc_time *rtctime)
+static int imxrt_settime(struct rtc_lowerhalf_s *lower,
+                         const struct rtc_time *rtctime)
 {
   struct timespec ts;
 
@@ -238,7 +231,7 @@ static int imxrt_settime(FAR struct rtc_lowerhalf_s *lower,
    * rtc_time is cast compatible with struct tm.
    */
 
-  ts.tv_sec  = timegm((FAR struct tm *)rtctime);
+  ts.tv_sec  = timegm((struct tm *)rtctime);
   ts.tv_nsec = 0;
 
   /* Now set the time (to one second accuracy) */
@@ -260,7 +253,7 @@ static int imxrt_settime(FAR struct rtc_lowerhalf_s *lower,
  *
  ****************************************************************************/
 
-static bool imxrt_havesettime(FAR struct rtc_lowerhalf_s *lower)
+static bool imxrt_havesettime(struct rtc_lowerhalf_s *lower)
 {
 #ifdef CONFIG_IMXRT_SNVS_LPSRTC
   return imxrt_lpsrtc_havesettime();
@@ -287,21 +280,21 @@ static bool imxrt_havesettime(FAR struct rtc_lowerhalf_s *lower)
  ****************************************************************************/
 
 #ifdef CONFIG_RTC_ALARM
-static int imxrt_setalarm(FAR struct rtc_lowerhalf_s *lower,
-                          FAR const struct lower_setalarm_s *alarminfo)
+static int imxrt_setalarm(struct rtc_lowerhalf_s *lower,
+                          const struct lower_setalarm_s *alarminfo)
 {
-  FAR struct imxrt_lowerhalf_s *rtc;
+  struct imxrt_lowerhalf_s *rtc;
   int ret;
 
   DEBUGASSERT(lower != NULL && alarminfo != NULL && alarminfo->id == 0);
-  rtc = (FAR struct imxrt_lowerhalf_s *)lower;
+  rtc = (struct imxrt_lowerhalf_s *)lower;
 
   /* Get exclusive access to the alarm */
 
-  ret = nxsem_wait(&rtc->devsem);
+  ret = nxmutex_lock(&rtc->devlock);
   if (ret < 0)
     {
-      rtcerr("ERROR: nxsem_wait failed: %d\n", ret);
+      rtcerr("ERROR: nxmutex_lock failed: %d\n", ret);
       return ret;
     }
 
@@ -312,7 +305,7 @@ static int imxrt_setalarm(FAR struct rtc_lowerhalf_s *lower,
 
       /* Convert the RTC time to a timespec (1 second accuracy) */
 
-      ts.tv_sec   = timegm((FAR struct tm *)&alarminfo->time);
+      ts.tv_sec   = timegm((struct tm *)&alarminfo->time);
       ts.tv_nsec  = 0;
 
       /* Remember the callback information */
@@ -330,7 +323,7 @@ static int imxrt_setalarm(FAR struct rtc_lowerhalf_s *lower,
         }
     }
 
-  nxsem_post(&rtc->devsem);
+  nxmutex_unlock(&rtc->devlock);
   return ret;
 }
 #endif
@@ -353,22 +346,22 @@ static int imxrt_setalarm(FAR struct rtc_lowerhalf_s *lower,
  ****************************************************************************/
 
 #ifdef CONFIG_RTC_ALARM
-static int imxrt_setrelative(FAR struct rtc_lowerhalf_s *lower,
-                             FAR const struct lower_setrelative_s *alarminfo)
+static int imxrt_setrelative(struct rtc_lowerhalf_s *lower,
+                             const struct lower_setrelative_s *alarminfo)
 {
-  FAR struct imxrt_lowerhalf_s *rtc;
-  FAR struct timespec ts;
+  struct imxrt_lowerhalf_s *rtc;
+  struct timespec ts;
   int ret = -EINVAL;
 
   DEBUGASSERT(lower != NULL && alarminfo != NULL && alarminfo->id == 0);
-  rtc = (FAR struct imxrt_lowerhalf_s *)lower;
+  rtc = (struct imxrt_lowerhalf_s *)lower;
 
   /* Get exclusive access to the alarm */
 
-  ret = nxsem_wait(&rtc->devsem);
+  ret = nxmutex_lock(&rtc->devlock);
   if (ret < 0)
     {
-      rtcerr("ERROR: nxsem_wait failed: %d\n", ret);
+      rtcerr("ERROR: nxmutex_lock failed: %d\n", ret);
       return ret;
     }
 
@@ -403,7 +396,7 @@ static int imxrt_setrelative(FAR struct rtc_lowerhalf_s *lower,
         }
     }
 
-  nxsem_post(&rtc->devsem);
+  nxmutex_unlock(&rtc->devlock);
   return ret;
 }
 #endif
@@ -426,7 +419,7 @@ static int imxrt_setrelative(FAR struct rtc_lowerhalf_s *lower,
  ****************************************************************************/
 
 #ifdef CONFIG_RTC_ALARM
-static int imxrt_cancelalarm(FAR struct rtc_lowerhalf_s *lower, int alarmid)
+static int imxrt_cancelalarm(struct rtc_lowerhalf_s *lower, int alarmid)
 {
   /* We cancel the alarm by alarm by disabling the alarm and the alarm
    * interrupt.
@@ -454,8 +447,8 @@ static int imxrt_cancelalarm(FAR struct rtc_lowerhalf_s *lower, int alarmid)
  ****************************************************************************/
 
 #ifdef CONFIG_RTC_ALARM
-static int imxrt_rdalarm(FAR struct rtc_lowerhalf_s *lower,
-                         FAR struct lower_rdalarm_s *alarminfo)
+static int imxrt_rdalarm(struct rtc_lowerhalf_s *lower,
+                         struct lower_rdalarm_s *alarminfo)
 {
   int ret = -EINVAL;
 
@@ -475,7 +468,7 @@ static int imxrt_rdalarm(FAR struct rtc_lowerhalf_s *lower,
       /* Convert the one second epoch time to a struct tm */
 
       ret = OK;
-      if (gmtime_r(&alarm, (FAR struct tm *)alarminfo->time) == 0)
+      if (gmtime_r(&alarm, (struct tm *)alarminfo->time) == 0)
         {
           int errcode = get_errno();
           DEBUGASSERT(errcode > 0);
@@ -512,11 +505,9 @@ static int imxrt_rdalarm(FAR struct rtc_lowerhalf_s *lower,
  *
  ****************************************************************************/
 
-FAR struct rtc_lowerhalf_s *imxrt_rtc_lowerhalf(void)
+struct rtc_lowerhalf_s *imxrt_rtc_lowerhalf(void)
 {
-  nxsem_init(&g_rtc_lowerhalf.devsem, 0, 1);
-
-  return (FAR struct rtc_lowerhalf_s *)&g_rtc_lowerhalf;
+  return (struct rtc_lowerhalf_s *)&g_rtc_lowerhalf;
 }
 
 #endif /* CONFIG_RTC_DRIVER */

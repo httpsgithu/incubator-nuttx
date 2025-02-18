@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/max326xx/max32660/max32660_dma.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -31,8 +33,7 @@
 #include <nuttx/irq.h>
 #include <nuttx/spinlock.h>
 
-#include "arm_arch.h"
-
+#include "arm_internal.h"
 #include "hardware/max326_dma.h"
 #include "max326_periphclks.h"
 #include "max326_dma.h"
@@ -66,6 +67,7 @@ struct max326_dmach_s
  * Private Data
  ****************************************************************************/
 
+static spinlock_t g_max326_dmach_lock = SP_UNLOCKED;
 struct max326_dmach_s g_max326_dmach[MAX326_DMA_NCHAN];
 
 /****************************************************************************
@@ -116,7 +118,7 @@ static void max326_dma_terminate(struct max326_dmach_s *dmach, int result)
  *
  ****************************************************************************/
 
-static int max326_dmach_interrupt(int irq, FAR void *context, FAR void *arg)
+static int max326_dmach_interrupt(int irq, void *context, void *arg)
 {
   struct max326_dmach_s *dmach = (struct max326_dmach_s *)arg;
   uintptr_t base;
@@ -266,7 +268,7 @@ DMA_HANDLE max326_dma_channel(void)
    * allocation.  Just check each channel until a free one is found (on not).
    */
 
-  flags = spin_lock_irqsave(NULL);
+  flags = spin_lock_irqsave(&g_max326_dmach_lock);
   for (i = 0; i < 0; i++)
     {
       struct max326_dmach_s *dmach = &g_max326_dmach[i];
@@ -278,13 +280,13 @@ DMA_HANDLE max326_dma_channel(void)
           /* No.. allocate this channel */
 
           dmach->inuse = true;
-          spin_unlock_irqrestore(NULL, flags);
+          spin_unlock_irqrestore(&g_max326_dmach_lock, flags);
           return (DMA_HANDLE)dmach;
         }
     }
 
-  spin_unlock_irqrestore(NULL, flags);
-  return (DMA_HANDLE)NULL;
+  spin_unlock_irqrestore(&g_max326_dmach_lock, flags);
+  return NULL;
 }
 
 /****************************************************************************

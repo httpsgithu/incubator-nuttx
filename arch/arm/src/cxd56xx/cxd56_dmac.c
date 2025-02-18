@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/cxd56xx/cxd56_dmac.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -34,7 +36,7 @@
 
 #include <nuttx/arch.h>
 #include <nuttx/irq.h>
-#include <nuttx/semaphore.h>
+#include <nuttx/mutex.h>
 
 #include "cxd56_dmac.h"
 
@@ -147,29 +149,29 @@ typedef struct
   uint32_t control;           /* Transfer control */
 } dmac_lli_t;
 
-#define CXD56_DMAC_M2M   0  /**< Memory to memory */
-#define CXD56_DMAC_M2P   1  /**< Memory to peripheral, DMAC controlled */
-#define CXD56_DMAC_P2M   2  /**< Peripheral to memory, DMAC controlled */
-#define CXD56_DMAC_P2P   3  /**< Peripheral to peripheral */
-#define CXD56_DMAC_P2CP  4  /**< P2P destination controlled */
-#define CXD56_DMAC_M2CP  5  /**< M2P peripheral controlled */
-#define CXD56_DMAC_CP2M  6  /**< P2M peripheral controlled */
-#define CXD56_DMAC_CP2P  7  /**< P2P source controlled */
+#define CXD56_DMAC_M2M   0  /* Memory to memory */
+#define CXD56_DMAC_M2P   1  /* Memory to peripheral, DMAC controlled */
+#define CXD56_DMAC_P2M   2  /* Peripheral to memory, DMAC controlled */
+#define CXD56_DMAC_P2P   3  /* Peripheral to peripheral */
+#define CXD56_DMAC_P2CP  4  /* P2P destination controlled */
+#define CXD56_DMAC_M2CP  5  /* M2P peripheral controlled */
+#define CXD56_DMAC_CP2M  6  /* P2M peripheral controlled */
+#define CXD56_DMAC_CP2P  7  /* P2P source controlled */
 
-#define CXD56_DMAC_BSIZE1    0     /**< 1 burst */
-#define CXD56_DMAC_BSIZE4    1     /**< 4 burst */
-#define CXD56_DMAC_BSIZE8    2     /**< 8 burst */
-#define CXD56_DMAC_BSIZE16   3     /**< 16 burst */
-#define CXD56_DMAC_BSIZE32   4     /**< 32 burst */
-#define CXD56_DMAC_BSIZE64   5     /**< 64 burst */
-#define CXD56_DMAC_BSIZE128  6     /**< 128 burst */
-#define CXD56_DMAC_BSIZE256  7     /**< 256 burst */
+#define CXD56_DMAC_BSIZE1    0     /* 1 burst */
+#define CXD56_DMAC_BSIZE4    1     /* 4 burst */
+#define CXD56_DMAC_BSIZE8    2     /* 8 burst */
+#define CXD56_DMAC_BSIZE16   3     /* 16 burst */
+#define CXD56_DMAC_BSIZE32   4     /* 32 burst */
+#define CXD56_DMAC_BSIZE64   5     /* 64 burst */
+#define CXD56_DMAC_BSIZE128  6     /* 128 burst */
+#define CXD56_DMAC_BSIZE256  7     /* 256 burst */
 
-#define CXD56_DMAC_LITTLE_ENDIAN  0  /**< Little endian */
-#define CXD56_DMAC_BIG_ENDIAN     1  /**< Bit endian */
+#define CXD56_DMAC_LITTLE_ENDIAN  0  /* Little endian */
+#define CXD56_DMAC_BIG_ENDIAN     1  /* Bit endian */
 
-#define CXD56_DMAC_MASTER1 0 /**< AHB master 1 */
-#define CXD56_DMAC_MASTER2 1 /**< AHB master 2 */
+#define CXD56_DMAC_MASTER1 0 /* AHB master 1 */
+#define CXD56_DMAC_MASTER2 1 /* AHB master 2 */
 
 /* max transfer size at a time */
 
@@ -235,11 +237,11 @@ typedef struct
 
 static int open_channels = 0;
 
-static int intr_handler_admac0(int irq, FAR void *context, FAR void *arg);
-static int intr_handler_admac1(int irq, FAR void *context, FAR void *arg);
-static int intr_handler_idmac(int irq, FAR void *context, FAR void *arg);
-static int intr_handler_skdmac0(int irq, FAR void *context, FAR void *arg);
-static int intr_handler_skdmac1(int irq, FAR void *context, FAR void *arg);
+static int intr_handler_admac0(int irq, void *context, void *arg);
+static int intr_handler_admac1(int irq, void *context, void *arg);
+static int intr_handler_idmac(int irq, void *context, void *arg);
+static int intr_handler_skdmac0(int irq, void *context, void *arg);
+static int intr_handler_skdmac1(int irq, void *context, void *arg);
 static uint32_t irq_map[] =
 {
   CXD56_IRQ_APP_DMAC0,
@@ -253,7 +255,7 @@ static uint32_t irq_map[] =
   CXD56_IRQ_SKDMAC_1,
 };
 
-static int (*intc_handler[])(int irq, FAR void *context, FAR void *arg) =
+static int (*intc_handler[])(int irq, void *context, void *arg) =
 {
   intr_handler_admac0,
   intr_handler_admac1,
@@ -290,7 +292,11 @@ struct dma_channel_s
 /* This is the array of all DMA channels */
 
 static struct dma_channel_s g_dmach[NCHANNELS];
-static sem_t g_dmaexc;
+static mutex_t g_dmalock = NXMUTEX_INITIALIZER;
+
+/****************************************************************************
+ * Private Functions
+ ****************************************************************************/
 
 static int dma_init(int ch);
 static int dma_uninit(int ch);
@@ -328,6 +334,7 @@ static struct dmac_register_map *get_device(int ch)
     case 2: return (struct dmac_register_map *)DMAC2_REG_BASE;
     case 3: return (struct dmac_register_map *)DMAC3_REG_BASE;
     }
+
     return NULL;
 }
 
@@ -335,15 +342,17 @@ static struct dmac_ch_register_map *get_channel(int ch)
 {
   struct dmac_register_map *dev = get_device(ch);
   if (dev == NULL)
-     return NULL;
+    {
+      return NULL;
+    }
 
   if (is_dmac(2, dev))
     {
-        return &dev->channel[ch - 7];
+      return &dev->channel[ch - 7];
     }
   else if (is_dmac(3, dev))
     {
-        return &((struct dmac080_register_map *)dev)->channel[ch - 2];
+      return &((struct dmac080_register_map *)dev)->channel[ch - 2];
     }
 
   return &dev->channel[ch & 1];
@@ -393,16 +402,22 @@ static void _dmac_intc_handler(int ch)
   int itc;
   int err;
 
+  if (dev == NULL)
+    {
+      dmaerr("Cannot get device with channel number %d.\n", ch);
+      return;
+    }
+
   mask = (1u << (ch & 1));
 
   if (is_dmac(2, dev))
     {
-        mask = 1u << (ch - 7);
+      mask = 1u << (ch - 7);
     }
 
   else if (is_dmac(3, dev))
     {
-        mask = 1u << (ch - 2);
+      mask = 1u << (ch - 2);
     }
 
   itc = dev->inttcstatus & mask;
@@ -420,23 +435,30 @@ static void _dmac_intc_handler(int ch)
     }
 }
 
-static int intr_handler_admac0(int irq, FAR void *context, FAR void *arg)
+static int intr_handler_admac0(int irq, void *context, void *arg)
 {
   _dmac_intc_handler(0);
   return OK;
 }
 
-static int intr_handler_admac1(int irq, FAR void *context, FAR void *arg)
+static int intr_handler_admac1(int irq, void *context, void *arg)
 {
   _dmac_intc_handler(1);
   return OK;
 }
 
-static int intr_handler_idmac(int irq, FAR void *context, FAR void *arg)
+static int intr_handler_idmac(int irq, void *context, void *arg)
 {
   struct dmac_register_map *dev = get_device(2); /* XXX */
-  uint32_t stat = dev->intstatus & 0x1f;
+  uint32_t stat;
   int i;
+
+  if (dev == NULL)
+    {
+      return -ENODEV;
+    }
+
+  stat = dev->intstatus & 0x1f;
 
   for (i = 2; stat; i++, stat >>= 1)
     {
@@ -449,13 +471,13 @@ static int intr_handler_idmac(int irq, FAR void *context, FAR void *arg)
   return OK;
 }
 
-static int intr_handler_skdmac0(int irq, FAR void *context, FAR void *arg)
+static int intr_handler_skdmac0(int irq, void *context, void *arg)
 {
   _dmac_intc_handler(7);
   return OK;
 }
 
-static int intr_handler_skdmac1(int irq, FAR void *context, FAR void *arg)
+static int intr_handler_skdmac1(int irq, void *context, void *arg)
 {
   _dmac_intc_handler(8);
   return OK;
@@ -724,10 +746,10 @@ void weak_function arm_dma_initialize(void)
   for (i = 0; i < NCHANNELS; i++)
     {
       g_dmach[i].chan = i;
+#ifndef CONFIG_CXD56_SUBCORE
       up_enable_irq(irq_map[i]);
+#endif
     }
-
-  nxsem_init(&g_dmaexc, 0, 1);
 }
 
 /****************************************************************************
@@ -762,7 +784,7 @@ DMA_HANDLE cxd56_dmachannel(int ch, ssize_t maxsize)
 
   /* Get exclusive access to allocate channel */
 
-  nxsem_wait_uninterruptible(&g_dmaexc);
+  nxmutex_lock(&g_dmalock);
 
   if (ch < 0 || ch >= NCHANNELS)
     {
@@ -792,7 +814,7 @@ DMA_HANDLE cxd56_dmachannel(int ch, ssize_t maxsize)
       n++;
     }
 
-  dmach->list = (dmac_lli_t *)kmm_malloc(n * sizeof(dmac_lli_t));
+  dmach->list = kmm_malloc(n * sizeof(dmac_lli_t));
   if (dmach->list == NULL)
     {
       dmainfo("Failed to kmm_malloc\n");
@@ -806,12 +828,11 @@ DMA_HANDLE cxd56_dmachannel(int ch, ssize_t maxsize)
 
   dmach->inuse  = true;
 
-  nxsem_post(&g_dmaexc);
-
+  nxmutex_unlock(&g_dmalock);
   return (DMA_HANDLE)dmach;
 
 err:
-  nxsem_post(&g_dmaexc);
+  nxmutex_unlock(&g_dmalock);
   return NULL;
 }
 
@@ -845,7 +866,7 @@ void cxd56_dmafree(DMA_HANDLE handle)
       return;
     }
 
-  nxsem_wait_uninterruptible(&g_dmaexc);
+  nxmutex_lock(&g_dmalock);
 
   if (!dmach->inuse)
     {
@@ -863,7 +884,7 @@ void cxd56_dmafree(DMA_HANDLE handle)
   dmach->inuse = false;
 
 err:
-  nxsem_post(&g_dmaexc);
+  nxmutex_unlock(&g_dmalock);
 }
 
 /****************************************************************************

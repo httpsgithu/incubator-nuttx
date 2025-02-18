@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/lpc54xx/lpc54_lowputc.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -82,7 +84,7 @@ void lpc54_lowsetup(void);
 
 #ifdef HAVE_USART_DEVICE
 void lpc54_usart_configure(uintptr_t base,
-                           FAR const struct uart_config_s *config);
+                           const struct uart_config_s *config);
 #endif
 
 /****************************************************************************

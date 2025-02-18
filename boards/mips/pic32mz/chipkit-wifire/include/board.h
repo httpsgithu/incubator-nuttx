@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/mips/pic32mz/chipkit-wifire/include/board.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -235,7 +237,7 @@
 /* SPI **********************************************************************/
 
 /* SPI1 is available on pins D5,D7,D35,D36 of the Arduino Shield connectors
- * where you would expect then.  The SPI connector is configured as follows:
+ * where you would expect them.  The SPI connector is configured as follows:
  *
  *   Pin J7&10 Board Signal PIC32MZ
  *   --- --    ------------ -------
@@ -245,7 +247,7 @@
  *   D7  15    SPI1_SS      RE9
  *
  * SPI2 is available on pins D10-D13 of the Arduino Shield connectors where
- * you would expect then.  The SPI connector is configured as follows:
+ * you would expect them.  The SPI connector is configured as follows:
  *
  *   Pin J7&10 Board Signal PIC32MZ
  *   --- --    ------------ -------

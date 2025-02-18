@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/lc823450/lc823450_dvfs2.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -30,8 +32,7 @@
 #include <arch/board/board.h>
 #include <string.h>
 
-#include "arm_arch.h"
-
+#include "arm_internal.h"
 #include "lc823450_clockconfig.h"
 #include "lc823450_syscontrol.h"
 #include "lc823450_intc.h"
@@ -55,10 +56,6 @@
 #define UP_THRESHOLD 20
 #define DN_THRESHOLD 60
 
-#ifndef CONFIG_SMP_NCPUS
-#  define CONFIG_SMP_NCPUS 1
-#endif
-
 #ifdef CONFIG_DVFS_CHANGE_VOLTAGE
 #  define CORE12V_PIN (GPIO_PORT2 | GPIO_PIN1)
 #endif
@@ -70,6 +67,8 @@
 /****************************************************************************
  * Private Data
  ****************************************************************************/
+
+static spinlock_t g_dvfs_lock = SP_UNLOCKED;
 
 typedef struct freq_entry
 {
@@ -124,18 +123,14 @@ uint32_t g_dvfs_freq_stat[3] =
  ****************************************************************************/
 
 /****************************************************************************
- * Name: up_get_current_time()
+ * Name: _get_current_time64()
  ****************************************************************************/
 
 static uint64_t _get_current_time64(void)
 {
   struct timespec ts;
 
-#ifdef CONFIG_CLOCK_MONOTONIC
-  clock_gettime(CLOCK_MONOTONIC, &ts);
-#else
-  clock_gettime(CLOCK_REALTIME, &ts);
-#endif
+  clock_systime_timespec(&ts);
   return (uint64_t)ts.tv_sec * NSEC_PER_SEC + (uint64_t)ts.tv_nsec;
 }
 
@@ -167,7 +162,7 @@ static int _dvfs_another_cpu_state(int me)
  * Callback for 1 shot timer
  ****************************************************************************/
 
-int lc823450_dvfs_oneshot(int irq, uint32_t *regs, FAR void *arg)
+int lc823450_dvfs_oneshot(int irq, uint32_t *regs, void *arg)
 {
   /* voltage has reached at 1.2V */
 
@@ -435,14 +430,14 @@ static void lc823450_dvfs_do_auto(uint32_t idle[])
 
 void lc823450_dvfs_get_idletime(uint64_t idletime[])
 {
-  irqstate_t flags = spin_lock_irqsave(NULL);
+  irqstate_t flags = spin_lock_irqsave(&g_dvfs_lock);
 
   /* First, copy g_idle_totaltime to the caller */
 
   memcpy(idletime, g_idle_totaltime, sizeof(g_idle_totaltime));
 
 #if CONFIG_SMP_NCPUS == 2
-  int me = up_cpu_index();
+  int me = this_cpu();
 
   if (0 == _dvfs_another_cpu_state(me))
     {
@@ -455,7 +450,7 @@ void lc823450_dvfs_get_idletime(uint64_t idletime[])
     }
 #endif
 
-  spin_unlock_irqrestore(NULL, flags);
+  spin_unlock_irqrestore(&g_dvfs_lock, flags);
 }
 
 /****************************************************************************
@@ -511,9 +506,9 @@ void lc823450_dvfs_tick_callback(void)
 
 void lc823450_dvfs_enter_idle(void)
 {
-  irqstate_t flags = spin_lock_irqsave(NULL);
+  irqstate_t flags = spin_lock_irqsave(&g_dvfs_lock);
 
-  int me = up_cpu_index();
+  int me = this_cpu();
 
   /* Update my state first : 0 (idle) */
 
@@ -551,7 +546,7 @@ void lc823450_dvfs_enter_idle(void)
   lc823450_dvfs_set_div(_dvfs_cur_idx, 1);
 
 exit_with_error:
-  spin_unlock_irqrestore(NULL, flags);
+  spin_unlock_irqrestore(&g_dvfs_lock, flags);
 }
 
 /****************************************************************************
@@ -561,9 +556,9 @@ exit_with_error:
 
 void lc823450_dvfs_exit_idle(int irq)
 {
-  irqstate_t flags = spin_lock_irqsave(NULL);
+  irqstate_t flags = spin_lock_irqsave(&g_dvfs_lock);
 
-  int me = up_cpu_index();
+  int me = this_cpu();
   uint64_t d;
   uint64_t now;
 
@@ -588,7 +583,6 @@ void lc823450_dvfs_exit_idle(int irq)
   lc823450_dvfs_set_div(_dvfs_cur_idx, 0);
 
 exit_with_error:
-
   if (0 == _dvfs_cpu_is_active[me])
     {
       /* In case of idle to active transition
@@ -604,7 +598,7 @@ exit_with_error:
 
   _dvfs_cpu_is_active[me] = 1;
 
-  spin_unlock_irqrestore(NULL, flags);
+  spin_unlock_irqrestore(&g_dvfs_lock, flags);
 }
 
 /****************************************************************************
@@ -636,7 +630,7 @@ int lc823450_dvfs_set_freq(int freq)
       return -1;
     }
 
-  flags = spin_lock_irqsave(NULL);
+  flags = spin_lock_irqsave(&g_dvfs_lock);
 
   switch (freq)
     {
@@ -664,6 +658,6 @@ int lc823450_dvfs_set_freq(int freq)
       lc823450_dvfs_set_div(idx, 0);
     }
 
-  spin_unlock_irqrestore(NULL, flags);
+  spin_unlock_irqrestore(&g_dvfs_lock, flags);
   return ret;
 }

@@ -1,6 +1,7 @@
 .. include:: /substitutions.rst
 .. _simulator:
 
+=========
 Simulator
 =========
 
@@ -13,10 +14,31 @@ having a piece of embedded hardware.
 This guide assumes you're on Linux. It works on Windows and Mac too— if you know how,
 submit a PR to improve this guide!
 
-.. todo:: Add Mac and Windows instructions
+.. todo:: Windows instructions
+
+Prerequisites For macOS
+=======================
+
+We need ``genromfs`` to build simulators(NON GUI).
+
+   .. code-block:: console
+
+      $ git clone https://github.com/chexum/genromfs.git
+      $ cd genromfs
+      $ make
+      $ make install
+
+Now Copy the built `genromfs` `exec` to /opt/local/bin.
+
+For GUI Applications we need X11 Libraries, libx11 can also be built using Homebrew or by Installing XQuartz.
+
+   .. code-block:: console
+   
+      $ sudo port install xorg-libX11
+      $ sudo port install xorg-server
 
 Compiling
----------
+=========
 
 #. Configure the Simulator
 
@@ -70,8 +92,10 @@ Compiling
        $
        $ # we're back at the Linux prompt.
 
+.. _simulator_accessing_the_network:
+
 Accessing the Network
----------------------
+=====================
 
 #. Here we'll use the ``sim:tcpblaster`` configuration because it comes with networking
    that is ready to use.
@@ -170,20 +194,70 @@ Accessing the Network
        56 bytes from 8.8.8.8: icmp_seq=0 time=10 ms
        1 packets transmitted, 1 received, 0% packet loss, time 1010 ms
 
+    If it doesn't work, then you need to enable the IP forward on your computer:
+
+    .. code-block:: console
+
+       sudo sysctl -w net.ipv4.ip_forward=1
+
    Success!
 
-Stopping
---------
+Testing / capturing TCP network traffic
+=======================================
 
-If you don't have an nsh prompt, the only effective way to stop the simulator is kill it from another terminal:
+#. Start Wireshark (or tcpdump) on Linux and capture the appeared tap0 interface.
+
+#. Optionally activate emulating packet loss on Linux:
+
+    .. code-block:: console
+
+       $ sudo iptables -A INPUT -p tcp --dport 31337 -m statistic --mode random --probability 0.01 -j DROP
+
+#. Run netcat server on Linux:
+
+    .. code-block:: console
+
+       $ netcat -l -p 31337
+
+#. Run netcat client on Apache NuttX:
+
+    .. code-block:: console
+
+       nsh> dd if=/dev/zero of=/tmp/test.bin count=1000
+       nsh> netcat LINUX_HOST_IP_ADDRESS 31337 /tmp/test.bin
+
+#. Observe TCP network traffic in Wireshark / tcpdump on Linux.
+
+Stopping
+========
+
+#. The normal way to stop:
+
+    .. code-block:: console
+
+       nsh> poweroff
+       $
+       $ # we're back at the Linux prompt.
+
+   If you don't have an nsh prompt, the only effective way to stop the simulator is kill it from another terminal:
 
     .. code-block:: console
 
        $ pkill nuttx
 
+#. Optionally deactivate emulating packet loss on Linux:
 
+    .. code-block:: console
+
+       $ sudo iptables -D INPUT -p tcp --dport 31337 -m statistic --mode random --probability 0.01 -j DROP
+
+#. If you do not need tap0 interface anymore, it can be disabled on Linux as follows:
+
+    .. code-block:: console
+
+       $ sudo ./tools/simhostroute.sh wlan0 off
 
 Debugging
----------
+=========
 
 You can debug the simulator like any regular Linux program.

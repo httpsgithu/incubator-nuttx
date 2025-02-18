@@ -1,6 +1,8 @@
 /****************************************************************************
  * libs/libc/sched/sched_getprioritymin.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -52,6 +54,6 @@
 
 int sched_get_priority_min(int policy)
 {
-  DEBUGASSERT(policy >= SCHED_FIFO && policy <= SCHED_OTHER);
+  DEBUGASSERT(policy >= SCHED_OTHER && policy <= SCHED_SPORADIC);
   return SCHED_PRIORITY_MIN;
 }

@@ -1,6 +1,8 @@
 /****************************************************************************
  * libs/libnx/nxfonts/nxfonts_mono5x8.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -18,8 +20,8 @@
  *
  ****************************************************************************/
 
-#ifndef __LIBNX_NXFONTS_NXFONTS_MONO5X8_H
-#define __LIBNX_NXFONTS_NXFONTS_MONO5X8_H
+#ifndef __LIBS_LIBNX_NXFONTS_NXFONTS_MONO5X8_H
+#define __LIBS_LIBNX_NXFONTS_NXFONTS_MONO5X8_H
 
 #define NXFONT_ID         FONTID_MONO5X8
 
@@ -794,4 +796,4 @@
 #define NXFONT_METRICS_255 {1, 5, 8, 0, 0, 0}
 #define NXFONT_BITMAP_255 {0x0, 0x90, 0x0, 0x90, 0x90, 0x70, 0x90, 0x60}
 
-#endif
+#endif /* __LIBS_LIBNX_NXFONTS_NXFONTS_MONO5X8_H */

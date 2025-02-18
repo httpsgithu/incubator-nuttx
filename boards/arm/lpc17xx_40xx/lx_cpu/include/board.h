@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/lpc17xx_40xx/lx_cpu/include/board.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -18,8 +20,8 @@
  *
  ****************************************************************************/
 
-#ifndef __BOARDS_ARM_LX_CPU_INCLUDE_BOARD_H
-#define __BOARDS_ARM_LX_CPU_INCLUDE_BOARD_H
+#ifndef __BOARDS_ARM_LPC17XX_40XX_LX_CPU_INCLUDE_BOARD_H
+#define __BOARDS_ARM_LPC17XX_40XX_LX_CPU_INCLUDE_BOARD_H
 
 /****************************************************************************
  * Included Files
@@ -483,4 +485,4 @@ struct nuttx_ulan_chip_data_s
 int nuttx_ulan_get_chip_data(int minor,
                              struct nuttx_ulan_chip_data_s *chip_data);
 
-#endif /* __BOARDS_ARM_LX_CPU_INCLUDE_BOARD_H */
+#endif /* __BOARDS_ARM_LPC17XX_40XX_LX_CPU_INCLUDE_BOARD_H */

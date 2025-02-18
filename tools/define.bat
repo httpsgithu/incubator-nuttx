@@ -2,6 +2,8 @@
 
 rem tools/define.bat
 rem
+rem SPDX-License-Identifier: Apache-2.0
+rem
 rem Licensed to the Apache Software Foundation (ASF) under one or more
 rem contributor license agreements.  See the NOTICE file distributed with
 rem this work for additional information regarding copyright ownership.  The
@@ -18,7 +20,7 @@ rem License for the specific language governing permissions and limitations
 rem under the License.
 
 rem Handle command line options
-rem [-h] <compiler-path> <def1> [-val <val1>] [<def2> [-val <val2>] [<def3> [-val <val3>] ...]]
+rem [-h] <compiler-path> <def1>[=val1] [<def2>[=val2] [<def3>[=val3] ...]]
 rem [-w] [-d] ignored for compatibility with define.sh
 
 set progname=%0
@@ -78,7 +80,7 @@ shift
 
 rem Handle the output depending on if there is a value for the variable or not
 
-if "%1"=="-val" goto :GetValue
+if not "%1"=="" goto :GetValue
 
 rem Handle the output using the selected format
 
@@ -110,7 +112,6 @@ goto :DefinitionLoop
 rem Get value following the variable name
 
 :GetValue
-shift
 set varvalue=%1
 shift
 
@@ -148,13 +149,13 @@ goto :End
 echo %progname% is a tool for flexible generation of command line pre-processor
 echo definitions arguments for a variety of diffent ccpaths in a variety of
 echo compilation environments"
-echo USAGE:%progname% [-h] ^<compiler-path^> [-val ^<^val1^>] [^<def2^> [-val ^<val2^>] [^<def3^> [-val ^<val3^>] ...]]
+echo USAGE:%progname% [-h] ^<compiler-path^> ^<def1^>[=^<val1^>] [^<def2^>[=^<val2^>] [^<def3^>[=^<val3^>] ...]]
 echo Where:"
 echo  ^<compiler-path^>
 echo    The full path to your ccpath
 echo  ^<def1^> ^<def2^> ^<def3^> ...
 echo    A list of pre-preprocesser variable names to be defined.
-echo  [-val ^<val1^>] [-val ^<val2^>] [-val ^<val3^>] ...
+echo  [=^<val1^>] [=^<val2^>] [=^<val3^>] ...
 echo    optional values to be assigned to each pre-processor variable.
 echo    If not supplied, the variable will be defined with no explicit value.
 echo  -h

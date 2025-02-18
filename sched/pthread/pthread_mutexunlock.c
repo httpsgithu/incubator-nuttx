@@ -1,6 +1,8 @@
 /****************************************************************************
  * sched/pthread/pthread_mutexunlock.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -32,39 +34,6 @@
 #include <debug.h>
 
 #include "pthread/pthread.h"
-
-/****************************************************************************
- * Private Functions
- ****************************************************************************/
-
-/****************************************************************************
- * Name: pthread_mutex_islocked
- *
- * Description:
- *   Return true is the mutex is locked.
- *
- * Input Parameters:
- *   None
- *
- * Returned Value:
- *   Returns true if the mutex is locked
- *
- ****************************************************************************/
-
-static inline bool pthread_mutex_islocked(FAR struct pthread_mutex_s *mutex)
-{
-  int semcount = mutex->sem.semcount;
-
-  /* The underlying semaphore should have a count less than 2:
-   *
-   *  1 == mutex is unlocked.
-   *  0 == mutex is locked with no waiters
-   * -n == mutex is locked with 'n' waiters.
-   */
-
-  DEBUGASSERT(semcount < 2);
-  return semcount < 1;
-}
 
 /****************************************************************************
  * Public Functions
@@ -102,18 +71,12 @@ int pthread_mutex_unlock(FAR pthread_mutex_t *mutex)
 {
   int ret = EPERM;
 
-  sinfo("mutex=0x%p\n", mutex);
+  sinfo("mutex=%p\n", mutex);
   DEBUGASSERT(mutex != NULL);
   if (mutex == NULL)
     {
       return EINVAL;
     }
-
-  /* Make sure the semaphore is stable while we make the following checks.
-   * This all needs to be one atomic action.
-   */
-
-  sched_lock();
 
   /* The unlock operation is only performed if the mutex is actually locked.
    * EPERM *must* be returned if the mutex type is PTHREAD_MUTEX_ERRORCHECK
@@ -122,7 +85,7 @@ int pthread_mutex_unlock(FAR pthread_mutex_t *mutex)
    * remaining case.
    */
 
-  if (pthread_mutex_islocked(mutex))
+  if (mutex_is_locked(&mutex->mutex))
     {
 #if !defined(CONFIG_PTHREAD_MUTEX_UNSAFE) || defined(CONFIG_PTHREAD_MUTEX_TYPES)
       /* Does the calling thread own the semaphore?  If no, should we return
@@ -142,7 +105,7 @@ int pthread_mutex_unlock(FAR pthread_mutex_t *mutex)
        * thread owns the semaphore.
        */
 
-      if (mutex->pid != (int)getpid())
+      if (!mutex_is_hold(&mutex->mutex))
 
 #elif defined(CONFIG_PTHREAD_MUTEX_UNSAFE) && defined(CONFIG_PTHREAD_MUTEX_TYPES)
       /* If mutex types are not supported, then all mutexes are NORMAL (or
@@ -150,7 +113,8 @@ int pthread_mutex_unlock(FAR pthread_mutex_t *mutex)
        * non-robust NORMAL mutex type.
        */
 
-      if (mutex->type != PTHREAD_MUTEX_NORMAL && mutex->pid != (int)getpid())
+      if (mutex->type != PTHREAD_MUTEX_NORMAL &&
+          !mutex_is_hold(&mutex->mutex))
 
 #else /* CONFIG_PTHREAD_MUTEX_BOTH */
       /* Skip the error check if this is a non-robust NORMAL mutex */
@@ -164,7 +128,7 @@ int pthread_mutex_unlock(FAR pthread_mutex_t *mutex)
        * the EPERM error?
        */
 
-      if (errcheck && mutex->pid != (int)getpid())
+      if (errcheck && !mutex_is_hold(&mutex->mutex))
 #endif
         {
           /* No... return an EPERM error.
@@ -178,28 +142,12 @@ int pthread_mutex_unlock(FAR pthread_mutex_t *mutex)
            * the behavior is undefined.
            */
 
-          serr("ERROR: Holder=%d returning EPERM\n", mutex->pid);
+          serr("ERROR: Holder=%d returning EPERM\n",
+               mutex_get_holder(&mutex->mutex));
           ret = EPERM;
         }
       else
 #endif /* !CONFIG_PTHREAD_MUTEX_UNSAFE || CONFIG_PTHREAD_MUTEX_TYPES */
-
-#ifdef CONFIG_PTHREAD_MUTEX_TYPES
-      /* Yes, the caller owns the semaphore.. Is this a recursive mutex? */
-
-      if (mutex->type == PTHREAD_MUTEX_RECURSIVE && mutex->nlocks > 1)
-        {
-          /* This is a recursive mutex and we there are multiple locks held.
-           * Retain the mutex lock, just decrement the count of locks held,
-           * and return success.
-           */
-
-          mutex->nlocks--;
-          ret = OK;
-        }
-      else
-
-#endif /* CONFIG_PTHREAD_MUTEX_TYPES */
 
       /* This is either a non-recursive mutex or is the outermost unlock of
        * a recursive mutex.
@@ -212,17 +160,10 @@ int pthread_mutex_unlock(FAR pthread_mutex_t *mutex)
        */
 
         {
-          /* Nullify the pid and lock count then post the semaphore */
-
-          mutex->pid    = -1;
-#ifdef CONFIG_PTHREAD_MUTEX_TYPES
-          mutex->nlocks = 0;
-#endif
           ret = pthread_mutex_give(mutex);
         }
     }
 
-  sched_unlock();
   sinfo("Returning %d\n", ret);
   return ret;
 }

@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/cxd56xx/common/src/cxd56_i2cdev.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -45,7 +47,7 @@
 int board_i2cdev_initialize(int port)
 {
   int ret;
-  FAR struct i2c_master_s *i2c;
+  struct i2c_master_s *i2c;
 
   _info("Initializing /dev/i2c%d..\n", port);
 
@@ -62,6 +64,7 @@ int board_i2cdev_initialize(int port)
   if (ret < 0)
     {
       _err("ERROR: Failed to register i2c%d: %d\n", port, ret);
+      cxd56_i2cbus_uninitialize(i2c);
     }
 
   return ret;

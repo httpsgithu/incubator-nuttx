@@ -1,6 +1,8 @@
 /****************************************************************************
  * libs/libc/pthread/pthread_attr_setstack.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -22,11 +24,7 @@
  * Included Files
  ****************************************************************************/
 
-#include <nuttx/config.h>
-
 #include <pthread.h>
-#include <string.h>
-#include <debug.h>
 #include <errno.h>
 
 /****************************************************************************
@@ -37,11 +35,13 @@
  * Name:  pthread_attr_setstack
  *
  * Description:
+ *   The pthread_attr_setstack() function shall set the thread creation stack
+ *   attributes stackaddr and stacksize in the attr object.
  *
  * Parameters:
- *   attr
- *   stackaddr
- *   stacksize
+ *   attr      - thread attributes to be modified.
+ *   stackaddr - stack address
+ *   stacksize - stack size
  *
  * Return Value:
  *   0 if successful.  Otherwise, an error code.
@@ -51,12 +51,9 @@
  ****************************************************************************/
 
 int pthread_attr_setstack(FAR pthread_attr_t *attr,
-                          FAR void *stackaddr, long stacksize)
+                          FAR void *stackaddr, size_t stacksize)
 {
   int ret;
-
-  linfo("attr=0x%p stackaddr=0x%p stacksize=%ld\n",
-        attr, stackaddr, stacksize);
 
   if (!attr || !stackaddr || stacksize < PTHREAD_STACK_MIN)
     {
@@ -69,6 +66,5 @@ int pthread_attr_setstack(FAR pthread_attr_t *attr,
       ret = OK;
     }
 
-  linfo("Returning %d\n", ret);
   return ret;
 }

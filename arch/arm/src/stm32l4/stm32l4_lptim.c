@@ -1,14 +1,12 @@
 /****************************************************************************
  * arch/arm/src/stm32l4/stm32l4_lptim.c
  *
- *   Copyright (C) 2011 Uros Platise. All rights reserved.
- *   Author: Uros Platise <uros.platise@isotel.eu>
- *
- * With modifications and updates by:
- *
- *   Copyright (C) 2016 Motorola Mobility, LLC. All rights reserved.
- *   Copyright (C) 2011-2012, 2017 Gregory Nutt. All rights reserved.
- *   Author: Gregory Nutt <gnutt@nuttx.org>
+ * SPDX-License-Identifier: BSD-3-Clause
+ * SPDX-FileCopyrightText: 2016 Motorola Mobility LLC. All rights reserved.
+ * SPDX-FileCopyrightText: 2011-2012, 2017 Gregory Nutt. All rights reserved.
+ * SPDX-FileCopyrightText: 2011 Uros Platise. All rights reserved.
+ * SPDX-FileContributor: Gregory Nutt <gnutt@nuttx.org>
+ * SPDX-FileContributor: Uros Platise <uros.platise@isotel.eu>
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -107,33 +105,33 @@ struct stm32l4_lptim_priv_s
  ****************************************************************************/
 
 static struct stm32l4_lptim_dev_s *stm32l4_lptim_getstruct(int timer);
-static inline void stm32l4_modifyreg32(FAR struct stm32l4_lptim_dev_s *dev,
+static inline void stm32l4_modifyreg32(struct stm32l4_lptim_dev_s *dev,
                                        uint8_t offset, uint32_t clearbits,
                                        uint32_t setbits);
-static int stm32l4_lptim_enable(FAR struct stm32l4_lptim_dev_s *dev);
-static int stm32l4_lptim_disable(FAR struct stm32l4_lptim_dev_s *dev);
-static int stm32l4_lptim_reset(FAR struct stm32l4_lptim_dev_s *dev);
-static int stm32l4_lptim_get_gpioconfig(FAR struct stm32l4_lptim_dev_s *dev,
+static int stm32l4_lptim_enable(struct stm32l4_lptim_dev_s *dev);
+static int stm32l4_lptim_disable(struct stm32l4_lptim_dev_s *dev);
+static int stm32l4_lptim_reset(struct stm32l4_lptim_dev_s *dev);
+static int stm32l4_lptim_get_gpioconfig(struct stm32l4_lptim_dev_s *dev,
                                         stm32l4_lptim_channel_t channel,
                                         uint32_t *cfg);
-static int stm32l4_lptim_setmode(FAR struct stm32l4_lptim_dev_s *dev,
+static int stm32l4_lptim_setmode(struct stm32l4_lptim_dev_s *dev,
                                  stm32l4_lptim_mode_t mode);
-static int stm32l4_lptim_setclock(FAR struct stm32l4_lptim_dev_s *dev,
+static int stm32l4_lptim_setclock(struct stm32l4_lptim_dev_s *dev,
                                   uint32_t freq);
-static int stm32l4_lptim_setchannel(FAR struct stm32l4_lptim_dev_s *dev,
+static int stm32l4_lptim_setchannel(struct stm32l4_lptim_dev_s *dev,
                                     stm32l4_lptim_channel_t channel,
                                     int enable);
-static int stm32l4_lptim_setclocksource(FAR struct stm32l4_lptim_dev_s *dev,
+static int stm32l4_lptim_setclocksource(struct stm32l4_lptim_dev_s *dev,
                                         stm32l4_lptim_clksrc_t clksrc);
-static int stm32l4_lptim_setpolarity(FAR struct stm32l4_lptim_dev_s *dev,
+static int stm32l4_lptim_setpolarity(struct stm32l4_lptim_dev_s *dev,
                                      stm32l4_lptim_clkpol_t polarity);
 static
-uint32_t stm32l4_lptim_getcounter(FAR struct stm32l4_lptim_dev_s *dev);
-static int stm32l4_lptim_setcountmode(FAR struct stm32l4_lptim_dev_s *dev,
+uint32_t stm32l4_lptim_getcounter(struct stm32l4_lptim_dev_s *dev);
+static int stm32l4_lptim_setcountmode(struct stm32l4_lptim_dev_s *dev,
                                       stm32l4_lptim_cntmode_t cntmode);
-static void stm32l4_lptim_setperiod(FAR struct stm32l4_lptim_dev_s *dev,
+static void stm32l4_lptim_setperiod(struct stm32l4_lptim_dev_s *dev,
                                   uint32_t period);
-static uint32_t stm32l4_lptim_getperiod(FAR struct stm32l4_lptim_dev_s *dev);
+static uint32_t stm32l4_lptim_getperiod(struct stm32l4_lptim_dev_s *dev);
 
 /****************************************************************************
  * Private Data
@@ -201,7 +199,7 @@ static struct stm32l4_lptim_dev_s *stm32l4_lptim_getstruct(int timer)
  * Name: stm32l4_modifyreg32
  ****************************************************************************/
 
-static inline void stm32l4_modifyreg32(FAR struct stm32l4_lptim_dev_s *dev,
+static inline void stm32l4_modifyreg32(struct stm32l4_lptim_dev_s *dev,
                                        uint8_t offset, uint32_t clearbits,
                                        uint32_t setbits)
 {
@@ -213,7 +211,7 @@ static inline void stm32l4_modifyreg32(FAR struct stm32l4_lptim_dev_s *dev,
  * Name: stm32l4_lptim_enable
  ****************************************************************************/
 
-static int stm32l4_lptim_enable(FAR struct stm32l4_lptim_dev_s *dev)
+static int stm32l4_lptim_enable(struct stm32l4_lptim_dev_s *dev)
 {
   DEBUGASSERT(dev != NULL);
 
@@ -241,7 +239,7 @@ static int stm32l4_lptim_enable(FAR struct stm32l4_lptim_dev_s *dev)
  * Name: stm32l4_lptim_disable
  ****************************************************************************/
 
-static int stm32l4_lptim_disable(FAR struct stm32l4_lptim_dev_s *dev)
+static int stm32l4_lptim_disable(struct stm32l4_lptim_dev_s *dev)
 {
   DEBUGASSERT(dev != NULL);
 
@@ -269,7 +267,7 @@ static int stm32l4_lptim_disable(FAR struct stm32l4_lptim_dev_s *dev)
  * Name: stm32l4_lptim_reset
  ****************************************************************************/
 
-static int stm32l4_lptim_reset(FAR struct stm32l4_lptim_dev_s *dev)
+static int stm32l4_lptim_reset(struct stm32l4_lptim_dev_s *dev)
 {
   DEBUGASSERT(dev != NULL);
 
@@ -296,7 +294,7 @@ static int stm32l4_lptim_reset(FAR struct stm32l4_lptim_dev_s *dev)
  * Name: stm32l4_lptim_get_gpioconfig
  ****************************************************************************/
 
-static int stm32l4_lptim_get_gpioconfig(FAR struct stm32l4_lptim_dev_s *dev,
+static int stm32l4_lptim_get_gpioconfig(struct stm32l4_lptim_dev_s *dev,
                                         stm32l4_lptim_channel_t channel,
                                         uint32_t *cfg)
 {
@@ -310,21 +308,21 @@ static int stm32l4_lptim_get_gpioconfig(FAR struct stm32l4_lptim_dev_s *dev,
       case STM32L4_LPTIM1_BASE:
         switch (channel)
           {
-# if defined(GPIO_LPTIM1_OUT_1)
+#  if defined(GPIO_LPTIM1_OUT_1)
             case 1:
               *cfg = GPIO_LPTIM1_OUT_1;
               break;
-# endif
-# if defined(GPIO_LPTIM1_OUT_2)
+#  endif
+#  if defined(GPIO_LPTIM1_OUT_2)
             case 2:
               *cfg = GPIO_LPTIM1_OUT_2;
               break;
-# endif
-# if defined(GPIO_LPTIM1_OUT_3)
+#  endif
+#  if defined(GPIO_LPTIM1_OUT_3)
             case 3:
               *cfg = GPIO_LPTIM1_OUT_3;
               break;
-# endif
+#  endif
             default:
               return ERROR;
           }
@@ -335,21 +333,21 @@ static int stm32l4_lptim_get_gpioconfig(FAR struct stm32l4_lptim_dev_s *dev,
       case STM32L4_LPTIM2_BASE:
         switch (channel)
           {
-# if defined(GPIO_LPTIM2_OUT_1)
+#  if defined(GPIO_LPTIM2_OUT_1)
             case 1:
               *cfg = GPIO_LPTIM2_OUT_1;
               break;
-# endif
-# if defined(GPIO_LPTIM2_OUT_2)
+#  endif
+#  if defined(GPIO_LPTIM2_OUT_2)
             case 2:
               *cfg = GPIO_LPTIM2_OUT_2;
               break;
-# endif
-# if defined(GPIO_LPTIM2_OUT_3)
+#  endif
+#  if defined(GPIO_LPTIM2_OUT_3)
             case 3:
               *cfg = GPIO_LPTIM2_OUT_3;
               break;
-# endif
+#  endif
             default:
               return ERROR;
           }
@@ -367,7 +365,7 @@ static int stm32l4_lptim_get_gpioconfig(FAR struct stm32l4_lptim_dev_s *dev,
  * Name: stm32l4_lptim_setmode
  ****************************************************************************/
 
-static int stm32l4_lptim_setmode(FAR struct stm32l4_lptim_dev_s *dev,
+static int stm32l4_lptim_setmode(struct stm32l4_lptim_dev_s *dev,
                                  stm32l4_lptim_mode_t mode)
 {
   const uint32_t addr = ((struct stm32l4_lptim_priv_s *)dev)->base +
@@ -408,11 +406,11 @@ static int stm32l4_lptim_setmode(FAR struct stm32l4_lptim_dev_s *dev,
  * Name: stm32l4_lptim_setclock
  ****************************************************************************/
 
-static int stm32l4_lptim_setclock(FAR struct stm32l4_lptim_dev_s *dev,
+static int stm32l4_lptim_setclock(struct stm32l4_lptim_dev_s *dev,
                                   uint32_t freq)
 {
-  FAR struct stm32l4_lptim_priv_s *priv =
-                                (FAR struct stm32l4_lptim_priv_s *)dev;
+  struct stm32l4_lptim_priv_s *priv =
+                                (struct stm32l4_lptim_priv_s *)dev;
   uint32_t setbits;
   uint32_t actual;
 
@@ -482,7 +480,7 @@ static int stm32l4_lptim_setclock(FAR struct stm32l4_lptim_dev_s *dev,
  * Name: stm32l4_lptim_setchannel
  ****************************************************************************/
 
-static int stm32l4_lptim_setchannel(FAR struct stm32l4_lptim_dev_s *dev,
+static int stm32l4_lptim_setchannel(struct stm32l4_lptim_dev_s *dev,
                                     stm32l4_lptim_channel_t channel,
                                     int enable)
 {
@@ -513,11 +511,11 @@ static int stm32l4_lptim_setchannel(FAR struct stm32l4_lptim_dev_s *dev,
  * Name: stm32l4_lptim_setclocksource
  ****************************************************************************/
 
-static int stm32l4_lptim_setclocksource(FAR struct stm32l4_lptim_dev_s *dev,
+static int stm32l4_lptim_setclocksource(struct stm32l4_lptim_dev_s *dev,
                                         stm32l4_lptim_clksrc_t clksrc)
 {
-  FAR struct stm32l4_lptim_priv_s *priv =
-                                 (FAR struct stm32l4_lptim_priv_s *)dev;
+  struct stm32l4_lptim_priv_s *priv =
+                                 (struct stm32l4_lptim_priv_s *)dev;
 
   DEBUGASSERT(dev != NULL);
 
@@ -627,11 +625,11 @@ static int stm32l4_lptim_setclocksource(FAR struct stm32l4_lptim_dev_s *dev,
  * Name: stm32l4_lptim_setperiod
  ****************************************************************************/
 
-static void stm32l4_lptim_setperiod(FAR struct stm32l4_lptim_dev_s *dev,
+static void stm32l4_lptim_setperiod(struct stm32l4_lptim_dev_s *dev,
                                     uint32_t period)
 {
-  FAR struct stm32l4_lptim_priv_s *priv =
-                                (FAR struct stm32l4_lptim_priv_s *)dev;
+  struct stm32l4_lptim_priv_s *priv =
+                                (struct stm32l4_lptim_priv_s *)dev;
 
   DEBUGASSERT(dev != NULL);
   putreg32(period, (uintptr_t)(priv->base + STM32L4_LPTIM_ARR_OFFSET));
@@ -641,10 +639,10 @@ static void stm32l4_lptim_setperiod(FAR struct stm32l4_lptim_dev_s *dev,
  * Name: stm32l4_tim_getperiod
  ****************************************************************************/
 
-static uint32_t stm32l4_lptim_getperiod(FAR struct stm32l4_lptim_dev_s *dev)
+static uint32_t stm32l4_lptim_getperiod(struct stm32l4_lptim_dev_s *dev)
 {
-  FAR struct stm32l4_lptim_priv_s *priv =
-                                  (FAR struct stm32l4_lptim_priv_s *)dev;
+  struct stm32l4_lptim_priv_s *priv =
+                                  (struct stm32l4_lptim_priv_s *)dev;
 
   DEBUGASSERT(dev != NULL);
   return getreg32((uintptr_t)(priv->base + STM32L4_LPTIM_ARR_OFFSET));
@@ -654,7 +652,7 @@ static uint32_t stm32l4_lptim_getperiod(FAR struct stm32l4_lptim_dev_s *dev)
  * Name: stm32l4_lptim_setcountmode
  ****************************************************************************/
 
-static int stm32l4_lptim_setcountmode(FAR struct stm32l4_lptim_dev_s *dev,
+static int stm32l4_lptim_setcountmode(struct stm32l4_lptim_dev_s *dev,
                                       stm32l4_lptim_cntmode_t cntmode)
 {
   DEBUGASSERT(dev != NULL);
@@ -681,8 +679,8 @@ static int stm32l4_lptim_setcountmode(FAR struct stm32l4_lptim_dev_s *dev,
  * Name: stm32l4_lptim_setpolarity
  ****************************************************************************/
 
-static int stm32l4_lptim_setpolarity(FAR struct stm32l4_lptim_dev_s *dev,
-                                        stm32l4_lptim_clkpol_t polarity)
+static int stm32l4_lptim_setpolarity(struct stm32l4_lptim_dev_s *dev,
+                                     stm32l4_lptim_clkpol_t polarity)
 {
   DEBUGASSERT(dev != NULL);
 
@@ -714,10 +712,10 @@ static int stm32l4_lptim_setpolarity(FAR struct stm32l4_lptim_dev_s *dev,
  * Name: stm32l4_lptim_setpolarity
  ****************************************************************************/
 
-static uint32_t stm32l4_lptim_getcounter(FAR struct stm32l4_lptim_dev_s *dev)
+static uint32_t stm32l4_lptim_getcounter(struct stm32l4_lptim_dev_s *dev)
 {
-  FAR struct stm32l4_lptim_priv_s *priv =
-                                 (FAR struct stm32l4_lptim_priv_s *)dev;
+  struct stm32l4_lptim_priv_s *priv =
+                                 (struct stm32l4_lptim_priv_s *)dev;
 
   DEBUGASSERT(dev != NULL);
 
@@ -744,7 +742,7 @@ static uint32_t stm32l4_lptim_getcounter(FAR struct stm32l4_lptim_dev_s *dev)
  * Name: stm32l4_lptim_init
  ****************************************************************************/
 
-FAR struct stm32l4_lptim_dev_s *stm32l4_lptim_init(int timer)
+struct stm32l4_lptim_dev_s *stm32l4_lptim_init(int timer)
 {
   struct stm32l4_lptim_dev_s *dev = NULL;
 
@@ -783,7 +781,7 @@ FAR struct stm32l4_lptim_dev_s *stm32l4_lptim_init(int timer)
  * Name: stm32l4_lptim_deinit
  ****************************************************************************/
 
-int stm32l4_lptim_deinit(FAR struct stm32l4_lptim_dev_s * dev)
+int stm32l4_lptim_deinit(struct stm32l4_lptim_dev_s * dev)
 {
   DEBUGASSERT(dev);
 

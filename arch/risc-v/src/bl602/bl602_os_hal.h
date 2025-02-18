@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/risc-v/src/bl602/bl602_os_hal.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -18,8 +20,8 @@
  *
  ****************************************************************************/
 
-#ifndef __ARCH_RISCV_SRC_BL602_OS_HAL_H
-#define __ARCH_RISCV_SRC_BL602_OS_HAL_H
+#ifndef __ARCH_RISCV_SRC_BL602_BL602_OS_HAL_H
+#define __ARCH_RISCV_SRC_BL602_BL602_OS_HAL_H
 
 /****************************************************************************
  * Included Files
@@ -50,7 +52,7 @@ extern "C"
  * Public Function Prototypes
  ****************************************************************************/
 
-void bl_os_printf(const char *__fmt, ...);
+void bl_os_printf(const char *__fmt, ...) printf_like(1, 2);
 
 void bl_os_assert_func(const char *file,
                        int line,
@@ -175,7 +177,7 @@ void bl_os_log_write(uint32_t level,
                      const char *file,
                      int line,
                      const char *format,
-                     ...);
+                     ...) printf_like(5, 6);
 
   #undef EXTERN
   #if defined(__cplusplus)
@@ -183,4 +185,4 @@ void bl_os_log_write(uint32_t level,
 #endif
 
 #endif /* __ASSEMBLY__ */
-#endif /* __ARCH_RISCV_SRC_BL602_OS_HAL_H*/
+#endif /* __ARCH_RISCV_SRC_BL602_BL602_OS_HAL_H */

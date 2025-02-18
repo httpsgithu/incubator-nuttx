@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/xtensa/esp32/esp32-wrover-kit/src/esp32_bringup.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -31,11 +33,8 @@
 #include <sys/stat.h>
 #include <sys/ioctl.h>
 #include <sys/types.h>
-#include <syslog.h>
 #include <debug.h>
-#include <stdio.h>
 
-#include <syslog.h>
 #include <errno.h>
 #include <nuttx/fs/fs.h>
 #include <nuttx/himem/himem.h>
@@ -68,7 +67,7 @@
 #  include "esp32_ble.h"
 #endif
 
-#ifdef CONFIG_ESP32_WIRELESS
+#ifdef CONFIG_ESP32_WIFI
 #  include "esp32_board_wlan.h"
 #endif
 
@@ -103,6 +102,10 @@
 
 #ifdef CONFIG_LCD_BACKPACK
 #  include "esp32_lcd_backpack.h"
+#endif
+
+#ifdef CONFIG_SENSORS_ZEROCROSS
+#   include "esp32_zerocross.h"
 #endif
 
 #include "esp32-wrover-kit.h"
@@ -178,7 +181,7 @@ int esp32_bringup(void)
 #endif
 
 #ifdef CONFIG_ESP32_SPIFLASH
-  ret = esp32_spiflash_init();
+  ret = board_spiflash_init();
   if (ret)
     {
       syslog(LOG_ERR, "ERROR: Failed to initialize SPI Flash\n");
@@ -206,11 +209,11 @@ int esp32_bringup(void)
   ret = esp32_ble_initialize();
   if (ret)
     {
-      syslog(LOG_ERR, "ERROR: Failed to initialize BLE: %d \n", ret);
+      syslog(LOG_ERR, "ERROR: Failed to initialize BLE: %d\n", ret);
     }
 #endif
 
-#ifdef CONFIG_ESP32_WIRELESS
+#ifdef CONFIG_ESP32_WIFI
   ret = board_wlan_init();
   if (ret < 0)
     {
@@ -382,6 +385,17 @@ int esp32_bringup(void)
     {
       syslog(LOG_ERR,
              "ERROR: Failed to Instantiate the RTC driver: %d\n", ret);
+    }
+#endif
+
+#ifdef CONFIG_SENSORS_ZEROCROSS
+  /* Register Zero Cross Driver */
+
+  ret = board_zerocross_initialize(0);
+  if (ret < 0)
+    {
+      syslog(LOG_ERR,
+            "ERROR: board_zerocross_initialize() failed: %d\n", ret);
     }
 #endif
 

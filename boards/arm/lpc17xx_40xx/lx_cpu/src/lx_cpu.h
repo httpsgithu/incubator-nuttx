@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/lpc17xx_40xx/lx_cpu/src/lx_cpu.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -18,8 +20,8 @@
  *
  ****************************************************************************/
 
-#ifndef _BOARDS_ARM_LPC17XX_40XX_LX_CPU_SRC_LX_CPU_SRC_LX_CPU_H
-#define _BOARDS_ARM_LPC17XX_40XX_LX_CPU_SRC_LX_CPU_SRC_LX_CPU_H
+#ifndef __BOARDS_ARM_LPC17XX_40XX_LX_CPU_SRC_LX_CPU_H
+#define __BOARDS_ARM_LPC17XX_40XX_LX_CPU_SRC_LX_CPU_H
 
 /****************************************************************************
  * Included Files
@@ -171,4 +173,4 @@ int lx_cpu_can_setup(void);
 #endif
 
 #endif /* __ASSEMBLY__ */
-#endif /* _BOARDS_ARM_LPC17XX_40XX_LX_CPU_SRC_LX_CPU_SRC_LX_CPU_H */
+#endif /* __BOARDS_ARM_LPC17XX_40XX_LX_CPU_SRC_LX_CPU_H */

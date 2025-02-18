@@ -1,6 +1,8 @@
 /****************************************************************************
  * libs/libc/stdio/lib_tempnam.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -74,9 +76,10 @@ FAR char *tempnam(FAR const char *dir, FAR const char *pfx)
 {
   FAR char *template;
   FAR char *path;
+  int ret;
 
-  asprintf(&template, "%s/%s-XXXXXX", dir, pfx);
-  if (template)
+  ret = asprintf(&template, "%s/%s-XXXXXX", dir, pfx);
+  if (ret > 0)
     {
       path = mktemp(template);
       if (path != NULL)

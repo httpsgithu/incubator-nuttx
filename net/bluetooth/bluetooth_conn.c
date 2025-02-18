@@ -1,6 +1,8 @@
 /****************************************************************************
  * net/bluetooth/bluetooth_conn.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -32,6 +34,7 @@
 #include <netpacket/bluetooth.h>
 #include <arch/irq.h>
 
+#include <nuttx/kmalloc.h>
 #include <nuttx/mm/iob.h>
 #include <nuttx/net/netconfig.h>
 #include <nuttx/net/net.h>
@@ -39,9 +42,18 @@
 #include <nuttx/net/bluetooth.h>
 
 #include "devif/devif.h"
+#include "utils/utils.h"
 #include "bluetooth/bluetooth.h"
 
 #ifdef CONFIG_NET_BLUETOOTH
+
+/****************************************************************************
+ * Pre-processor Definitions
+ ****************************************************************************/
+
+#ifndef CONFIG_NET_BLUETOOTH_MAX_CONNS
+#  define CONFIG_NET_BLUETOOTH_MAX_CONNS 0
+#endif
 
 /****************************************************************************
  * Private Data
@@ -51,12 +63,10 @@
  * network lock.
  */
 
-static struct bluetooth_conn_s
-  g_bluetooth_connections[CONFIG_NET_BLUETOOTH_NCONNS];
-
-/* A list of all free packet socket connections */
-
-static dq_queue_t g_free_bluetooth_connections;
+NET_BUFPOOL_DECLARE(g_bluetooth_connections, sizeof(struct bluetooth_conn_s),
+                    CONFIG_NET_BLUETOOTH_PREALLOC_CONNS,
+                    CONFIG_NET_BLUETOOTH_ALLOC_CONNS,
+                    CONFIG_NET_BLUETOOTH_MAX_CONNS);
 
 /* A list of all allocated packet socket connections */
 
@@ -70,44 +80,6 @@ static const bt_addr_t g_any_addr =
 /****************************************************************************
  * Public Functions
  ****************************************************************************/
-
-/****************************************************************************
- * Name: bluetooth_conn_initialize
- *
- * Description:
- *   Initialize the Bluetooth connection structure allocator.  Called
- *   once and only from bluetooth_initialize().
- *
- * Assumptions:
- *   Called early in the initialization sequence
- *
- ****************************************************************************/
-
-void bluetooth_conn_initialize(void)
-{
-  int i;
-
-  /* Initialize the queues */
-
-  dq_init(&g_free_bluetooth_connections);
-  dq_init(&g_active_bluetooth_connections);
-
-  /* Mark connections as uninitialized */
-
-  memset(g_bluetooth_connections, 0, sizeof(g_bluetooth_connections));
-
-  for (i = 0; i < CONFIG_NET_BLUETOOTH_NCONNS; i++)
-    {
-      /* Indicate a connection unbound with BTPROTO_NONE */
-
-      g_bluetooth_connections[i].bc_proto = BTPROTO_NONE;
-
-      /* Link each pre-allocated connection structure into the free list. */
-
-      dq_addlast(&g_bluetooth_connections[i].bc_node,
-                 &g_free_bluetooth_connections);
-    }
-}
 
 /****************************************************************************
  * Name: bluetooth_conn_alloc()
@@ -125,15 +97,17 @@ FAR struct bluetooth_conn_s *bluetooth_conn_alloc(void)
   /* The free list is protected by the network lock */
 
   net_lock();
-  conn = (FAR struct bluetooth_conn_s *)
-    dq_remfirst(&g_free_bluetooth_connections);
 
+  conn = NET_BUFPOOL_TRYALLOC(g_bluetooth_connections);
   if (conn)
     {
+      /* Mark as unbound */
+
+      conn->bc_proto = BTPROTO_NONE;
+
       /* Enqueue the connection into the active list */
 
-      memset(conn, 0, sizeof(struct bluetooth_conn_s));
-      dq_addlast(&conn->bc_node, &g_active_bluetooth_connections);
+      dq_addlast(&conn->bc_conn.node, &g_active_bluetooth_connections);
     }
 
   net_unlock();
@@ -161,7 +135,7 @@ void bluetooth_conn_free(FAR struct bluetooth_conn_s *conn)
   /* Remove the connection from the active list */
 
   net_lock();
-  dq_rem(&conn->bc_node, &g_active_bluetooth_connections);
+  dq_rem(&conn->bc_conn.node, &g_active_bluetooth_connections);
 
   /* Check if there any any frames attached to the container */
 
@@ -169,14 +143,14 @@ void bluetooth_conn_free(FAR struct bluetooth_conn_s *conn)
     {
       /* Remove the frame from the list */
 
-      next                = container->bn_flink;
+      next = container->bn_flink;
       container->bn_flink = NULL;
 
       /* Free the contained frame data (should be only one in chain) */
 
       if (container->bn_iob)
         {
-          iob_free(container->bn_iob, IOBUSER_NET_SOCK_BLUETOOTH);
+          iob_free(container->bn_iob);
         }
 
       /* And free the container itself */
@@ -184,13 +158,9 @@ void bluetooth_conn_free(FAR struct bluetooth_conn_s *conn)
       bluetooth_container_free(container);
     }
 
-  /* Free the connection */
+  /* Free the connection structure */
 
-  dq_addlast(&conn->bc_node, &g_free_bluetooth_connections);
-
-  /* Mark as unbound */
-
-  conn->bc_proto = BTPROTO_NONE;
+  NET_BUFPOOL_FREE(g_bluetooth_connections, conn);
 
   net_unlock();
 }
@@ -217,7 +187,7 @@ FAR struct bluetooth_conn_s *
   for (conn =
        (FAR struct bluetooth_conn_s *)g_active_bluetooth_connections.head;
        conn != NULL;
-       conn = (FAR struct bluetooth_conn_s *)conn->bc_node.flink)
+       conn = (FAR struct bluetooth_conn_s *)conn->bc_conn.node.flink)
     {
       /* match protocol and channel first */
 
@@ -284,7 +254,7 @@ FAR struct bluetooth_conn_s *
     }
   else
     {
-      return (FAR struct bluetooth_conn_s *)conn->bc_node.flink;
+      return (FAR struct bluetooth_conn_s *)conn->bc_conn.node.flink;
     }
 }
 

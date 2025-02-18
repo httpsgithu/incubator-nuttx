@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/renesas/src/rx65n/rx65n_sbram.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -142,4 +144,4 @@ int rx65n_sbram_savepanic(int fileno, uint8_t *context, int length);
 }
 #endif
 #endif /* __ASSEMBLY__ */
-#endif /* __ARCH_ARM_SRC_RX65N_RX65N_SBRAM_H */
+#endif /* __ARCH_RENESAS_SRC_RX65N_RX65N_SBSRAM_H */

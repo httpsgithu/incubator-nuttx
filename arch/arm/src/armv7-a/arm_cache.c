@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/armv7-a/arm_cache.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -25,14 +27,204 @@
 #include <nuttx/config.h>
 #include <nuttx/cache.h>
 #include <nuttx/irq.h>
+#include <sys/param.h>
+#include <arch/barriers.h>
 
 #include "cp15_cacheops.h"
-#include "barriers.h"
 #include "l2cc.h"
 
 /****************************************************************************
  * Public Functions
  ****************************************************************************/
+
+#ifdef CONFIG_ARCH_ICACHE
+
+/****************************************************************************
+ * Name: up_get_icache_linesize
+ *
+ * Description:
+ *   Get icache linesize
+ *
+ * Input Parameters:
+ *   None
+ *
+ * Returned Value:
+ *   Cache line size
+ *
+ ****************************************************************************/
+
+size_t up_get_icache_linesize(void)
+{
+  static uint32_t clsize;
+
+  if (clsize == 0)
+    {
+      clsize = MAX(cp15_icache_linesize(), l2cc_linesize());
+    }
+
+  return clsize;
+}
+
+/****************************************************************************
+ * Name: up_get_icache_size
+ *
+ * Description:
+ *   Get icache size
+ *
+ * Input Parameters:
+ *   None
+ *
+ * Returned Value:
+ *   Cache size
+ *
+ ****************************************************************************/
+
+size_t up_get_icache_size(void)
+{
+  static uint32_t csize;
+
+  if (csize == 0)
+    {
+      csize = MAX(cp15_icache_size(), l2cc_size());
+    }
+
+  return csize;
+}
+
+/****************************************************************************
+ * Name: up_invalidate_icache_all
+ *
+ * Description:
+ *   Invalidate all instruction caches to PoU, also flushes branch target
+ *   cache
+ *
+ * Input Parameters:
+ *   None
+ *
+ * Returned Value:
+ *   None
+ *
+ ****************************************************************************/
+
+void up_invalidate_icache_all(void)
+{
+  cp15_invalidate_icache_all();
+}
+
+/****************************************************************************
+ * Name: up_invalidate_icache
+ *
+ * Description:
+ *   Validate the specified range instruction cache as PoU,
+ *   and flush the branch target cache
+ *
+ * Input Parameters:
+ *   start - virtual start address of region
+ *   end   - virtual end address of region + 1
+ *
+ * Returned Value:
+ *   None
+ *
+ ****************************************************************************/
+
+void up_invalidate_icache(uintptr_t start, uintptr_t end)
+{
+  cp15_invalidate_icache(start, end);
+}
+
+/****************************************************************************
+ * Name: up_enable_icache
+ *
+ * Description:
+ *   Enable the I-Cache
+ *
+ * Input Parameters:
+ *   None
+ *
+ * Returned Value:
+ *   None
+ *
+ ****************************************************************************/
+
+void up_enable_icache(void)
+{
+  cp15_enable_icache();
+}
+
+/****************************************************************************
+ * Name: up_disable_icache
+ *
+ * Description:
+ *   Disable the I-Cache
+ *
+ * Input Parameters:
+ *   None
+ *
+ * Returned Value:
+ *   None
+ *
+ ****************************************************************************/
+
+void up_disable_icache(void)
+{
+  cp15_disable_icache();
+}
+
+#endif /* CONFIG_ARCH_ICACHE */
+
+#ifdef CONFIG_ARCH_DCACHE
+
+/****************************************************************************
+ * Name: up_get_dcache_linesize
+ *
+ * Description:
+ *   Get dcache linesize
+ *
+ * Input Parameters:
+ *   None
+ *
+ * Returned Value:
+ *   Cache line size
+ *
+ ****************************************************************************/
+
+size_t up_get_dcache_linesize(void)
+{
+  static uint32_t clsize;
+
+  if (clsize == 0)
+    {
+      clsize = MAX(cp15_dcache_linesize(), l2cc_linesize());
+    }
+
+  return clsize;
+}
+
+/****************************************************************************
+ * Name: up_get_dcache_size
+ *
+ * Description:
+ *   Get dcache size
+ *
+ * Input Parameters:
+ *   None
+ *
+ * Returned Value:
+ *   Cache size
+ *
+ ****************************************************************************/
+
+size_t up_get_dcache_size(void)
+{
+  static uint32_t csize;
+
+  if (csize == 0)
+    {
+      csize = MAX(cp15_dcache_size(), l2cc_size());
+    }
+
+  return csize;
+}
 
 /****************************************************************************
  * Name: up_invalidate_dcache
@@ -92,26 +284,6 @@ void up_invalidate_dcache_all(void)
 }
 
 /****************************************************************************
- * Name: up_invalidate_icache_all
- *
- * Description:
- *   Invalidate all instruction caches to PoU, also flushes branch target
- *   cache
- *
- * Input Parameters:
- *   None
- *
- * Returned Value:
- *   None
- *
- ****************************************************************************/
-
-void up_invalidate_icache_all(void)
-{
-  cp15_invalidate_icache();
-}
-
-/****************************************************************************
  * Name: up_clean_dcache
  *
  * Description:
@@ -134,8 +306,49 @@ void up_invalidate_icache_all(void)
 
 void up_clean_dcache(uintptr_t start, uintptr_t end)
 {
+#ifdef CONFIG_SMP
   cp15_clean_dcache(start, end);
+#else
+  if ((end - start) < cp15_dcache_size())
+    {
+      cp15_clean_dcache(start, end);
+    }
+  else
+    {
+      cp15_clean_dcache_all();
+    }
+#endif
+
   l2cc_clean(start, end);
+}
+
+/****************************************************************************
+ * Name: up_clean_dcache_all
+ *
+ * Description:
+ *   Clean the entire data cache within the specified region by flushing the
+ *   contents of the data cache to memory.
+ *
+ *   NOTE: This operation is un-necessary if the DCACHE is configured in
+ *   write-through mode.
+ *
+ * Input Parameters:
+ *   None
+ *
+ * Returned Value:
+ *   None
+ *
+ * Assumptions:
+ *   This operation is not atomic.  This function assumes that the caller
+ *   has exclusive access to the address range so that no harm is done if
+ *   the operation is pre-empted.
+ *
+ ****************************************************************************/
+
+void up_clean_dcache_all(void)
+{
+  cp15_clean_dcache_all();
+  l2cc_clean_all();
 }
 
 /****************************************************************************
@@ -161,15 +374,30 @@ void up_clean_dcache(uintptr_t start, uintptr_t end)
 
 void up_flush_dcache(uintptr_t start, uintptr_t end)
 {
+#ifdef CONFIG_SMP
   cp15_flush_dcache(start, end);
+#else
+  if ((end - start) < cp15_dcache_size())
+    {
+      cp15_flush_dcache(start, end);
+    }
+  else
+    {
+      cp15_flush_dcache_all();
+    }
+#endif
+
   l2cc_flush(start, end);
 }
 
 /****************************************************************************
- * Name: up_enable_icache
+ * Name: up_flush_dcache_all
  *
  * Description:
- *   Enable the I-Cache
+ *   Flush the entire data cache by cleaning and invalidating the D cache.
+ *
+ *   NOTE: If DCACHE write-through is configured, then this operation is the
+ *   same as up_invalidate_cache_all().
  *
  * Input Parameters:
  *   None
@@ -177,30 +405,17 @@ void up_flush_dcache(uintptr_t start, uintptr_t end)
  * Returned Value:
  *   None
  *
- ****************************************************************************/
-
-void up_enable_icache(void)
-{
-  cp15_enable_icache();
-}
-
-/****************************************************************************
- * Name: up_disable_icache
- *
- * Description:
- *   Disable the I-Cache
- *
- * Input Parameters:
- *   None
- *
- * Returned Value:
- *   None
+ * Assumptions:
+ *   This operation is not atomic.  This function assumes that the caller
+ *   has exclusive access to the address range so that no harm is done if
+ *   the operation is pre-empted.
  *
  ****************************************************************************/
 
-void up_disable_icache(void)
+void up_flush_dcache_all(void)
 {
-  cp15_disable_icache();
+  cp15_flush_dcache_all();
+  l2cc_flush_all();
 }
 
 /****************************************************************************
@@ -219,6 +434,15 @@ void up_disable_icache(void)
 
 void up_enable_dcache(void)
 {
+  /* Check if the D-Cache is enabled */
+
+  if (cp15_dcache_is_enabled())
+    {
+      return;
+    }
+
+  up_invalidate_dcache_all();
+
   cp15_enable_dcache();
   l2cc_enable();
 }
@@ -276,3 +500,5 @@ void up_coherent_dcache(uintptr_t addr, size_t len)
 #endif
     }
 }
+
+#endif /* CONFIG_ARCH_DCACHE */

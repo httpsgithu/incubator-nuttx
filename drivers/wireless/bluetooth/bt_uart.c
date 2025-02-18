@@ -1,8 +1,8 @@
 /****************************************************************************
  * drivers/wireless/bluetooth/bt_uart.c
  *
- *   Copyright (c) 2016, Intel Corporation
- *   All rights reserved.
+ * SPDX-License-Identifier: BSD-3-Clause
+ * SPDX-FileCopyrightText: 2016, Intel Corporation. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -64,8 +64,7 @@ static ssize_t btuart_read(FAR struct btuart_upperhalf_s *upper,
   ssize_t ntotal = 0;
   ssize_t nread;
 
-  wlinfo("buflen %lu minread %lu\n",
-         (unsigned long)buflen, (unsigned long)minread);
+  wlinfo("buflen %zu minread %zu\n", buflen, minread);
 
   DEBUGASSERT(upper != NULL && upper->lower != NULL);
   lower = upper->lower;
@@ -86,12 +85,11 @@ static ssize_t btuart_read(FAR struct btuart_upperhalf_s *upper,
         }
       else if (nread < 0)
         {
-          wlwarn("Returned error %d\n", (int)nread);
+          wlwarn("Returned error %zd\n", nread);
           return nread;
         }
 
-      wlinfo("read %ld remaining %lu\n",
-             (long)nread, (unsigned long)(buflen - nread));
+      wlinfo("read %zd remaining %zu\n", nread, buflen - nread);
 
       buflen -= nread;
       ntotal += nread;
@@ -104,7 +102,7 @@ static ssize_t btuart_read(FAR struct btuart_upperhalf_s *upper,
 static void btuart_rxwork(FAR void *arg)
 {
   FAR struct btuart_upperhalf_s *upper;
-  uint8_t data[BLUETOOTH_MAX_FRAMELEN];
+  uint8_t data[CONFIG_BLUETOOTH_UART_RXBUFSIZE];
   enum bt_buf_type_e type;
   unsigned int hdrlen;
   unsigned int pktlen;
@@ -123,74 +121,69 @@ static void btuart_rxwork(FAR void *arg)
    * Read the first byte to get the packet type.
    */
 
-  nread = btuart_read(upper, data, H4_HEADER_SIZE, 0);
-  if (nread != 1)
+  while (true)
     {
-      wlwarn("WARNING: Unable to read H4 packet type: %ld\n",
-             (long)nread);
-      goto errout_with_busy;
-    }
+      nread = btuart_read(upper, data, H4_HEADER_SIZE, 0);
+      if (nread != H4_HEADER_SIZE)
+        {
+          wlwarn("WARNING: Unable to read H4 packet type: %zd\n", nread);
+          break;
+        }
 
-  if (data[0] == H4_EVT)
-    {
-      hdrlen = sizeof(struct bt_hci_evt_hdr_s);
-    }
-  else if (data[0] == H4_ACL)
-    {
-      hdrlen = sizeof(struct bt_hci_acl_hdr_s);
-    }
-  else
-    {
-      wlerr("ERROR: Unknown H4 type %u\n", data[0]);
-      goto errout_with_busy;
-    }
+      if (data[0] == H4_EVT)
+        {
+          hdrlen = sizeof(struct bt_hci_evt_hdr_s);
+        }
+      else if (data[0] == H4_ACL)
+        {
+          hdrlen = sizeof(struct bt_hci_acl_hdr_s);
+        }
+      else
+        {
+          wlerr("ERROR: Unknown H4 type %u\n", data[0]);
+          break;
+        }
 
-  nread = btuart_read(upper, data + H4_HEADER_SIZE,
-                      hdrlen, hdrlen);
-  if (nread != hdrlen)
-    {
-      wlwarn("WARNING: Unable to read H4 packet header: %ld\n",
-          (long)nread);
-      goto errout_with_busy;
+      nread = btuart_read(upper, data + H4_HEADER_SIZE,
+                          hdrlen, hdrlen);
+      if (nread != hdrlen)
+        {
+          wlwarn("WARNING: Unable to read H4 packet header: %zd\n", nread);
+          break;
+        }
+
+      hdr = (FAR void *)(data + H4_HEADER_SIZE);
+
+      if (data[0] == H4_EVT)
+        {
+          pktlen = hdr->evt.len;
+          type = BT_EVT;
+        }
+      else if (data[0] == H4_ACL)
+        {
+          pktlen = hdr->acl.len;
+          type = BT_ACL_IN;
+        }
+      else
+        {
+          wlerr("ERROR: Unknown H4 type %u\n", data[0]);
+          break;
+        }
+
+      nread = btuart_read(upper, data + H4_HEADER_SIZE + hdrlen,
+                          pktlen, pktlen);
+      if (nread != pktlen)
+        {
+          wlwarn("WARNING: Unable to read H4 packet: %zd\n", nread);
+          break;
+        }
+
+      /* Pass buffer to the stack */
+
+      BT_DUMP("Received", data, H4_HEADER_SIZE + hdrlen + pktlen);
+      bt_netdev_receive(&upper->dev, type, data + H4_HEADER_SIZE,
+                        hdrlen + pktlen);
     }
-
-  hdr = (void *)(data + H4_HEADER_SIZE);
-
-  if (data[0] == H4_EVT)
-    {
-      pktlen = hdr->evt.len;
-      type = BT_EVT;
-    }
-  else if (data[0] == H4_ACL)
-    {
-      pktlen = hdr->acl.len;
-      type = BT_ACL_IN;
-    }
-  else
-    {
-      wlerr("ERROR: Unknown H4 type %u\n", data[0]);
-      goto errout_with_busy;
-    }
-
-  nread = btuart_read(upper, data + H4_HEADER_SIZE + hdrlen,
-                      pktlen, pktlen);
-  if (nread != pktlen)
-    {
-      wlwarn("WARNING: Unable to read H4 packet: %ld\n",
-          (long)nread);
-      goto errout_with_busy;
-    }
-
-  /* Pass buffer to the stack */
-
-  BT_DUMP("Received", data, H4_HEADER_SIZE + hdrlen + pktlen);
-  upper->busy = false;
-  bt_netdev_receive(&upper->dev, type, data + H4_HEADER_SIZE,
-                    hdrlen + pktlen);
-  return;
-
-errout_with_busy:
-  upper->busy = false;
 }
 
 static void btuart_rxcallback(FAR const struct btuart_lowerhalf_s *lower,
@@ -201,15 +194,10 @@ static void btuart_rxcallback(FAR const struct btuart_lowerhalf_s *lower,
   DEBUGASSERT(lower != NULL && arg != NULL);
   upper = (FAR struct btuart_upperhalf_s *)arg;
 
-  if (!upper->busy)
+  int ret = work_queue(HPWORK, &upper->work, btuart_rxwork, arg, 0);
+  if (ret < 0)
     {
-      upper->busy = true;
-      int ret = work_queue(HPWORK, &upper->work, btuart_rxwork, arg, 0);
-      if (ret < 0)
-        {
-          upper->busy = false;
-          wlerr("ERROR: work_queue failed: %d\n", ret);
-        }
+      wlerr("ERROR: work_queue failed: %d\n", ret);
     }
 }
 
@@ -280,10 +268,6 @@ int btuart_open(FAR struct bt_driver_s *dev)
   DEBUGASSERT(upper != NULL && upper->lower != NULL);
   lower = upper->lower;
 
-  /* Disable Rx callbacks */
-
-  lower->rxenable(lower, false);
-
   /* Drain any cached Rx data */
 
   lower->rxdrain(lower);
@@ -296,4 +280,78 @@ int btuart_open(FAR struct bt_driver_s *dev)
 
   lower->rxenable(lower, true);
   return OK;
+}
+
+void btuart_close(FAR struct bt_driver_s *dev)
+{
+  FAR struct btuart_upperhalf_s *upper;
+  FAR const struct btuart_lowerhalf_s *lower;
+
+  upper = (FAR struct btuart_upperhalf_s *)dev;
+  DEBUGASSERT(upper != NULL && upper->lower != NULL);
+  lower = upper->lower;
+
+  /* Disable Rx callbacks */
+
+  lower->rxenable(lower, false);
+
+  /* Detach the Rx event handler */
+
+  lower->rxattach(lower, NULL, NULL);
+}
+
+int btuart_ioctl(FAR struct bt_driver_s *dev,
+                 int cmd, unsigned long arg)
+{
+  FAR struct btuart_upperhalf_s *upper;
+  FAR const struct btuart_lowerhalf_s *lower;
+
+  upper = (FAR struct btuart_upperhalf_s *)dev;
+  DEBUGASSERT(upper != NULL && upper->lower != NULL);
+  lower = upper->lower;
+
+  if (lower->ioctl)
+    {
+      return lower->ioctl(lower, cmd, arg);
+    }
+  else
+    {
+      return -ENOTTY;
+    }
+}
+
+/****************************************************************************
+ * Name: btuart_register
+ *
+ * Description:
+ *   Register the UART-based bluetooth driver.
+ *
+ * Input Parameters:
+ *   lower - an instance of the lower half driver interface
+ *
+ * Returned Value:
+ *   Zero is returned on success; a negated errno value is returned on any
+ *   failure.
+ *
+ ****************************************************************************/
+
+int btuart_register(FAR const struct btuart_lowerhalf_s *lower)
+{
+  FAR struct bt_driver_s *driver;
+  int ret;
+
+  ret = btuart_create(lower, &driver);
+  if (ret < 0)
+    {
+      return ret;
+    }
+
+  ret = bt_driver_register(driver);
+  if (ret < 0)
+    {
+      wlerr("ERROR: bt_driver_register failed: %d\n", ret);
+      kmm_free(driver);
+    }
+
+  return ret;
 }

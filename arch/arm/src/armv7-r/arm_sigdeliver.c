@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/armv7-r/arm_sigdeliver.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -35,8 +37,8 @@
 #include <arch/board/board.h>
 
 #include "sched/sched.h"
+#include "signal/signal.h"
 #include "arm_internal.h"
-#include "arm_arch.h"
 
 /****************************************************************************
  * Public Functions
@@ -54,25 +56,43 @@
 
 void arm_sigdeliver(void)
 {
-  struct tcb_s  *rtcb = this_task();
-  uint32_t regs[XCPTCONTEXT_REGS];
+  struct tcb_s *rtcb = this_task();
+  uint32_t *regs = rtcb->xcp.saved_regs;
 
-  /* Save the errno.  This must be preserved throughout the signal handling
-   * so that the user code final gets the correct errno value (probably
-   * EINTR).
+#ifdef CONFIG_SMP
+  /* In the SMP case, we must terminate the critical section while the signal
+   * handler executes, but we also need to restore the irqcount when the
+   * we resume the main thread of the task.
    */
 
-  int saved_errno = get_errno();
+  int16_t saved_irqcount;
+#endif
 
   board_autoled_on(LED_SIGNAL);
 
-  sinfo("rtcb=%p sigdeliver=%p sigpendactionq.head=%p\n",
-        rtcb, rtcb->xcp.sigdeliver, rtcb->sigpendactionq.head);
-  DEBUGASSERT(rtcb->xcp.sigdeliver != NULL);
+  sinfo("rtcb=%p sigpendactionq.head=%p\n",
+        rtcb, rtcb->sigpendactionq.head);
+  DEBUGASSERT((rtcb->flags & TCB_FLAG_SIGDELIVER) != 0);
 
-  /* Save the return state on the stack. */
+retry:
+#ifdef CONFIG_SMP
+  /* In the SMP case, up_schedule_sigaction(0) will have incremented
+   * 'irqcount' in order to force us into a critical section.  Save the
+   * pre-incremented irqcount.
+   */
 
-  arm_copyfullstate(regs, rtcb->xcp.regs);
+  saved_irqcount = rtcb->irqcount;
+  DEBUGASSERT(saved_irqcount >= 0);
+
+  /* Now we need call leave_critical_section() repeatedly to get the irqcount
+   * to zero, freeing all global spinlocks that enforce the critical section.
+   */
+
+  while (rtcb->irqcount > 0)
+    {
+      leave_critical_section(regs[REG_CPSR]);
+    }
+#endif /* CONFIG_SMP */
 
 #ifndef CONFIG_SUPPRESS_INTERRUPTS
   /* Then make sure that interrupts are enabled.  Signal handlers must always
@@ -84,7 +104,7 @@ void arm_sigdeliver(void)
 
   /* Deliver the signal */
 
-  ((sig_deliver_t)rtcb->xcp.sigdeliver)(rtcb);
+  nxsig_deliver(rtcb);
 
   /* Output any debug messages BEFORE restoring errno (because they may
    * alter errno), then disable interrupts again and restore the original
@@ -92,8 +112,31 @@ void arm_sigdeliver(void)
    */
 
   sinfo("Resuming\n");
+
+#ifdef CONFIG_SMP
+  /* Restore the saved 'irqcount' and recover the critical section
+   * spinlocks.
+   */
+
+  DEBUGASSERT(rtcb->irqcount == 0);
+  while (rtcb->irqcount < saved_irqcount + 1)
+    {
+      enter_critical_section();
+    }
+#endif
+
+#ifndef CONFIG_SUPPRESS_INTERRUPTS
   up_irq_save();
-  set_errno(saved_errno);
+#endif
+
+  if (!sq_empty(&rtcb->sigpendactionq) &&
+      (rtcb->flags & TCB_FLAG_SIGNAL_ACTION) == 0)
+    {
+#ifdef CONFIG_SMP
+      leave_critical_section(regs[REG_CPSR]);
+#endif
+      goto retry;
+    }
 
   /* Modify the saved return state with the actual saved values in the
    * TCB.  This depends on the fact that nested signal handling is
@@ -105,12 +148,22 @@ void arm_sigdeliver(void)
    * could be modified by a hostile program.
    */
 
-  regs[REG_PC]         = rtcb->xcp.saved_pc;
-  regs[REG_CPSR]       = rtcb->xcp.saved_cpsr;
-  rtcb->xcp.sigdeliver = NULL;  /* Allows next handler to be scheduled */
+  /* Allows next handler to be scheduled */
+
+  rtcb->flags &= ~TCB_FLAG_SIGDELIVER;
 
   /* Then restore the correct state for this thread of execution. */
 
   board_autoled_off(LED_SIGNAL);
-  arm_fullcontextrestore(regs);
+#ifdef CONFIG_SMP
+  /* We need to keep the IRQ lock until task switching */
+
+  rtcb->irqcount++;
+  leave_critical_section(regs[REG_CPSR]);
+  rtcb->irqcount--;
+#endif
+
+  rtcb->xcp.regs = rtcb->xcp.saved_regs;
+  arm_fullcontextrestore();
+  UNUSED(regs);
 }

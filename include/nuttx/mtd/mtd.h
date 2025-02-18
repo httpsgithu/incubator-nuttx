@@ -1,6 +1,7 @@
 /****************************************************************************
  * include/nuttx/mtd/mtd.h
- * Memory Technology Device (MTD) interface
+ *
+ * SPDX-License-Identifier: Apache-2.0
  *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -48,32 +49,34 @@
  * replace with BIOC_XIPBASE, BIOC_FLUSH and BIOC_PARTINFO instead.
  */
 
-#define MTDIOC_GEOMETRY   _MTDIOC(0x0001) /* IN:  Pointer to write-able struct
-                                           *      mtd_geometry_s in which to receive
-                                           *      receive geometry data (see mtd.h)
-                                           * OUT: Geometry structure is populated
-                                           *      with data for the MTD */
-#define MTDIOC_BULKERASE  _MTDIOC(0x0003) /* IN:  None
-                                           * OUT: None */
-#define MTDIOC_PROTECT    _MTDIOC(0x0004) /* IN:  Pointer to read-able struct
-                                           *      mtd_protects_s that provides
-                                           *      the region to protect.
-                                           * OUT: None */
-#define MTDIOC_UNPROTECT  _MTDIOC(0x0005) /* IN:  Pointer to read-able struct
-                                           *      mtd_protects_s that provides
-                                           *      the region to un-protect.
-                                           * OUT: None */
-#define MTDIOC_SETSPEED   _MTDIOC(0x0006) /* IN:  New bus speed in Hz
-                                           * OUT: None */
-#define MTDIOC_EXTENDED   _MTDIOC(0x0007) /* IN:  unsigned long
-                                           *      0=Use normal memory region
-                                           *      1=Use alternate/extended memory
-                                           * OUT: None */
-#define MTDIOC_ECCSTATUS  _MTDIOC(0x0008) /* IN:  Pointer to uint8_t
-                                           * OUT: ECC status */
-#define MTDIOC_ERASESTATE _MTDIOC(0x000a) /* IN:  Pointer to uint8_t
-                                           * OUT: Byte value that represents the
-                                           *      erased state of the MTD cell */
+#define MTDIOC_GEOMETRY     _MTDIOC(0x0001) /* IN:  Pointer to write-able struct
+                                             *      mtd_geometry_s in which to receive
+                                             *      receive geometry data (see mtd.h)
+                                             * OUT: Geometry structure is populated
+                                             *      with data for the MTD */
+#define MTDIOC_BULKERASE    _MTDIOC(0x0003) /* IN:  None
+                                            * OUT: None */
+#define MTDIOC_PROTECT      _MTDIOC(0x0004) /* IN:  Pointer to read-able struct
+                                             *      mtd_protects_s that provides
+                                             *      the region to protect.
+                                             * OUT: None */
+#define MTDIOC_UNPROTECT    _MTDIOC(0x0005) /* IN:  Pointer to read-able struct
+                                             *      mtd_protects_s that provides
+                                             *      the region to un-protect.
+                                             * OUT: None */
+#define MTDIOC_SETSPEED     _MTDIOC(0x0006) /* IN:  New bus speed in Hz
+                                             * OUT: None */
+#define MTDIOC_EXTENDED     _MTDIOC(0x0007) /* IN:  unsigned long
+                                             *      0=Use normal memory region
+                                             *      1=Use alternate/extended memory
+                                             * OUT: None */
+#define MTDIOC_ECCSTATUS    _MTDIOC(0x0008) /* IN:  Pointer to uint8_t
+                                             * OUT: ECC status */
+#define MTDIOC_ERASESTATE   _MTDIOC(0x000a) /* IN:  Pointer to uint8_t
+                                             * OUT: Byte value that represents the
+                                             *      erased state of the MTD cell */
+#define MTDIOC_ERASESECTORS _MTDIOC(0x000c) /* IN: Pointer to mtd_erase_s structure
+                                             * OUT: None */
 
 /* Macros to hide implementation */
 
@@ -83,6 +86,8 @@
 #define MTD_READ(d,s,n,b)  ((d)->read    ? (d)->read(d,s,n,b)   : (-ENOSYS))
 #define MTD_WRITE(d,s,n,b) ((d)->write   ? (d)->write(d,s,n,b)  : (-ENOSYS))
 #define MTD_IOCTL(d,c,a)   ((d)->ioctl   ? (d)->ioctl(d,c,a)    : (-ENOSYS))
+#define MTD_ISBAD(d,b)     ((d)->isbad   ? (d)->isbad(d,b)      : (-ENOSYS))
+#define MTD_MARKBAD(d,b)   ((d)->markbad ? (d)->markbad(d,b)    : (-ENOSYS))
 
 /* If any of the low-level device drivers declare they want sub-sector erase
  * support, then define MTD_SUBSECTOR_ERASE.
@@ -110,6 +115,10 @@ struct mtd_geometry_s
   uint32_t erasesize;     /* Size of one erase blocks -- must be a multiple
                            * of blocksize. */
   uint32_t neraseblocks;  /* Number of erase blocks */
+
+  /* NULL-terminated string representing the device model */
+
+  char     model[NAME_MAX + 1];
 };
 
 /* This structure describes a range of sectors to be protected or
@@ -128,9 +137,17 @@ struct mtd_protect_s
 
 struct mtd_byte_write_s
 {
-  uint32_t offset;        /* Offset within the device to write to */
-  uint16_t count;         /* Number of bytes to write */
-  const uint8_t *buffer;  /* Pointer to the data to write */
+  uint32_t offset;           /* Offset within the device to write to */
+  uint16_t count;            /* Number of bytes to write */
+  FAR const uint8_t *buffer; /* Pointer to the data to write */
+};
+
+/* This structure describes a range of erase sectors to be erased. */
+
+struct mtd_erase_s
+{
+  uint32_t startblock;  /* First block to be erased */
+  uint32_t nblocks;     /* Number of blocks to be erased */
 };
 
 /* This structure defines the interface to a simple memory technology device.
@@ -149,14 +166,15 @@ struct mtd_dev_s
    * or subsector.
    */
 
-  int (*erase)(FAR struct mtd_dev_s *dev, off_t startblock, size_t nblocks);
+  CODE int (*erase)(FAR struct mtd_dev_s *dev, off_t startblock,
+                    size_t nblocks);
 
   /* Read/write from the specified read/write blocks */
 
-  ssize_t (*bread)(FAR struct mtd_dev_s *dev, off_t startblock,
-                   size_t nblocks, FAR uint8_t *buffer);
-  ssize_t (*bwrite)(FAR struct mtd_dev_s *dev, off_t startblock,
-                    size_t nblocks, FAR const uint8_t *buffer);
+  CODE ssize_t (*bread)(FAR struct mtd_dev_s *dev, off_t startblock,
+                        size_t nblocks, FAR uint8_t *buffer);
+  CODE ssize_t (*bwrite)(FAR struct mtd_dev_s *dev, off_t startblock,
+                         size_t nblocks, FAR const uint8_t *buffer);
 
   /* Some devices may support byte oriented reads (optional).  Most MTD
    * devices are inherently block oriented so byte-oriented writing is not
@@ -164,11 +182,11 @@ struct mtd_dev_s
    * if it requires buffering.
    */
 
-  ssize_t (*read)(FAR struct mtd_dev_s *dev, off_t offset, size_t nbytes,
-                  FAR uint8_t *buffer);
+  CODE ssize_t (*read)(FAR struct mtd_dev_s *dev, off_t offset,
+                       size_t nbytes, FAR uint8_t *buffer);
 #ifdef CONFIG_MTD_BYTE_WRITE
-  ssize_t (*write)(FAR struct mtd_dev_s *dev, off_t offset, size_t nbytes,
-                   FAR const uint8_t *buffer);
+  CODE ssize_t (*write)(FAR struct mtd_dev_s *dev, off_t offset,
+                        size_t nbytes, FAR const uint8_t *buffer);
 #endif
 
   /* Support other, less frequently used commands:
@@ -179,7 +197,12 @@ struct mtd_dev_s
    * (see include/nuttx/fs/ioctl.h)
    */
 
-  int (*ioctl)(FAR struct mtd_dev_s *dev, int cmd, unsigned long arg);
+  CODE int (*ioctl)(FAR struct mtd_dev_s *dev, int cmd, unsigned long arg);
+
+  /* Check/Mark bad block for the specified block number */
+
+  CODE int (*isbad)(FAR struct mtd_dev_s *dev, off_t block);
+  CODE int (*markbad)(FAR struct mtd_dev_s *dev, off_t block);
 
   /* Name of this MTD device */
 
@@ -377,6 +400,28 @@ FAR struct mtd_dev_s *at24c_initialize(FAR struct i2c_master_s *dev);
 #endif
 
 /****************************************************************************
+ * Name: at25xx_initialize
+ *
+ * Description:
+ *   Create an initialized MTD device instance for an AT25 SPI EEPROM
+ *   MTD devices are not registered in the file system, but are created
+ *   as instances that can be bound to other functions
+ *   (such as a block or character driver front end).
+ *
+ * Input Parameters:
+ *   dev        - a reference to the spi device structure
+ *   devtype    - device type, from include/nuttx/eeprom/spi_xx25xx.h
+ *   readonly   - sets block driver to be readonly
+ *
+ * Returned Value:
+ *   Initialised device structure (success) of NULL (fail)
+ *
+ ****************************************************************************/
+
+FAR struct mtd_dev_s *at25ee_initialize(FAR struct spi_dev_s *dev,
+                                        int devtype, int readonly);
+
+/****************************************************************************
  * Name: at24c_uninitialize
  *
  * Description:
@@ -408,7 +453,8 @@ FAR struct mtd_dev_s *at25_initialize(FAR struct spi_dev_s *dev);
  *
  ****************************************************************************/
 
-FAR struct mtd_dev_s *is25xp_initialize(FAR struct spi_dev_s *dev);
+FAR struct mtd_dev_s *is25xp_initialize(FAR struct spi_dev_s *dev,
+                                        uint16_t spi_devid);
 
 /****************************************************************************
  * Name: m25p_initialize
@@ -443,6 +489,19 @@ FAR struct mtd_dev_s *mx35_initialize(FAR struct spi_dev_s *dev);
  ****************************************************************************/
 
 FAR struct mtd_dev_s *rammtd_initialize(FAR uint8_t *start, size_t size);
+
+/****************************************************************************
+ * Name: rammtd_uninitialize
+ *
+ * Description:
+ *   Free the resources associated with a RAM MTD device instance.
+ *
+ * Input Parameters:
+ *   dev - Pointer to the MTD device instance to be uninitialized.
+ *
+ ****************************************************************************/
+
+void rammtd_uninitialize(FAR struct mtd_dev_s *dev);
 
 /****************************************************************************
  * Name: ramtron_initialize
@@ -493,7 +552,8 @@ FAR struct mtd_dev_s *sst25xx_initialize(FAR struct spi_dev_s *dev);
  *
  ****************************************************************************/
 
-FAR struct mtd_dev_s *sst26_initialize_spi(FAR struct spi_dev_s *dev);
+FAR struct mtd_dev_s *sst26_initialize_spi(FAR struct spi_dev_s *dev,
+                                           uint16_t spi_devid);
 
 /****************************************************************************
  * Name: sst39vf_initialize
@@ -529,6 +589,17 @@ FAR struct mtd_dev_s *w25_initialize(FAR struct spi_dev_s *dev);
 
 FAR struct mtd_dev_s *gd25_initialize(FAR struct spi_dev_s *dev,
                                       uint32_t spi_devid);
+
+/****************************************************************************
+ * Name: gd55_initialize
+ *
+ * Description:
+ *   Initializes the driver for QSPI-based GD55 FLASH
+ *
+ ****************************************************************************/
+
+FAR struct mtd_dev_s *gd55_initialize(FAR struct qspi_dev_s *dev,
+                                      bool unprotect);
 
 /****************************************************************************
  * Name: gd5f_initialize
@@ -598,36 +669,7 @@ FAR struct mtd_dev_s *n25qxxx_initialize(FAR struct qspi_dev_s *qspi,
  ****************************************************************************/
 
 FAR struct mtd_dev_s *w25qxxxjv_initialize(FAR struct qspi_dev_s *qspi,
-                                         bool unprotect);
-
-/****************************************************************************
- * Name: blockmtd_initialize
- *
- * Description:
- *   Create and initialize a BLOCK MTD device instance.
- *
- * Input Parameters:
- *   path - Path name of the block device backing the MTD device
- *
- ****************************************************************************/
-
-FAR struct mtd_dev_s *blockmtd_initialize(FAR const char *path,
-                                          size_t offset, size_t mtdlen,
-                                          int16_t sectsize,
-                                          int32_t erasesize);
-
-/****************************************************************************
- * Name: blockmtd_teardown
- *
- * Description:
- *   Teardown a previously created blockmtd device.
- *
- * Input Parameters:
- *   dev - Pointer to the mtd driver instance.
- *
- ****************************************************************************/
-
-void blockmtd_teardown(FAR struct mtd_dev_s *dev);
+                                           bool unprotect);
 
 /****************************************************************************
  * Name: filemtd_initialize
@@ -640,7 +682,7 @@ void blockmtd_teardown(FAR struct mtd_dev_s *dev);
  *
  ****************************************************************************/
 
-FAR struct mtd_dev_s *filemtd_initialize(FAR const char *path, size_t offset,
+FAR struct mtd_dev_s *filemtd_initialize(FAR const char *path, off_t offset,
                                          int16_t sectsize,
                                          int32_t erasesize);
 
@@ -669,6 +711,119 @@ void filemtd_teardown(FAR struct mtd_dev_s *dev);
  ****************************************************************************/
 
 bool filemtd_isfilemtd(FAR struct mtd_dev_s *mtd);
+
+/****************************************************************************
+ * Name: nullmtd_initialize
+ *
+ * Description:
+ *   Create and initialize a MTD null device instance.
+ *
+ * Input Parameters:
+ *   mtdlen    - Total length of a size in bytes of the MTD null device
+ *   sectsize  - Sector size of the MTD null device
+ *   erasesize - Erase block size of the MTD null device
+ *
+ ****************************************************************************/
+
+FAR struct mtd_dev_s *nullmtd_initialize(size_t mtdlen, int16_t sectsize,
+                                         int32_t erasesize);
+
+/****************************************************************************
+ * Name: rpmsgmtd_register
+ *
+ * Description:
+ *   Rpmsg-mtd client register function, the client cpu should call
+ *   this function in the board initialize process.
+ *
+ * Parameters:
+ *   remotecpu  - the server cpu name
+ *   remotepath - the device you want to access in the remote cpu
+ *   localpath  - the device path in local cpu, if NULL, the localpath is
+ *                same as the remotepath, provide this argument to supoort
+ *                custom device path
+ *
+ * Returned Values:
+ *   OK on success; A negated errno value is returned on any failure.
+ *
+ ****************************************************************************/
+
+#ifdef CONFIG_RPMSGMTD
+int rpmsgmtd_register(FAR const char *remotecpu, FAR const char *remotepath,
+                      FAR const char *localpath);
+#endif
+
+/****************************************************************************
+ * Name: rpmsgmtd_server_init
+ *
+ * Description:
+ *   Rpmsg-mtd server initialize function, the server cpu should call
+ *   this function.
+ *
+ * Parameters:
+ *   None
+ *
+ * Returned Values:
+ *   OK on success; A negated errno value is returned on any failure.
+ *
+ ****************************************************************************/
+
+#ifdef CONFIG_RPMSGMTD_SERVER
+int rpmsgmtd_server_init(void);
+#endif
+
+/****************************************************************************
+ * Name: dhara_initialize
+ *
+ * Description:
+ *   Initialize to provide a block driver wrapper around an MTD interface
+ *
+ * Input Parameters:
+ *   minor - The minor device number.  The MTD block device will be
+ *           registered as as /dev/mtdblockN where N is the minor number.
+ *   mtd   - The MTD device that supports the FLASH interface.
+ *
+ ****************************************************************************/
+
+#ifdef CONFIG_MTD_DHARA
+int dhara_initialize(int minor, FAR struct mtd_dev_s *mtd);
+#endif
+
+/****************************************************************************
+ * Name: dhara_initialize_by_path
+ *
+ * Description:
+ *   Initialize to provide a block driver wrapper around an MTD interface
+ *
+ * Input Parameters:
+ *   path - The block device path.
+ *   mtd  - The MTD device that supports the FLASH interface.
+ *
+ ****************************************************************************/
+
+#ifdef CONFIG_MTD_DHARA
+int dhara_initialize_by_path(FAR const char *path,
+                             FAR struct mtd_dev_s *mtd);
+#endif
+
+/****************************************************************************
+ * Name: register_cfi_driver
+ *
+ * Description:
+ *   Initialize and register a cfi nor flash.
+ *
+ * Input Parameters:
+ *   addr_base - The base(start) address of the device.
+ *   addr_end  - The end address of the device.
+ *   bankwidth - The bankwidth(port width) of the device.
+ *   id        - The device id used for register name.
+ *
+ ****************************************************************************/
+
+#ifdef CONFIG_MTD_CFI
+int register_cfi_driver(volatile uintptr_t addr_base,
+                        volatile uintptr_t addr_end, uint32_t bankwidth,
+                        int id);
+#endif
 
 #undef EXTERN
 #ifdef __cplusplus

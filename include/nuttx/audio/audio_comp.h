@@ -1,6 +1,8 @@
 /****************************************************************************
  * include/nuttx/audio/audio_comp.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -65,14 +67,15 @@ extern "C"
  *   ...  - The list of the lower half audio driver.
  *
  * Returned Value:
- *   Zero on success; a negated errno value on failure.
+ *   struct audio_lowerhalf_s* on success; NULL on failure.
  *
  * Note
  *   The variable argument list must be NULL terminated.
  *
  ****************************************************************************/
 
-int audio_comp_initialize(FAR const char *name, ...);
+FAR struct audio_lowerhalf_s *audio_comp_initialize(FAR const char *name,
+                                                    ...);
 
 #undef EXTERN
 #ifdef __cplusplus

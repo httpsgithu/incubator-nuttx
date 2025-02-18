@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/z80/src/z180/z180_scc.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -39,7 +41,6 @@
 
 #include "chip.h"
 #include "z80_internal.h"
-
 #include "z180_config.h"
 #include "z180_serial.h"
 
@@ -137,8 +138,6 @@ static const struct z180_dev_s g_scc_priv =
 static uart_dev_t g_scc_port =
 {
   0,                           /* open_count */
-  false,                       /* xmitwaiting */
-  false,                       /* recvwaiting */
 #ifdef CONFIG_Z180_SCC_SERIAL_CONSOLE
   true,                        /* isconsole */
 #else
@@ -183,8 +182,6 @@ static const struct z180_dev_s g_escca_priv =
 static uart_dev_t g_escca_port =
 {
   0,                             /* open_count */
-  false,                         /* xmitwaiting */
-  false,                         /* recvwaiting */
 #ifdef CONFIG_Z180_ESCCA_SERIAL_CONSOLE
   true,                          /* isconsole */
 #else
@@ -229,8 +226,6 @@ static const struct z180_dev_s g_esccb_priv =
 static uart_dev_t g_escca_port =
 {
   0,                           /* open_count */
-  false,                       /* xmitwaiting */
-  false,                       /* recvwaiting */
 #ifdef CONFIG_Z180_ESCCA_SERIAL_CONSOLE
   true,                        /* isconsole */
 #else
@@ -290,10 +285,10 @@ static uart_dev_t g_escca_port =
 #  define TTYS0_DEV       g_escca_port
 #  if defined(CONFIG_Z180_ESCCB)
 #    define TTYS1_DEV     g_esccb_port
-# endif
+#  endif
 
 #elif defined(CONFIG_Z180_ESCCB)
-# define TTYS0_DEV       g_esccb_port
+#  define TTYS0_DEV       g_esccb_port
 #endif
 
 /****************************************************************************
@@ -425,12 +420,11 @@ static void z180_detach(struct uart_dev_s *dev)
  * Name: z180_interrupt
  *
  * Description:
- *   This is the UART interrupt handler.  It will be invoked
- *   when an interrupt received on the 'irq'  It should call
- *   uart_transmitchars or uart_receivechar to perform the
- *   appropriate data transfers.  The interrupt handling logic\
- *   must be able to map the 'irq' number into the appropriate
- *   uart_dev_s structure in order to call these functions.
+ *   This is the UART interrupt handler.  It will be invoked when an
+ *   interrupt is received on the 'irq'.  It should call uart_xmitchars or
+ *   uart_recvchars to perform the appropriate data transfers.  The
+ *   interrupt handling logic must be able to map the 'arg' to the
+ *   appropriate uart_dev_s structure in order to call these functions.
  *
  ****************************************************************************/
 
@@ -603,15 +597,14 @@ void z80_serial_initialize(void)
  *
  ****************************************************************************/
 
-int up_putc(int ch)
+void up_putc(int ch)
 {
 #ifdef CONSOLE_DEV
   /* Disable [E]SCC interrupts and perform the low-level output */
 
   z180_disableuartint(priv);
-  up_lowputc(ch);
+  z80_lowputc(ch);
   z180_restoreuartint(priv);
-  return ch;
 #endif
 }
 #endif /* USE_SERIALDRIVER */

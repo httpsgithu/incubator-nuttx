@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/sam34/sam4cm_oneshot.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -18,8 +20,8 @@
  *
  ****************************************************************************/
 
-#ifndef __ARCH_ARM_SRC_SAM34_SAM_ONESHOT_H
-#define __ARCH_ARM_SRC_SAM34_SAM_ONESHOT_H
+#ifndef __ARCH_ARM_SRC_SAM34_SAM4CM_ONESHOT_H
+#define __ARCH_ARM_SRC_SAM34_SAM4CM_ONESHOT_H
 
 /****************************************************************************
  * Included Files
@@ -194,4 +196,4 @@ int sam_oneshot_cancel(struct sam_oneshot_s *oneshot,
 #endif
 
 #endif /* CONFIG_SAM34_ONESHOT */
-#endif /* __ARCH_ARM_SRC_SAM34_SAM_ONESHOT_H */
+#endif /* __ARCH_ARM_SRC_SAM34_SAM4CM_ONESHOT_H */

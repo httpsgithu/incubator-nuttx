@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/lpc43xx/lpc43_ehci.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -36,6 +38,7 @@
 #include <nuttx/kmalloc.h>
 #include <nuttx/wqueue.h>
 #include <nuttx/signal.h>
+#include <nuttx/mutex.h>
 #include <nuttx/semaphore.h>
 #include <nuttx/usb/usb.h>
 #include <nuttx/usb/usbhost.h>
@@ -47,8 +50,7 @@
 
 #include "chip.h"
 #include "hardware/lpc43_usb0.h"
-#include "arm_arch.h"
-
+#include "arm_internal.h"
 #include "lpc43_cgu.h"
 #include "hardware/lpc43_creg.h"
 #include "hardware/lpc43_evntrtr.h"
@@ -279,7 +281,7 @@ struct lpc43_ehci_s
 {
   volatile bool pscwait;        /* TRUE: Thread is waiting for port status change event */
 
-  sem_t exclsem;                /* Support mutually exclusive access */
+  mutex_t lock;                 /* Support mutually exclusive access */
   sem_t pscsem;                 /* Semaphore to wait for port status change events */
 
   struct lpc43_epinfo_s ep0;    /* Endpoint 0 */
@@ -292,6 +294,8 @@ struct lpc43_ehci_s
 
   volatile struct usbhost_hubport_s *hport;
 #endif
+
+  struct usbhost_devaddr_s devgen;  /* Address generation data */
 
   /* Root hub ports */
 
@@ -380,7 +384,7 @@ struct lpc43_ehci_trace_s
   uint16_t id;
   bool fmt2;
 #endif
-  FAR const char *string;
+  const char *string;
 };
 
 #endif /* HAVE_USBHOST_TRACE */
@@ -419,12 +423,6 @@ static inline void lpc43_putreg(uint32_t regval, volatile uint32_t *regaddr);
 #endif
 static int ehci_wait_usbsts(uint32_t maskbits, uint32_t donebits,
          unsigned int delay);
-
-/* Semaphores ***************************************************************/
-
-static int lpc43_takesem(sem_t *sem);
-static int lpc43_takesem_noncancelable(sem_t *sem);
-#define lpc43_givesem(s) nxsem_post(s);
 
 /* Allocators ***************************************************************/
 
@@ -483,7 +481,7 @@ static ssize_t lpc43_transfer_wait(struct lpc43_epinfo_s *epinfo);
 #ifdef CONFIG_USBHOST_ASYNCH
 static inline int lpc43_ioc_async_setup(struct lpc43_rhport_s *rhport,
          struct lpc43_epinfo_s *epinfo, usbhost_asynch_t callback,
-         FAR void *arg);
+         void *arg);
 static void lpc43_asynch_completion(struct lpc43_epinfo_s *epinfo);
 #endif
 
@@ -502,50 +500,51 @@ static inline void lpc43_ioc_bottomhalf(void);
 static inline void lpc43_portsc_bottomhalf(void);
 static inline void lpc43_syserr_bottomhalf(void);
 static inline void lpc43_async_advance_bottomhalf(void);
-static void lpc43_ehci_bottomhalf(FAR void *arg);
-static int lpc43_ehci_interrupt(int irq, FAR void *context, FAR void *arg);
+static void lpc43_ehci_bottomhalf(void *arg);
+static int lpc43_ehci_interrupt(int irq, void *context, void *arg);
 
 /* USB Host Controller Operations *******************************************/
 
-static int lpc43_wait(FAR struct usbhost_connection_s *conn,
-         FAR struct usbhost_hubport_s **hport);
-static int lpc43_rh_enumerate(FAR struct usbhost_connection_s *conn,
-         FAR struct usbhost_hubport_s *hport);
-static int lpc43_enumerate(FAR struct usbhost_connection_s *conn,
-         FAR struct usbhost_hubport_s *hport);
+static int lpc43_wait(struct usbhost_connection_s *conn,
+         struct usbhost_hubport_s **hport);
+static int lpc43_rh_enumerate(struct usbhost_connection_s *conn,
+         struct usbhost_hubport_s *hport);
+static int lpc43_enumerate(struct usbhost_connection_s *conn,
+         struct usbhost_hubport_s *hport);
 
-static int lpc43_ep0configure(FAR struct usbhost_driver_s *drvr,
+static int lpc43_ep0configure(struct usbhost_driver_s *drvr,
          usbhost_ep_t ep0, uint8_t funcaddr, uint8_t speed,
          uint16_t maxpacketsize);
-static int lpc43_epalloc(FAR struct usbhost_driver_s *drvr,
-         const FAR struct usbhost_epdesc_s *epdesc, usbhost_ep_t *ep);
-static int lpc43_epfree(FAR struct usbhost_driver_s *drvr, usbhost_ep_t ep);
-static int lpc43_alloc(FAR struct usbhost_driver_s *drvr,
-         FAR uint8_t **buffer, FAR size_t *maxlen);
-static int lpc43_free(FAR struct usbhost_driver_s *drvr,
-         FAR uint8_t *buffer);
-static int lpc43_ioalloc(FAR struct usbhost_driver_s *drvr,
-         FAR uint8_t **buffer, size_t buflen);
-static int lpc43_iofree(FAR struct usbhost_driver_s *drvr,
-         FAR uint8_t *buffer);
-static int lpc43_ctrlin(FAR struct usbhost_driver_s *drvr, usbhost_ep_t ep0,
-         FAR const struct usb_ctrlreq_s *req, FAR uint8_t *buffer);
-static int lpc43_ctrlout(FAR struct usbhost_driver_s *drvr, usbhost_ep_t ep0,
-         FAR const struct usb_ctrlreq_s *req, FAR const uint8_t *buffer);
-static ssize_t lpc43_transfer(FAR struct usbhost_driver_s *drvr,
-         usbhost_ep_t ep, FAR uint8_t *buffer, size_t buflen);
+static int lpc43_epalloc(struct usbhost_driver_s *drvr,
+                         const struct usbhost_epdesc_s *epdesc,
+                         usbhost_ep_t *ep);
+static int lpc43_epfree(struct usbhost_driver_s *drvr, usbhost_ep_t ep);
+static int lpc43_alloc(struct usbhost_driver_s *drvr,
+         uint8_t **buffer, size_t *maxlen);
+static int lpc43_free(struct usbhost_driver_s *drvr,
+         uint8_t *buffer);
+static int lpc43_ioalloc(struct usbhost_driver_s *drvr,
+         uint8_t **buffer, size_t buflen);
+static int lpc43_iofree(struct usbhost_driver_s *drvr,
+         uint8_t *buffer);
+static int lpc43_ctrlin(struct usbhost_driver_s *drvr, usbhost_ep_t ep0,
+         const struct usb_ctrlreq_s *req, uint8_t *buffer);
+static int lpc43_ctrlout(struct usbhost_driver_s *drvr, usbhost_ep_t ep0,
+         const struct usb_ctrlreq_s *req, const uint8_t *buffer);
+static ssize_t lpc43_transfer(struct usbhost_driver_s *drvr,
+         usbhost_ep_t ep, uint8_t *buffer, size_t buflen);
 #ifdef CONFIG_USBHOST_ASYNCH
-static int lpc43_asynch(FAR struct usbhost_driver_s *drvr, usbhost_ep_t ep,
-         FAR uint8_t *buffer, size_t buflen, usbhost_asynch_t callback,
-         FAR void *arg);
+static int lpc43_asynch(struct usbhost_driver_s *drvr, usbhost_ep_t ep,
+         uint8_t *buffer, size_t buflen, usbhost_asynch_t callback,
+         void *arg);
 #endif
-static int lpc43_cancel(FAR struct usbhost_driver_s *drvr, usbhost_ep_t ep);
+static int lpc43_cancel(struct usbhost_driver_s *drvr, usbhost_ep_t ep);
 #ifdef CONFIG_USBHOST_HUB
-static int lpc43_connect(FAR struct usbhost_driver_s *drvr,
-         FAR struct usbhost_hubport_s *hport, bool connected);
+static int lpc43_connect(struct usbhost_driver_s *drvr,
+         struct usbhost_hubport_s *hport, bool connected);
 #endif
-static void lpc43_disconnect(FAR struct usbhost_driver_s *drvr,
-                             FAR struct usbhost_hubport_s *hport);
+static void lpc43_disconnect(struct usbhost_driver_s *drvr,
+                             struct usbhost_hubport_s *hport);
 
 /* Initialization ***********************************************************/
 
@@ -560,11 +559,20 @@ static int lpc43_reset(void);
  * global instance.
  */
 
-static struct lpc43_ehci_s g_ehci;
+static struct lpc43_ehci_s g_ehci =
+{
+  .lock = NXMUTEX_INITIALIZER,
+  .pscsem = SEM_INITIALIZER(0),
+  .ep0.iocsem = SEM_INITIALIZER(1),
+};
 
 /* This is the connection/enumeration interface */
 
-static struct usbhost_connection_s g_ehciconn;
+static struct usbhost_connection_s g_ehciconn =
+{
+  .wait = lpc43_wait,
+  .enumerate = lpc43_enumerate,
+};
 
 /* Maps USB chapter 9 speed to EHCI speed */
 
@@ -1042,60 +1050,12 @@ static int ehci_wait_usbsts(uint32_t maskbits, uint32_t donebits,
 }
 
 /****************************************************************************
- * Name: lpc43_takesem
- *
- * Description:
- *   This is just a wrapper to handle the annoying behavior of semaphore
- *   waits that return due to the receipt of a signal.
- *
- ****************************************************************************/
-
-static int lpc43_takesem(sem_t *sem)
-{
-  return nxsem_wait_uninterruptible(sem);
-}
-
-/****************************************************************************
- * Name: lpc43_takesem_noncancelable
- *
- * Description:
- *   This is just a wrapper to handle the annoying behavior of semaphore
- *   waits that return due to the receipt of a signal.  This version also
- *   ignores attempts to cancel the thread.
- *
- ****************************************************************************/
-
-static int lpc43_takesem_noncancelable(sem_t *sem)
-{
-  int result;
-  int ret = OK;
-
-  do
-    {
-      result = nxsem_wait_uninterruptible(sem);
-
-      /* The only expected error is ECANCELED which would occur if the
-       * calling thread were canceled.
-       */
-
-      DEBUGASSERT(result == OK || result == -ECANCELED);
-      if (ret == OK && result < 0)
-        {
-          ret = result;
-        }
-    }
-  while (result < 0);
-
-  return ret;
-}
-
-/****************************************************************************
  * Name: lpc43_qh_alloc
  *
  * Description:
  *   Allocate a Queue Head (QH) structure by removing it from the free list
  *
- * Assumption:  Caller holds the exclsem
+ * Assumption:  Caller holds the lock
  *
  ****************************************************************************/
 
@@ -1121,7 +1081,7 @@ static struct lpc43_qh_s *lpc43_qh_alloc(void)
  * Description:
  *   Free a Queue Head (QH) structure by returning it to the free list
  *
- * Assumption:  Caller holds the exclsem
+ * Assumption:  Caller holds the lock
  *
  ****************************************************************************/
 
@@ -1142,7 +1102,7 @@ static void lpc43_qh_free(struct lpc43_qh_s *qh)
  *   Allocate a Queue Element Transfer Descriptor (qTD) by removing it from
  *   the free list
  *
- * Assumption:  Caller holds the exclsem
+ * Assumption:  Caller holds the lock
  *
  ****************************************************************************/
 
@@ -1169,7 +1129,7 @@ static struct lpc43_qtd_s *lpc43_qtd_alloc(void)
  *   Free a Queue Element Transfer Descriptor (qTD) by returning it to the
  *   free list
  *
- * Assumption:  Caller holds the exclsem
+ * Assumption:  Caller holds the lock
  *
  ****************************************************************************/
 
@@ -1527,7 +1487,7 @@ static inline uint8_t lpc43_ehci_speed(uint8_t usbspeed)
  *   this to minimize race conditions.  This logic would have to be expanded
  *   if we want to have more than one packet in flight at a time!
  *
- * Assumption:  The caller holds tex EHCI exclsem
+ * Assumption:  The caller holds tex EHCI lock
  *
  ****************************************************************************/
 
@@ -1573,7 +1533,7 @@ static int lpc43_ioc_setup(struct lpc43_rhport_s *rhport,
  * Description:
  *   Wait for the IOC event.
  *
- * Assumption:  The caller does *NOT* hold the EHCI exclsem.  That would
+ * Assumption:  The caller does *NOT* hold the EHCI lock.  That would
  * cause a deadlock when the bottom-half, worker thread needs to take the
  * semaphore.
  *
@@ -1589,7 +1549,7 @@ static int lpc43_ioc_wait(struct lpc43_epinfo_s *epinfo)
 
   while (epinfo->iocwait)
     {
-      ret = lpc43_takesem(&epinfo->iocsem);
+      ret = nxsem_wait_uninterruptible(&epinfo->iocsem);
       if (ret < 0)
         {
           break;
@@ -1605,7 +1565,7 @@ static int lpc43_ioc_wait(struct lpc43_epinfo_s *epinfo)
  * Description:
  *   Add a new, ready-to-go QH w/attached qTDs to the asynchronous queue.
  *
- * Assumptions:  The caller holds the EHCI exclsem
+ * Assumptions:  The caller holds the EHCI lock
  *
  ****************************************************************************/
 
@@ -2040,7 +2000,7 @@ static struct lpc43_qtd_s *lpc43_qtd_statusphase(uint32_t tokenbits)
  *   This is a blocking function; it will not return until the control
  *   transfer has completed.
  *
- * Assumption:  The caller holds the EHCI exclsem.
+ * Assumption:  The caller holds the EHCI lock.
  *
  * Returned Value:
  *   Zero (OK) is returned on success; a negated errno value is return on
@@ -2323,7 +2283,7 @@ errout_with_qh:
  *     frame list), followed by shorter poll rates, with queue heads with a
  *     poll rate of one, on the very end."
  *
- * Assumption:  The caller holds the EHCI exclsem.
+ * Assumption:  The caller holds the EHCI lock.
  *
  * Returned Value:
  *   Zero (OK) is returned on success; a negated errno value is return on
@@ -2427,8 +2387,8 @@ errout_with_qh:
  * Description:
  *   Wait for an IN or OUT transfer to complete.
  *
- * Assumption:  The caller holds the EHCI exclsem.  The caller must be aware
- *   that the EHCI exclsem will released while waiting for the transfer to
+ * Assumption:  The caller holds the EHCI lock.  The caller must be aware
+ *   that the EHCI lock will released while waiting for the transfer to
  *   complete, but will be re-acquired when before returning.  The state of
  *   EHCI resources could be very different upon return.
  *
@@ -2446,35 +2406,33 @@ static ssize_t lpc43_transfer_wait(struct lpc43_epinfo_s *epinfo)
   int ret;
   int ret2;
 
-  /* Release the EHCI semaphore while we wait.  Other threads need the
+  /* Release the EHCI mutex while we wait.  Other threads need the
    * opportunity to access the EHCI resources while we wait.
    *
    * REVISIT:  Is this safe?  NO.  This is a bug and needs rethinking.
    * We need to lock all of the port-resources (not EHCI common) until
-   * the transfer is complete.  But we can't use the common EHCI exclsem
+   * the transfer is complete.  But we can't use the common EHCI lock
    * or we will deadlock while waiting (because the working thread that
-   * wakes this thread up needs the exclsem).
+   * wakes this thread up needs the lock).
    */
 #warning REVISIT
-  lpc43_givesem(&g_ehci.exclsem);
+  nxmutex_unlock(&g_ehci.lock);
 
   /* Wait for the IOC completion event */
 
   ret = lpc43_ioc_wait(epinfo);
 
-  /* Re-acquire the EHCI semaphore.  The caller expects to be holding
+  /* Re-acquire the EHCI mutex.  The caller expects to be holding
    * this upon return.
    */
 
-  ret2 = lpc43_takesem_noncancelable(&g_ehci.exclsem);
+  ret2 = nxmutex_lock(&g_ehci.lock);
   if (ret2 < 0)
     {
       ret = ret2;
     }
 
-  /* Did lpc43_ioc_wait() or lpc43_takesem_noncancelable()report an
-   * error?
-   */
+  /* Did lpc43_ioc_wait() or nxmutex_lock()report an error? */
 
   if (ret < 0)
     {
@@ -2514,7 +2472,7 @@ static ssize_t lpc43_transfer_wait(struct lpc43_epinfo_s *epinfo)
 static inline int lpc43_ioc_async_setup(struct lpc43_rhport_s *rhport,
                                         struct lpc43_epinfo_s *epinfo,
                                         usbhost_asynch_t callback,
-                                        FAR void *arg)
+                                        void *arg)
 {
   irqstate_t flags;
   int ret = -ENODEV;
@@ -2772,7 +2730,7 @@ static int lpc43_qh_ioccheck(struct lpc43_qh_s *qh, uint32_t **bp, void *arg)
         {
           /* Yes... wake it up */
 
-          lpc43_givesem(&epinfo->iocsem);
+          nxsem_post(&epinfo->iocsem);
           epinfo->iocwait = 0;
         }
 
@@ -2923,7 +2881,7 @@ static int lpc43_qh_cancel(struct lpc43_qh_s *qh, uint32_t **bp, void *arg)
  *   detected (actual number of bytes received was less than the expected
  *   number of bytes)."
  *
- * Assumptions:  The caller holds the EHCI exclsem
+ * Assumptions:  The caller holds the EHCI lock
  *
  ****************************************************************************/
 
@@ -3046,7 +3004,7 @@ static inline void lpc43_portsc_bottomhalf(void)
 
                   if (g_ehci.pscwait)
                     {
-                      lpc43_givesem(&g_ehci.pscsem);
+                      nxsem_post(&g_ehci.pscsem);
                       g_ehci.pscwait = false;
                     }
                 }
@@ -3086,7 +3044,7 @@ static inline void lpc43_portsc_bottomhalf(void)
 
                   if (g_ehci.pscwait)
                     {
-                      lpc43_givesem(&g_ehci.pscsem);
+                      nxsem_post(&g_ehci.pscsem);
                       g_ehci.pscwait = false;
                     }
                 }
@@ -3155,7 +3113,7 @@ static inline void lpc43_async_advance_bottomhalf(void)
  *
  ****************************************************************************/
 
-static void lpc43_ehci_bottomhalf(FAR void *arg)
+static void lpc43_ehci_bottomhalf(void *arg)
 {
   uint32_t pending = (uint32_t)arg;
 
@@ -3164,7 +3122,7 @@ static void lpc43_ehci_bottomhalf(FAR void *arg)
    * real option (other than to reschedule and delay).
    */
 
-  lpc43_takesem_noncancelable(&g_ehci.exclsem);
+  nxmutex_lock(&g_ehci.lock);
 
   /* Handle all unmasked interrupt sources */
 
@@ -3274,7 +3232,7 @@ static void lpc43_ehci_bottomhalf(FAR void *arg)
 
   /* We are done with the EHCI structures */
 
-  lpc43_givesem(&g_ehci.exclsem);
+  nxmutex_unlock(&g_ehci.lock);
 
   /* Re-enable relevant EHCI interrupts.  Interrupts should still be enabled
    * at the level of the interrupt controller.
@@ -3291,7 +3249,7 @@ static void lpc43_ehci_bottomhalf(FAR void *arg)
  *
  ****************************************************************************/
 
-static int lpc43_ehci_interrupt(int irq, FAR void *context, FAR void *arg)
+static int lpc43_ehci_interrupt(int irq, void *context, void *arg)
 {
   uint32_t usbsts;
   uint32_t pending;
@@ -3323,7 +3281,7 @@ static int lpc43_ehci_interrupt(int irq, FAR void *context, FAR void *arg)
 
       DEBUGASSERT(work_available(&g_ehci.work));
       DEBUGVERIFY(work_queue(HPWORK, &g_ehci.work, lpc43_ehci_bottomhalf,
-                            (FAR void *)pending, 0));
+                            (void *)pending, 0));
 
       /* Disable further EHCI interrupts so that we do not overrun the work
        * queue.
@@ -3366,8 +3324,8 @@ static int lpc43_ehci_interrupt(int irq, FAR void *context, FAR void *arg)
  *
  ****************************************************************************/
 
-static int lpc43_wait(FAR struct usbhost_connection_s *conn,
-                      FAR struct usbhost_hubport_s **hport)
+static int lpc43_wait(struct usbhost_connection_s *conn,
+                      struct usbhost_hubport_s **hport)
 {
   irqstate_t flags;
   int rhpndx;
@@ -3433,7 +3391,7 @@ static int lpc43_wait(FAR struct usbhost_connection_s *conn,
        */
 
       g_ehci.pscwait = true;
-      ret = lpc43_takesem(&g_ehci.pscsem);
+      ret = nxsem_wait_uninterruptible(&g_ehci.pscsem);
       if (ret < 0)
         {
           return ret;
@@ -3469,8 +3427,8 @@ static int lpc43_wait(FAR struct usbhost_connection_s *conn,
  *
  ****************************************************************************/
 
-static int lpc43_rh_enumerate(FAR struct usbhost_connection_s *conn,
-                              FAR struct usbhost_hubport_s *hport)
+static int lpc43_rh_enumerate(struct usbhost_connection_s *conn,
+                              struct usbhost_hubport_s *hport)
 {
   struct lpc43_rhport_s *rhport;
   volatile uint32_t *regaddr;
@@ -3711,8 +3669,8 @@ static int lpc43_rh_enumerate(FAR struct usbhost_connection_s *conn,
   return OK;
 }
 
-static int lpc43_enumerate(FAR struct usbhost_connection_s *conn,
-                           FAR struct usbhost_hubport_s *hport)
+static int lpc43_enumerate(struct usbhost_connection_s *conn,
+                           struct usbhost_hubport_s *hport)
 {
   int ret;
 
@@ -3781,7 +3739,7 @@ static int lpc43_enumerate(FAR struct usbhost_connection_s *conn,
  *
  ****************************************************************************/
 
-static int lpc43_ep0configure(FAR struct usbhost_driver_s *drvr,
+static int lpc43_ep0configure(struct usbhost_driver_s *drvr,
                               usbhost_ep_t ep0, uint8_t funcaddr,
                               uint8_t speed, uint16_t maxpacketsize)
 {
@@ -3792,7 +3750,7 @@ static int lpc43_ep0configure(FAR struct usbhost_driver_s *drvr,
 
   /* We must have exclusive access to the EHCI data structures. */
 
-  ret = lpc43_takesem(&g_ehci.exclsem);
+  ret = nxmutex_lock(&g_ehci.lock);
   if (ret >= 0)
     {
       /* Remember the new device address and max packet size */
@@ -3801,7 +3759,7 @@ static int lpc43_ep0configure(FAR struct usbhost_driver_s *drvr,
       epinfo->speed     = speed;
       epinfo->maxpacket = maxpacketsize;
 
-      lpc43_givesem(&g_ehci.exclsem);
+      nxmutex_unlock(&g_ehci.lock);
     }
 
   return ret;
@@ -3829,8 +3787,8 @@ static int lpc43_ep0configure(FAR struct usbhost_driver_s *drvr,
  *
  ****************************************************************************/
 
-static int lpc43_epalloc(FAR struct usbhost_driver_s *drvr,
-                         const FAR struct usbhost_epdesc_s *epdesc,
+static int lpc43_epalloc(struct usbhost_driver_s *drvr,
+                         const struct usbhost_epdesc_s *epdesc,
                          usbhost_ep_t *ep)
 {
   struct lpc43_epinfo_s *epinfo;
@@ -3879,13 +3837,7 @@ static int lpc43_epalloc(FAR struct usbhost_driver_s *drvr,
   epinfo->maxpacket = epdesc->mxpacketsize;
   epinfo->xfrtype   = epdesc->xfrtype;
   epinfo->speed     = hport->speed;
-
-  /* The endpoint iocsem semaphore is used for signaling and, hence,
-   * should not have priority inheritance enabled.
-   */
-
   nxsem_init(&epinfo->iocsem, 0, 0);
-  nxsem_set_protocol(&epinfo->iocsem, SEM_PRIO_NONE);
 
   /* Success.. return an opaque reference to the endpoint information
    * structure instance
@@ -3915,7 +3867,7 @@ static int lpc43_epalloc(FAR struct usbhost_driver_s *drvr,
  *
  ****************************************************************************/
 
-static int lpc43_epfree(FAR struct usbhost_driver_s *drvr, usbhost_ep_t ep)
+static int lpc43_epfree(struct usbhost_driver_s *drvr, usbhost_ep_t ep)
 {
   struct lpc43_epinfo_s *epinfo = (struct lpc43_epinfo_s *)ep;
 
@@ -3962,15 +3914,15 @@ static int lpc43_epfree(FAR struct usbhost_driver_s *drvr, usbhost_ep_t ep)
  *
  ****************************************************************************/
 
-static int lpc43_alloc(FAR struct usbhost_driver_s *drvr,
-                     FAR uint8_t **buffer, FAR size_t *maxlen)
+static int lpc43_alloc(struct usbhost_driver_s *drvr,
+                       uint8_t **buffer, size_t *maxlen)
 {
   int ret = -ENOMEM;
   DEBUGASSERT(drvr && buffer && maxlen);
 
   /* There is no special requirements for transfer/descriptor buffers. */
 
-  *buffer = (FAR uint8_t *)kmm_malloc(CONFIG_LPC43_EHCI_BUFSIZE);
+  *buffer = kmm_malloc(CONFIG_LPC43_EHCI_BUFSIZE);
   if (*buffer)
     {
       *maxlen = CONFIG_LPC43_EHCI_BUFSIZE;
@@ -4004,7 +3956,7 @@ static int lpc43_alloc(FAR struct usbhost_driver_s *drvr,
  *
  ****************************************************************************/
 
-static int lpc43_free(FAR struct usbhost_driver_s *drvr, FAR uint8_t *buffer)
+static int lpc43_free(struct usbhost_driver_s *drvr, uint8_t *buffer)
 {
   DEBUGASSERT(drvr && buffer);
 
@@ -4045,8 +3997,8 @@ static int lpc43_free(FAR struct usbhost_driver_s *drvr, FAR uint8_t *buffer)
  *
  ****************************************************************************/
 
-static int lpc43_ioalloc(FAR struct usbhost_driver_s *drvr,
-                         FAR uint8_t **buffer, size_t buflen)
+static int lpc43_ioalloc(struct usbhost_driver_s *drvr,
+                         uint8_t **buffer, size_t buflen)
 {
   DEBUGASSERT(drvr && buffer && buflen > 0);
 
@@ -4055,7 +4007,7 @@ static int lpc43_ioalloc(FAR struct usbhost_driver_s *drvr,
    * buffering).
    */
 
-  *buffer = (FAR uint8_t *)kumm_malloc(buflen);
+  *buffer = kumm_malloc(buflen);
   return *buffer ? OK : -ENOMEM;
 }
 
@@ -4082,8 +4034,8 @@ static int lpc43_ioalloc(FAR struct usbhost_driver_s *drvr,
  *
  ****************************************************************************/
 
-static int lpc43_iofree(FAR struct usbhost_driver_s *drvr,
-                        FAR uint8_t *buffer)
+static int lpc43_iofree(struct usbhost_driver_s *drvr,
+                        uint8_t *buffer)
 {
   DEBUGASSERT(drvr && buffer);
 
@@ -4129,9 +4081,9 @@ static int lpc43_iofree(FAR struct usbhost_driver_s *drvr,
  *
  ****************************************************************************/
 
-static int lpc43_ctrlin(FAR struct usbhost_driver_s *drvr, usbhost_ep_t ep0,
-                        FAR const struct usb_ctrlreq_s *req,
-                        FAR uint8_t *buffer)
+static int lpc43_ctrlin(struct usbhost_driver_s *drvr, usbhost_ep_t ep0,
+                        const struct usb_ctrlreq_s *req,
+                        uint8_t *buffer)
 {
   struct lpc43_rhport_s *rhport = (struct lpc43_rhport_s *)drvr;
   struct lpc43_epinfo_s *ep0info = (struct lpc43_epinfo_s *)ep0;
@@ -4158,7 +4110,7 @@ static int lpc43_ctrlin(FAR struct usbhost_driver_s *drvr, usbhost_ep_t ep0,
    * structures.
    */
 
-  ret = lpc43_takesem(&g_ehci.exclsem);
+  ret = nxmutex_lock(&g_ehci.lock);
   if (ret < 0)
     {
       return ret;
@@ -4170,7 +4122,7 @@ static int lpc43_ctrlin(FAR struct usbhost_driver_s *drvr, usbhost_ep_t ep0,
   if (ret != OK)
     {
       usbhost_trace1(EHCI_TRACE1_DEVDISCONNECTED, -ret);
-      goto errout_with_sem;
+      goto errout_with_lock;
     }
 
   /* Now initiate the transfer */
@@ -4185,19 +4137,19 @@ static int lpc43_ctrlin(FAR struct usbhost_driver_s *drvr, usbhost_ep_t ep0,
   /* And wait for the transfer to complete */
 
   nbytes = lpc43_transfer_wait(ep0info);
-  lpc43_givesem(&g_ehci.exclsem);
+  nxmutex_unlock(&g_ehci.lock);
   return nbytes >= 0 ? OK : (int)nbytes;
 
 errout_with_iocwait:
   ep0info->iocwait = false;
-errout_with_sem:
-  lpc43_givesem(&g_ehci.exclsem);
+errout_with_lock:
+  nxmutex_unlock(&g_ehci.lock);
   return ret;
 }
 
-static int lpc43_ctrlout(FAR struct usbhost_driver_s *drvr, usbhost_ep_t ep0,
-                         FAR const struct usb_ctrlreq_s *req,
-                         FAR const uint8_t *buffer)
+static int lpc43_ctrlout(struct usbhost_driver_s *drvr, usbhost_ep_t ep0,
+                         const struct usb_ctrlreq_s *req,
+                         const uint8_t *buffer)
 {
   /* lpc43_ctrlin can handle both directions.  We just need to work around
    * the differences in the function signatures.
@@ -4245,8 +4197,8 @@ static int lpc43_ctrlout(FAR struct usbhost_driver_s *drvr, usbhost_ep_t ep0,
  *
  ****************************************************************************/
 
-static ssize_t lpc43_transfer(FAR struct usbhost_driver_s *drvr,
-                              usbhost_ep_t ep, FAR uint8_t *buffer,
+static ssize_t lpc43_transfer(struct usbhost_driver_s *drvr,
+                              usbhost_ep_t ep, uint8_t *buffer,
                               size_t buflen)
 {
   struct lpc43_rhport_s *rhport = (struct lpc43_rhport_s *)drvr;
@@ -4260,7 +4212,7 @@ static ssize_t lpc43_transfer(FAR struct usbhost_driver_s *drvr,
    * data structures.
    */
 
-  ret = lpc43_takesem(&g_ehci.exclsem);
+  ret = nxmutex_lock(&g_ehci.lock);
   if (ret < 0)
     {
       return (ssize_t)ret;
@@ -4272,7 +4224,7 @@ static ssize_t lpc43_transfer(FAR struct usbhost_driver_s *drvr,
   if (ret != OK)
     {
       usbhost_trace1(EHCI_TRACE1_DEVDISCONNECTED, -ret);
-      goto errout_with_sem;
+      goto errout_with_lock;
     }
 
   /* Initiate the transfer */
@@ -4310,13 +4262,13 @@ static ssize_t lpc43_transfer(FAR struct usbhost_driver_s *drvr,
   /* Then wait for the transfer to complete */
 
   nbytes = lpc43_transfer_wait(epinfo);
-  lpc43_givesem(&g_ehci.exclsem);
+  nxmutex_unlock(&g_ehci.lock);
   return nbytes;
 
 errout_with_iocwait:
   epinfo->iocwait = false;
-errout_with_sem:
-  lpc43_givesem(&g_ehci.exclsem);
+errout_with_lock:
+  nxmutex_unlock(&g_ehci.lock);
   return (ssize_t)ret;
 }
 
@@ -4357,9 +4309,9 @@ errout_with_sem:
  ****************************************************************************/
 
 #ifdef CONFIG_USBHOST_ASYNCH
-static int lpc43_asynch(FAR struct usbhost_driver_s *drvr, usbhost_ep_t ep,
-                        FAR uint8_t *buffer, size_t buflen,
-                        usbhost_asynch_t callback, FAR void *arg)
+static int lpc43_asynch(struct usbhost_driver_s *drvr, usbhost_ep_t ep,
+                        uint8_t *buffer, size_t buflen,
+                        usbhost_asynch_t callback, void *arg)
 {
   struct lpc43_rhport_s *rhport = (struct lpc43_rhport_s *)drvr;
   struct lpc43_epinfo_s *epinfo = (struct lpc43_epinfo_s *)ep;
@@ -4371,7 +4323,7 @@ static int lpc43_asynch(FAR struct usbhost_driver_s *drvr, usbhost_ep_t ep,
    * data structures.
    */
 
-  ret = lpc43_takesem(&g_ehci.exclsem);
+  ret = nxmutex_lock(&g_ehci.lock);
   if (ret < 0)
     {
       return ret;
@@ -4383,7 +4335,7 @@ static int lpc43_asynch(FAR struct usbhost_driver_s *drvr, usbhost_ep_t ep,
   if (ret != OK)
     {
       usbhost_trace1(EHCI_TRACE1_DEVDISCONNECTED, -ret);
-      goto errout_with_sem;
+      goto errout_with_lock;
     }
 
   /* Initiate the transfer */
@@ -4420,14 +4372,14 @@ static int lpc43_asynch(FAR struct usbhost_driver_s *drvr, usbhost_ep_t ep,
 
   /* The transfer is in progress */
 
-  lpc43_givesem(&g_ehci.exclsem);
+  nxmutex_unlock(&g_ehci.lock);
   return OK;
 
 errout_with_callback:
   epinfo->callback = NULL;
   epinfo->arg      = NULL;
-errout_with_sem:
-  lpc43_givesem(&g_ehci.exclsem);
+errout_with_lock:
+  nxmutex_unlock(&g_ehci.lock);
   return ret;
 }
 #endif /* CONFIG_USBHOST_ASYNCH */
@@ -4451,7 +4403,7 @@ errout_with_sem:
  *
  ****************************************************************************/
 
-static int lpc43_cancel(FAR struct usbhost_driver_s *drvr, usbhost_ep_t ep)
+static int lpc43_cancel(struct usbhost_driver_s *drvr, usbhost_ep_t ep)
 {
   struct lpc43_epinfo_s *epinfo = (struct lpc43_epinfo_s *)ep;
   struct lpc43_qh_s *qh;
@@ -4475,7 +4427,7 @@ static int lpc43_cancel(FAR struct usbhost_driver_s *drvr, usbhost_ep_t ep)
    * interrupt level.
    */
 
-  ret = lpc43_takesem(&g_ehci.exclsem);
+  ret = nxmutex_lock(&g_ehci.lock);
   if (ret < 0)
     {
       return ret;
@@ -4518,7 +4470,7 @@ static int lpc43_cancel(FAR struct usbhost_driver_s *drvr, usbhost_ep_t ep)
 #endif
     {
       ret = OK;
-      goto errout_with_sem;
+      goto errout_with_lock;
     }
 
   /* Handle the cancellation according to the type of the transfer */
@@ -4581,7 +4533,7 @@ static int lpc43_cancel(FAR struct usbhost_driver_s *drvr, usbhost_ep_t ep)
       default:
         usbhost_trace1(EHCI_TRACE1_BADXFRTYPE, epinfo->xfrtype);
         ret = -ENOSYS;
-        goto errout_with_sem;
+        goto errout_with_lock;
     }
 
   /* Find and remove the QH.  There are four possibilities:
@@ -4611,7 +4563,7 @@ exit_terminate:
       /* Yes... wake it up */
 
       DEBUGASSERT(callback == NULL);
-      lpc43_givesem(&epinfo->iocsem);
+      nxsem_post(&epinfo->iocsem);
     }
 
   /* No.. Is there a pending asynchronous transfer? */
@@ -4626,11 +4578,11 @@ exit_terminate:
 #else
   /* Wake up the waiting thread */
 
-  lpc43_givesem(&epinfo->iocsem);
+  nxsem_post(&epinfo->iocsem);
 #endif
 
-errout_with_sem:
-  lpc43_givesem(&g_ehci.exclsem);
+errout_with_lock:
+  nxmutex_unlock(&g_ehci.lock);
   return ret;
 }
 
@@ -4656,8 +4608,8 @@ errout_with_sem:
  ****************************************************************************/
 
 #ifdef CONFIG_USBHOST_HUB
-static int lpc43_connect(FAR struct usbhost_driver_s *drvr,
-                         FAR struct usbhost_hubport_s *hport,
+static int lpc43_connect(struct usbhost_driver_s *drvr,
+                         struct usbhost_hubport_s *hport,
                          bool connected)
 {
   irqstate_t flags;
@@ -4677,7 +4629,7 @@ static int lpc43_connect(FAR struct usbhost_driver_s *drvr,
   if (g_ehci.pscwait)
     {
       g_ehci.pscwait = false;
-      lpc43_givesem(&g_ehci.pscsem);
+      nxsem_post(&g_ehci.pscsem);
     }
 
   leave_critical_section(flags);
@@ -4711,8 +4663,8 @@ static int lpc43_connect(FAR struct usbhost_driver_s *drvr,
  *
  ****************************************************************************/
 
-static void lpc43_disconnect(FAR struct usbhost_driver_s *drvr,
-                             FAR struct usbhost_hubport_s *hport)
+static void lpc43_disconnect(struct usbhost_driver_s *drvr,
+                             struct usbhost_hubport_s *hport)
 {
   DEBUGASSERT(hport != NULL);
   hport->devclass = NULL;
@@ -4866,9 +4818,9 @@ static int lpc43_reset(void)
  *
  ****************************************************************************/
 
-FAR struct usbhost_connection_s *lpc43_ehci_initialize(int controller)
+struct usbhost_connection_s *lpc43_ehci_initialize(int controller)
 {
-  FAR struct usbhost_hubport_s *hport;
+  struct usbhost_hubport_s *hport;
   uint32_t regval;
 #if defined(CONFIG_DEBUG_USB) && defined(CONFIG_DEBUG_INFO)
   uint16_t regval16;
@@ -4901,20 +4853,9 @@ FAR struct usbhost_connection_s *lpc43_ehci_initialize(int controller)
 
   usbhost_vtrace1(EHCI_VTRACE1_INITIALIZING, 0);
 
-  /* Initialize the EHCI state data structure */
+  /* Initialize function address generation logic */
 
-  nxsem_init(&g_ehci.exclsem, 0, 1);
-  nxsem_init(&g_ehci.pscsem,  0, 0);
-
-  /* The pscsem semaphore is used for signaling and, hence, should not have
-   * priority inheritance enabled.
-   */
-
-  nxsem_set_protocol(&g_ehci.pscsem, SEM_PRIO_NONE);
-
-  /* Initialize EP0 */
-
-  nxsem_init(&g_ehci.ep0.iocsem, 0, 1);
+  usbhost_devaddr_initialize(&g_ehci.devgen);
 
   /* Initialize the root hub port structures */
 
@@ -4942,19 +4883,14 @@ FAR struct usbhost_connection_s *lpc43_ehci_initialize(int controller)
       rhport->drvr.connect        = lpc43_connect;
 #endif
       rhport->drvr.disconnect     = lpc43_disconnect;
+      rhport->hport.pdevgen       = &g_ehci.devgen;
 
       /* Initialize EP0 */
 
       rhport->ep0.xfrtype         = USB_EP_ATTR_XFER_CONTROL;
       rhport->ep0.speed           = USB_SPEED_FULL;
       rhport->ep0.maxpacket       = 8;
-
-      /* The EP0 iocsem semaphore is used for signaling and, hence, should
-       * not have priority inheritance enabled.
-       */
-
       nxsem_init(&rhport->ep0.iocsem, 0, 0);
-      nxsem_set_protocol(&rhport->ep0.iocsem, SEM_PRIO_NONE);
 
       /* Initialize the public port representation */
 
@@ -4966,10 +4902,6 @@ FAR struct usbhost_connection_s *lpc43_ehci_initialize(int controller)
       hport->ep0                  = &rhport->ep0;
       hport->port                 = i;
       hport->speed                = USB_SPEED_FULL;
-
-      /* Initialize function address generation logic */
-
-      usbhost_devaddr_initialize(&rhport->hport);
     }
 
 #ifndef CONFIG_LPC43_EHCI_PREALLOCATE
@@ -5313,10 +5245,6 @@ FAR struct usbhost_connection_s *lpc43_ehci_initialize(int controller)
   up_enable_irq(LPC43M4_IRQ_USB0); /* enable USB interrupt */
   usbhost_vtrace1(EHCI_VTRACE1_INIITIALIZED, 0);
 
-  /* Initialize and return the connection interface */
-
-  g_ehciconn.wait      = lpc43_wait;
-  g_ehciconn.enumerate = lpc43_enumerate;
   return &g_ehciconn;
 }
 
@@ -5334,7 +5262,7 @@ FAR struct usbhost_connection_s *lpc43_ehci_initialize(int controller)
  ****************************************************************************/
 
 #ifdef HAVE_USBHOST_TRACE
-FAR const char *usbhost_trformat1(uint16_t id)
+const char *usbhost_trformat1(uint16_t id)
 {
   int ndx = TRACE1_INDEX(id);
 
@@ -5346,7 +5274,7 @@ FAR const char *usbhost_trformat1(uint16_t id)
   return NULL;
 }
 
-FAR const char *usbhost_trformat2(uint16_t id)
+const char *usbhost_trformat2(uint16_t id)
 {
   int ndx = TRACE2_INDEX(id);
 

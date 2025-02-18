@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/z80/src/ez80/ez80_spi.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -32,15 +34,12 @@
 
 #include <arch/board/board.h>
 #include <nuttx/arch.h>
-#include <nuttx/semaphore.h>
+#include <nuttx/mutex.h>
 #include <nuttx/spi/spi.h>
 #include <arch/io.h>
 
 #include "z80_internal.h"
-#include "z80_arch.h"
-
 #include "chip.h"
-
 #include "ez80_spi.h"
 
 /****************************************************************************
@@ -132,9 +131,7 @@ static struct spi_dev_s g_spidev =
   &g_spiops
 };
 
-/* Semaphore supports mutually exclusive access */
-
-static sem_t g_exclsem = SEM_INITIALIZER(1);
+static mutex_t g_lock = NXMUTEX_INITIALIZER;
 
 /* These are used to perform reconfigurations only when necessary. */
 
@@ -173,11 +170,11 @@ static int spi_lock(FAR struct spi_dev_s *dev, bool lock)
 
   if (lock)
     {
-      ret = nxsem_wait_uninterruptible(&g_exclsem);
+      ret = nxmutex_lock(&g_lock);
     }
   else
     {
-      ret = nxsem_post(&g_exclsem);
+      ret = nxmutex_unlock(&g_lock);
     }
 
   return ret;

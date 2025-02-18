@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/imxrt/teensy-4.x/src/imxrt_flexcan.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -52,7 +54,7 @@ int imxrt_can_setup(void)
   int ret;
 
 #ifdef CONFIG_IMXRT_FLEXCAN3_AS_CAN0
-# ifdef CONFIG_IMXRT_FLEXCAN3
+#  ifdef CONFIG_IMXRT_FLEXCAN3
   ret = imxrt_caninitialize(3);
   if (ret < 0)
     {
@@ -60,7 +62,7 @@ int imxrt_can_setup(void)
       return -ENODEV;
     }
 
-# endif
+#  endif
 #endif
 
 #ifdef CONFIG_IMXRT_FLEXCAN1
@@ -84,7 +86,7 @@ int imxrt_can_setup(void)
 
 #endif
 #ifndef CONFIG_IMXRT_FLEXCAN3_AS_CAN0
-# ifdef CONFIG_IMXRT_FLEXCAN3
+#  ifdef CONFIG_IMXRT_FLEXCAN3
   ret = imxrt_caninitialize(3);
   if (ret < 0)
     {
@@ -92,7 +94,7 @@ int imxrt_can_setup(void)
       return -ENODEV;
     }
 
-# endif
+#  endif
 #endif
   UNUSED(ret);
   return OK;

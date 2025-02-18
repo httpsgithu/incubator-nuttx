@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/armv6-m/nvic.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -18,8 +20,8 @@
  *
  ****************************************************************************/
 
-#ifndef __ARCH_ARM_SRC_COMMON_ARMV6_M_NVIC_H
-#define __ARCH_ARM_SRC_COMMON_ARMV6_M_NVIC_H
+#ifndef __ARCH_ARM_SRC_ARMV6_M_NVIC_H
+#define __ARCH_ARM_SRC_ARMV6_M_NVIC_H
 
 /****************************************************************************
  * Included Files
@@ -31,6 +33,31 @@
 /****************************************************************************
  * Pre-processor Definitions
  ****************************************************************************/
+
+/* Exception/interrupt vector numbers ***************************************/
+
+                                              /* Vector  0: Reset stack
+                                               *            pointer value
+                                               */
+
+                                               /* Vector  1: Reset */
+#define NVIC_IRQ_NMI                    (2)    /* Vector  2: Non-Maskable Interrupt (NMI) */
+#define NVIC_IRQ_HARDFAULT              (3)    /* Vector  3: Hard fault */
+#define NVIC_IRQ_MEMFAULT               (4)    /* Vector  4: Memory management (MPU) */
+#define NVIC_IRQ_BUSFAULT               (5)    /* Vector  5: Bus fault */
+#define NVIC_IRQ_USAGEFAULT             (6)    /* Vector  6: Usage fault */
+                                               /* Vectors 7-10: Reserved */
+#define NVIC_IRQ_SVCALL                 (11)   /* Vector 11: SVC call */
+#define NVIC_IRQ_DBGMONITOR             (12)   /* Vector 12: Debug Monitor */
+                                               /* Vector 13: Reserved */
+#define NVIC_IRQ_PENDSV                 (14)   /* Vector 14: Pendable system service request */
+#define NVIC_IRQ_SYSTICK                (15)   /* Vector 15: System tick */
+
+/* External interrupts (vectors >= 16).
+ * These definitions are chip-specific
+ */
+
+#define NVIC_IRQ_FIRST                  (16)    /* Vector number of the first interrupt */
 
 /* Base addresses ***********************************************************/
 
@@ -378,7 +405,7 @@ extern "C"
  ****************************************************************************/
 
 #ifdef CONFIG_DEBUG_FEATURES
-void arm_dumpnvic(FAR const char *msg);
+void arm_dumpnvic(const char *msg);
 #else
 #  define arm_dumpnvic(m)
 #endif
@@ -388,4 +415,4 @@ void arm_dumpnvic(FAR const char *msg);
 }
 #endif
 #endif /* __ASSEMBLY__ */
-#endif /* __ARCH_ARM_SRC_COMMON_ARMV6_M_NVIC_H */
+#endif /* __ARCH_ARM_SRC_ARMV6_M_NVIC_H */

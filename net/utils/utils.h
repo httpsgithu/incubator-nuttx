@@ -1,6 +1,8 @@
 /****************************************************************************
  * net/utils/utils.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -26,8 +28,82 @@
  ****************************************************************************/
 
 #include <nuttx/config.h>
+
+#include <stdlib.h>
+
 #include <nuttx/net/net.h>
 #include <nuttx/net/ip.h>
+#include <nuttx/net/netdev.h>
+
+/****************************************************************************
+ * Pre-processor Definitions
+ ****************************************************************************/
+
+/* Some utils for port selection */
+
+#define NET_PORT_RANDOM_INIT(port) \
+  do \
+    { \
+      arc4random_buf(&(port), sizeof(port)); \
+      (port) = (port) % (CONFIG_NET_DEFAULT_MAX_PORT - \
+                         CONFIG_NET_DEFAULT_MIN_PORT + 1); \
+      (port) += CONFIG_NET_DEFAULT_MIN_PORT; \
+    } while (0)
+
+/* Get next net port number, and make sure that the port number is within
+ * range.  In host byte order.
+ */
+
+#define NET_PORT_NEXT_H(hport) \
+  do \
+    { \
+      ++(hport); \
+      if ((hport) > CONFIG_NET_DEFAULT_MAX_PORT || \
+          (hport) < CONFIG_NET_DEFAULT_MIN_PORT) \
+        { \
+          (hport) = CONFIG_NET_DEFAULT_MIN_PORT; \
+        } \
+    } while (0)
+
+/* Get next net port number, and make sure that the port number is within
+ * range.  In both network & host byte order.
+ */
+
+#define NET_PORT_NEXT_NH(nport, hport) \
+  do \
+    { \
+      NET_PORT_NEXT_H(hport); \
+      (nport) = HTONS(hport); \
+    } while (0)
+
+/* Network buffer pool related macros, in which:
+ *   pool:     The name of the buffer pool
+ *   nodesize: The size of each node in the pool
+ *   prealloc: The number of pre-allocated buffers
+ *   dynalloc: The number per dynamic allocations
+ *   maxalloc: The number of max allocations, 0 means no limit
+ */
+
+#define NET_BUFPOOL_MAX(prealloc, dynalloc, maxalloc) \
+  (dynalloc) <= 0 ? (prealloc) : ((maxalloc) > 0 ? (maxalloc) : INT16_MAX)
+
+#define NET_BUFPOOL_DECLARE(pool, nodesize, prealloc, dynalloc, maxalloc) \
+  static char pool##_buffer[prealloc][nodesize]; \
+  static struct net_bufpool_s pool = \
+    { \
+      pool##_buffer[0], \
+      prealloc, \
+      dynalloc, \
+      -(int)(nodesize), \
+      SEM_INITIALIZER(NET_BUFPOOL_MAX(prealloc, dynalloc, maxalloc)), \
+      { NULL, NULL } \
+    };
+
+#define NET_BUFPOOL_TIMEDALLOC(p,t) net_bufpool_timedalloc(&p, t)
+#define NET_BUFPOOL_TRYALLOC(p)     net_bufpool_timedalloc(&p, 0)
+#define NET_BUFPOOL_ALLOC(p)        net_bufpool_timedalloc(&p, UINT_MAX)
+#define NET_BUFPOOL_FREE(p,n)       net_bufpool_free(&p, n)
+#define NET_BUFPOOL_TEST(p)         net_bufpool_test(&p)
 
 /****************************************************************************
  * Public Types
@@ -40,6 +116,22 @@ enum tv2ds_remainder_e
   TV2DS_TRUNC = 0, /* Truncate microsecond remainder */
   TV2DS_ROUND,     /* Round to the nearest full decisecond */
   TV2DS_CEIL       /* Force to next larger full decisecond */
+};
+
+/* This structure is used to manage a pool of network buffers */
+
+struct net_bufpool_s
+{
+  /* Allocation configuration */
+
+  FAR char  *pool;     /* The beginning of the pre-allocated buffer pool */
+  int        prealloc; /* The number of pre-allocated buffers */
+  int        dynalloc; /* The number per dynamic allocations */
+  int        nodesize; /* The size of each node in the pool */
+
+  sem_t      sem;      /* The semaphore for waiting for free buffers */
+
+  sq_queue_t freebuffers;
 };
 
 /****************************************************************************
@@ -60,16 +152,6 @@ extern "C"
 
 struct net_driver_s;      /* Forward reference */
 struct timeval;           /* Forward reference */
-
-/****************************************************************************
- * Name: net_lockinitialize
- *
- * Description:
- *   Initialize the locking facility
- *
- ****************************************************************************/
-
-void net_lockinitialize(void);
 
 /****************************************************************************
  * Name: net_breaklock
@@ -154,6 +236,53 @@ unsigned int net_timeval2dsec(FAR struct timeval *tv,
                               enum tv2ds_remainder_e remainder);
 
 /****************************************************************************
+ * Name: net_ipv4_mask2pref
+ *
+ * Description:
+ *   Convert a 32-bit netmask to a prefix length.  The NuttX IPv4
+ *   networking uses 32-bit network masks internally.  This function
+ *   converts the IPv4 netmask to a prefix length.
+ *
+ *   The prefix length is the number of MS '1' bits on in the netmask.
+ *   This, of course, assumes that all MS bits are '1' and all LS bits are
+ *   '0' with no intermixed 1's and 0's.  This function searches from the MS
+ *   bit until the first '0' is found (this does not necessary mean that
+ *   there might not be additional '1' bits following the firs '0', but that
+ *   will be a malformed netmask.
+ *
+ * Input Parameters:
+ *   mask   An IPv4 netmask in the form of in_addr_t
+ *
+ * Returned Value:
+ *   The prefix length, range 0-32 on success;  This function will not
+ *   fail.
+ *
+ ****************************************************************************/
+
+#ifdef CONFIG_NET_IPv4
+uint8_t net_ipv4_mask2pref(in_addr_t mask);
+#endif
+
+/****************************************************************************
+ * Name: net_ipv6_common_pref
+ *
+ * Description:
+ *   Calculate the common prefix length of two IPv6 addresses.
+ *
+ * Input Parameters:
+ *   a1,a2   Points to IPv6 addresses in the form of uint16_t[8]
+ *
+ * Returned Value:
+ *   The common prefix length, range 0-128 on success;  This function will
+ *   not fail.
+ *
+ ****************************************************************************/
+
+#ifdef CONFIG_NET_IPv6
+uint8_t net_ipv6_common_pref(FAR const uint16_t *a1, FAR const uint16_t *a2);
+#endif
+
+/****************************************************************************
  * Name: net_ipv6_mask2pref
  *
  * Description:
@@ -189,8 +318,8 @@ uint8_t net_ipv6_mask2pref(FAR const uint16_t *mask);
  *   specifies the number of MS bits under mask (0-128)
  *
  * Input Parameters:
+ *   mask     - The location to return the netmask.
  *   preflen  - Determines the width of the netmask (in bits).  Range 0-128
- *   mask  - The location to return the netmask.
  *
  * Returned Value:
  *   None
@@ -198,101 +327,115 @@ uint8_t net_ipv6_mask2pref(FAR const uint16_t *mask);
  ****************************************************************************/
 
 #ifdef CONFIG_NET_IPv6
-void net_ipv6_pref2mask(uint8_t preflen, net_ipv6addr_t mask);
+void net_ipv6_pref2mask(net_ipv6addr_t mask, uint8_t preflen);
 #endif
 
 /****************************************************************************
- * Name: chksum
+ * Name: net_ipv6_payload
  *
  * Description:
- *   Calculate the raw change some over the memory region described by
- *   data and len.
+ *   Given a pointer to the IPv6 header, this function will return a pointer
+ *   to the beginning of the L4 payload.
  *
  * Input Parameters:
- *   sum  - Partial calculations carried over from a previous call to chksum.
- *          This should be zero on the first time that check sum is called.
- *   data - Beginning of the data to include in the checksum.
- *   len  - Length of the data to include in the checksum.
+ *   ipv6  - A pointer to the IPv6 header.
+ *   proto - The location to return the protocol number in the IPv6 header.
  *
  * Returned Value:
- *   The updated checksum value.
- *
- ****************************************************************************/
-
-uint16_t chksum(uint16_t sum, FAR const uint8_t *data, uint16_t len);
-
-/****************************************************************************
- * Name: net_chksum
- *
- * Description:
- *   Calculate the Internet checksum over a buffer.
- *
- *   The Internet checksum is the one's complement of the one's complement
- *   sum of all 16-bit words in the buffer.
- *
- *   See RFC1071.
- *
- *   If CONFIG_NET_ARCH_CHKSUM is defined, then this function must be
- *   provided by architecture-specific logic.
- *
- * Input Parameters:
- *
- *   buf - A pointer to the buffer over which the checksum is to be computed.
- *
- *   len - Length of the buffer over which the checksum is to be computed.
- *
- * Returned Value:
- *   The Internet checksum of the buffer.
- *
- ****************************************************************************/
-
-uint16_t net_chksum(FAR uint16_t *data, uint16_t len);
-
-/****************************************************************************
- * Name: ipv4_upperlayer_chksum
- *
- * Description:
- *   Perform the checksum calcaultion over the IPv4, protocol headers, and
- *   data payload as necessary.
- *
- * Input Parameters:
- *   dev   - The network driver instance.  The packet data is in the d_buf
- *           of the device.
- *   proto - The protocol being supported
- *
- * Returned Value:
- *   The calculated checksum
- *
- ****************************************************************************/
-
-#ifdef CONFIG_NET_IPv4
-uint16_t ipv4_upperlayer_chksum(FAR struct net_driver_s *dev, uint8_t proto);
-#endif
-
-/****************************************************************************
- * Name: ipv6_upperlayer_chksum
- *
- * Description:
- *   Perform the checksum calculation over the IPv6, protocol headers, and
- *   data payload as necessary.
- *
- * Input Parameters:
- *   dev   - The network driver instance.  The packet data is in the d_buf
- *           of the device.
- *   proto - The protocol being supported
- *   iplen - The size of the IPv6 header.  This may be larger than
- *           IPv6_HDRLEN the IPv6 header if IPv6 extension headers are
- *           present.
- *
- * Returned Value:
- *   The calculated checksum
+ *   A pointer to the beginning of the payload.
  *
  ****************************************************************************/
 
 #ifdef CONFIG_NET_IPv6
-uint16_t ipv6_upperlayer_chksum(FAR struct net_driver_s *dev,
-                                uint8_t proto, unsigned int iplen);
+FAR void *net_ipv6_payload(FAR struct ipv6_hdr_s *ipv6, FAR uint8_t *proto);
 #endif
+
+/****************************************************************************
+ * Name: net_iob_concat
+ *
+ * Description:
+ *   Concatenate iob_s chain iob2 to iob1, if CONFIG_NET_RECV_PACK is
+ *   endabled, pack all data in the I/O buffer chain.
+ *
+ * Returned Value:
+ *   The number of bytes actually buffered is returned.  This will be either
+ *   zero or equal to iob1->io_pktlen.
+ *
+ ****************************************************************************/
+
+#ifdef CONFIG_MM_IOB
+uint16_t net_iob_concat(FAR struct iob_s **iob1, FAR struct iob_s **iob2);
+#endif
+
+/****************************************************************************
+ * Name: net_bufpool_timedalloc
+ *
+ * Description:
+ *   Allocate a buffer from the pool.  If no buffer is available, then wait
+ *   for the specified timeout.
+ *
+ * Input Parameters:
+ *   pool    - The pool from which to allocate the buffer
+ *   timeout - The maximum time to wait for a buffer to become available.
+ *
+ * Returned Value:
+ *   A reference to the allocated buffer, which is guaranteed to be zeroed.
+ *   NULL is returned on a timeout.
+ *
+ ****************************************************************************/
+
+FAR void *net_bufpool_timedalloc(FAR struct net_bufpool_s *pool,
+                                 unsigned int timeout);
+
+/****************************************************************************
+ * Name: net_bufpool_free
+ *
+ * Description:
+ *   Free a buffer from the pool.
+ *
+ * Input Parameters:
+ *   pool - The pool from which to allocate the buffer
+ *   node - The buffer to be freed
+ *
+ ****************************************************************************/
+
+void net_bufpool_free(FAR struct net_bufpool_s *pool, FAR void *node);
+
+/****************************************************************************
+ * Name: net_bufpool_test
+ *
+ * Description:
+ *   Check if there is room in the buffer pool.  Does not reserve any space.
+ *
+ * Assumptions:
+ *   None.
+ *
+ ****************************************************************************/
+
+int net_bufpool_test(FAR struct net_bufpool_s *pool);
+
+/****************************************************************************
+ * Name: net_chksum_adjust
+ *
+ * Description:
+ *   Adjusts the checksum of a packet without having to completely
+ *   recalculate it, as described in RFC 3022, Section 4.2, Page 9.
+ *
+ * Input Parameters:
+ *   chksum - points to the chksum in the packet
+ *   optr   - points to the old data in the packet
+ *   olen   - length of old data
+ *   nptr   - points to the new data in the packet
+ *   nlen   - length of new data
+ *
+ * Limitations:
+ *   The algorithm is applicable only for even offsets and even lengths.
+ *
+ ****************************************************************************/
+
+void net_chksum_adjust(FAR uint16_t *chksum,
+                       FAR const uint16_t *optr, ssize_t olen,
+                       FAR const uint16_t *nptr, ssize_t nlen);
 
 /****************************************************************************
  * Name: tcp_chksum, tcp_ipv4_chksum, and tcp_ipv6_chksum
@@ -361,9 +504,22 @@ uint16_t udp_ipv6_chksum(FAR struct net_driver_s *dev);
  *
  ****************************************************************************/
 
-#if defined(CONFIG_NET_ICMP) && defined(CONFIG_NET_ICMP_SOCKET)
+#ifdef CONFIG_NET_ICMP
 uint16_t icmp_chksum(FAR struct net_driver_s *dev, int len);
 #endif
+
+/****************************************************************************
+ * Name: icmp_chksum_iob
+ *
+ * Description:
+ *   Calculate the checksum of the ICMP message, the input can be an I/O
+ *   buffer chain
+ *
+ ****************************************************************************/
+
+#if defined(CONFIG_NET_ICMP) && defined(CONFIG_MM_IOB)
+uint16_t icmp_chksum_iob(FAR struct iob_s *iob);
+#endif /* CONFIG_NET_ICMP && CONFIG_MM_IOB */
 
 /****************************************************************************
  * Name: icmpv6_chksum
@@ -376,6 +532,34 @@ uint16_t icmp_chksum(FAR struct net_driver_s *dev, int len);
 #ifdef CONFIG_NET_ICMPv6
 uint16_t icmpv6_chksum(FAR struct net_driver_s *dev, unsigned int iplen);
 #endif
+
+/****************************************************************************
+ * Name: cmsg_append
+ *
+ * Description:
+ *   Append specified data into the control message, msg_control and
+ *   msg_controllen will be changed to the appropriate value when success
+ *
+ * Input Parameters:
+ *   msg       - Buffer to receive the message.
+ *   level     - The level of control message.
+ *   type      - The type of control message.
+ *   value     - If the value is not NULL, this interface copies the data
+ *               to the appropriate location in msg_control, and modify
+ *               msg_control and msg_controllen.
+ *               If the value is NULL, just modify the corresponding value
+ *               of msg.
+ *   value_len - The value length of control message.
+ *
+ * Returned Value:
+ *   On success, a pointer to the start address of control message data,
+ *               the caller can copy the data in.
+ *   On failure, return NULL, because of msg_controllen is not enough
+ *
+ ****************************************************************************/
+
+FAR void *cmsg_append(FAR struct msghdr *msg, int level, int type,
+                      FAR void *value, int value_len);
 
 #undef EXTERN
 #ifdef __cplusplus

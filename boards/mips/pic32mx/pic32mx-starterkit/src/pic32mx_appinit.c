@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/mips/pic32mx/pic32mx-starterkit/src/pic32mx_appinit.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -206,7 +208,7 @@ static int nsh_waiter(int argc, char *argv[])
 #ifdef NSH_HAVEMMCSD
 static int nsh_sdinitialize(void)
 {
-  FAR struct spi_dev_s *spi;
+  struct spi_dev_s *spi;
   int ret;
 
   /* Get the SPI port */
@@ -259,7 +261,6 @@ errout:
 #ifdef NSH_HAVEUSBHOST
 static int nsh_usbhostinitialize(void)
 {
-  int pid;
   int ret;
 
   /* First, register all of the class drivers needed to support the drivers
@@ -301,10 +302,10 @@ static int nsh_usbhostinitialize(void)
 
       syslog(LOG_INFO, "Start nsh_waiter\n");
 
-      pid = kthread_create("usbhost", CONFIG_USBHOST_DEFPRIO,
+      ret = kthread_create("usbhost", CONFIG_USBHOST_DEFPRIO,
                            CONFIG_USBHOST_STACKSIZE,
-                           (main_t)nsh_waiter, (FAR char * const *)NULL);
-      return pid < 0 ? -ENOEXEC : OK;
+                           nsh_waiter, NULL);
+      return ret < 0 ? -ENOEXEC : OK;
     }
 
   return -ENODEV;

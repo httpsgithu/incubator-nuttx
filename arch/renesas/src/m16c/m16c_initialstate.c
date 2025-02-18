@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/renesas/src/m16c/m16c_initialstate.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -30,8 +32,7 @@
 #include <nuttx/arch.h>
 #include <arch/board/board.h>
 
-#include "up_internal.h"
-#include "up_arch.h"
+#include "renesas_internal.h"
 
 /****************************************************************************
  * Public Functions
@@ -50,15 +51,15 @@
  *
  ****************************************************************************/
 
-void up_initial_state(FAR struct tcb_s *tcb)
+void up_initial_state(struct tcb_s *tcb)
 {
-  FAR struct xcptcontext *xcp  = &tcb->xcp;
-  FAR uint8_t            *regs = xcp->regs;
-  uintptr_t               sp;
+  struct xcptcontext *xcp  = &tcb->xcp;
+  uint8_t            *regs = xcp->regs;
+  uintptr_t           sp;
 
   /* Initialize the idle thread stack */
 
-  if (tcb->pid == 0)
+  if (tcb->pid == IDLE_PROCESS_ID)
     {
       char *stack_ptr = (char *)(g_idle_topstack -
                                  CONFIG_IDLETHREAD_STACKSIZE);

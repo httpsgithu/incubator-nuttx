@@ -1,6 +1,7 @@
 /****************************************************************************
  * include/nuttx/syslog/ramlog.h
- * The RAM logging driver
+ *
+ * SPDX-License-Identifier: Apache-2.0
  *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -65,10 +66,6 @@
  *
  * CONFIG_RAMLOG_BUFSIZE - Size of the console RAM log.  Default: 1024
  */
-
-#if defined(CONFIG_RAMLOG_SYSLOG) && !defined(CONFIG_SYSLOG_DEVPATH)
-#  define CONFIG_SYSLOG_DEVPATH "/dev/ramlog"
-#endif
 
 #ifndef CONFIG_RAMLOG_NPOLLWAITERS
 #  define CONFIG_RAMLOG_NPOLLWAITERS 4
@@ -137,7 +134,7 @@ void ramlog_syslog_register(void);
  ****************************************************************************/
 
 #ifdef CONFIG_RAMLOG_SYSLOG
-int ramlog_putc(FAR struct syslog_channel_s *channel, int ch);
+int ramlog_putc(FAR syslog_channel_t *channel, int ch);
 #endif
 
 /****************************************************************************
@@ -149,7 +146,7 @@ int ramlog_putc(FAR struct syslog_channel_s *channel, int ch);
  ****************************************************************************/
 
 #ifdef CONFIG_RAMLOG_SYSLOG
-ssize_t ramlog_write(FAR struct syslog_channel_s *channel,
+ssize_t ramlog_write(FAR syslog_channel_t *channel,
                      FAR const char *buffer, size_t buflen);
 #endif
 

@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/kinetis/kinetis_usbdev.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -15,7 +17,9 @@
  * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.  See the
  * License for the specific language governing permissions and limitations
  * under the License.
- *
+ ****************************************************************************/
+
+/****************************************************************************
  * References:
  *   This file derives from the STM32 USB device driver with modifications
  *   based on additional information from:
@@ -35,6 +39,7 @@
 
 #include <nuttx/config.h>
 
+#include <sys/param.h>
 #include <sys/types.h>
 #include <stdint.h>
 #include <stdbool.h>
@@ -53,7 +58,7 @@
 
 #include <nuttx/irq.h>
 
-#include "arm_arch.h"
+#include "arm_internal.h"
 #include "kinetis.h"
 #include "kinetis_usbotg.h"
 #include "hardware/kinetis_sim.h"
@@ -342,16 +347,6 @@ const struct trace_msg_t g_usb_trace_strings_deverror[] =
 
 /* Misc Helper Macros *******************************************************/
 
-/* Ever-present MIN and MAX macros */
-
-#ifndef MIN
-#  define MIN(a,b) (a < b ? a : b)
-#endif
-
-#ifndef MAX
-#  define MAX(a,b) (a > b ? a : b)
-#endif
-
 /* Byte ordering in host-based values */
 
 #ifdef CONFIG_ENDIAN_BIG
@@ -580,7 +575,7 @@ static void   khci_ep0outcomplete(struct khci_usbdev_s *priv);
 static void   khci_ep0incomplete(struct khci_usbdev_s *priv);
 static void   khci_ep0transfer(struct khci_usbdev_s *priv,
                 uint16_t ustat);
-static int    khci_interrupt(int irq, void *context, FAR void *arg);
+static int    khci_interrupt(int irq, void *context, void *arg);
 
 /* Endpoint helpers *********************************************************/
 
@@ -589,8 +584,6 @@ static inline struct khci_ep_s *
 static inline void
               khci_epunreserve(struct khci_usbdev_s *priv,
               struct khci_ep_s *privep);
-static inline bool
-              khci_epreserved(struct khci_usbdev_s *priv, int epno);
 static void  khci_ep0configure(struct khci_usbdev_s *priv);
 
 /* Endpoint operations ******************************************************/
@@ -981,10 +974,10 @@ static void khci_wrcomplete(struct khci_usbdev_s *priv,
   epno   = USB_EPNO(privep->ep.eplog);
 
 #ifdef CONFIG_USBDEV_NOWRITEAHEAD
-  uinfo("EP%d: len=%d xfrd=%d inflight=%d\n",
+  uinfo("EP%d: len=%zu xfrd=%zu inflight=%d\n",
         epno, privreq->req.len, privreq->req.xfrd, privreq->inflight[0]);
 #else
-  uinfo("EP%d: len=%d xfrd=%d inflight={%d, %d}\n",
+  uinfo("EP%d: len=%zu xfrd=%zu inflight={%d, %d}\n",
         epno, privreq->req.len, privreq->req.xfrd,
         privreq->inflight[0], privreq->inflight[1]);
 #endif
@@ -1302,7 +1295,7 @@ static int khci_wrstart(struct khci_usbdev_s *priv,
       bytesleft = privreq->req.len;
     }
 
-  uinfo("epno=%d req=%p: len=%d xfrd=%d index=%d nullpkt=%d\n",
+  uinfo("epno=%d req=%p: len=%zu xfrd=%zu index=%d nullpkt=%d\n",
         epno, privreq, privreq->req.len, xfrd, index, privep->txnullpkt);
 
   /* Get the number of bytes left to be sent in the packet */
@@ -1417,7 +1410,7 @@ static int khci_rdcomplete(struct khci_usbdev_s *priv,
   bdtout = privep->bdtout;
   epno   = USB_EPNO(privep->ep.eplog);
 
-  uinfo("EP%d: len=%d xfrd=%d\n",
+  uinfo("EP%d: len=%zu xfrd=%zu\n",
         epno, privreq->req.len, privreq->req.xfrd);
   bdtinfo("EP%d BDT OUT [%p] {%08x, %08x}\n",
         epno, bdtout, bdtout->status, bdtout->addr);
@@ -2876,7 +2869,7 @@ static void khci_ep0transfer(struct khci_usbdev_s *priv, uint16_t ustat)
  * Name: khci_interrupt
  ****************************************************************************/
 
-static int khci_interrupt(int irq, void *context, FAR void *arg)
+static int khci_interrupt(int irq, void *context, void *arg)
 {
   uint16_t usbir;
   uint32_t regval;
@@ -3310,16 +3303,6 @@ khci_epunreserve(struct khci_usbdev_s *priv, struct khci_ep_s *privep)
 }
 
 /****************************************************************************
- * Name: khci_epreserved
- ****************************************************************************/
-
-static inline bool
-khci_epreserved(struct khci_usbdev_s *priv, int epno)
-{
-  return ((priv->epavail & KHCI_ENDP_BIT(epno)) == 0);
-}
-
-/****************************************************************************
  * Name: khci_ep0configure
  ****************************************************************************/
 
@@ -3391,7 +3374,7 @@ static int khci_epconfigure(struct usbdev_ep_s *ep,
   uint32_t regval;
   uint8_t  epno;
   bool     epin;
-  bool     bidi;
+  bool     bidi = false;
   int      index;
 
 #ifdef CONFIG_DEBUG_FEATURES
@@ -3584,7 +3567,7 @@ static struct usbdev_req_s *khci_epallocreq(struct usbdev_ep_s *ep)
 
   usbtrace(TRACE_EPALLOCREQ, USB_EPNO(ep->eplog));
 
-  privreq = (struct khci_req_s *)kmm_malloc(sizeof(struct khci_req_s));
+  privreq = kmm_malloc(sizeof(struct khci_req_s));
   if (!privreq)
     {
       usbtrace(TRACE_DEVERROR(KHCI_TRACEERR_ALLOCFAIL), 0);
@@ -4412,7 +4395,7 @@ static void khci_hwinitialize(struct khci_usbdev_s *priv)
   khci_putreg((uint8_t)(((uint32_t)g_bdt >> 8) & USB_BDTPAGE1_MASK),
       KINETIS_USB0_BDTPAGE1);
 
-  uinfo("BDT Address %p \n", (const void *)&g_bdt);
+  uinfo("BDT Address %p\n", (const void *)&g_bdt);
   uinfo("BDTPAGE3 %hhx\n", khci_getreg(KINETIS_USB0_BDTPAGE3));
   uinfo("BDTPAGE2 %hhx\n", khci_getreg(KINETIS_USB0_BDTPAGE2));
   uinfo("BDTPAGE1 %hhx\n", khci_getreg(KINETIS_USB0_BDTPAGE1));

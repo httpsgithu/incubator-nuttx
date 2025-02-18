@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/a1x/a1x_boot.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -27,17 +29,14 @@
 #include <stdint.h>
 #include <assert.h>
 
-#ifdef CONFIG_PAGING
+#ifdef CONFIG_LEGACY_PAGING
 #  include <nuttx/page.h>
 #endif
 
 #include "chip.h"
 #include "arm.h"
 #include "mmu.h"
-#include "fpu.h"
 #include "arm_internal.h"
-#include "arm_arch.h"
-
 #include "a1x_lowputc.h"
 #include "a1x_boot.h"
 
@@ -65,8 +64,8 @@
  * Public Data
  ****************************************************************************/
 
-extern uint32_t _vector_start; /* Beginning of vector block */
-extern uint32_t _vector_end;   /* End+1 of vector block */
+extern uint8_t _vector_start[]; /* Beginning of vector block */
+extern uint8_t _vector_end[];   /* End+1 of vector block */
 
 /****************************************************************************
  * Private Data
@@ -131,7 +130,7 @@ static inline void a1x_setupmappings(void)
  ****************************************************************************/
 
 #if !defined(CONFIG_ARCH_ROMPGTABLE) && defined(CONFIG_ARCH_LOWVECTORS) && \
-     defined(CONFIG_PAGING)
+     defined(CONFIG_LEGACY_PAGING)
 static void a1x_vectorpermissions(uint32_t mmuflags)
 {
   /* The PTE for the beginning of ISRAM is at the base of the L2 page table */
@@ -176,7 +175,7 @@ static void a1x_vectormapping(void)
 {
   uint32_t vector_paddr = A1X_VECTOR_PADDR & PTE_SMALL_PADDR_MASK;
   uint32_t vector_vaddr = A1X_VECTOR_VADDR & PTE_SMALL_PADDR_MASK;
-  uint32_t vector_size  = (uint32_t)&_vector_end - (uint32_t)&_vector_start;
+  uint32_t vector_size  = _vector_end - _vector_start;
   uint32_t end_paddr    = A1X_VECTOR_PADDR + vector_size;
 
   /* REVISIT:  Cannot really assert in this context */
@@ -191,7 +190,7 @@ static void a1x_vectormapping(void)
 
   while (vector_paddr < end_paddr)
     {
-      mmu_l2_setentry(VECTOR_L2_VBASE,  vector_paddr, vector_vaddr,
+      mmu_l2_setentry(VECTOR_L2_VBASE, vector_paddr, vector_vaddr,
                       MMU_L2_VECTORFLAGS);
       vector_paddr += 4096;
       vector_vaddr += 4096;
@@ -229,7 +228,7 @@ static void a1x_copyvectorblock(void)
    * read only, then temporarily mark the mapping write-able (non-buffered).
    */
 
-#ifdef CONFIG_PAGING
+#ifdef CONFIG_LEGACY_PAGING
   a1x_vectorpermissions(MMU_L2_VECTRWFLAGS);
 #endif
 
@@ -242,8 +241,8 @@ static void a1x_copyvectorblock(void)
    *                      0xffff0000)
    */
 
-  src  = (uint32_t *)&_vector_start;
-  end  = (uint32_t *)&_vector_end;
+  src  = (uint32_t *)_vector_start;
+  end  = (uint32_t *)_vector_end;
   dest = (uint32_t *)(A1X_VECTOR_VSRAM + VECTOR_TABLE_OFFSET);
 
   while (src < end)
@@ -253,7 +252,7 @@ static void a1x_copyvectorblock(void)
 
   /* Make the vectors read-only, cacheable again */
 
-#if !defined(CONFIG_ARCH_LOWVECTORS) && defined(CONFIG_PAGING)
+#if !defined(CONFIG_ARCH_LOWVECTORS) && defined(CONFIG_LEGACY_PAGING)
   a1x_vectorpermissions(MMU_L2_VECTORFLAGS);
 #endif
 }
@@ -302,11 +301,9 @@ void arm_boot(void)
 
   a1x_copyvectorblock();
 
-#ifdef CONFIG_ARCH_FPU
   /* Initialize the FPU */
 
   arm_fpuconfig();
-#endif
 
 #ifdef CONFIG_BOOT_SDRAM_DATA
   /* This setting is inappropriate for the A1x because the code is *always*

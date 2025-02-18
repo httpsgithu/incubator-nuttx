@@ -1,6 +1,8 @@
 /****************************************************************************
  * libs/libc/semaphore/sem_getprotocol.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -46,8 +48,7 @@
  *
  * Returned Value:
  *   This function is exposed as a non-standard application interface.  It
- *   returns zero (OK) if successful.  Otherwise, -1 (ERROR) is returned and
- *   the errno value is set appropriately.
+ *   returns zero (OK).  Otherwise, an error code.
  *
  ****************************************************************************/
 
@@ -55,19 +56,6 @@ int sem_getprotocol(FAR sem_t *sem, FAR int *protocol)
 {
   DEBUGASSERT(sem != NULL && protocol != NULL);
 
-#ifdef CONFIG_PRIORITY_INHERITANCE
-  if ((sem->flags & PRIOINHERIT_FLAGS_DISABLE) != 0)
-    {
-      *protocol = SEM_PRIO_NONE;
-    }
-  else
-    {
-      *protocol = SEM_PRIO_INHERIT;
-    }
-
-#else
-  *protocol = SEM_PRIO_NONE;
-#endif
-
+  *protocol = sem->flags;
   return OK;
 }

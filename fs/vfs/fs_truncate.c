@@ -1,6 +1,8 @@
 /****************************************************************************
  * fs/vfs/fs_truncate.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -32,9 +34,8 @@
 
 #include <nuttx/fs/fs.h>
 
+#include "notify/notify.h"
 #include "inode/inode.h"
-
-#ifndef CONFIG_DISABLE_MOUNTPOINT
 
 /****************************************************************************
  * Public Functions
@@ -59,7 +60,7 @@ int file_truncate(FAR struct file *filep, off_t length)
   if ((filep->f_oflags & O_WROK) == 0)
     {
       fwarn("WARNING: Cannot truncate a file opened read-only\n");
-      return -EBADF;
+      return -EINVAL;
     }
 
   /* Is this inode a registered mountpoint? Does it support the
@@ -68,9 +69,14 @@ int file_truncate(FAR struct file *filep, off_t length)
    */
 
   inode = filep->f_inode;
-  if (inode == NULL || !INODE_IS_MOUNTPT(inode) || inode->u.i_mops == NULL)
+  if (inode == NULL)
     {
-      fwarn("WARNING:  Not a (regular) file on a mounted file system.\n");
+      return -EINVAL;
+    }
+
+  if (inode->u.i_ops == NULL)
+    {
+      fwarn("WARNING:  Not a file\n");
       return -EINVAL;
     }
 
@@ -78,7 +84,7 @@ int file_truncate(FAR struct file *filep, off_t length)
    * possible not the only indicator -- sufficient, but not necessary")
    */
 
-  if (inode->u.i_mops->write == NULL)
+  if (inode->u.i_ops->writev == NULL && inode->u.i_ops->write == NULL)
     {
       fwarn("WARNING: File system is read-only\n");
       return -EROFS;
@@ -88,7 +94,7 @@ int file_truncate(FAR struct file *filep, off_t length)
    * a write-able file system.
    */
 
-  if (inode->u.i_mops->truncate == NULL)
+  if (inode->u.i_ops->truncate == NULL)
     {
       fwarn("WARNING: File system does not support the truncate() method\n");
       return -ENOSYS;
@@ -96,7 +102,7 @@ int file_truncate(FAR struct file *filep, off_t length)
 
   /* Yes, then tell the file system to truncate this file */
 
-  return inode->u.i_mops->truncate(filep, length);
+  return inode->u.i_ops->truncate(filep, length);
 }
 
 /****************************************************************************
@@ -171,13 +177,15 @@ int ftruncate(int fd, off_t length)
       goto errout;
     }
 
-  DEBUGASSERT(filep != NULL);
-
   /* Perform the truncate operation */
 
   ret = file_truncate(filep, length);
+  fs_putfilep(filep);
   if (ret >= 0)
     {
+#ifdef CONFIG_FS_NOTIFY
+      notify_write(filep);
+#endif
       return 0;
     }
 
@@ -187,5 +195,3 @@ errout:
   set_errno(-ret);
   return ERROR;
 }
-
-#endif /* !CONFIG_DISABLE_MOUNTPOINT */

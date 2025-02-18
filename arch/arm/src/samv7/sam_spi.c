@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/samv7/sam_spi.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -41,12 +43,10 @@
 #include <nuttx/kmalloc.h>
 #include <nuttx/wdog.h>
 #include <nuttx/clock.h>
-#include <nuttx/semaphore.h>
+#include <nuttx/mutex.h>
 #include <nuttx/spi/spi.h>
 
 #include "arm_internal.h"
-#include "arm_arch.h"
-
 #include "sam_gpio.h"
 #include "sam_xdmac.h"
 #include "sam_periphclks.h"
@@ -178,7 +178,7 @@ typedef void (*select_t)(uint32_t devid, bool selected);
 struct sam_spidev_s
 {
   uint32_t base;               /* SPI controller register base address */
-  sem_t spisem;                /* Assures mutually exclusive access to SPI */
+  mutex_t spilock;             /* Assures mutually exclusive access to SPI */
   select_t select;             /* SPI select call-out */
   bool initialized;            /* TRUE: Controller has been initialized */
   bool escape_lastxfer;        /* Don't set LASTXFER-Bit in the next transfer */
@@ -206,7 +206,7 @@ struct sam_spidev_s
 static bool     spi_checkreg(struct sam_spidev_s *spi, bool wr,
                   uint32_t value, uint32_t address);
 #else
-# define        spi_checkreg(spi,wr,value,address) (false)
+#  define       spi_checkreg(spi,wr,value,address) (false)
 #endif
 
 static inline uint32_t spi_getreg(struct sam_spidev_s *spi,
@@ -218,7 +218,7 @@ static inline struct sam_spidev_s *spi_device(struct sam_spics_s *spics);
 #ifdef CONFIG_DEBUG_SPI_INFO
 static void     spi_dumpregs(struct sam_spidev_s *spi, const char *msg);
 #else
-# define        spi_dumpregs(spi,msg)
+#  define       spi_dumpregs(spi,msg)
 #endif
 
 static inline void spi_flush(struct sam_spidev_s *spi);
@@ -338,6 +338,7 @@ static const struct spi_ops_s g_spi0ops =
 static struct sam_spidev_s g_spi0dev =
 {
   .base              = SAM_SPI0_BASE,
+  .spilock           = NXMUTEX_INITIALIZER,
   .select            = sam_spi0select,
 #ifdef CONFIG_SAMV7_SPI_DMA
   .pid               = SAM_PID_SPI0,
@@ -377,6 +378,7 @@ static const struct spi_ops_s g_spi1ops =
 static struct sam_spidev_s g_spi1dev =
 {
   .base              = SAM_SPI1_BASE,
+  .spilock           = NXMUTEX_INITIALIZER,
   .select            = sam_spi1select,
 #ifdef CONFIG_SAMV7_SPI_DMA
   .pid               = SAM_PID_SPI1,
@@ -904,11 +906,11 @@ static int spi_lock(struct spi_dev_s *dev, bool lock)
   spiinfo("lock=%d\n", lock);
   if (lock)
     {
-      ret = nxsem_wait_uninterruptible(&spi->spisem);
+      ret = nxmutex_lock(&spi->spilock);
     }
   else
     {
-      ret = nxsem_post(&spi->spisem);
+      ret = nxmutex_unlock(&spi->spilock);
     }
 
   return ret;
@@ -1125,10 +1127,10 @@ static int spi_setdelay(struct spi_dev_s *dev, uint32_t startdelay,
   uint32_t regval;
   unsigned int offset;
 
-  spiinfo("cs=%d startdelay=%d\n", spics->cs, startdelay);
-  spiinfo("cs=%d stopdelay=%d\n", spics->cs, stopdelay);
-  spiinfo("cs=%d csdelay=%d\n", spics->cs, csdelay);
-  spiinfo("cs=%d ifdelay=%d\n", spics->if, ifdelay);
+  spiinfo("cs=%u startdelay=%" PRIu32 "\n", spics->cs, startdelay);
+  spiinfo("cs=%u stopdelay=%" PRIu32 "\n", spics->cs, stopdelay);
+  spiinfo("cs=%u csdelay=%" PRIu32 "\n", spics->cs, csdelay);
+  spiinfo("cs=%u ifdelay=%" PRIu32 "\n", spics->cs, ifdelay);
 
   offset = (unsigned int)g_csroffset[spics->cs];
 
@@ -1807,7 +1809,7 @@ static void spi_exchange(struct spi_dev_s *dev, const void *txbuffer,
   regaddr = spi_regaddr(spics, SAM_SPI_RDR_OFFSET);
   memaddr = (uintptr_t)rxbuffer;
 
-  ret = sam_dmarxsetup(spics->rxdma, regaddr, memaddr, nwords);
+  ret = sam_dmarxsetup(spics->rxdma, regaddr, memaddr, nbytes);
   if (ret < 0)
     {
       dmaerr("ERROR: sam_dmarxsetup failed: %d\n", ret);
@@ -1821,7 +1823,7 @@ static void spi_exchange(struct spi_dev_s *dev, const void *txbuffer,
   regaddr = spi_regaddr(spics, SAM_SPI_TDR_OFFSET);
   memaddr = (uintptr_t)txbuffer;
 
-  ret = sam_dmatxsetup(spics->txdma, regaddr, memaddr, nwords);
+  ret = sam_dmatxsetup(spics->txdma, regaddr, memaddr, nbytes);
   if (ret < 0)
     {
       dmaerr("ERROR: sam_dmatxsetup failed: %d\n", ret);
@@ -1992,10 +1994,10 @@ static void spi_recvblock(struct spi_dev_s *dev, void *buffer, size_t nwords)
  *
  ****************************************************************************/
 
-FAR struct spi_dev_s *sam_spibus_initialize(int port)
+struct spi_dev_s *sam_spibus_initialize(int port)
 {
-  FAR struct sam_spidev_s *spi;
-  FAR struct sam_spics_s *spics;
+  struct sam_spidev_s *spi;
+  struct sam_spics_s *spics;
   int csno  = (port & __SPI_CS_MASK) >> __SPI_CS_SHIFT;
   int spino = (port & __SPI_SPI_MASK) >> __SPI_SPI_SHIFT;
   irqstate_t flags;
@@ -2020,7 +2022,7 @@ FAR struct spi_dev_s *sam_spibus_initialize(int port)
    * chip select structures.
    */
 
-  spics = (struct sam_spics_s *)kmm_zalloc(sizeof(struct sam_spics_s));
+  spics = kmm_zalloc(sizeof(struct sam_spics_s));
   if (!spics)
     {
       spierr("ERROR: Failed to allocate a chip select structure\n");
@@ -2158,22 +2160,10 @@ FAR struct spi_dev_s *sam_spibus_initialize(int port)
       spi_getreg(spi, SAM_SPI_SR_OFFSET);
       spi_getreg(spi, SAM_SPI_RDR_OFFSET);
 
-      /* Initialize the SPI semaphore that enforces mutually exclusive
-       * access to the SPI registers.
-       */
-
-      nxsem_init(&spi->spisem, 0, 1);
-      spi->escape_lastxfer = false;
       spi->initialized = true;
 
 #ifdef CONFIG_SAMV7_SPI_DMA
-      /* Initialize the SPI semaphore that is used to wake up the waiting
-       * thread when the DMA transfer completes.  This semaphore is used for
-       * signaling and, hence, should not have priority inheritance enabled.
-       */
-
       nxsem_init(&spics->dmawait, 0, 0);
-      nxsem_set_protocol(&spics->dmawait, SEM_PRIO_NONE);
 #endif
 
       spi_dumpregs(spi, "After initialization");

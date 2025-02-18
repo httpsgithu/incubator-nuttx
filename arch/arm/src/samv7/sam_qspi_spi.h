@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/samv7/sam_qspi_spi.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -81,7 +83,7 @@ extern "C"
  ****************************************************************************/
 
 struct spi_dev_s;
-FAR struct spi_dev_s *sam_qspi_spi_initialize(int intf);
+struct spi_dev_s *sam_qspi_spi_initialize(int intf);
 
 /****************************************************************************
  * Name: sam_qspi_select
@@ -125,7 +127,7 @@ void sam_qspi_select(uint32_t devid, bool selected);
  *
  ****************************************************************************/
 
-uint8_t sam_qspi_status(FAR struct spi_dev_s *dev, uint32_t devid);
+uint8_t sam_qspi_status(struct spi_dev_s *dev, uint32_t devid);
 
 /****************************************************************************
  * Name: sam_qspi_cmddata
@@ -152,7 +154,7 @@ uint8_t sam_qspi_status(FAR struct spi_dev_s *dev, uint32_t devid);
  ****************************************************************************/
 
 #ifdef CONFIG_SPI_CMDDATA
-int sam_qspi_cmddata(FAR struct spi_dev_s *dev, uint32_t devid, bool cmd);
+int sam_qspi_cmddata(struct spi_dev_s *dev, uint32_t devid, bool cmd);
 #endif /* CONFIG_SPI_CMDDATA */
 
 #undef EXTERN

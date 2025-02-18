@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/efm32/efm32_spi.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -35,14 +37,13 @@
 #include <nuttx/arch.h>
 #include <nuttx/wdog.h>
 #include <nuttx/clock.h>
+#include <nuttx/mutex.h>
 #include <nuttx/semaphore.h>
 #include <nuttx/spi/spi.h>
 
 #include <arch/board/board.h>
 
 #include "arm_internal.h"
-#include "arm_arch.h"
-
 #include "chip.h"
 #include "hardware/efm32_usart.h"
 #include "efm32_config.h"
@@ -118,7 +119,7 @@ struct efm32_spidev_s
   sem_t txdmasem;            /* Wait for TX DMA to complete */
 #endif
 
-  sem_t exclsem;             /* Supports mutually exclusive access */
+  mutex_t lock;              /* Supports mutually exclusive access */
   uint32_t frequency;        /* Requested clock frequency */
   uint32_t actual;           /* Actual clock frequency */
   uint8_t mode;              /* Mode 0,1,2,3 */
@@ -158,8 +159,8 @@ static void      spi_dmarxsetup(struct efm32_spidev_s *priv,
 static void      spi_dmatxsetup(struct efm32_spidev_s *priv,
                    const void *txbuffer, const void *txdummy,
                    size_t nwords);
-static inline void spi_dmarxstart(FAR struct efm32_spidev_s *priv);
-static inline void spi_dmatxstart(FAR struct efm32_spidev_s *priv);
+static inline void spi_dmarxstart(struct efm32_spidev_s *priv);
+static inline void spi_dmatxstart(struct efm32_spidev_s *priv);
 #endif
 
 /* SPI methods */
@@ -172,7 +173,7 @@ static uint32_t  spi_setfrequency(struct spi_dev_s *dev,
 static void      spi_setmode(struct spi_dev_s *dev, enum spi_mode_e mode);
 static void      spi_setbits(struct spi_dev_s *dev, int nbits);
 #ifdef CONFIG_SPI_HWFEATURES
-static int       spi_hwfeatures(FAR struct spi_dev_s *dev,
+static int       spi_hwfeatures(struct spi_dev_s *dev,
                                 spi_hwfeatures_t features);
 #endif
 static uint8_t   spi_status(struct spi_dev_s *dev, uint32_t devid);
@@ -227,7 +228,15 @@ static const struct spi_ops_s g_spiops =
 #ifdef CONFIG_EFM32_USART0_ISSPI
 /* Support for SPI on USART0 */
 
-static struct efm32_spidev_s g_spi0dev;
+static struct efm32_spidev_s g_spi0dev =
+{
+#ifdef CONFIG_EFM32_SPI_DMA
+  .rxdmasem = SEM_INITIALIZER(0),
+  .txdmasem = SEM_INITIALIZER(0),
+#endif
+  .lock = NXMUTEX_INITIALIZER,
+};
+
 static const struct efm32_spiconfig_s g_spi0config =
 {
   .base              = EFM32_USART0_BASE,
@@ -250,7 +259,15 @@ static const struct efm32_spiconfig_s g_spi0config =
 #ifdef CONFIG_EFM32_USART1_ISSPI
 /* Support for SPI on USART1 */
 
-static struct efm32_spidev_s g_spi1dev;
+static struct efm32_spidev_s g_spi1dev =
+{
+#ifdef CONFIG_EFM32_SPI_DMA
+  .rxdmasem = SEM_INITIALIZER(0),
+  .txdmasem = SEM_INITIALIZER(0),
+#endif
+  .lock = NXMUTEX_INITIALIZER,
+};
+
 static const struct efm32_spiconfig_s g_spi1config =
 {
   .base              = EFM32_USART1_BASE,
@@ -273,7 +290,15 @@ static const struct efm32_spiconfig_s g_spi1config =
 #ifdef CONFIG_EFM32_USART2_ISSPI
 /* Support for SPI on USART2 */
 
-static struct efm32_spidev_s g_spi2dev;
+static struct efm32_spidev_s g_spi2dev =
+{
+#ifdef CONFIG_EFM32_SPI_DMA
+  .rxdmasem = SEM_INITIALIZER(0),
+  .txdmasem = SEM_INITIALIZER(0),
+#endif
+  .lock = NXMUTEX_INITIALIZER,
+};
+
 static const struct efm32_spiconfig_s g_spi2config =
 {
   .base              = EFM32_USART2_BASE,
@@ -669,7 +694,7 @@ static void spi_dmatxsetup(struct efm32_spidev_s *priv, const void *txbuffer,
  ****************************************************************************/
 
 #ifdef CONFIG_EFM32_SPI_DMA
-static void spi_dmarxstart(FAR struct efm32_spidev_s *priv)
+static void spi_dmarxstart(struct efm32_spidev_s *priv)
 {
   priv->rxresult = EINPROGRESS;
   efm32_dmastart(priv->rxdmach, spi_dmarxcallback, priv);
@@ -685,7 +710,7 @@ static void spi_dmarxstart(FAR struct efm32_spidev_s *priv)
  ****************************************************************************/
 
 #ifdef CONFIG_EFM32_SPI_DMA
-static inline void spi_dmatxstart(FAR struct efm32_spidev_s *priv)
+static inline void spi_dmatxstart(struct efm32_spidev_s *priv)
 {
   priv->txresult = EINPROGRESS;
   efm32_dmastart(priv->txdmach, spi_dmatxcallback, priv);
@@ -720,11 +745,11 @@ static int spi_lock(struct spi_dev_s *dev, bool lock)
 
   if (lock)
     {
-      ret = nxsem_wait_uninterruptible(&priv->exclsem);
+      ret = nxmutex_lock(&priv->lock);
     }
   else
     {
-      ret = nxsem_post(&priv->exclsem);
+      ret = nxmutex_unlock(&priv->lock);
     }
 
   return ret;
@@ -1052,7 +1077,7 @@ static void spi_setbits(struct spi_dev_s *dev, int nbits)
  ****************************************************************************/
 
 #ifdef CONFIG_SPI_HWFEATURES
-static int spi_hwfeatures(FAR struct spi_dev_s *dev,
+static int spi_hwfeatures(struct spi_dev_s *dev,
                           spi_hwfeatures_t features)
 {
 #ifdef CONFIG_SPI_BITORDER
@@ -1215,7 +1240,7 @@ static uint32_t spi_send(struct spi_dev_s *dev, uint32_t wd)
   spi_wait_status(config, _USART_STATUS_RXDATAV_MASK, USART_STATUS_RXDATAV);
   ret = spi_getreg(config, EFM32_USART_RXDATA_OFFSET);
 
-  spiinfo("Sent: %04x Return: %04x \n", wd, ret);
+  spiinfo("Sent: %04x Return: %04x\n", wd, ret);
   return ret;
 }
 
@@ -1578,10 +1603,6 @@ static int spi_portinitialize(struct efm32_spidev_s *priv)
 
   spi_putreg(config, EFM32_USART_CMD_OFFSET, USART_CMD_MASTEREN);
 
-  /* Initialize the SPI semaphore that enforces mutually exclusive access */
-
-  nxsem_init(&priv->exclsem, 0, 1);
-
 #ifdef CONFIG_EFM32_SPI_DMA
   /* Allocate two DMA channels... one for the RX and one for the TX side of
    * the transfer.
@@ -1602,18 +1623,6 @@ static int spi_portinitialize(struct efm32_spidev_s *priv)
              port);
       goto errout_with_rxdmach;
     }
-
-  /* Initialized semaphores used to wait for DMA completion */
-
-  nxsem_init(&priv->rxdmasem, 0, 0);
-  nxsem_init(&priv->txdmasem, 0, 0);
-
-  /* These semaphores are used for signaling and, hence, should not have
-   * priority inheritance enabled.
-   */
-
-  nxsem_set_protocol(&priv->rxdmasem, SEM_PRIO_NONE);
-  nxsem_set_protocol(&priv->txdmasem, SEM_PRIO_NONE);
 #endif
 
   /* Enable SPI */

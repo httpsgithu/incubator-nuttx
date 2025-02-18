@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/xmc4/xmc4_spi.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -40,17 +42,14 @@
 #include <nuttx/wdog.h>
 #include <nuttx/kmalloc.h>
 #include <nuttx/clock.h>
-#include <nuttx/semaphore.h>
+#include <nuttx/mutex.h>
 #include <nuttx/spi/spi.h>
 
 #include "arm_internal.h"
-#include "arm_arch.h"
-
 #include "chip.h"
 #include "xmc4_gpio.h"
 #include "xmc4_spi.h"
 #include "xmc4_usic.h"
-#include "hardware/xmc4_spi.h"
 #include "hardware/xmc4_usic.h"
 #include "hardware/xmc4_pinmux.h"
 
@@ -185,8 +184,8 @@ struct xmc4_spics_s
 
 /* Type of board-specific SPI status function */
 
-typedef CODE void (*select_t)(struct spi_dev_s *dev, uint32_t devid,
-                              bool selected);
+typedef void (*select_t)(struct spi_dev_s *dev, uint32_t devid,
+                         bool selected);
 
 /* Chip select register offsets */
 
@@ -195,13 +194,15 @@ typedef CODE void (*select_t)(struct spi_dev_s *dev, uint32_t devid,
 struct xmc4_spidev_s
 {
   uint32_t base;                /* SPI controller register base address */
-  sem_t spisem;                 /* Assures mutually exclusive access to SPI */
+  mutex_t spilock;              /* Assures mutually exclusive access to SPI */
   select_t select;              /* SPI select call-out */
   bool initialized;             /* TRUE: Controller has been initialized */
 #ifdef CONFIG_XMC4_SPI_DMA
   uint8_t rxintf;               /* RX hardware interface number */
   uint8_t txintf;               /* TX hardware interface number */
 #endif
+
+  uint8_t dx0;                /* Input signal selection for MISO */
 
   /* Debug stuff */
 
@@ -224,7 +225,7 @@ static bool     spi_checkreg(struct xmc4_spidev_s *spi, bool wr,
                              uint32_t value, uint32_t address);
 
 #else
-# define        spi_checkreg(spi, wr, value, address)  (false)
+#  define       spi_checkreg(spi, wr, value, address)  (false)
 #endif
 
 static inline uint32_t spi_getreg(struct xmc4_spidev_s *spi,
@@ -236,7 +237,7 @@ static inline struct xmc4_spidev_s *spi_device(struct xmc4_spics_s *spics);
 #ifdef CONFIG_DEBUG_SPI_INFO
 static void     spi_dumpregs(struct xmc4_spidev_s *spi, const char *msg);
 #else
-# define        spi_dumpregs(spi, msg)
+#  define       spi_dumpregs(spi, msg)
 #endif
 
 static inline void spi_flush(struct xmc4_spidev_s *spi);
@@ -327,7 +328,13 @@ static const struct spi_ops_s g_spi0ops =
 static struct xmc4_spidev_s g_spi0dev =
 {
   .base         = XMC4_USIC0_CH0_BASE,
+  .spilock      = NXMUTEX_INITIALIZER,
   .select       = xmc4_spi0select,
+#ifdef BOARD_SPI0_DX
+  .dx0          = BOARD_SPI0_DX,
+#else
+  .dx0          = BOARD_SPI_DX,
+#endif
 #ifdef CONFIG_XMC4_SPI_DMA
   .rxintf       = DMACHAN_INTF_SPI0RX,
   .txintf       = DMACHAN_INTF_SPI0TX,
@@ -364,7 +371,13 @@ static const struct spi_ops_s g_spi1ops =
 static struct xmc4_spidev_s g_spi1dev =
 {
   .base         = XMC4_USIC0_CH1_BASE,
+  .spilock      = NXMUTEX_INITIALIZER,
   .select       = xmc4_spi1select,
+#ifdef BOARD_SPI1_DX
+  .dx0          = BOARD_SPI1_DX,
+#else
+  .dx0          = BOARD_SPI_DX,
+#endif
 #ifdef CONFIG_XMC4_SPI_DMA
   .rxintf       = DMACHAN_INTF_SPI1RX,
   .txintf       = DMACHAN_INTF_SPI1TX,
@@ -401,7 +414,13 @@ static const struct spi_ops_s g_spi2ops =
 static struct xmc4_spidev_s g_spi2dev =
 {
   .base         = XMC4_USIC1_CH0_BASE,
+  .spilock      = NXMUTEX_INITIALIZER,
   .select       = xmc4_spi2select,
+#ifdef BOARD_SPI2_DX
+  .dx0          = BOARD_SPI2_DX,
+#else
+  .dx0          = BOARD_SPI_DX,
+#endif
 #ifdef CONFIG_XMC4_SPI_DMA
   .rxintf       = DMACHAN_INTF_SPI2RX,
   .txintf       = DMACHAN_INTF_SPI2TX,
@@ -438,7 +457,13 @@ static const struct spi_ops_s g_spi3ops =
 static struct xmc4_spidev_s g_spi3dev =
 {
   .base         = XMC4_USIC1_CH1_BASE,
+  .spilock      = NXMUTEX_INITIALIZER,
   .select       = xmc4_spi3select,
+#ifdef BOARD_SPI3_DX
+  .dx0          = BOARD_SPI3_DX,
+#else
+  .dx0          = BOARD_SPI_DX,
+#endif
 #ifdef CONFIG_XMC4_SPI_DMA
   .rxintf       = DMACHAN_INTF_SPI3RX,
   .txintf       = DMACHAN_INTF_SPI3TX,
@@ -475,7 +500,13 @@ static const struct spi_ops_s g_spi4ops =
 static struct xmc4_spidev_s g_spi4dev =
 {
   .base          = XMC4_USIC2_CH0_BASE,
+  .spilock      = NXMUTEX_INITIALIZER,
   .select        = xmc4_spi4select,
+#ifdef BOARD_SPI4_DX
+  .dx0          = BOARD_SPI4_DX,
+#else
+  .dx0          = BOARD_SPI_DX,
+#endif
 #ifdef CONFIG_XMC4_SPI_DMA
   .rxintf        = DMACHAN_INTF_SPI4RX,
   .txintf        = DMACHAN_INTF_SPI4TX,
@@ -513,7 +544,13 @@ static const struct spi_ops_s g_spi5ops =
 static struct xmc4_spidev_s g_spi5dev =
 {
   .base         = XMC4_USIC2_CH1_BASE,
+  .spilock      = NXMUTEX_INITIALIZER,
   .select       = xmc4_spi5select,
+#ifdef BOARD_SPI5_DX
+  .dx0          = BOARD_SPI5_DX,
+#else
+  .dx0          = BOARD_SPI_DX,
+#endif
 #ifdef CONFIG_XMC4_SPI_DMA
   .rxintf       = DMACHAN_INTF_SPI5RX,
   .txintf       = DMACHAN_INTF_SPI5TX,
@@ -1052,11 +1089,11 @@ static int spi_lock(struct spi_dev_s *dev, bool lock)
   spiinfo("lock=%d\n", lock);
   if (lock)
     {
-      ret = nxsem_wait_uninterruptible(&spi->spisem);
+      ret = nxmutex_lock(&spi->spilock);
     }
   else
     {
-      ret = nxsem_post(&spi->spisem);
+      ret = nxmutex_unlock(&spi->spilock);
     }
 
   return ret;
@@ -1081,8 +1118,8 @@ static int spi_lock(struct spi_dev_s *dev, bool lock)
 
 static void spi_select(struct spi_dev_s *dev, uint32_t devid, bool selected)
 {
-  struct xmc4_spics_s   *spics  = (struct xmc4_spics_s *)dev;
-  struct xmc4_spidev_s  *spi    = spi_device(spics);
+  struct xmc4_spics_s  *spics = (struct xmc4_spics_s *)dev;
+  struct xmc4_spidev_s *spi   = spi_device(spics);
 
   /* Are we selecting or de-selecting the device? */
 
@@ -1790,7 +1827,7 @@ struct spi_dev_s *xmc4_spibus_initialize(int channel)
    * chip select structures.
    */
 
-  spics = (struct xmc4_spics_s *)kmm_zalloc(sizeof(struct xmc4_spics_s));
+  spics = kmm_zalloc(sizeof(struct xmc4_spics_s));
   if (!spics)
     {
       spierr("ERROR: Failed to allocate a chip select structure\n");
@@ -2014,9 +2051,15 @@ struct spi_dev_s *xmc4_spibus_initialize(int channel)
 
       /* Set DX0CR input source path and input switch */
 
+      if (spi->dx0 > 7)
+        {
+          spierr("ERROR:  DX invalid: %d\n", spi->dx0);
+          goto errchannel;
+        }
+
       regval  = getreg32(spi->base + XMC4_USIC_DX0CR_OFFSET);
       regval &= ~USIC_DXCR_DSEL_MASK;
-      regval |= USIC_DXCR_DSEL_DX(BOARD_SPI_DX);
+      regval |= USIC_DXCR_DSEL_DX(spi->dx0);
       regval |= USIC_DXCR_INSW;
       putreg32(regval, spi->base + XMC4_USIC_DX0CR_OFFSET);
 
@@ -2059,22 +2102,10 @@ struct spi_dev_s *xmc4_spibus_initialize(int channel)
 
       spi_putreg(spi, 0, XMC4_USIC_CCR_OFFSET);
 
-      /* Initialize the SPI semaphore that enforces mutually exclusive
-       * access to the SPI registers.
-       */
-
-      nxsem_init(&spi->spisem, 0, 1);
       spi->initialized = true;
 
 #ifdef CONFIG_XMC4_SPI_DMA
-
-      /* Initialize the SPI semaphore that is used to wake up the waiting
-       * thread when the DMA transfer completes.  This semaphore is used for
-       * signaling and, hence, should not have priority inheritance enabled.
-       */
-
       nxsem_init(&spics->dmawait, 0, 0);
-      nxsem_set_protocol(&spics->dmawait, SEM_PRIO_NONE);
 #endif
 
       spi_dumpregs(spi, "After initialization");

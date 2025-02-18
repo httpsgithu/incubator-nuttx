@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/nrf52/nrf52_gpiote.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -35,8 +37,7 @@
 #include <arch/irq.h>
 #include <nuttx/arch.h>
 
-#include "arm_arch.h"
-
+#include "arm_internal.h"
 #include "nrf52_gpio.h"
 #include "nrf52_gpiote.h"
 
@@ -54,8 +55,9 @@
 
 struct nrf52_gpiote_callback_s
 {
-  xcpt_t     callback;
-  FAR void  *arg;
+  xcpt_t    callback;
+  void     *arg;
+  uint32_t  pinset;
 };
 
 /****************************************************************************
@@ -116,7 +118,7 @@ static inline uint32_t nrf52_gpiote_getreg(uint32_t offset)
  *
  ****************************************************************************/
 
-static int nrf52_gpiote_isr(int irq, FAR void *context, FAR void *arg)
+static int nrf52_gpiote_isr(int irq, void *context, void *arg)
 {
   uint32_t regval = 0;
   int      ret    = OK;
@@ -141,7 +143,7 @@ static int nrf52_gpiote_isr(int irq, FAR void *context, FAR void *arg)
               /* Execute callback */
 
               xcpt_t callback = g_gpiote_ch_callbacks[i].callback;
-              FAR void *cbarg = g_gpiote_ch_callbacks[i].arg;
+              void *cbarg = g_gpiote_ch_callbacks[i].arg;
               ret = callback(irq, context, cbarg);
 
               /* Clear event */
@@ -198,7 +200,7 @@ static int nrf52_gpiote_isr(int irq, FAR void *context, FAR void *arg)
                   /* Run callback */
 
                   xcpt_t callback = g_gpiote_pin_callbacks[i][j].callback;
-                  FAR void *cbarg = g_gpiote_pin_callbacks[i][j].arg;
+                  void *cbarg = g_gpiote_pin_callbacks[i][j].arg;
 
                   ret = callback(irq, context, cbarg);
 
@@ -213,7 +215,7 @@ static int nrf52_gpiote_isr(int irq, FAR void *context, FAR void *arg)
           if (g_gpiote_port_callback[i].callback)
             {
               xcpt_t callback = g_gpiote_port_callback[i].callback;
-              FAR void *cbarg = g_gpiote_port_callback[i].arg;
+              void *cbarg = g_gpiote_port_callback[i].arg;
 
               ret = callback(irq, context, cbarg);
             }
@@ -247,13 +249,9 @@ static int nrf52_gpiote_isr(int irq, FAR void *context, FAR void *arg)
  *  - func:        When non-NULL, generate interrupt
  *  - arg:         Argument passed to the interrupt callback
  *
- * Returned Value:
- *   Zero (OK) on success; a negated errno value on failure indicating the
- *   nature of the failure.
- *
  ****************************************************************************/
 
-void nrf52_gpiote_set_pin_event(uint32_t pinset, xcpt_t func, FAR void *arg)
+void nrf52_gpiote_set_pin_event(uint32_t pinset, xcpt_t func, void *arg)
 {
   int        pin    = 0;
   int        port   = 0;
@@ -286,13 +284,9 @@ void nrf52_gpiote_set_pin_event(uint32_t pinset, xcpt_t func, FAR void *arg)
  *  - func:        When non-NULL, generate interrupt
  *  - arg:         Argument passed to the interrupt callback
  *
- * Returned Value:
- *   Zero (OK) on success; a negated errno value on failure indicating the
- *   nature of the failure.
- *
  ****************************************************************************/
 
-void nrf52_gpiote_set_port_event(uint32_t pinset, xcpt_t func, FAR void *arg)
+void nrf52_gpiote_set_port_event(uint32_t pinset, xcpt_t func, void *arg)
 {
   int        port   = 0;
   irqstate_t flags;
@@ -351,21 +345,17 @@ void nrf52_gpiote_set_port_event(uint32_t pinset, xcpt_t func, FAR void *arg)
  *
  * Input Parameters:
  *  - pinset:      GPIO pin configuration
+ *  - channel:     GPIOTE channel used to capture events
  *  - risingedge:  Enables interrupt on rising edges
  *  - fallingedge: Enables interrupt on falling edges
- *  - event:       Generate event when set
  *  - func:        When non-NULL, generate interrupt
  *  - arg:         Argument passed to the interrupt callback
- *
- * Returned Value:
- *   Zero (OK) on success; a negated errno value on failure indicating the
- *   nature of the failure.
  *
  ****************************************************************************/
 
 void nrf52_gpiote_set_ch_event(uint32_t pinset, int channel,
                                bool risingedge, bool fallingedge,
-                               xcpt_t func, FAR void *arg)
+                               xcpt_t func, void *arg)
 {
   int        pin    = 0;
 #ifdef CONFIG_NRF52_HAVE_PORT1
@@ -446,6 +436,64 @@ void nrf52_gpiote_set_ch_event(uint32_t pinset, int channel,
 }
 
 /****************************************************************************
+ * Name: nrf52_gpiote_set_event
+ *
+ * Description:
+ *   Configures a GPIOTE channel in EVENT mode, assigns it to a given pin
+ *   and sets a handler for the first availalbe GPIOTE channel
+ *
+ * Input Parameters:
+ *  - pinset:      GPIO pin configuration
+ *  - risingedge:  Enables interrupt on rising edges
+ *  - fallingedge: Enables interrupt on falling edges
+ *  - func:        When non-NULL, generate interrupt
+ *  - arg:         Argument passed to the interrupt callback
+ *
+ * Returned Value:
+ *   Zero (OK) on success; a negated errno value on failure indicating the
+ *   nature of the failure.
+ *
+ ****************************************************************************/
+
+int nrf52_gpiote_set_event(uint32_t pinset,
+                           bool risingedge, bool fallingedge,
+                           xcpt_t func, void *arg)
+{
+  irqstate_t flags;
+  int ret = -ENOMEM;
+  int i = 0;
+
+  flags = enter_critical_section();
+
+  /* Get free channel or channel already used by pinset */
+
+  for (i = 0; i < GPIOTE_CHANNELS; i++)
+    {
+      if (g_gpiote_ch_callbacks[i].callback == NULL ||
+          g_gpiote_ch_callbacks[i].pinset == pinset)
+        {
+          g_gpiote_ch_callbacks[i].pinset = pinset;
+
+          /* Configure channel */
+
+          nrf52_gpiote_set_ch_event(pinset, i,
+                                    risingedge, fallingedge,
+                                    func, arg);
+
+          /* Return the channel index */
+
+          ret = i;
+
+          break;
+        }
+    }
+
+  leave_critical_section(flags);
+
+  return ret;
+}
+
+/****************************************************************************
  * Name: nrf52_gpio_set_task
  *
  * Description:
@@ -457,14 +505,10 @@ void nrf52_gpiote_set_ch_event(uint32_t pinset, int channel,
  *   Finally, a given pin should only be assigned to a given channel.
  *
  * Input Parameters:
- *  - pinset: gpio pin configuration (only port + pin is important here)
- *  - channel: the GPIOTE channel used to control the given pin
+ *  - pinset:      gpio pin configuration (only port + pin is important here)
+ *  - channel:     the GPIOTE channel used to control the given pin
  *  - output_high: set pin initially to output HIGH or LOW.
- *  - outcfg: configure pin behavior one OUT task is triggered
- *
- * Returned Value:
- *   Zero (OK) on success; a negated errno value on failure indicating the
- *   nature of the failure.
+ *  - outcfg:      configure pin behavior one OUT task is triggered
  *
  ****************************************************************************/
 

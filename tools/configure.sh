@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 # tools/configure.sh
 #
+# SPDX-License-Identifier: Apache-2.0
+#
 # Licensed to the Apache Software Foundation (ASF) under one or more
 # contributor license agreements.  See the NOTICE file distributed with
 # this work for additional information regarding copyright ownership.  The
@@ -21,14 +23,16 @@ set -e
 
 WD=`test -d ${0%/*} && cd ${0%/*}; pwd`
 TOPDIR="${WD}/.."
+WSDIR=`cd "${TOPDIR}/.." && pwd -P`
 MAKECMD="make"
 USAGE="
 
-USAGE: ${0} [-E] [-e] [-l|m|c|g|n|B] [L] [-a <app-dir>] <board-name>:<config-name> [make-opts]
+USAGE: ${0} [-E] [-e] [-S] [-l|m|c|g|n|B] [-L [boardname]] [-a <app-dir>] <board-selection> [make-opts]
 
 Where:
   -E enforces distclean if already configured.
   -e performs distclean if configuration changed.
+  -S adds the nxtmpdir folder for third-party packages.
   -l selects the Linux (l) host environment.
   -m selects the macOS (m) host environment.
   -c selects the Windows host and Cygwin (c) environment.
@@ -37,11 +41,17 @@ Where:
   -B selects the *BSD (B) host environment.
   Default: Use host setup in the defconfig file
   Default Windows: Cygwin
-  -L  Lists all available configurations.
+  -L lists available configurations for given boards, or all boards if no
+     board is given. board name can be partial here.
   -a <app-dir> is the path to the apps/ directory, relative to the nuttx
      directory
-  <board-name> is the name of the board in the boards directory
-  configs/<config-name> is the name of the board configuration sub-directory
+  <board-selection> is either:
+    For in-tree boards: a <board-name>:<config-name> pair where <board-name> is
+    the name of the board in the boards directory and <config-name> is the name
+    of the board configuration sub-directory (e.g. boardname:nsh), or: For
+    out-of-tree custom boards: a path to the board's configuration directory,
+    either relative to TOPDIR (e.g. ../mycustomboards/myboardname/config/nsh)
+    or an absolute path.
   make-opts directly pass to make
 
 "
@@ -62,10 +72,17 @@ unset appdir
 unset host
 unset enforce_distclean
 unset distclean
+unset store_nxtmpdir
 
 function dumpcfgs
 {
-  configlist=`find ${TOPDIR}/boards -name defconfig`
+  if [ -n "$1" ]; then
+    local boards=$(find ${TOPDIR}/boards -mindepth 3 -maxdepth 3 -type d -name "*$1*")
+    [ -z "$boards" ] && { echo board "$1" not found; return ;}
+    configlist=$(find $boards -name defconfig -type f)
+  else
+    configlist=$(find ${TOPDIR}/boards -name defconfig -type f)
+  fi
   for defconfig in ${configlist}; do
     config=`dirname ${defconfig} | sed -e "s,${TOPDIR}/boards/,,g"`
     boardname=`echo ${config} | cut -d'/' -f3`
@@ -104,8 +121,12 @@ while [ ! -z "$1" ]; do
     exit 0
     ;;
   -L )
-    dumpcfgs
+    shift
+    dumpcfgs $1
     exit 0
+    ;;
+  -S )
+    store_nxtmpdir=y
     ;;
   *)
     boardconfig=$1
@@ -162,8 +183,12 @@ if [ ! -r ${src_makedefs} ]; then
       src_makedefs=${configpath}/../../scripts/Make.defs
 
       if [ ! -r ${src_makedefs} ]; then
-        echo "File Make.defs could not be found"
-        exit 4
+        src_makedefs=${configpath}/../../../common/scripts/Make.defs
+
+        if [ ! -r ${src_makedefs} ]; then
+          echo "File Make.defs could not be found"
+          exit 4
+        fi
       fi
     fi
   fi
@@ -171,6 +196,7 @@ fi
 
 src_config=${configpath}/defconfig
 dest_config="${TOPDIR}/.config"
+original_config="${TOPDIR}/.config.orig"
 backup_config="${TOPDIR}/defconfig"
 
 if [ ! -r ${src_config} ]; then
@@ -197,6 +223,35 @@ if [ -r ${dest_config} ]; then
   fi
 fi
 
+if [ "X${store_nxtmpdir}" = "Xy" ]; then
+  if [ ! -d "${WSDIR}/nxtmpdir" ]; then
+    mkdir -p "${WSDIR}/nxtmpdir"
+    echo "Folder ${WSDIR}/nxtmpdir created."
+  fi
+else
+  if [ -d "${WSDIR}/nxtmpdir" ]; then
+    rm -rf "${WSDIR}/nxtmpdir"
+    echo "Folder ${WSDIR}/nxtmpdir clean."
+  fi
+fi
+
+
+# Okay... Everything looks good.  Setup the configuration
+
+echo "  Copy files"
+ln -sf ${src_makedefs} ${dest_makedefs} || \
+  { echo "Failed to symlink ${src_makedefs}" ; exit 8 ; }
+${TOPDIR}/tools/process_config.sh -I ${configpath}/../../common/configs \
+  -I ${configpath}/../common -I ${configpath} -o ${dest_config} ${src_config}
+install -m 644 ${src_config} "${backup_config}" || \
+  { echo "Failed to backup ${src_config}" ; exit 10 ; }
+
+# Install any optional files
+
+for opt in ${OPTFILES}; do
+  test -f ${configpath}/${opt} && install ${configpath}/${opt} "${TOPDIR}/"
+done
+
 # Extract values needed from the defconfig file.  We need:
 # (1) The CONFIG_WINDOWS_NATIVE setting to know it this is target for a
 #     native Windows
@@ -220,7 +275,7 @@ fi
 # not be in a usable form.
 
 defappdir=y
-if [ -z "${appdir}" -a "X$oldnative" = "$winnative" ]; then
+if [ -z "${appdir}" -a "X$oldnative" = "X$winnative" ]; then
   quoted=`grep "^CONFIG_APPS_DIR=" ${src_config} | cut -d'=' -f2`
   if [ ! -z "${quoted}" ]; then
     appdir=`echo ${quoted} | sed -e "s/\"//g"`
@@ -243,11 +298,18 @@ if [ -z "${appdir}" ]; then
 
   if [ -d "${TOPDIR}/../apps" ]; then
     appdir="../apps"
+  elif [ -d "${TOPDIR}/../nuttx-apps" ]; then
+    appdir="../nuttx-apps"
+  elif [ -d "${TOPDIR}/../nuttx-apps.git" ]; then
+    appdir="../nuttx-apps.git"
   else
     # Check for a versioned apps/ directory
 
     if [ -d "${TOPDIR}/../apps-${CONFIG_VERSION_STRING}" ]; then
       appdir="../apps-${CONFIG_VERSION_STRING}"
+    else
+      echo "ERROR: Could not find the path to the appdir"
+      exit 7
     fi
   fi
 fi
@@ -265,21 +327,6 @@ if [ ! -z "${appdir}" -a ! -d "${TOPDIR}/${posappdir}" ]; then
   exit 7
 fi
 
-# Okay... Everything looks good.  Setup the configuration
-
-echo "  Copy files"
-install -m 644 ${src_makedefs} "${dest_makedefs}" || \
-  { echo "Failed to copy ${src_makedefs}" ; exit 8 ; }
-install -m 644 ${src_config} "${dest_config}" || \
-  { echo "Failed to copy ${src_config}" ; exit 9 ; }
-install -m 644 ${src_config} "${backup_config}" || \
-  { echo "Failed to backup ${src_config}" ; exit 10 ; }
-
-# Install any optional files
-
-for opt in ${OPTFILES}; do
-  test -f ${configpath}/${opt} && install ${configpath}/${opt} "${TOPDIR}/"
-done
 
 # If we did not use the CONFIG_APPS_DIR that was in the defconfig config file,
 # then append the correct application information to the tail of the .config
@@ -298,7 +345,17 @@ if [ "X${defappdir}" = "Xy" ]; then
   fi
 fi
 
+# Update the CONFIG_BASE_DEFCONFIG setting
+
+posboardconfig=`echo "${boardconfig}" | sed -e 's/\\\\/\\//g'`
+echo "CONFIG_BASE_DEFCONFIG=\"$posboardconfig\"" >> "${dest_config}"
+
 # The saved defconfig files are all in compressed format and must be
 # reconstitued before they can be used.
 
 ${TOPDIR}/tools/sethost.sh $host $*
+
+# Save the original configuration file without CONFIG_BASE_DEFCONFIG
+# for later comparison
+
+grep -v "CONFIG_BASE_DEFCONFIG" "${dest_config}" > "${original_config}"

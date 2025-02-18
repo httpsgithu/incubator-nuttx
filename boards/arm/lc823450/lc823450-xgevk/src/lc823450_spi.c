@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/lc823450/lc823450-xgevk/src/lc823450_spi.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -41,7 +43,7 @@
  *
  ****************************************************************************/
 
-void lc823450_spiselect(FAR struct spi_dev_s *dev, uint32_t devid,
+void lc823450_spiselect(struct spi_dev_s *dev, uint32_t devid,
                         bool selected)
 {
   /* no need */

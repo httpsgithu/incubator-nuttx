@@ -1,6 +1,8 @@
 /****************************************************************************
  * drivers/analog/max1161x.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -144,20 +146,20 @@ static int  max1161x_ioctl(FAR struct adc_dev_s *dev, int cmd,
 
 static const struct adc_ops_s g_adcops =
 {
-  .ao_bind     = max1161x_bind,      /* ao_bind */
-  .ao_reset    = max1161x_reset,     /* ao_reset */
-  .ao_setup    = max1161x_setup,     /* ao_setup */
-  .ao_shutdown = max1161x_shutdown,  /* ao_shutdown */
-  .ao_rxint    = max1161x_rxint,     /* ao_rxint */
-  .ao_ioctl    = max1161x_ioctl      /* ao_read */
+  max1161x_bind,      /* ao_bind */
+  max1161x_reset,     /* ao_reset */
+  max1161x_setup,     /* ao_setup */
+  max1161x_shutdown,  /* ao_shutdown */
+  max1161x_rxint,     /* ao_rxint */
+  max1161x_ioctl      /* ao_read */
 };
 
 static struct max1161x_dev_s g_adcpriv;
 
 static struct adc_dev_s g_adcdev =
 {
-  .ad_ops  = &g_adcops,
-  .ad_priv = &g_adcpriv,
+  &g_adcops,    /* ad_ops */
+  &g_adcpriv    /* ad_priv */
 };
 
 /****************************************************************************
@@ -267,7 +269,7 @@ static int max1161x_readchannel(FAR struct max1161x_dev_s *priv,
       i2cmsg[2].flags = I2C_M_READ;
 
       uint16_t buf;
-      i2cmsg[2].buffer = (uint8_t *)(&buf);
+      i2cmsg[2].buffer = (FAR uint8_t *)(&buf);
       i2cmsg[2].length = sizeof(buf);
       ret = I2C_TRANSFER(priv->i2c, i2cmsg, 3);
       if (ret < 0)

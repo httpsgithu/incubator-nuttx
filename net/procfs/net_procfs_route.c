@@ -1,6 +1,8 @@
 /****************************************************************************
  * net/procfs/net_procfs_route.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -41,7 +43,6 @@
 #include <nuttx/kmalloc.h>
 #include <nuttx/fs/fs.h>
 #include <nuttx/fs/procfs.h>
-#include <nuttx/fs/dirent.h>
 
 #include "route/route.h"
 
@@ -129,7 +130,7 @@ struct route_info_s
 /* Helpers */
 
 static void    route_sprintf(FAR struct route_info_s *info,
-                 FAR const char *fmt, ...);
+                 FAR const char *fmt, ...) printf_like(2, 3);
 #ifdef CONFIG_NET_IPv4
 static int     route_ipv4_entry(FAR struct net_route_ipv4_s *route,
                  FAR void *arg);
@@ -159,9 +160,10 @@ static int     route_dup(FAR const struct file *oldp,
                  FAR struct file *newp);
 
 static int     route_opendir(const char *relpath,
-                 FAR struct fs_dirent_s *dir);
+                 FAR struct fs_dirent_s **dir);
 static int     route_closedir(FAR struct fs_dirent_s *dir);
-static int     route_readdir(FAR struct fs_dirent_s *dir);
+static int     route_readdir(FAR struct fs_dirent_s *dir,
+                             FAR struct dirent *entry);
 static int     route_rewinddir(FAR struct fs_dirent_s *dir);
 
 static int     route_stat(FAR const char *relpath, FAR struct stat *buf);
@@ -175,12 +177,13 @@ static int     route_stat(FAR const char *relpath, FAR struct stat *buf);
  * with any compiler.
  */
 
-const struct procfs_operations net_procfs_routeoperations =
+const struct procfs_operations g_netroute_operations =
 {
   route_open,          /* open */
   route_close,         /* close */
   route_read,          /* read */
   NULL,                /* write */
+  NULL,                /* poll */
 
   route_dup,           /* dup */
 
@@ -609,12 +612,12 @@ static int route_dup(FAR const struct file *oldp, FAR struct file *newp)
  ****************************************************************************/
 
 static int route_opendir(FAR const char *relpath,
-                         FAR struct fs_dirent_s *dir)
+                         FAR struct fs_dirent_s **dir)
 {
   FAR struct route_dir_s *level2;
 
   finfo("relpath: \"%s\"\n", relpath ? relpath : "NULL");
-  DEBUGASSERT(relpath && dir && !dir->u.procfs);
+  DEBUGASSERT(relpath);
 
   /* Check the relative path */
 
@@ -651,7 +654,7 @@ static int route_opendir(FAR const char *relpath,
   level2->base.nentries    = 2;
   level2->name             = "";
   level2->node             = PROC_ROUTE;
-  dir->u.procfs            = (FAR void *)level2;
+  *dir                     = (FAR struct fs_dirent_s *)level2;
   return OK;
 }
 
@@ -664,17 +667,8 @@ static int route_opendir(FAR const char *relpath,
 
 static int route_closedir(FAR struct fs_dirent_s *dir)
 {
-  FAR struct route_dir_s *priv;
-
-  DEBUGASSERT(dir && dir->u.procfs);
-  priv = dir->u.procfs;
-
-  if (priv != NULL)
-    {
-      kmm_free(priv);
-    }
-
-  dir->u.procfs = NULL;
+  DEBUGASSERT(dir);
+  kmm_free(dir);
   return OK;
 }
 
@@ -685,14 +679,15 @@ static int route_closedir(FAR struct fs_dirent_s *dir)
  *
  ****************************************************************************/
 
-static int route_readdir(struct fs_dirent_s *dir)
+static int route_readdir(FAR struct fs_dirent_s *dir,
+                         FAR struct dirent *entry)
 {
   FAR struct route_dir_s *level2;
   FAR const char *dname;
   unsigned int index;
 
-  DEBUGASSERT(dir != NULL && dir->u.procfs != NULL);
-  level2 = dir->u.procfs;
+  DEBUGASSERT(dir != NULL);
+  level2 = (FAR struct route_dir_s *)dir;
 
   /* The index determines which entry to return */
 
@@ -722,8 +717,8 @@ static int route_readdir(struct fs_dirent_s *dir)
 
   /* Save the filename and file type */
 
-  dir->fd_dir.d_type = DTYPE_FILE;
-  strncpy(dir->fd_dir.d_name, dname, NAME_MAX + 1);
+  entry->d_type = DTYPE_FILE;
+  strlcpy(entry->d_name, dname, sizeof(entry->d_name));
 
   /* Set up the next directory entry offset.  NOTE that we could use the
    * standard f_pos instead of our own private index.
@@ -744,8 +739,8 @@ static int route_rewinddir(struct fs_dirent_s *dir)
 {
   FAR struct route_dir_s *priv;
 
-  DEBUGASSERT(dir && dir->u.procfs);
-  priv = dir->u.procfs;
+  DEBUGASSERT(dir);
+  priv = (FAR struct route_dir_s *)dir;
 
   priv->base.index = 0;
   return OK;

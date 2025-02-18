@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/kinetis/kinetis_lpserial.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -37,6 +39,7 @@
 #include <nuttx/arch.h>
 #include <nuttx/fs/ioctl.h>
 #include <nuttx/serial/serial.h>
+#include <nuttx/spinlock.h>
 
 #ifdef CONFIG_SERIAL_TERMIOS
 #  include <termios.h>
@@ -44,9 +47,7 @@
 
 #include <arch/board/board.h>
 
-#include "arm_arch.h"
 #include "arm_internal.h"
-
 #include "kinetis_config.h"
 #include "chip.h"
 #include "hardware/kinetis_lpuart.h"
@@ -272,6 +273,7 @@ struct kinetis_dev_s
   uint8_t   parity;    /* 0=none, 1=odd, 2=even */
   uint8_t   bits;      /* Number of bits (8 or 9) */
   uint8_t   stop2;     /* Use 2 stop bits */
+  spinlock_t lock;     /* Spinlock */
 #ifdef CONFIG_SERIAL_IFLOWCONTROL
   bool      iflow;     /* input flow control (RTS) enabled */
 #endif
@@ -427,6 +429,7 @@ static struct kinetis_dev_s g_lpuart0priv =
   .parity         = CONFIG_LPUART0_PARITY,
   .bits           = CONFIG_LPUART0_BITS,
   .stop2          = CONFIG_LPUART0_2STOP,
+  .lock           = SP_UNLOCKED,
 #if defined(CONFIG_SERIAL_OFLOWCONTROL) && defined(CONFIG_LPUART0_OFLOWCONTROL)
   .oflow         = true,
   .cts_gpio      = PIN_LPUART0_CTS,
@@ -474,6 +477,7 @@ static struct kinetis_dev_s g_lpuart1priv =
   .parity         = CONFIG_LPUART1_PARITY,
   .bits           = CONFIG_LPUART1_BITS,
   .stop2          = CONFIG_LPUART1_2STOP,
+  .lock           = SP_UNLOCKED,
 #if defined(CONFIG_SERIAL_OFLOWCONTROL) && defined(CONFIG_LPUART1_OFLOWCONTROL)
   .oflow         = true,
   .cts_gpio      = PIN_LPUART1_CTS,
@@ -521,6 +525,7 @@ static struct kinetis_dev_s g_lpuart2priv =
   .parity         = CONFIG_LPUART2_PARITY,
   .bits           = CONFIG_LPUART2_BITS,
   .stop2          = CONFIG_LPUART2_2STOP,
+  .lock           = SP_UNLOCKED,
 #if defined(CONFIG_SERIAL_OFLOWCONTROL) && defined(CONFIG_LPUART2_OFLOWCONTROL)
   .oflow         = true,
   .cts_gpio      = PIN_LPUART2_CTS,
@@ -568,6 +573,7 @@ static struct kinetis_dev_s g_lpuart3priv =
   .parity         = CONFIG_LPUART3_PARITY,
   .bits           = CONFIG_LPUART3_BITS,
   .stop2          = CONFIG_LPUART3_2STOP,
+  .lock           = SP_UNLOCKED,
 #if defined(CONFIG_SERIAL_OFLOWCONTROL) && defined(CONFIG_LPUART3_OFLOWCONTROL)
   .oflow         = true,
   .cts_gpio      = PIN_LPUART3_CTS,
@@ -615,6 +621,7 @@ static struct kinetis_dev_s g_lpuart4priv =
   .parity         = CONFIG_LPUART4_PARITY,
   .bits           = CONFIG_LPUART4_BITS,
   .stop2          = CONFIG_LPUART4_2STOP,
+  .lock           = SP_UNLOCKED,
 #if defined(CONFIG_SERIAL_OFLOWCONTROL) && defined(CONFIG_LPUART4_OFLOWCONTROL)
   .oflow         = true,
   .cts_gpio      = PIN_LPUART4_CTS,
@@ -699,6 +706,17 @@ static void kinetis_setuartint(struct kinetis_dev_s *priv)
  * Name: kinetis_restoreuartint
  ****************************************************************************/
 
+static void kinetis_restoreuartint_nolock(struct kinetis_dev_s *priv,
+                                          uint32_t ie)
+{
+  /* Re-enable/re-disable interrupts corresponding to the state of bits in
+   * ie
+   */
+
+  priv->ie = ie & LPUART_CTRL_ALL_INTS;
+  kinetis_setuartint(priv);
+}
+
 static void kinetis_restoreuartint(struct kinetis_dev_s *priv, uint32_t ie)
 {
   irqstate_t flags;
@@ -707,10 +725,9 @@ static void kinetis_restoreuartint(struct kinetis_dev_s *priv, uint32_t ie)
    * ie
    */
 
-  flags    = enter_critical_section();
-  priv->ie = ie & LPUART_CTRL_ALL_INTS;
-  kinetis_setuartint(priv);
-  leave_critical_section(flags);
+  flags    = spin_lock_irqsave(&priv->lock);
+  kinetis_restoreuartint_nolock(priv, ie);
+  spin_unlock_irqrestore(&priv->lock, flags);
 }
 
 /****************************************************************************
@@ -722,14 +739,14 @@ static void kinetis_disableuartint(struct kinetis_dev_s *priv, uint32_t *ie)
 {
   irqstate_t flags;
 
-  flags = enter_critical_section();
+  flags = spin_lock_irqsave(&priv->lock);
   if (ie)
     {
       *ie = priv->ie;
     }
 
-  kinetis_restoreuartint(priv, 0);
-  leave_critical_section(flags);
+  kinetis_restoreuartint_nolock(priv, 0);
+  spin_unlock_irqrestore(&priv->lock, flags);
 }
 #endif
 
@@ -849,7 +866,6 @@ static int kinetis_dma_setup(struct uart_dev_s *dev)
   config.flags  = EDMA_CONFIG_LINKTYPE_LINKNONE | EDMA_CONFIG_LOOPDEST;
   config.ssize  = EDMA_8BIT;
   config.dsize  = EDMA_8BIT;
-  config.ttype  = EDMA_PERIPH2MEM;
   config.nbytes = 1;
 #ifdef CONFIG_KINETIS_EDMA_ELINK
   config.linkch = NULL;
@@ -861,6 +877,9 @@ static int kinetis_dma_setup(struct uart_dev_s *dev)
    */
 
   priv->rxdmanext = 0;
+
+  up_invalidate_dcache((uintptr_t)priv->rxfifo,
+                       (uintptr_t)priv->rxfifo + RXDMA_BUFFER_SIZE);
 
   /* Enable receive DMA for the UART */
 
@@ -995,11 +1014,11 @@ static void kinetis_detach(struct uart_dev_s *dev)
  * Name: kinetis_interrupts
  *
  * Description:
- *   This is the LPUART status interrupt handler.  It will be invoked when
- *   an interrupt received on the 'irq'  It should call uart_transmitchars
- *   or uart_receivechar to perform the appropriate data transfers.  The
- *   interrupt handling logic must be able to map the 'irq' number into the
- *   Appropriate uart_dev_s structure in order to call these functions.
+ *   This is the LPUART interrupt handler.  It will be invoked when an
+ *   interrupt is received on the 'irq'.  It should call uart_xmitchars or
+ *   uart_recvchars to perform the appropriate data transfers.  The
+ *   interrupt handling logic must be able to map the 'arg' to the
+ *   appropriate uart_dev_s structure in order to call these functions.
  *
  ****************************************************************************/
 
@@ -1114,7 +1133,6 @@ static int kinetis_ioctl(struct file *filep, int cmd, unsigned long arg)
 
 #if defined(CONFIG_SERIAL_TERMIOS) || defined(CONFIG_SERIAL_TIOCSERGSTRUCT) || \
     defined(CONFIG_KINETIS_SERIALBRK_BSDCOMPAT)
-  DEBUGASSERT(filep != NULL && filep->f_inode != NULL);
   inode = filep->f_inode;
   dev   = inode->i_private;
   DEBUGASSERT(dev != NULL && dev->priv != NULL);
@@ -1204,7 +1222,7 @@ static int kinetis_ioctl(struct file *filep, int cmd, unsigned long arg)
 
         cfsetispeed(termiosp, priv->baud);
 
-        /* TODO: CCTS_IFLOW, CCTS_OFLOW */
+        /* TODO: CRTS_IFLOW, CCTS_OFLOW */
       }
       break;
 
@@ -1949,27 +1967,16 @@ void kinetis_lpserial_dma_poll(void)
  ****************************************************************************/
 
 #ifdef HAVE_LPUART_PUTC
-int up_putc(int ch)
+void up_putc(int ch)
 {
 #ifdef HAVE_LPUART_CONSOLE
   struct kinetis_dev_s *priv = (struct kinetis_dev_s *)CONSOLE_DEV.priv;
   uint32_t ie;
 
   kinetis_disableuartint(priv, &ie);
-
-  /* Check for LF */
-
-  if (ch == '\n')
-    {
-      /* Add CR */
-
-      arm_lowputc('\r');
-    }
-
   arm_lowputc(ch);
   kinetis_restoreuartint(priv, ie);
 #endif
-  return ch;
 }
 #endif
 
@@ -1984,21 +1991,11 @@ int up_putc(int ch)
  ****************************************************************************/
 
 #ifdef HAVE_LPUART_PUTC
-int up_putc(int ch)
+void up_putc(int ch)
 {
 #ifdef HAVE_LPUART_CONSOLE
-  /* Check for LF */
-
-  if (ch == '\n')
-    {
-      /* Add CR */
-
-      arm_lowputc('\r');
-    }
-
   arm_lowputc(ch);
 #endif
-  return ch;
 }
 #endif
 

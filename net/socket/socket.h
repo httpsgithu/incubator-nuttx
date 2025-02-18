@@ -1,6 +1,8 @@
 /****************************************************************************
  * net/socket/socket.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -18,8 +20,8 @@
  *
  ****************************************************************************/
 
-#ifndef _NET_SOCKET_SOCKET_H
-#define _NET_SOCKET_SOCKET_H
+#ifndef __NET_SOCKET_SOCKET_H
+#define __NET_SOCKET_SOCKET_H
 
 /****************************************************************************
  * Included Files
@@ -32,6 +34,7 @@
 #include <stdint.h>
 #include <time.h>
 
+#include <nuttx/fs/fs.h>
 #include <nuttx/clock.h>
 #include <nuttx/net/net.h>
 
@@ -61,10 +64,12 @@
 #define _SO_SNDLOWAT     _SO_BIT(SO_SNDLOWAT)
 #define _SO_SNDTIMEO     _SO_BIT(SO_SNDTIMEO)
 #define _SO_TYPE         _SO_BIT(SO_TYPE)
+#define _SO_TIMESTAMP    _SO_BIT(SO_TIMESTAMP)
+#define _SO_BINDTODEVICE _SO_BIT(SO_BINDTODEVICE)
 
 /* This is the largest option value.  REVISIT: belongs in sys/socket.h */
 
-#define _SO_MAXOPT       (16)
+#define _SO_MAXOPT       (18)
 
 /* Macros to set, test, clear options */
 
@@ -92,18 +97,30 @@
 /* Macro to set socket errors */
 
 #ifdef CONFIG_NET_SOCKOPTS
+#  define _SO_CONN_SETERRNO(c,e) \
+    do \
+      { \
+        if ((c) != NULL) \
+          { \
+            FAR struct socket_conn_s *_conn = \
+              (FAR struct socket_conn_s *)(c); \
+            _conn->s_error = (int16_t)e; \
+          } \
+      } \
+    while (0)
+
 #  define _SO_SETERRNO(s,e) \
     do \
       { \
         if (s != NULL) \
           { \
-            s->s_error = (int16_t)e; \
+            _SO_CONN_SETERRNO((s)->s_conn, e); \
           } \
-        set_errno(e); \
       } \
     while (0)
 #else
-#  define _SO_SETERRNO(s,e) set_errno(e)
+#  define _SO_CONN_SETERRNO(c,e)
+#  define _SO_SETERRNO(s,e)
 #endif /* CONFIG_NET_SOCKOPTS */
 
 /****************************************************************************
@@ -171,4 +188,4 @@ int net_timeo(clock_t start_time, socktimeo_t timeo);
 #endif
 
 #endif /* CONFIG_NET */
-#endif /* _NET_SOCKET_SOCKET_H */
+#endif /* __NET_SOCKET_SOCKET_H */

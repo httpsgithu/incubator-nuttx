@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/lc823450/lc823450_i2c.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -89,9 +91,9 @@ extern "C"
  * Public Function Prototypes
  ****************************************************************************/
 
-FAR struct i2c_master_s *lc823450_i2cbus_initialize(int port);
-int lc823450_i2cbus_uninitialize(FAR struct i2c_master_s *dev);
-void lc823450_i2cbus_changetimeout(FAR struct i2c_master_s *dev,
+struct i2c_master_s *lc823450_i2cbus_initialize(int port);
+int lc823450_i2cbus_uninitialize(struct i2c_master_s *dev);
+void lc823450_i2cbus_changetimeout(struct i2c_master_s *dev,
                                    uint32_t timeoms);
 
 #if defined(__cplusplus)

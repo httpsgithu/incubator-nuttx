@@ -1,6 +1,8 @@
 ############################################################################
 # graphics/Makefile
 #
+# SPDX-License-Identifier: Apache-2.0
+#
 # Licensed to the Apache Software Foundation (ASF) under one or more
 # contributor license agreements.  See the NOTICE file distributed with
 # this work for additional information regarding copyright ownership.  The
@@ -24,9 +26,8 @@ include nxglib/Make.defs
 include nxbe/Make.defs
 include nxmu/Make.defs
 include nxterm/Make.defs
-include vnc/Make.defs
 
-CFLAGS += ${shell $(INCDIR) "$(CC)" $(TOPDIR)$(DELIM)graphics}
+CFLAGS += ${INCDIR_PREFIX}$(TOPDIR)$(DELIM)graphics
 
 AOBJS = $(ASRCS:.S=$(OBJEXT))
 COBJS = $(CSRCS:.c=$(OBJEXT))

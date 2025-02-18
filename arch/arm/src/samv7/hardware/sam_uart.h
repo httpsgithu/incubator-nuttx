@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/samv7/hardware/sam_uart.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -248,7 +250,7 @@
 #define UART_CR_STTBRK               (1 << 9)  /* Bit 9:  Start Break (USART, UART mode only) */
 #define UART_CR_STPBRK               (1 << 10) /* Bit 10: Stop Break (USART, UART mode only) */
 #define UART_CR_STTTO                (1 << 11) /* Bit 11: Start Time-out (USART, UART mode only) */
-#define UART_CR_REQCLR               (1 << 12) /* Bit 12:Request Clear (UART only) */
+#define UART_CR_REQCLR               (1 << 12) /* Bit 12: Request Clear (UART only) */
 #define UART_CR_SENDA                (1 << 12) /* Bit 12: Send Address (USART, UART mode only) */
 #define UART_CR_RETTO                (1 << 15) /* Bit 15: Rearm Time-out (USART, UART mode only) */
 #define UART_CR_RTSEN                (1 << 18) /* Bit 18: Request to Send Enable (USART, UART mode only) */
@@ -266,6 +268,8 @@
 #  define UART_MR_MODE_RS485         (1  << UART_MR_MODE_SHIFT) /* RS485 */
 #  define UART_MR_MODE_HWHS          (2  << UART_MR_MODE_SHIFT) /* Hardware Handshaking */
 #  define UART_MR_MODE_LON           (9  << UART_MR_MODE_SHIFT) /* LON */
+#  define UART_MR_MODE_LINMSTR       (10 << UART_MR_MODE_SHIFT) /* LIN Master */
+#  define UART_MR_MODE_LINSLV        (11 << UART_MR_MODE_SHIFT) /* LIN Slave */
 #  define UART_MR_MODE_SPIMSTR       (14 << UART_MR_MODE_SHIFT) /* SPI Master (SPI mode only) */
 #  define UART_MR_MODE_SPISLV        (15 << UART_MR_MODE_SHIFT) /* SPI Slave (SPI mode only) */
 
@@ -332,7 +336,7 @@
 #define UART_INT_RXBRK               (1 << 2)  /* Bit 2:  Break Received/End of Break (USART, UART mode only) */
 #define UART_INT_OVRE                (1 << 5)  /* Bit 5:  Overrun Error Interrupt (Common) */
 #define UART_INT_FRAME               (1 << 6)  /* Bit 6:  Framing Error Interrupt (Common, UART mode) */
-#define UART_INT_LSF                 (1 << 6)  /* Bit 6:   LON Short Frame Error Interrupt Enablee (USART, LON mode only) */
+#define UART_INT_LSF                 (1 << 6)  /* Bit 6:  LON Short Frame Error Interrupt Enablee (USART, LON mode only) */
 #define UART_INT_PARE                (1 << 7)  /* Bit 7:  Parity Error Interrupt (Common, UART mode) */
 #define UART_INT_LCRCE               (1 << 7)  /* Bit 7:  LON CRC Error Interrupt Enablee (USART, LON mode only) */
 #define UART_INT_TIMEOUT             (1 << 8)  /* Bit 8:  Time-out Interrupt (USART, UART mode only) */
@@ -354,6 +358,8 @@
 #define UART_INT_LINCE               (1 << 28) /* Bit 28: LIN Checksum Error Interrupt (USART, LIN mode only) */
 #define UART_INT_LBLOVFE             (1 << 28) /* Bit 28: LON Backlog Overflow Error Interrupt Enable (USART, LON mode only) */
 #define UART_INT_LINSNRE             (1 << 29) /* Bit 29: LIN Slave Not Responding Error Interrupt (USART, LIN mode only) */
+#define UART_INT_LINSTE              (1 << 30) /* Bit 30: LIN Synch Tolerance Error Interrupt (USART, LIN mode only) */
+#define UART_INT_LINHTE              (1 << 31) /* Bit 31: LIN Header Timeout Error Interrupt (USART, LIN mode only) */
 
 #define UART_INT_ALLINTS             0x3f08e7e7
 
@@ -375,7 +381,7 @@
 #endif
 #define UART_THR_TXCHR_SHIFT         (0)       /* Bits 0-8: Character to be Transmitted (USART only) */
 #define UART_THR_TXCHR_MASK          (0x1ff << UART_THR_TXCHR_SHIFT)
-#define UART_THR_TXSYNH              (1 << 15) /* Bit 15: Sync Field to be tran (USART only) */
+#define UART_THR_TXSYNH              (1 << 15) /* Bit 15: Sync Field to be Transmitted (USART only) */
 
 /* UART Baud Rate Generator Register */
 
@@ -486,7 +492,7 @@
 #define UART_LONMR_TCOL              (1 << 2)  /* Bit 2:  Terminate Frame upon Collision Notification */
 #define UART_LONMR_CDTAIL            (1 << 3)  /* Bit 3:  LON Collision Detection on Frame Tail */
 #define UART_LONMR_DMAM              (1 << 4)  /* Bit 4:  LON DMA Mode */
-#define UART_LONMR_LCDS              (1 << 5)  /* Bit 5: LON Collision Detection Source */
+#define UART_LONMR_LCDS              (1 << 5)  /* Bit 5:  LON Collision Detection Source */
 #define UART_LONMR_EOFS_SHIFT        (16)      /* Bits 16-23: End of Frame Condition Size */
 #define UART_LONMR_EOFS_MASK         (0xff << UART_LONMR_EOFS_SHIFT)
 #  define UART_LONMR_EOFS(n)         ((uint32_t)(n) << UART_LONMR_EOFS_SHIFT)

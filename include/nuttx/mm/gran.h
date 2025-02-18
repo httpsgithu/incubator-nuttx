@@ -1,6 +1,7 @@
 /****************************************************************************
  * include/nuttx/mm/gran.h
- * General purpose granule memory allocator.
+ *
+ * SPDX-License-Identifier: Apache-2.0
  *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -170,11 +171,12 @@ void gran_release(GRAN_HANDLE handle);
  *   size   - The size of the region to be reserved
  *
  * Returned Value:
- *   None
+ *   On success, a non-NULL pointer to the allocated memory is returned;
+ *   NULL is returned on failure.
  *
  ****************************************************************************/
 
-void gran_reserve(GRAN_HANDLE handle, uintptr_t start, size_t size);
+FAR void *gran_reserve(GRAN_HANDLE handle, uintptr_t start, size_t size);
 
 /****************************************************************************
  * Name: gran_alloc

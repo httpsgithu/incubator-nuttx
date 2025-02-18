@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/s32k1xx/s32k144evb/src/s32k144evb.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -63,10 +65,6 @@
 
 #define GPIO_SW2    (PIN_PTC12 | PIN_INT_BOTH)
 #define GPIO_SW3    (PIN_PTC13 | PIN_INT_BOTH)
-
-/* Count of peripheral clock user configurations */
-
-#define NUM_OF_PERIPHERAL_CLOCKS_0 15
 
 /****************************************************************************
  * Public Data

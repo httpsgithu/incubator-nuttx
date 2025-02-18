@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/imxrt/imxrt_flexpwm.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -35,11 +37,13 @@
 
 #include <nuttx/timers/pwm.h>
 
-#include "arm_arch.h"
+#include "arm_internal.h"
 #include "chip.h"
 #include "imxrt_config.h"
 #include "imxrt_flexpwm.h"
+#include "imxrt_gpio.h"
 #include "imxrt_periphclks.h"
+#include "imxrt_xbar.h"
 #include "hardware/imxrt_flexpwm.h"
 #include "hardware/imxrt_pinmux.h"
 #include "hardware/imxrt_ccm.h"
@@ -51,13 +55,13 @@
 #ifdef CONFIG_IMXRT_FLEXPWM
 
 #ifdef CONFIG_PWM_NCHANNELS
-# define PWM_NCHANNELS CONFIG_PWM_NCHANNELS
+#  define PWM_NCHANNELS CONFIG_PWM_NCHANNELS
 #else
-# define PWM_NCHANNELS 1
+#  define PWM_NCHANNELS 1
 #endif
 
 #define MODULE_OFFSET 0x60
-#define CLK_FREQ  132000000
+#define CLK_FREQ  150000000
 #define PWM_RES 65535
 
 /****************************************************************************
@@ -71,44 +75,48 @@
 struct imxrt_flexpwm_out_s
 {
   bool used;
-  uint32_t pin;                   /* Output pin */
+  uint32_t pin;                     /* Output pin */
 };
 
 struct imxrt_flexpwm_module_s
 {
   uint8_t module;                   /* Number of PWM module */
   bool used;                        /* True if the module is used */
+  uint8_t trig_val;                 /* 0: invalid, 1: period, 2: duty */
   struct imxrt_flexpwm_out_s out_a; /* PWM output */
   struct imxrt_flexpwm_out_s out_b; /* PWM output */
   bool complementary;               /* True if outputs are complementary */
   uint32_t irq;                     /* Combined interrupt */
+  uint16_t ext_sync;
+  int16_t sync_src;
 };
 
 struct imxrt_flexpwm_s
 {
-  const struct pwm_ops_s *ops;    /* PWM operations */
-  FAR struct imxrt_flexpwm_module_s *modules;
-  uint8_t modules_num;            /* Number of modules */
-  uint32_t frequency;             /* PWM frequency */
-  uint32_t base;                  /* Base address of peripheral register */
+  const struct pwm_ops_s *ops;      /* PWM operations */
+  struct imxrt_flexpwm_module_s *modules;
+  uint8_t modules_num;              /* Number of modules */
+  uint32_t frequency;               /* PWM frequency */
+  uint32_t base;                    /* Base address of peripheral register */
 };
 
 /* PWM driver methods */
 
-static int pwm_setup(FAR struct pwm_lowerhalf_s *dev);
-static int pwm_shutdown(FAR struct pwm_lowerhalf_s *dev);
-static int pwm_start(FAR struct pwm_lowerhalf_s *dev,
-                     FAR const struct pwm_info_s *info);
-static int pwm_stop(FAR struct pwm_lowerhalf_s *dev);
-static int pwm_ioctl(FAR struct pwm_lowerhalf_s *dev,
+static int pwm_setup(struct pwm_lowerhalf_s *dev);
+static int pwm_shutdown(struct pwm_lowerhalf_s *dev);
+static int pwm_start(struct pwm_lowerhalf_s *dev,
+                     const struct pwm_info_s *info);
+static int pwm_stop(struct pwm_lowerhalf_s *dev);
+static int pwm_ioctl(struct pwm_lowerhalf_s *dev,
                      int cmd, unsigned long arg);
 
 /* Helper functions */
 
-static int pwm_set_output(FAR struct pwm_lowerhalf_s *dev, uint8_t channel,
-                           ub16_t duty);
-static int pwm_change_freq(FAR struct pwm_lowerhalf_s *dev,
-                     FAR const struct pwm_info_s *info, uint8_t channel);
+static int pwm_set_output(struct pwm_lowerhalf_s *dev, uint8_t channel,
+                          ub16_t duty);
+static int pwm_change_freq(struct pwm_lowerhalf_s *dev,
+                           const struct pwm_info_s *info,
+                           uint8_t channel);
 
 /****************************************************************************
   * Private Data
@@ -133,84 +141,144 @@ static struct imxrt_flexpwm_module_s g_pwm1_modules[] =
   {
     .module = 1,
     .used = true,
+#ifdef CONFIG_IMXRT_FLEXPWM1_MOD1_TRIG
+#ifdef CONFIG_IMXRT_FLEXPWM1_MOD1_TRIG_PER
+    .trig_val = 1,
+#elif CONFIG_IMXRT_FLEXPWM1_MOD1_TRIG_DUTY
+    .trig_val = 2,
+#else
+    .trig_val = 0,
+#endif
+#else
+    .trig_val = 0,
+#endif
     .out_a =
     {
       .used = true,
       .pin = GPIO_FLEXPWM1_MOD1_A
     },
-#ifdef CONFIG_IMXRT_FLEXPWM1_MOD1_COMP
+#ifdef CONFIG_IMXRT_FLEXPWM1_MOD1_USE_OUT_B
     .out_b =
     {
       .used = true,
       .pin = GPIO_FLEXPWM1_MOD1_B
     },
-    .complementary = true
-#else
-    .complementary = false
 #endif
+#ifdef CONFIG_IMXRT_FLEXPWM1_MOD1_COMP
+    .complementary = true,
+#else
+    .complementary = false,
+#endif
+    .sync_src = CONFIG_IMXRT_FLEXPWM1_MOD1_SYNC_SRC,
+    .ext_sync = IMXRT_XBARA1_OUT_FLEXPWM1_EXT_SYNC0_SEL_OFFSET,
   },
 #endif
 #ifdef CONFIG_IMXRT_FLEXPWM1_MOD2
   {
     .module = 2,
     .used = true,
+#ifdef CONFIG_IMXRT_FLEXPWM1_MOD2_TRIG
+#ifdef CONFIG_IMXRT_FLEXPWM1_MOD2_TRIG_PER
+    .trig_val = 1,
+#elif CONFIG_IMXRT_FLEXPWM1_MOD2_TRIG_DUTY
+    .trig_val = 2,
+#else
+    .trig_val = 0,
+#endif
+#else
+    .trig_val = 0,
+#endif
     .out_a =
     {
       .used = true,
       .pin = GPIO_FLEXPWM1_MOD2_A
     },
-#ifdef CONFIG_IMXRT_FLEXPWM1_MOD2_COMP
+#ifdef CONFIG_IMXRT_FLEXPWM1_MOD2_USE_OUT_B
     .out_b =
     {
       .used = true,
       .pin = GPIO_FLEXPWM1_MOD2_B
     },
-    .complementary = true
-#else
-    .complementary = false
 #endif
+#ifdef CONFIG_IMXRT_FLEXPWM1_MOD2_COMP
+    .complementary = true,
+#else
+    .complementary = false,
+#endif
+    .sync_src = CONFIG_IMXRT_FLEXPWM1_MOD2_SYNC_SRC,
+    .ext_sync = IMXRT_XBARA1_OUT_FLEXPWM1_EXT_SYNC1_SEL_OFFSET,
   },
 #endif
 #ifdef CONFIG_IMXRT_FLEXPWM1_MOD3
   {
     .module = 3,
     .used = true,
+#ifdef CONFIG_IMXRT_FLEXPWM1_MOD3_TRIG
+#ifdef CONFIG_IMXRT_FLEXPWM1_MOD3_TRIG_PER
+    .trig_val = 1,
+#elif CONFIG_IMXRT_FLEXPWM1_MOD3_TRIG_DUTY
+    .trig_val = 2,
+#else
+    .trig_val = 0,
+#endif
+#else
+    .trig_val = 0,
+#endif
     .out_a =
     {
       .used = true,
       .pin = GPIO_FLEXPWM1_MOD3_A
     },
-#ifdef CONFIG_IMXRT_FLEXPWM1_MOD3_COMP
+#ifdef CONFIG_IMXRT_FLEXPWM1_MOD3_USE_OUT_B
     .out_b =
     {
       .used = true,
       .pin = GPIO_FLEXPWM1_MOD3_B
     },
-    .complementary = true
-#else
-    .complementary = false
 #endif
+#ifdef CONFIG_IMXRT_FLEXPWM1_MOD3_COMP
+    .complementary = true,
+#else
+    .complementary = false,
+#endif
+    .sync_src = CONFIG_IMXRT_FLEXPWM1_MOD3_SYNC_SRC,
+    .ext_sync = IMXRT_XBARA1_OUT_FLEXPWM1_EXT_SYNC2_SEL_OFFSET,
   },
 #endif
 #ifdef CONFIG_IMXRT_FLEXPWM1_MOD4
   {
     .module = 4,
     .used = true,
+#ifdef CONFIG_IMXRT_FLEXPWM1_MOD4_TRIG
+#ifdef CONFIG_IMXRT_FLEXPWM1_MOD4_TRIG_PER
+    .trig_val = 1,
+#elif CONFIG_IMXRT_FLEXPWM1_MOD4_TRIG_DUTY
+    .trig_val = 2,
+#else
+    .trig_val = 0,
+#endif
+#else
+    .trig_val = 0,
+#endif
     .out_a =
     {
       .used = true,
       .pin = GPIO_FLEXPWM1_MOD4_A
     },
-#ifdef CONFIG_IMXRT_FLEXPWM1_MOD4_COMP
+#ifdef CONFIG_IMXRT_FLEXPWM1_MOD4_USE_OUT_B
     .out_b =
     {
       .used = true,
       .pin = GPIO_FLEXPWM1_MOD4_B
     },
-    .complementary = true
-#else
-    .complementary = false
 #endif
+#ifdef CONFIG_IMXRT_FLEXPWM1_MOD4_COMP
+    .complementary = true,
+#else
+    .complementary = false,
+#endif
+    .sync_src = CONFIG_IMXRT_FLEXPWM1_MOD4_SYNC_SRC,
+    .ext_sync = IMXRT_XBARA1_OUT_FLEXPWM1_EXT_SYNC3_SEL_OFFSET,
   },
 #endif
 };
@@ -219,7 +287,7 @@ static struct imxrt_flexpwm_s g_pwm1 =
 {
   .ops = &g_pwmops,
   .modules = g_pwm1_modules,
-  .modules_num = 4,
+  .modules_num = FLEXPWM1_NMODULES,
   .frequency = 0,
   .base = IMXRT_FLEXPWM1_BASE,
 };
@@ -235,84 +303,144 @@ static struct imxrt_flexpwm_module_s g_pwm2_modules[] =
   {
     .module = 1,
     .used = true,
+#ifdef CONFIG_IMXRT_FLEXPWM2_MOD1_TRIG
+#ifdef CONFIG_IMXRT_FLEXPWM2_MOD1_TRIG_PER
+    .trig_val = 1,
+#elif CONFIG_IMXRT_FLEXPWM2_MOD1_TRIG_DUTY
+    .trig_val = 2,
+#else
+    .trig_val = 0,
+#endif
+#else
+    .trig_val = 0,
+#endif
     .out_a =
     {
       .used = true,
       .pin = GPIO_FLEXPWM2_MOD1_A
     },
-#ifdef CONFIG_IMXRT_FLEXPWM2_MOD1_COMP
+#ifdef CONFIG_IMXRT_FLEXPWM2_MOD1_USE_OUT_B
     .out_b =
     {
       .used = true,
       .pin = GPIO_FLEXPWM2_MOD1_B
     },
-    .complementary = true
-#else
-    .complementary = false
 #endif
+#ifdef CONFIG_IMXRT_FLEXPWM2_MOD1_COMP
+    .complementary = true,
+#else
+    .complementary = false,
+#endif
+    .sync_src = CONFIG_IMXRT_FLEXPWM2_MOD1_SYNC_SRC,
+    .ext_sync = IMXRT_XBARA1_OUT_FLEXPWM2_EXT_SYNC0_SEL_OFFSET,
   },
 #endif
 #ifdef CONFIG_IMXRT_FLEXPWM2_MOD2
   {
     .module = 2,
     .used = true,
+#ifdef CONFIG_IMXRT_FLEXPWM2_MOD2_TRIG
+#ifdef CONFIG_IMXRT_FLEXPWM2_MOD2_TRIG_PER
+    .trig_val = 1,
+#elif CONFIG_IMXRT_FLEXPWM2_MOD2_TRIG_DUTY
+    .trig_val = 2,
+#else
+    .trig_val = 0,
+#endif
+#else
+    .trig_val = 0,
+#endif
     .out_a =
     {
       .used = true,
       .pin = GPIO_FLEXPWM2_MOD2_A,
     },
-#ifdef CONFIG_IMXRT_FLEXPWM2_MOD2_COMP
+#ifdef CONFIG_IMXRT_FLEXPWM2_MOD2_USE_OUT_B
     .out_b =
     {
       .used = true,
       .pin = GPIO_FLEXPWM2_MOD2_B
-    }
-    .complementary = true
-#else
-    .complementary = false
+    },
 #endif
+#ifdef CONFIG_IMXRT_FLEXPWM2_MOD2_COMP
+    .complementary = true,
+#else
+    .complementary = false,
+#endif
+    .sync_src = CONFIG_IMXRT_FLEXPWM2_MOD2_SYNC_SRC,
+    .ext_sync = IMXRT_XBARA1_OUT_FLEXPWM2_EXT_SYNC1_SEL_OFFSET,
   },
 #endif
 #ifdef CONFIG_IMXRT_FLEXPWM2_MOD3
   {
     .module = 3,
     .used = true,
+#ifdef CONFIG_IMXRT_FLEXPWM2_MOD3_TRIG
+#ifdef CONFIG_IMXRT_FLEXPWM2_MOD3_TRIG_PER
+    .trig_val = 1,
+#elif CONFIG_IMXRT_FLEXPWM2_MOD3_TRIG_DUTY
+    .trig_val = 2,
+#else
+    .trig_val = 0,
+#endif
+#else
+    .trig_val = 0,
+#endif
     .out_a =
     {
       .used = true,
       .pin = GPIO_FLEXPWM2_MOD3_A
     },
-#ifdef CONFIG_IMXRT_FLEXPWM2_MOD3_COMP
+#ifdef CONFIG_IMXRT_FLEXPWM2_MOD3_USE_OUT_B
     .out_b =
     {
       .used = true,
       .pin = GPIO_FLEXPWM2_MOD3_B
     },
-    .complementary = true
-#else
-    .complementary = false
 #endif
+#ifdef CONFIG_IMXRT_FLEXPWM2_MOD3_COMP
+    .complementary = true,
+#else
+    .complementary = false,
+#endif
+    .sync_src = CONFIG_IMXRT_FLEXPWM2_MOD3_SYNC_SRC,
+    .ext_sync = IMXRT_XBARA1_OUT_FLEXPWM2_EXT_SYNC2_SEL_OFFSET,
   },
 #endif
 #ifdef CONFIG_IMXRT_FLEXPWM2_MOD4
   {
     .module = 4,
     .used = true,
+#ifdef CONFIG_IMXRT_FLEXPWM2_MOD4_TRIG
+#ifdef CONFIG_IMXRT_FLEXPWM2_MOD4_TRIG_PER
+    .trig_val = 1,
+#elif CONFIG_IMXRT_FLEXPWM2_MOD4_TRIG_DUTY
+    .trig_val = 2,
+#else
+    .trig_val = 0,
+#endif
+#else
+    .trig_val = 0,
+#endif
     .out_a =
     {
       .used = true,
       .pin = GPIO_FLEXPWM2_MOD4_A
     },
-#ifdef CONFIG_IMXRT_FLEXPWM2_MOD4_COMP
+#ifdef CONFIG_IMXRT_FLEXPWM2_MOD4_USE_OUT_B
     .out_b =
     {
       .used = true,
       .pin = GPIO_FLEXPWM2_MOD4_B
     },
-    .complementary = true
-#else
-    .complementary = false
 #endif
+#ifdef CONFIG_IMXRT_FLEXPWM2_MOD4_COMP
+    .complementary = true,
+#else
+    .complementary = false,
+#endif
+    .sync_src = CONFIG_IMXRT_FLEXPWM2_MOD4_SYNC_SRC,
+    .ext_sync = IMXRT_XBARA1_OUT_FLEXPWM2_EXT_SYNC3_SEL_OFFSET,
   }
 #endif
 };
@@ -321,7 +449,7 @@ static struct imxrt_flexpwm_s g_pwm2 =
 {
   .ops = &g_pwmops,
   .modules = g_pwm2_modules,
-  .modules_num = 4,
+  .modules_num = FLEXPWM2_NMODULES,
   .frequency = 0,
   .base = IMXRT_FLEXPWM2_BASE,
 };
@@ -337,84 +465,144 @@ static struct imxrt_flexpwm_module_s g_pwm3_modules[] =
   {
     .module = 1,
     .used = true,
+#ifdef CONFIG_IMXRT_FLEXPWM3_MOD1_TRIG
+#ifdef CONFIG_IMXRT_FLEXPWM3_MOD1_TRIG_PER
+    .trig_val = 1,
+#elif CONFIG_IMXRT_FLEXPWM3_MOD1_TRIG_DUTY
+    .trig_val = 2,
+#else
+    .trig_val = 0,
+#endif
+#else
+    .trig_val = 0,
+#endif
     .out_a =
     {
       .used = true,
       .pin = GPIO_FLEXPWM3_MOD1_A
     },
-#ifdef CONFIG_IMXRT_FLEXPWM3_MOD1_COMP
+#ifdef CONFIG_IMXRT_FLEXPWM3_MOD1_USE_OUT_B
     .out_b =
     {
       .used = true,
       .pin = GPIO_FLEXPWM3_MOD1_B
     },
-    .complementary = true
-#else
-    .complementary = false
 #endif
+#ifdef CONFIG_IMXRT_FLEXPWM3_MOD1_COMP
+    .complementary = true,
+#else
+    .complementary = false,
+#endif
+    .sync_src = CONFIG_IMXRT_FLEXPWM3_MOD1_SYNC_SRC,
+    .ext_sync = IMXRT_XBARA1_OUT_FLEXPWM3_EXT_SYNC0_SEL_OFFSET,
   },
 #endif
 #ifdef CONFIG_IMXRT_FLEXPWM3_MOD2
   {
     .module = 2,
     .used = true,
+#ifdef CONFIG_IMXRT_FLEXPWM3_MOD2_TRIG
+#ifdef CONFIG_IMXRT_FLEXPWM3_MOD2_TRIG_PER
+    .trig_val = 1,
+#elif CONFIG_IMXRT_FLEXPWM3_MOD2_TRIG_DUTY
+    .trig_val = 2,
+#else
+    .trig_val = 0,
+#endif
+#else
+    .trig_val = 0,
+#endif
     .out_a =
     {
       .used = true,
       .pin = GPIO_FLEXPWM3_MOD2_A
     },
-#ifdef CONFIG_IMXRT_FLEXPWM3_MOD2_COMP
+#ifdef CONFIG_IMXRT_FLEXPWM3_MOD2_USE_OUT_B
     .out_b =
     {
       .used = true,
       .pin = GPIO_FLEXPWM3_MOD2_B
     },
-    .complementary = true
-#else
-    .complementary = false
 #endif
+#ifdef CONFIG_IMXRT_FLEXPWM3_MOD2_COMP
+    .complementary = true,
+#else
+    .complementary = false,
+#endif
+    .sync_src = CONFIG_IMXRT_FLEXPWM3_MOD2_SYNC_SRC,
+    .ext_sync = IMXRT_XBARA1_OUT_FLEXPWM3_EXT_SYNC1_SEL_OFFSET,
   },
 #endif
 #ifdef CONFIG_IMXRT_FLEXPWM3_MOD3
   {
     .module = 3,
     .used = true,
+#ifdef CONFIG_IMXRT_FLEXPWM3_MOD3_TRIG
+#ifdef CONFIG_IMXRT_FLEXPWM3_MOD3_TRIG_PER
+    .trig_val = 1,
+#elif CONFIG_IMXRT_FLEXPWM3_MOD3_TRIG_DUTY
+    .trig_val = 2,
+#else
+    .trig_val = 0,
+#endif
+#else
+    .trig_val = 0,
+#endif
     .out_a =
     {
       .used = true,
       .pin = GPIO_FLEXPWM3_MOD3_A
     },
-#ifdef CONFIG_IMXRT_FLEXPWM3_MOD3_COMP
+#ifdef CONFIG_IMXRT_FLEXPWM3_MOD3_USE_OUT_B
     .out_b =
     {
       .used = true,
       .pin = GPIO_FLEXPWM3_MOD3_B
     },
-    .complementary = true
-#else
-    .complementary = false
 #endif
+#ifdef CONFIG_IMXRT_FLEXPWM3_MOD3_COMP
+    .complementary = true,
+#else
+    .complementary = false,
+#endif
+    .sync_src = CONFIG_IMXRT_FLEXPWM3_MOD3_SYNC_SRC,
+    .ext_sync = IMXRT_XBARA1_OUT_FLEXPWM3_EXT_SYNC2_SEL_OFFSET,
   },
 #endif
 #ifdef CONFIG_IMXRT_FLEXPWM3_MOD4
   {
     .module = 4,
     .used = true,
+#ifdef CONFIG_IMXRT_FLEXPWM3_MOD4_TRIG
+#ifdef CONFIG_IMXRT_FLEXPWM3_MOD4_TRIG_PER
+    .trig_val = 1,
+#elif CONFIG_IMXRT_FLEXPWM3_MOD4_TRIG_DUTY
+    .trig_val = 2,
+#else
+    .trig_val = 0,
+#endif
+#else
+    .trig_val = 0,
+#endif
     .out_a =
     {
       .used = true,
       .pin = GPIO_FLEXPWM3_MOD4_A
     },
-#ifdef CONFIG_IMXRT_FLEXPWM3_MOD4_COMP
+#ifdef CONFIG_IMXRT_FLEXPWM3_MOD4_USE_OUT_B
     .out_b =
     {
       .used = true,
       .pin = GPIO_FLEXPWM3_MOD4_B
     },
-    .complementary = true
-#else
-    .complementary = false
 #endif
+#ifdef CONFIG_IMXRT_FLEXPWM3_MOD4_COMP
+    .complementary = true,
+#else
+    .complementary = false,
+#endif
+    .sync_src = CONFIG_IMXRT_FLEXPWM3_MOD4_SYNC_SRC,
+    .ext_sync = IMXRT_XBARA1_OUT_FLEXPWM3_EXT_SYNC3_SEL_OFFSET,
   },
 #endif
 };
@@ -423,7 +611,7 @@ static struct imxrt_flexpwm_s g_pwm3 =
 {
   .ops = &g_pwmops,
   .modules = g_pwm3_modules,
-  .modules_num = 4,
+  .modules_num = FLEXPWM3_NMODULES,
   .frequency = 0,
   .base = IMXRT_FLEXPWM3_BASE,
 };
@@ -439,84 +627,144 @@ static struct imxrt_flexpwm_module_s g_pwm4_modules[] =
   {
     .module = 1,
     .used = true,
+#ifdef CONFIG_IMXRT_FLEXPWM4_MOD1_TRIG
+#ifdef CONFIG_IMXRT_FLEXPWM4_MOD1_TRIG_PER
+    .trig_val = 1,
+#elif CONFIG_IMXRT_FLEXPWM4_MOD1_TRIG_DUTY
+    .trig_val = 2,
+#else
+    .trig_val = 0,
+#endif
+#else
+    .trig_val = 0,
+#endif
     .out_a =
     {
       .used = true,
       .pin = GPIO_FLEXPWM4_MOD1_A
     },
-#ifdef CONFIG_IMXRT_FLEXPWM4_MOD1_COMP
+#ifdef CONFIG_IMXRT_FLEXPWM4_MOD1_USE_OUT_B
     .out_b =
     {
       .used = true,
       .pin = GPIO_FLEXPWM4_MOD1_B
-    }
-    .complementary = true
-#else
-    .complementary = false
+    },
 #endif
+#ifdef CONFIG_IMXRT_FLEXPWM4_MOD1_COMP
+    .complementary = true,
+#else
+    .complementary = false,
+#endif
+    .sync_src = CONFIG_IMXRT_FLEXPWM4_MOD1_SYNC_SRC,
+    .ext_sync = IMXRT_XBARA1_OUT_FLEXPWM4_EXT_SYNC0_SEL_OFFSET,
   },
 #endif
 #ifdef CONFIG_IMXRT_FLEXPWM4_MOD2
   {
     .module = 2,
     .used = true,
+#ifdef CONFIG_IMXRT_FLEXPWM4_MOD2_TRIG
+#ifdef CONFIG_IMXRT_FLEXPWM4_MOD2_TRIG_PER
+    .trig_val = 1,
+#elif CONFIG_IMXRT_FLEXPWM4_MOD2_TRIG_DUTY
+    .trig_val = 2,
+#else
+    .trig_val = 0,
+#endif
+#else
+    .trig_val = 0,
+#endif
     .out_a =
     {
       .used = true,
       .pin = GPIO_FLEXPWM4_MOD2_A
     },
-#ifdef CONFIG_IMXRT_FLEXPWM4_MOD2_COMP
+#ifdef CONFIG_IMXRT_FLEXPWM4_MOD2_USE_OUT_B
     .out_b =
     {
       .used = true,
       .pin = GPIO_FLEXPWM4_MOD2_B
-    }
-    .complementary = true
-#else
-    .complementary = false
+    },
 #endif
+#ifdef CONFIG_IMXRT_FLEXPWM4_MOD2_COMP
+    .complementary = true,
+#else
+    .complementary = false,
+#endif
+    .sync_src = CONFIG_IMXRT_FLEXPWM4_MOD2_SYNC_SRC,
+    .ext_sync = IMXRT_XBARA1_OUT_FLEXPWM4_EXT_SYNC1_SEL_OFFSET,
   },
 #endif
 #ifdef CONFIG_IMXRT_FLEXPWM4_MOD3
   {
     .module = 3,
     .used = true,
+#ifdef CONFIG_IMXRT_FLEXPWM4_MOD3_TRIG
+#ifdef CONFIG_IMXRT_FLEXPWM4_MOD3_TRIG_PER
+    .trig_val = 1,
+#elif CONFIG_IMXRT_FLEXPWM4_MOD3_TRIG_DUTY
+    .trig_val = 2,
+#else
+    .trig_val = 0,
+#endif
+#else
+    .trig_val = 0,
+#endif
     .out_a =
     {
       .used = true,
       .pin = GPIO_FLEXPWM4_MOD3_A
     },
-#ifdef CONFIG_IMXRT_FLEXPWM4_MOD3_COMP
+#ifdef CONFIG_IMXRT_FLEXPWM4_MOD3_USE_OUT_B
     .out_b =
     {
       .used = true,
       .pin = GPIO_FLEXPWM4_MOD3_B
-    }
-    .complementary = true
-#else
-    .complementary = false
+    },
 #endif
+#ifdef CONFIG_IMXRT_FLEXPWM4_MOD3_COMP
+    .complementary = true,
+#else
+    .complementary = false,
+#endif
+    .sync_src = CONFIG_IMXRT_FLEXPWM4_MOD3_SYNC_SRC,
+    .ext_sync = IMXRT_XBARA1_OUT_FLEXPWM4_EXT_SYNC3_SEL_OFFSET,
   },
 #endif
 #ifdef CONFIG_IMXRT_FLEXPWM4_MOD4
   {
     .module = 4,
     .used = true,
+#ifdef CONFIG_IMXRT_FLEXPWM4_MOD4_TRIG
+#ifdef CONFIG_IMXRT_FLEXPWM4_MOD4_TRIG_PER
+    .trig_val = 1,
+#elif CONFIG_IMXRT_FLEXPWM4_MOD4_TRIG_DUTY
+    .trig_val = 2,
+#else
+    .trig_val = 0,
+#endif
+#else
+    .trig_val = 0,
+#endif
     .out_a =
     {
       .used = true,
       .pin = GPIO_FLEXPWM4_MOD4_A
     },
-#ifdef CONFIG_IMXRT_FLEXPWM4_MOD3_COMP
+#ifdef CONFIG_IMXRT_FLEXPWM4_MOD4_USE_OUT_B
     .out_b =
     {
       .used = true,
       .pin = GPIO_FLEXPWM4_MOD4_B
-    }
-    .complementary = true
-#else
-    .complementary = false
+    },
 #endif
+#ifdef CONFIG_IMXRT_FLEXPWM4_MOD3_COMP
+    .complementary = true,
+#else
+    .complementary = false,
+#endif
+    .sync_src = CONFIG_IMXRT_FLEXPWM4_MOD4_SYNC_SRC,
+    .ext_sync = IMXRT_XBARA1_OUT_FLEXPWM4_EXT_SYNC4_SEL_OFFSET,
   },
 #endif
 };
@@ -525,7 +773,7 @@ static struct imxrt_flexpwm_s g_pwm4 =
 {
   .ops = &g_pwmops,
   .modules = g_pwm4_modules,
-  .modules_num = 4,
+  .modules_num = FLEXPWM4_NMODULES,
   .frequency = 0,
   .base = IMXRT_FLEXPWM4_BASE,
 };
@@ -555,25 +803,26 @@ static struct imxrt_flexpwm_s g_pwm4 =
  *
  ****************************************************************************/
 
-static int pwm_change_freq(FAR struct pwm_lowerhalf_s *dev,
-                     FAR const struct pwm_info_s *info, uint8_t channel)
+static int pwm_change_freq(struct pwm_lowerhalf_s *dev,
+                           const struct pwm_info_s *info,
+                           uint8_t channel)
 {
-  FAR struct imxrt_flexpwm_s *priv = (FAR struct imxrt_flexpwm_s *)dev;
+  struct imxrt_flexpwm_s *priv = (struct imxrt_flexpwm_s *)dev;
 #ifdef CONFIG_PWM_MULTICHAN
-  uint8_t shift = info->channels[channel].channel - 1;
+  uint8_t shift = (info->channels[channel].channel - 1) >> 1;
 #else
   uint8_t shift = priv->modules[0].module - 1;
 #endif
   uint16_t regval;
   uint16_t olddiv = getreg16(priv->base + IMXRT_FLEXPWM_SM0VAL1_OFFSET
                                         + MODULE_OFFSET * shift);
-  uint16_t newdiv = (uint32_t)((float)CLK_FREQ / info->frequency + 0.5f);
+  uint32_t newdiv = (CLK_FREQ + (info->frequency / 2)) / info->frequency;
   uint16_t prescale = 0;
 
   while (newdiv > PWM_RES && prescale < 7)
     {
-      newdiv = newdiv >> 1;
-      prescale = prescale + 1;
+      newdiv = (newdiv + 1) >> 1;
+      prescale++;
     }
 
   if (newdiv > PWM_RES)
@@ -594,7 +843,7 @@ static int pwm_change_freq(FAR struct pwm_lowerhalf_s *dev,
                               + MODULE_OFFSET * shift);
 
   putreg16(newdiv - 1, priv->base + IMXRT_FLEXPWM_SM0VAL1_OFFSET
-                                  + MODULE_OFFSET * shift);
+                              + MODULE_OFFSET * shift);
 
   /* Update VAL0, VAL3 and VAL5 registers */
 
@@ -635,15 +884,14 @@ static int pwm_change_freq(FAR struct pwm_lowerhalf_s *dev,
  *
  ****************************************************************************/
 
-static int pwm_set_output(FAR struct pwm_lowerhalf_s *dev, uint8_t channel,
-                           ub16_t duty)
+static int pwm_set_output(struct pwm_lowerhalf_s *dev, uint8_t channel,
+                          ub16_t duty)
 {
-  FAR struct imxrt_flexpwm_s *priv = (FAR struct imxrt_flexpwm_s *)dev;
+  struct imxrt_flexpwm_s *priv = (struct imxrt_flexpwm_s *)dev;
   uint16_t period;
   uint16_t width;
   uint16_t regval;
-  double duty_pct;
-  uint8_t shift = channel - 1;  /* Shift submodle offset addresses */
+  uint8_t shift = (channel - 1) >> 1;  /* Shift submodule offset addresses */
 
   /* Get the period value */
 
@@ -652,8 +900,7 @@ static int pwm_set_output(FAR struct pwm_lowerhalf_s *dev, uint8_t channel,
 
   /* Compute PWM width (count value to set PWM low) */
 
-  duty_pct = (duty / 65536.0) * 100;
-  width = (uint16_t)(((uint16_t)duty_pct * period) / 100);
+  width = b16toi(duty * period + b16HALF);
 
   /* Clear corresponding MCTRL[LDOK] bit  */
 
@@ -661,21 +908,38 @@ static int pwm_set_output(FAR struct pwm_lowerhalf_s *dev, uint8_t channel,
   regval |= MCTRL_CLDOK(1 << shift);
   putreg16(regval, priv->base + IMXRT_FLEXPWM_MCTRL_OFFSET);
 
-  /* Write width to value register 3 and enable output A */
-
-  putreg16(width, priv->base + IMXRT_FLEXPWM_SM0VAL3_OFFSET
-                             + MODULE_OFFSET * shift);
-
-  regval = getreg16(priv->base + IMXRT_FLEXPWM_OUTEN_OFFSET);
-  regval |= OUTEN_PWMA_EN(1 << shift);
-  putreg16(regval, priv->base + IMXRT_FLEXPWM_OUTEN_OFFSET);
-
-  /* Enable output B if complementary option is turn on */
-
-  if (priv->modules[shift].complementary)
+  if ((channel - 1) % 2)
     {
+      for (int i = 0; i < priv->modules_num; i++)
+        {
+          if ((priv->modules[i].module - 1) == shift)
+            {
+              /* Write width to value register 5 and enable output B */
+
+              if (!priv->modules[i].complementary)
+                {
+                  putreg16(width, priv->base + IMXRT_FLEXPWM_SM0VAL5_OFFSET
+                                             + MODULE_OFFSET * shift);
+                }
+
+              if (priv->modules[i].out_b.used)
+                {
+                  regval = getreg16(priv->base + IMXRT_FLEXPWM_OUTEN_OFFSET);
+                  regval |= OUTEN_PWMB_EN(1 << shift);
+                  putreg16(regval, priv->base + IMXRT_FLEXPWM_OUTEN_OFFSET);
+                }
+            }
+        }
+    }
+  else
+    {
+      /* Write width to value register 3 and enable output A */
+
+      putreg16(width, priv->base + IMXRT_FLEXPWM_SM0VAL3_OFFSET
+                                 + MODULE_OFFSET * shift);
+
       regval = getreg16(priv->base + IMXRT_FLEXPWM_OUTEN_OFFSET);
-      regval |= OUTEN_PWMB_EN(1 << shift);
+      regval |= OUTEN_PWMA_EN(1 << shift);
       putreg16(regval, priv->base + IMXRT_FLEXPWM_OUTEN_OFFSET);
     }
 
@@ -698,12 +962,13 @@ static int pwm_set_output(FAR struct pwm_lowerhalf_s *dev, uint8_t channel,
  *
  ****************************************************************************/
 
-static int pwm_setup(FAR struct pwm_lowerhalf_s *dev)
+static int pwm_setup(struct pwm_lowerhalf_s *dev)
 {
-  FAR struct imxrt_flexpwm_s *priv = (FAR struct imxrt_flexpwm_s *)dev;
+  struct imxrt_flexpwm_s *priv = (struct imxrt_flexpwm_s *)dev;
   uint32_t pin = 0;
   uint16_t regval;
   uint8_t shift;
+  int ret;
 
   putreg16(FCTRL0_FLVL(15), priv->base + IMXRT_FLEXPWM_FCTRL0_OFFSET);
   putreg16(0x000f, priv->base + IMXRT_FLEXPWM_FSTS0_OFFSET);
@@ -727,17 +992,14 @@ static int pwm_setup(FAR struct pwm_lowerhalf_s *dev)
             }
         }
 
-      /* Configure PIN_B if complementary option is turn on */
+      /* Configure PIN_B if option is turn on */
 
-      if (priv->modules[i].complementary)
+      if (priv->modules[i].out_b.used)
         {
-          if (priv->modules[i].out_b.used)
+          pin = priv->modules[i].out_b.pin;
+          if (pin != 0)
             {
-              pin = priv->modules[i].out_b.pin;
-              if (pin != 0)
-                {
-                  imxrt_config_gpio(pin);
-                }
+              imxrt_config_gpio(pin);
             }
         }
 
@@ -749,14 +1011,17 @@ static int pwm_setup(FAR struct pwm_lowerhalf_s *dev)
 
       /* Set control registers 1 and 2 */
 
+      regval = 0;
+
       if (!priv->modules[i].complementary)
         {
           /* Enable independent PWM_A and PWM_B output */
 
-          regval = SMCTRL2_INDEP;
-          putreg16(regval, priv->base + IMXRT_FLEXPWM_SM0CTRL2_OFFSET
-                                    + MODULE_OFFSET * shift);
+          regval |= SMCTRL2_INDEP;
         }
+
+      putreg16(regval, priv->base + IMXRT_FLEXPWM_SM0CTRL2_OFFSET
+                                  + MODULE_OFFSET * shift);
 
       regval = SMCTRL_FULL;     /* Enable full read cycle reload */
       putreg16(regval, priv->base + IMXRT_FLEXPWM_SM0CTRL_OFFSET
@@ -777,6 +1042,19 @@ static int pwm_setup(FAR struct pwm_lowerhalf_s *dev)
       putreg16(0, priv->base + IMXRT_FLEXPWM_SM0INIT_OFFSET
                              + MODULE_OFFSET * shift);
 
+      /* Set fraction value registers */
+
+      putreg16(0, priv->base + IMXRT_FLEXPWM_SM0FRACVAL1_OFFSET
+                             + MODULE_OFFSET * shift);
+      putreg16(0, priv->base + IMXRT_FLEXPWM_SM0FRACVAL2_OFFSET
+                             + MODULE_OFFSET * shift);
+      putreg16(0, priv->base + IMXRT_FLEXPWM_SM0FRACVAL3_OFFSET
+                             + MODULE_OFFSET * shift);
+      putreg16(0, priv->base + IMXRT_FLEXPWM_SM0FRACVAL4_OFFSET
+                             + MODULE_OFFSET * shift);
+      putreg16(0, priv->base + IMXRT_FLEXPWM_SM0FRACVAL5_OFFSET
+                             + MODULE_OFFSET * shift);
+
       /* Set value registers */
 
       putreg16(0, priv->base + IMXRT_FLEXPWM_SM0VAL0_OFFSET
@@ -791,6 +1069,60 @@ static int pwm_setup(FAR struct pwm_lowerhalf_s *dev)
                              + MODULE_OFFSET * shift);
       putreg16(0, priv->base + IMXRT_FLEXPWM_SM0VAL5_OFFSET
                              + MODULE_OFFSET * shift);
+
+      /* Is this PWM set to synchronized by external signal (trigger)? */
+
+      if (priv->modules[i].sync_src != -1)
+        {
+          regval = getreg16(priv->base + IMXRT_FLEXPWM_SM0CTRL2_OFFSET
+                                       + MODULE_OFFSET * shift);
+          regval |= SMCTRL2_INIT_SEL_EXT_SYNC | SMCTRL2_FORCE_SEL_EXT_SYNC |
+                    SMCTRL2_FRCEN;
+          putreg16(regval, priv->base + IMXRT_FLEXPWM_SM0CTRL2_OFFSET
+                                      + MODULE_OFFSET * shift);
+
+          /* Connect corresponding XBARs */
+
+          ret = imxrt_xbar_connect(priv->modules[i].ext_sync,
+                                   IMXRT_XBARA1(XBAR_INPUT,
+                                                priv->modules[i].sync_src));
+          if (ret < 0)
+            {
+              /* Disable external triggering if XBAR connection failed */
+
+              regval = getreg16(priv->base + IMXRT_FLEXPWM_SM0CTRL2_OFFSET
+                                           + MODULE_OFFSET * shift);
+              regval &= ~(SMCTRL2_INIT_SEL_EXT_SYNC |
+                          SMCTRL2_FORCE_SEL_EXT_SYNC |
+                          SMCTRL2_FRCEN);
+              putreg16(regval, priv->base + IMXRT_FLEXPWM_SM0CTRL2_OFFSET
+                                          + MODULE_OFFSET * shift);
+
+              pwmerr("ERROR: imxrt_xbar_connect failed: %d\n", ret);
+            }
+        }
+
+      if (priv->modules[i].trig_val != 0)
+        {
+          /* Use either period or duty cycle register for
+           * trigger generation
+           */
+
+          regval = getreg16(priv->base + IMXRT_FLEXPWM_SM0TCTRL_OFFSET
+                                       + MODULE_OFFSET * shift);
+          if (priv->modules[i].trig_val == 1)
+            {
+              regval |= SMT_OUT_TRIG_EN_VAL1;
+            }
+
+          if (priv->modules[i].trig_val == 2)
+            {
+              regval |= SMT_OUT_TRIG_EN_VAL3;
+            }
+
+          putreg16(regval, priv->base + IMXRT_FLEXPWM_SM0TCTRL_OFFSET
+                                      + MODULE_OFFSET * shift);
+        }
 
       regval = getreg16(priv->base + IMXRT_FLEXPWM_MCTRL_OFFSET);
       regval |= MCTRL_LDOK(1 << shift);
@@ -820,9 +1152,9 @@ static int pwm_setup(FAR struct pwm_lowerhalf_s *dev)
  *
  ****************************************************************************/
 
-static int pwm_shutdown(FAR struct pwm_lowerhalf_s *dev)
+static int pwm_shutdown(struct pwm_lowerhalf_s *dev)
 {
-  FAR struct imxrt_flexpwm_s *priv = (FAR struct imxrt_flexpwm_s *)dev;
+  struct imxrt_flexpwm_s *priv = (struct imxrt_flexpwm_s *)dev;
 
   for (int i = 0; i < priv->modules_num; i++)
     {
@@ -874,10 +1206,10 @@ static int pwm_shutdown(FAR struct pwm_lowerhalf_s *dev)
  *
  ****************************************************************************/
 
-static int pwm_start(FAR struct pwm_lowerhalf_s *dev,
-                     FAR const struct pwm_info_s *info)
+static int pwm_start(struct pwm_lowerhalf_s *dev,
+                     const struct pwm_info_s *info)
 {
-  FAR struct imxrt_flexpwm_s *priv = (FAR struct imxrt_flexpwm_s *)dev;
+  struct imxrt_flexpwm_s *priv = (struct imxrt_flexpwm_s *)dev;
   int ret = OK;
   uint8_t ldok_map = 0;
 
@@ -933,7 +1265,7 @@ static int pwm_start(FAR struct pwm_lowerhalf_s *dev,
 
           /* Remember the channel number in bitmap */
 
-          ldok_map |= 1 << (info->channels[i].channel - 1);
+          ldok_map |= 1 << ((info->channels[i].channel - 1) >> 1);
         }
     }
 #else
@@ -974,9 +1306,9 @@ static int pwm_start(FAR struct pwm_lowerhalf_s *dev,
  *
  ****************************************************************************/
 
-static int pwm_stop(FAR struct pwm_lowerhalf_s *dev)
+static int pwm_stop(struct pwm_lowerhalf_s *dev)
 {
-  FAR struct imxrt_flexpwm_s *priv = (FAR struct imxrt_flexpwm_s *)dev;
+  struct imxrt_flexpwm_s *priv = (struct imxrt_flexpwm_s *)dev;
   uint8_t shift;
   uint16_t regval;
 
@@ -1028,7 +1360,7 @@ static int pwm_stop(FAR struct pwm_lowerhalf_s *dev)
  *
  ****************************************************************************/
 
-static int pwm_ioctl(FAR struct pwm_lowerhalf_s *dev, int cmd,
+static int pwm_ioctl(struct pwm_lowerhalf_s *dev, int cmd,
                      unsigned long arg)
 {
   return -ENOTTY;
@@ -1053,9 +1385,9 @@ static int pwm_ioctl(FAR struct pwm_lowerhalf_s *dev, int cmd,
  *
  ****************************************************************************/
 
-FAR struct pwm_lowerhalf_s *imxrt_pwminitialize(int pwm)
+struct pwm_lowerhalf_s *imxrt_pwminitialize(int pwm)
 {
-  FAR struct imxrt_flexpwm_s *priv;
+  struct imxrt_flexpwm_s *priv;
 
   pwminfo("Initializing pwm %d\n", pwm);
 
@@ -1090,6 +1422,7 @@ FAR struct pwm_lowerhalf_s *imxrt_pwminitialize(int pwm)
       return NULL;
   }
 
-  return (FAR struct pwm_lowerhalf_s *)priv;
+  return (struct pwm_lowerhalf_s *)priv;
 }
+
 #endif /* CONFIG_IMXRT_FLEXPWM */

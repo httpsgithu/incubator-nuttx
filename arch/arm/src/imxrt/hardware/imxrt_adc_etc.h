@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/imxrt/hardware/imxrt_adc_etc.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -33,6 +35,7 @@
  ****************************************************************************/
 
 #define TRIG_OFFSET   0x28
+#define IRQ_OFFSET    0x10
 #define CHAIN_OFFSET  0x4
 #define RESULT_OFFSET 0x4
 
@@ -139,7 +142,7 @@
                                                         /* Bits 1-3:   Reserved */
 #define ADC_ETC_TRIG_CTRL_TRIG_MODE         (1 << 4)    /* Bit  4:     Sotware trigger select */
                                                         /* Bits 5-7:   Reserved */
-#define ADC_ETC_TRIG_CTRL_TRIG_CHAIN_SHIFT  (8)         /* Bits 8-11:  TRIG chain lenght to the ADC */
+#define ADC_ETC_TRIG_CTRL_TRIG_CHAIN_SHIFT  (8)         /* Bits 8-11:  TRIG chain length to the ADC */
 #define ADC_ETC_TRIG_CTRL_TRIG_CHAIN_MASK   (0x7 << ADC_ETC_TRIG_CTRL_TRIG_CHAIN_SHIFT)
 #define ADC_ETC_TRIG_CTRL_TRIG_CHAIN(n)     (((uint32_t)(n) << ADC_ETC_TRIG_CTRL_TRIG_CHAIN_SHIFT) & ADC_ETC_TRIG_CTRL_TRIG_CHAIN_MASK)
                                                         /* Bit  11:    Reserved */

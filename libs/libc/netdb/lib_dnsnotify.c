@@ -1,6 +1,8 @@
 /****************************************************************************
  * libs/libc/netdb/lib_dnsnotify.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -25,7 +27,7 @@
 #include <nuttx/config.h>
 
 #include <nuttx/net/dns.h>
-#include <queue.h>
+#include <nuttx/queue.h>
 
 #include "libc.h"
 #include "netdb/lib_dns.h"
@@ -74,9 +76,9 @@ int dns_register_notify(dns_callback_t callback, FAR void *arg)
   notify->callback = callback;
   notify->arg      = arg;
 
-  dns_semtake();
+  dns_lock();
   dq_addlast(&notify->entry, &g_dns_notify);
-  dns_semgive();
+  dns_unlock();
 
   /* Notify the existed nameserver */
 
@@ -96,7 +98,7 @@ int dns_unregister_notify(dns_callback_t callback, FAR void *arg)
 {
   FAR dq_entry_t *entry;
 
-  dns_semtake();
+  dns_lock();
   for (entry = dq_peek(&g_dns_notify); entry; entry = dq_next(entry))
     {
       FAR struct dns_notify_s *notify = (FAR struct dns_notify_s *)entry;
@@ -104,13 +106,13 @@ int dns_unregister_notify(dns_callback_t callback, FAR void *arg)
       if (notify->callback == callback && notify->arg == arg)
         {
           dq_rem(&notify->entry, &g_dns_notify);
-          dns_semgive();
+          dns_unlock();
           lib_free(notify);
           return OK;
         }
     }
 
-  dns_semgive();
+  dns_unlock();
   return -EINVAL;
 }
 
@@ -123,14 +125,14 @@ void dns_notify_nameserver(FAR const struct sockaddr *addr,
 {
   FAR dq_entry_t *entry;
 
-  dns_semtake();
+  dns_lock();
   for (entry = dq_peek(&g_dns_notify); entry; entry = dq_next(entry))
     {
       FAR struct dns_notify_s *notify = (FAR struct dns_notify_s *)entry;
       notify->callback(notify->arg, (FAR struct sockaddr *)addr, addrlen);
     }
 
-  dns_semgive();
+  dns_unlock();
 }
 
 #endif /* CONFIG_NETDB_DNSCLIENT */

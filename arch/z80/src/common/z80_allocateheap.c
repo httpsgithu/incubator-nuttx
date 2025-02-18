@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/z80/src/common/z80_allocateheap.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -32,7 +34,6 @@
 #include <nuttx/kmalloc.h>
 #include <nuttx/mm/mm.h>
 
-#include "z80_arch.h"
 #include "z80_internal.h"
 
 #ifdef SDCC
@@ -79,7 +80,7 @@ void up_allocate_heap(FAR void **heap_start, size_t *heap_size)
 }
 
 /****************************************************************************
- * Name: up_addregions
+ * Name: z80_addregions
  *
  * Description:
  *   Memory may be added in non-contiguous chunks.  Additional chunks are
@@ -88,7 +89,7 @@ void up_allocate_heap(FAR void **heap_start, size_t *heap_size)
  ****************************************************************************/
 
 #if CONFIG_MM_REGIONS > 1
-void up_addregion(void)
+void z80_addregion(void)
 {
   kmm_addregion((FAR void *)CONFIG_HEAP2_BASE, CONFIG_HEAP2_SIZE);
 }

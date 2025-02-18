@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/nuc1xx/nutiny-nuc120/include/board.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -18,8 +20,8 @@
  *
  ****************************************************************************/
 
-#ifndef __BOARDS_ARM_NUC1XX_NUTINY_NUC12_INCLUDE_BOARD_H
-#define __BOARDS_ARM_NUC1XX_NUTINY_NUC12_INCLUDE_BOARD_H
+#ifndef __BOARDS_ARM_NUC1XX_NUTINY_NUC120_INCLUDE_BOARD_H
+#define __BOARDS_ARM_NUC1XX_NUTINY_NUC120_INCLUDE_BOARD_H
 
 /****************************************************************************
  * Included Files
@@ -28,7 +30,7 @@
 #include <nuttx/config.h>
 
 #ifndef __ASSEMBLY__
-# include <stdint.h>
+#  include <stdint.h>
 #endif
 
 /****************************************************************************
@@ -122,4 +124,4 @@
 
 #define NUM_BUTTONS        0
 
-#endif /* __BOARDS_ARM_NUC1XX_NUTINY_NUC12_INCLUDE_BOARD_H */
+#endif /* __BOARDS_ARM_NUC1XX_NUTINY_NUC120_INCLUDE_BOARD_H */

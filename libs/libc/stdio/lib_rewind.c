@@ -1,6 +1,8 @@
 /****************************************************************************
  * libs/libc/stdio/lib_rewind.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -46,8 +48,8 @@ void rewind(FAR FILE *stream)
       return;
     }
 
-  lib_take_semaphore(stream);
-  (void) fseek(stream, 0L, SEEK_SET);
+  flockfile(stream);
+  fseek(stream, 0L, SEEK_SET);
   stream->fs_flags &= ~__FS_FLAG_ERROR;
-  lib_give_semaphore(stream);
+  funlockfile(stream);
 }

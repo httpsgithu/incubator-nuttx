@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/risc-v/src/bl602/bl602_lowputc.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -18,8 +20,8 @@
  *
  ****************************************************************************/
 
-#ifndef __ARCH_RISCV_SRC_BL602_LOWPUTC_H
-#define __ARCH_RISCV_SRC_BL602_LOWPUTC_H
+#ifndef __ARCH_RISCV_SRC_BL602_BL602_LOWPUTC_H
+#define __ARCH_RISCV_SRC_BL602_BL602_LOWPUTC_H
 
 /****************************************************************************
  * Included Files
@@ -65,4 +67,4 @@ EXTERN void bl602_uart_configure(const struct uart_config_s *config);
 #endif
 
 #endif /* __ASSEMBLY__ */
-#endif /* __ARCH_RISCV_SRC_BL602_LOWPUTC_H */
+#endif /* __ARCH_RISCV_SRC_BL602_BL602_LOWPUTC_H */

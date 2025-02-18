@@ -1,6 +1,8 @@
 /****************************************************************************
  * crypto/testmngr.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -31,6 +33,8 @@
 #include <errno.h>
 #include <debug.h>
 
+#include <sys/param.h>
+
 #include <nuttx/fs/fs.h>
 #include <nuttx/kmalloc.h>
 #include <nuttx/crypto/crypto.h>
@@ -42,10 +46,6 @@
 /****************************************************************************
  * Pre-processor Definitions
  ****************************************************************************/
-
-#ifndef ARRAY_SIZE
-#  define ARRAY_SIZE(x) (sizeof(x) / sizeof((x)[0]))
-#endif
 
 #if defined(CONFIG_CRYPTO_AES)
 
@@ -94,14 +94,14 @@ static int test_aes(void)
 {
   int i;
 
-  AES_CYPHER_TEST(AES_MODE_ECB, "ECB", ARRAY_SIZE(aes_enc_tv_template),
-                  ARRAY_SIZE(aes_dec_tv_template), aes_enc_tv_template,
+  AES_CYPHER_TEST(AES_MODE_ECB, "ECB", nitems(aes_enc_tv_template),
+                  nitems(aes_dec_tv_template), aes_enc_tv_template,
                   aes_dec_tv_template)
-  AES_CYPHER_TEST(AES_MODE_CBC, "CBC", ARRAY_SIZE(aes_cbc_enc_tv_template),
-                  ARRAY_SIZE(aes_cbc_dec_tv_template),
+  AES_CYPHER_TEST(AES_MODE_CBC, "CBC", nitems(aes_cbc_enc_tv_template),
+                  nitems(aes_cbc_dec_tv_template),
                   aes_cbc_enc_tv_template, aes_cbc_dec_tv_template)
-  AES_CYPHER_TEST(AES_MODE_CTR, "CTR", ARRAY_SIZE(aes_ctr_enc_tv_template),
-                  ARRAY_SIZE(aes_ctr_dec_tv_template),
+  AES_CYPHER_TEST(AES_MODE_CTR, "CTR", nitems(aes_ctr_enc_tv_template),
+                  nitems(aes_ctr_dec_tv_template),
                   aes_ctr_enc_tv_template, aes_ctr_dec_tv_template)
 
   return OK;

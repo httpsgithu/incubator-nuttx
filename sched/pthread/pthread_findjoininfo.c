@@ -1,6 +1,8 @@
 /****************************************************************************
  * sched/pthread/pthread_findjoininfo.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -26,16 +28,23 @@
 
 #include <sys/types.h>
 #include <assert.h>
+#include <debug.h>
+
+#include <nuttx/nuttx.h>
 
 #include "group/group.h"
 #include "pthread/pthread.h"
+
+/****************************************************************************
+ * Private Functions
+ ****************************************************************************/
 
 /****************************************************************************
  * Public Functions
  ****************************************************************************/
 
 /****************************************************************************
- * Name: thread_findjoininfo
+ * Name: pthread_findjoininfo
  *
  * Description:
  *   Find a join structure in a local data set.
@@ -44,28 +53,64 @@
  *   group - The group that the pid is (or was) a member of
  *   pid - The ID of the pthread
  *
+ * Output Parameters:
+ *   pjoin - None or pointer to the found entry
+ *
  * Returned Value:
- *   None or pointer to the found entry.
+ *   0 if successful.  Otherwise, one of the following error codes:
+ *
+ *   EINVAL  The value specified by thread does not refer to joinable
+ *           thread.
+ *   ESRCH   No thread could be found corresponding to that specified by the
+ *           given thread ID.
  *
  * Assumptions:
  *   The caller has provided protection from re-entrancy.
  *
  ****************************************************************************/
 
-FAR struct join_s *pthread_findjoininfo(FAR struct task_group_s *group,
-                                        pid_t pid)
+int pthread_findjoininfo(FAR struct task_group_s *group, pid_t pid,
+                         FAR struct task_join_s **pjoin, bool create)
 {
-  FAR struct join_s *pjoin;
+  FAR struct task_join_s *join;
+  FAR sq_entry_t *curr;
+  FAR sq_entry_t *next;
 
-  DEBUGASSERT(group);
+  nxrmutex_lock(&group->tg_mutex);
 
-  /* Find the entry with the matching pid */
+  sq_for_every_safe(&group->tg_joinqueue, curr, next)
+    {
+      join = container_of(curr, struct task_join_s, entry);
 
-  for (pjoin = group->tg_joinhead;
-       (pjoin && (pid_t)pjoin->thread != pid);
-       pjoin = pjoin->next);
+      if (join->pid == pid)
+        {
+          goto found;
+        }
+    }
 
-  /* and return it */
+  nxrmutex_unlock(&group->tg_mutex);
 
-  return pjoin;
+  if (!create)
+    {
+      return EINVAL;
+    }
+
+  join = kmm_zalloc(sizeof(struct task_join_s));
+  if (join == NULL)
+    {
+      return ENOMEM;
+    }
+
+  join->pid = pid;
+
+  nxrmutex_lock(&group->tg_mutex);
+
+  sq_addfirst(&join->entry, &group->tg_joinqueue);
+
+found:
+  nxrmutex_unlock(&group->tg_mutex);
+
+  *pjoin = join;
+
+  return OK;
 }

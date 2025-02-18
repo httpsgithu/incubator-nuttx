@@ -1,6 +1,8 @@
 /****************************************************************************
  * drivers/syslog/syslog_rpmsg.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -28,9 +30,9 @@
 #define SYSLOG_RPMSG_EPT_NAME           "rpmsg-syslog"
 
 #define SYSLOG_RPMSG_TRANSFER           0
-#define SYSLOG_RPMSG_TRANSFER_DONE      1
-#define SYSLOG_RPMSG_SUSPEND            2
-#define SYSLOG_RPMSG_RESUME             3
+#define SYSLOG_RPMSG_SUSPEND            1
+#define SYSLOG_RPMSG_RESUME             2
+#define SYSLOG_RPMSG_SYNC               3
 
 /****************************************************************************
  * Public Types
@@ -47,6 +49,12 @@ begin_packed_struct struct syslog_rpmsg_transfer_s
   struct syslog_rpmsg_header_s header;
   int32_t                      count;
   char                         data[0];
+} end_packed_struct;
+
+begin_packed_struct struct syslog_rpmsg_sync_s
+{
+  struct syslog_rpmsg_header_s header;
+  uint64_t                     cookie;
 } end_packed_struct;
 
 #endif /* __DRIVERS_SYSLOG_SYSLOG_RPMSG_H */

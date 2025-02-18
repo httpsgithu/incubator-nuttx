@@ -1,15 +1,12 @@
 /****************************************************************************
  * arch/arm/src/lpc54xx/lpc54_ethernet.c
  *
- *   Copyright (C) 2017 Gregory Nutt. All rights reserved.
- *   Author: Gregory Nutt <gnutt@nuttx.org>
- *
- * Some of the logic in this file was developed using sample code provided by
- * NXP that has a compatible BSD license:
- *
- *   Copyright (c) 2016, Freescale Semiconductor, Inc.
- *   Copyright 2016-2017 NXP
- *   All rights reserved.
+ * SPDX-License-Identifier: BSD-3-Clause
+ * SPDX-FileCopyrightText: 2017 Gregory Nutt. All rights reserved.
+ * SPDX-FileCopyrightText: 2016 Freescale Semiconductor Inc.
+ * SPDX-FileCopyrightText: 2016 - 2017, NXP
+ * SPDX-FileContributor: Gregory Nutt <gnutt@nuttx.org>
+ * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -67,7 +64,6 @@
 #include <stdbool.h>
 #include <time.h>
 #include <string.h>
-#include <queue.h>
 #include <errno.h>
 #include <assert.h>
 #include <debug.h>
@@ -76,18 +72,19 @@
 
 #include <nuttx/arch.h>
 #include <nuttx/irq.h>
+#include <nuttx/queue.h>
 #include <nuttx/wdog.h>
 #include <nuttx/wqueue.h>
 #include <nuttx/clock.h>
 #include <nuttx/net/mii.h>
-#include <nuttx/net/arp.h>
+#include <nuttx/net/ip.h>
 #include <nuttx/net/netdev.h>
 
 #ifdef CONFIG_NET_PKT
 #  include <nuttx/net/pkt.h>
 #endif
 
-#include "arm_arch.h"
+#include "arm_internal.h"
 #include "hardware/lpc54_syscon.h"
 #include "hardware/lpc54_pinmux.h"
 #include "hardware/lpc54_ethernet.h"
@@ -131,12 +128,6 @@
  */
 
 #define ETHWORK LPWORK
-
-/* TX poll delay = 1 seconds.
- * CLK_TCK is the number of clock ticks per second
- */
-
-#define LPC54_WDDELAY   (1*CLK_TCK)
 
 /* TX timeout = 1 minute */
 
@@ -257,8 +248,13 @@
  * header.
  */
 
-#define ETHBUF       ((struct eth_hdr_s *)priv->eth_dev.d_buf)
 #define ETH8021QWBUF ((struct eth_8021qhdr_s *)priv->eth_dev.d_buf)
+
+/* This is a helper pointer for accessing the contents of the Ethernet
+ * header
+ */
+
+#define BUF ((struct eth_hdr_s *)&dev->d_buf[0])
 
 /****************************************************************************
  * Private Types
@@ -296,7 +292,6 @@ struct lpc54_ethdriver_s
   uint8_t eth_fullduplex : 1;    /* 1:Full duplex 0:Half duplex mode */
   uint8_t eth_100mbps : 1;       /* 1:100mbps 0:10mbps */
   uint8_t eth_rxdiscard : 1;     /* 1:Discarding Rx data */
-  struct wdog_s eth_txpoll;      /* TX poll timer */
   struct wdog_s eth_txtimeout;   /* TX timeout timer */
   struct work_s eth_irqwork;     /* For deferring interrupt work to the work queue */
   struct work_s eth_pollwork;    /* For deferring poll work to the work queue */
@@ -373,8 +368,8 @@ static uint32_t *g_txbuffers1[CONFIG_LPC54_ETH_NTXDESC1];
 static uint32_t lpc54_getreg(uintptr_t addr);
 static void lpc54_putreg(uint32_t val, uintptr_t addr);
 #else
-# define lpc54_getreg(addr)      getreg32(addr)
-# define lpc54_putreg(val,addr)  putreg32(val,addr)
+#  define lpc54_getreg(addr)     getreg32(addr)
+#  define lpc54_putreg(val,addr) putreg32(val,addr)
 #endif
 
 /* Common TX logic */
@@ -404,14 +399,10 @@ static int  lpc54_mac_interrupt(int irq, void *context, void *arg);
 
 /* Watchdog timer expirations */
 
-static void lpc54_eth_dotimer(struct lpc54_ethdriver_s *priv);
 static void lpc54_eth_dopoll(struct lpc54_ethdriver_s *priv);
 
 static void lpc54_eth_txtimeout_work(void *arg);
 static void lpc54_eth_txtimeout_expiry(wdparm_t arg);
-
-static void lpc54_eth_poll_work(void *arg);
-static void lpc54_eth_poll_expiry(wdparm_t arg);
 
 /* NuttX callback functions */
 
@@ -617,7 +608,7 @@ static int lpc54_eth_transmit(struct lpc54_ethdriver_s *priv,
       /* Prepare the Tx descriptor for transmission */
 
       txdesc->buffer1 = (uint32_t)buffer;
-      txdesc->buffer2 = (uint32_t)NULL;
+      txdesc->buffer2 = 0;
 
       /* One buffer, no timestamp, interrupt on completion */
 
@@ -769,81 +760,49 @@ static int lpc54_eth_txpoll(struct net_driver_s *dev)
   DEBUGASSERT(dev->d_private != NULL && dev->d_buf != NULL);
   priv = (struct lpc54_ethdriver_s *)dev->d_private;
 
-  /* If the polling resulted in data that should be sent out on the network,
-   * the field d_len is set to a value > 0.
+  /* Send the packet */
+
+  chan   = lpc54_eth_getring(priv);
+  txring = &priv->eth_txring[chan];
+
+  (txring->tr_buffers)[txring->tr_supply] =
+    (uint32_t *)priv->eth_dev.d_buf;
+
+  lpc54_eth_transmit(priv, chan);
+
+  txring0 = &priv->eth_txring[0];
+#ifdef CONFIG_LPC54_ETH_MULTIQUEUE
+  txring1 = &priv->eth_txring[1];
+
+  /* We cannot perform the Tx poll now if all of the Tx descriptors
+   * for both channels are in-use.
    */
 
-  if (priv->eth_dev.d_len > 0)
-    {
-      /* Look up the destination MAC address and add it to the Ethernet
-       * header.
-       */
-
-#ifdef CONFIG_NET_IPv4
-#ifdef CONFIG_NET_IPv6
-      if (IFF_IS_IPv4(priv->eth_dev.d_flags))
-#endif
-        {
-          arp_out(&priv->eth_dev);
-        }
-#endif /* CONFIG_NET_IPv4 */
-
-#ifdef CONFIG_NET_IPv6
-#ifdef CONFIG_NET_IPv4
-      else
-#endif
-        {
-          neighbor_out(&priv->eth_dev);
-        }
-#endif /* CONFIG_NET_IPv6 */
-
-      if (!devif_loopback(&priv->eth_dev))
-        {
-          /* Send the packet */
-
-          chan   = lpc54_eth_getring(priv);
-          txring = &priv->eth_txring[chan];
-
-          (txring->tr_buffers)[txring->tr_supply] =
-            (uint32_t *)priv->eth_dev.d_buf;
-
-          lpc54_eth_transmit(priv, chan);
-
-          txring0 = &priv->eth_txring[0];
-#ifdef CONFIG_LPC54_ETH_MULTIQUEUE
-          txring1 = &priv->eth_txring[1];
-
-          /* We cannot perform the Tx poll now if all of the Tx descriptors
-           * for both channels are in-use.
-           */
-
-          if (txring0->tr_inuse >= txring0->tr_ndesc ||
-              txring1->tr_inuse >= txring1->tr_ndesc)
+  if (txring0->tr_inuse >= txring0->tr_ndesc ||
+      txring1->tr_inuse >= txring1->tr_ndesc)
 #else
-          /* We cannot continue the Tx poll now if all of the Tx descriptors
-           * for this channel 0 are in-use.
-           */
+  /* We cannot continue the Tx poll now if all of the Tx descriptors
+   * for this channel 0 are in-use.
+   */
 
-          if (txring0->tr_inuse >= txring0->tr_ndesc)
+  if (txring0->tr_inuse >= txring0->tr_ndesc)
 #endif
-            {
-              /* Stop the poll.. no more Tx descriptors */
+    {
+      /* Stop the poll.. no more Tx descriptors */
 
-              return 1;
-            }
+      return 1;
+    }
 
-          /* There is a free descriptor in the ring, allocate a new Tx buffer
-           * to perform the poll.
-           */
+  /* There is a free descriptor in the ring, allocate a new Tx buffer
+   * to perform the poll.
+   */
 
-          priv->eth_dev.d_buf = (uint8_t *)lpc54_pktbuf_alloc(priv);
-          if (priv->eth_dev.d_buf == NULL)
-            {
-              /* Stop the poll.. no more packet buffers */
+  priv->eth_dev.d_buf = (uint8_t *)lpc54_pktbuf_alloc(priv);
+  if (priv->eth_dev.d_buf == NULL)
+    {
+      /* Stop the poll.. no more packet buffers */
 
-              return 1;
-            }
-        }
+      return 1;
     }
 
   /* If zero is returned, the polling will continue until all connections
@@ -891,28 +850,6 @@ static void lpc54_eth_reply(struct lpc54_ethdriver_s *priv)
 #warning Missing Logic
 #endif
 
-#ifdef CONFIG_NET_IPv4
-#ifdef CONFIG_NET_IPv6
-      /* Check for an outgoing IPv4 packet */
-
-      if (IFF_IS_IPv4(priv->eth_dev.d_flags))
-#endif
-        {
-          arp_out(&priv->eth_dev);
-        }
-#endif
-
-#ifdef CONFIG_NET_IPv6
-#ifdef CONFIG_NET_IPv4
-      /* Otherwise, it must be an outgoing IPv6 packet */
-
-      else
-#endif
-        {
-          neighbor_out(&priv->eth_dev);
-        }
-#endif
-
       /* And send the packet */
 
       chan   = lpc54_eth_getring(priv);
@@ -945,26 +882,25 @@ static void lpc54_eth_reply(struct lpc54_ethdriver_s *priv)
 
 static void lpc54_eth_rxdispatch(struct lpc54_ethdriver_s *priv)
 {
+  struct net_driver_s *dev = &priv->eth_dev;
+
 #ifdef CONFIG_NET_PKT
   /* When packet sockets are enabled, feed the frame into the tap */
 
-  pkt_input(&priv->eth_dev);
+  pkt_input(dev);
 #endif
 
   /* We only accept IP packets of the configured type and ARP packets */
 
 #ifdef CONFIG_NET_IPv4
-  if (ETHBUF->type == HTONS(ETHTYPE_IP))
+  if (BUF->type == HTONS(ETHTYPE_IP))
     {
       ninfo("IPv4 packet\n");
-      NETDEV_RXIPV4(&priv->eth_dev);
+      NETDEV_RXIPV4(dev);
 
-      /* Handle ARP on input,
-       * then dispatch IPv4 packet to the network layer
-       */
+      /* Receive an IPv4 packet from the network device */
 
-      arp_ipin(&priv->eth_dev);
-      ipv4_input(&priv->eth_dev);
+      ipv4_input(dev);
 
       /* Check for a reply to the IPv4 packet */
 
@@ -973,14 +909,14 @@ static void lpc54_eth_rxdispatch(struct lpc54_ethdriver_s *priv)
   else
 #endif
 #ifdef CONFIG_NET_IPv6
-  if (ETHBUF->type == HTONS(ETHTYPE_IP6))
+  if (BUF->type == HTONS(ETHTYPE_IP6))
     {
       ninfo("IPv6 packet\n");
-      NETDEV_RXIPV6(&priv->eth_dev);
+      NETDEV_RXIPV6(dev);
 
       /* Dispatch IPv6 packet to the network layer */
 
-      ipv6_input(&priv->eth_dev);
+      ipv6_input(dev);
 
       /* Check for a reply to the IPv6 packet */
 
@@ -992,11 +928,11 @@ static void lpc54_eth_rxdispatch(struct lpc54_ethdriver_s *priv)
   if (ETH8021QWBUF->tpid == HTONS(TPID_8021QVLAN))
     {
       ninfo("IEEE 802.1q packet\n");
-      NETDEV_RXQVLAN(&priv->eth_dev);
+      NETDEV_RXQVLAN(dev);
 
       /* Dispatch the 802.1q VLAN packet to the network layer */
 
-      qvlan_input(&priv->eth_dev);
+      qvlan_input(dev);
 
       /* Check for a reply to the 802.1q VLAN packet */
 
@@ -1005,27 +941,27 @@ static void lpc54_eth_rxdispatch(struct lpc54_ethdriver_s *priv)
   else
 #endif
 #ifdef CONFIG_NET_ARP
-  if (ETHBUF->type == htons(ETHTYPE_ARP))
+  if (BUF->type == HTONS(ETHTYPE_ARP))
     {
       struct lpc54_txring_s *txring;
       unsigned int chan;
 
       /* Dispatch the ARP packet to the network layer */
 
-      arp_arpin(&priv->eth_dev);
-      NETDEV_RXARP(&priv->eth_dev);
+      arp_input(dev);
+      NETDEV_RXARP(dev);
 
       /* If the above function invocation resulted in data that should be
        * sent out on the network, d_len field will set to a value > 0.
        */
 
-      if (priv->eth_dev.d_len > 0)
+      if (dev->d_len > 0)
         {
           chan   = lpc54_eth_getring(priv);
           txring = &priv->eth_txring[chan];
 
           (txring->tr_buffers)[txring->tr_supply] =
-            (uint32_t *)priv->eth_dev.d_buf;
+            (uint32_t *)dev->d_buf;
 
           lpc54_eth_transmit(priv, chan);
         }
@@ -1033,7 +969,7 @@ static void lpc54_eth_rxdispatch(struct lpc54_ethdriver_s *priv)
   else
 #endif
     {
-      NETDEV_RXDROPPED(&priv->eth_dev);
+      NETDEV_RXDROPPED(dev);
     }
 
   /* On entry, d_buf refers to the receive buffer as set by logic in
@@ -1043,13 +979,13 @@ static void lpc54_eth_rxdispatch(struct lpc54_ethdriver_s *priv)
    * receive buffer and we will need to dispose of it here.
    */
 
-  if (priv->eth_dev.d_buf != NULL)
+  if (dev->d_buf != NULL)
     {
-      lpc54_pktbuf_free(priv, (uint32_t *)priv->eth_dev.d_buf);
+      lpc54_pktbuf_free(priv, (uint32_t *)dev->d_buf);
     }
 
-  priv->eth_dev.d_buf = NULL;
-  priv->eth_dev.d_len = 0;
+  dev->d_buf = NULL;
+  dev->d_len = 0;
 }
 
 /****************************************************************************
@@ -1284,7 +1220,7 @@ static void lpc54_eth_txdone(struct lpc54_ethdriver_s *priv,
     {
       /* Update statistics */
 
-      NETDEV_TXDONE(priv->eth_dev);
+      NETDEV_TXDONE(&priv->eth_dev);
 
       /* Free the Tx buffer assigned to the descriptor */
 
@@ -1382,12 +1318,12 @@ static void lpc54_eth_channel_work(struct lpc54_ethdriver_s *priv,
 
       if ((pending & LPC54_RXERR_INTMASK) != 0)
         {
-          NETDEV_RXERRORS(priv->eth_dev);
+          NETDEV_RXERRORS(&priv->eth_dev);
         }
 
       if ((pending & LPC54_TXERR_INTMASK) != 0)
         {
-          NETDEV_TXERRORS(priv->eth_dev);
+          NETDEV_TXERRORS(&priv->eth_dev);
         }
 
       /* The Receive Buffer Unavailable (RBU) error is a special case.  It
@@ -1436,7 +1372,7 @@ static void lpc54_eth_channel_work(struct lpc54_ethdriver_s *priv,
             {
               /* Update statistics if a packet was dispatched */
 
-              NETDEV_RXPACKETS(priv->eth_dev);
+              NETDEV_RXPACKETS(&priv->eth_dev);
             }
           else
             {
@@ -1637,7 +1573,7 @@ static void lpc54_eth_txtimeout_work(void *arg)
 
   /* Increment statistics and dump debug info */
 
-  NETDEV_TXTIMEOUTS(priv->eth_dev);
+  NETDEV_TXTIMEOUTS(&priv->eth_dev);
 
   /* Then reset the hardware by bringing it down and taking it back up
    * again.
@@ -1686,73 +1622,6 @@ static void lpc54_eth_txtimeout_expiry(wdparm_t arg)
 
   work_queue(ETHWORK, &priv->eth_timeoutwork, lpc54_eth_txtimeout_work,
              priv, 0);
-}
-
-/****************************************************************************
- * Name: lpc54_eth_dotimer
- *
- * Description:
- *   Check if there are Tx descriptors available and, if so, allocate a Tx
- *   then perform the normal Tx poll
- *
- * Input Parameters:
- *   priv - Reference to the driver state structure
- *
- * Returned Value:
- *   None
- *
- * Assumptions:
- *   The network is locked.
- *
- ****************************************************************************/
-
-static void lpc54_eth_dotimer(struct lpc54_ethdriver_s *priv)
-{
-  struct lpc54_txring_s *txring0;
-#ifdef CONFIG_LPC54_ETH_MULTIQUEUE
-  struct lpc54_txring_s *txring1;
-#endif
-
-  DEBUGASSERT(priv->eth_dev.d_buf == NULL);
-
-  txring0 = &priv->eth_txring[0];
-#ifdef CONFIG_LPC54_ETH_MULTIQUEUE
-  txring1 = &priv->eth_txring[1];
-
-  /* We cannot perform the Tx poll now if all of the Tx descriptors for both
-   * channels are in-use.
-   */
-
-  if (txring0->tr_inuse < txring0->tr_ndesc &&
-      txring1->tr_inuse < txring1->tr_ndesc)
-#else
-  /* We cannot perform the Tx poll now if all of the Tx descriptors for this
-   * channel 0 are in-use.
-   */
-
-  if (txring0->tr_inuse < txring0->tr_ndesc)
-#endif
-    {
-      /* There is a free descriptor in the ring, allocate a new Tx buffer
-       * to perform the poll.
-       */
-
-      priv->eth_dev.d_buf = (uint8_t *)lpc54_pktbuf_alloc(priv);
-      if (priv->eth_dev.d_buf != NULL)
-        {
-          devif_timer(&priv->eth_dev, LPC54_WDDELAY, lpc54_eth_txpoll);
-
-          /* Make sure that the Tx buffer remaining after the poll is
-           * freed.
-           */
-
-          if (priv->eth_dev.d_buf != NULL)
-            {
-              lpc54_pktbuf_free(priv, (uint32_t *)priv->eth_dev.d_buf);
-              priv->eth_dev.d_buf = NULL;
-            }
-        }
-    }
 }
 
 /****************************************************************************
@@ -1807,7 +1676,7 @@ static void lpc54_eth_dopoll(struct lpc54_ethdriver_s *priv)
       priv->eth_dev.d_buf = (uint8_t *)lpc54_pktbuf_alloc(priv);
       if (priv->eth_dev.d_buf != NULL)
         {
-          devif_timer(&priv->eth_dev, 0, lpc54_eth_txpoll);
+          devif_poll(&priv->eth_dev, lpc54_eth_txpoll);
 
           /* Make sure that the Tx buffer remaining after the poll is
            * freed.
@@ -1820,73 +1689,6 @@ static void lpc54_eth_dopoll(struct lpc54_ethdriver_s *priv)
             }
         }
     }
-}
-
-/****************************************************************************
- * Name: lpc54_eth_poll_work
- *
- * Description:
- *   Perform periodic polling from the worker thread
- *
- * Input Parameters:
- *   arg - The argument passed when work_queue() as called.
- *
- * Returned Value:
- *   OK on success
- *
- * Assumptions:
- *   Run on a work queue thread.
- *
- ****************************************************************************/
-
-static void lpc54_eth_poll_work(void *arg)
-{
-  struct lpc54_ethdriver_s *priv = (struct lpc54_ethdriver_s *)arg;
-
-  /* Lock the network and serialize driver operations if necessary.
-   * NOTE: Serialization is only required in the case where the driver work
-   * is performed on an LP worker thread and where more than one LP worker
-   * thread has been configured.
-   */
-
-  net_lock();
-
-  /* Perform the timer poll */
-
-  lpc54_eth_dotimer(priv);
-
-  /* Setup the watchdog poll timer again */
-
-  wd_start(&priv->eth_txpoll, LPC54_WDDELAY,
-           lpc54_eth_poll_expiry, (wdparm_t)priv);
-  net_unlock();
-}
-
-/****************************************************************************
- * Name: lpc54_eth_poll_expiry
- *
- * Description:
- *   Periodic timer handler.  Called from the timer interrupt handler.
- *
- * Input Parameters:
- *   arg  - The argument
- *
- * Returned Value:
- *   None
- *
- * Assumptions:
- *   Runs in the context of a the timer interrupt handler.  Local
- *   interrupts are disabled by the interrupt logic.
- *
- ****************************************************************************/
-
-static void lpc54_eth_poll_expiry(wdparm_t arg)
-{
-  struct lpc54_ethdriver_s *priv = (struct lpc54_ethdriver_s *)arg;
-
-  /* Schedule to perform the interrupt processing on the worker thread. */
-
-  work_queue(ETHWORK, &priv->eth_pollwork, lpc54_eth_poll_work, priv, 0);
 }
 
 /****************************************************************************
@@ -1918,11 +1720,9 @@ static int lpc54_eth_ifup(struct net_driver_s *dev)
   int i;
 
 #ifdef CONFIG_NET_IPv4
-  ninfo("Bringing up: %d.%d.%d.%d\n",
-        (int)(dev->d_ipaddr & 0xff),
-        (int)((dev->d_ipaddr >> 8) & 0xff),
-        (int)((dev->d_ipaddr >> 16) & 0xff),
-        (int)(dev->d_ipaddr >> 24));
+  ninfo("Bringing up: %u.%u.%u.%u\n",
+        ip4_addr1(dev->d_ipaddr), ip4_addr2(dev->d_ipaddr),
+        ip4_addr3(dev->d_ipaddr), ip4_addr4(dev->d_ipaddr));
 #endif
 #ifdef CONFIG_NET_IPv6
   ninfo("Bringing up: %04x:%04x:%04x:%04x:%04x:%04x:%04x:%04x\n",
@@ -2167,11 +1967,6 @@ static int lpc54_eth_ifup(struct net_driver_s *dev)
   regval |= ETH_MAC_CONFIG_TE;
   lpc54_putreg(regval, LPC54_ETH_MAC_CONFIG);
 
-  /* Set and activate a timer process */
-
-  wd_start(&priv->eth_txpoll, LPC54_WDDELAY,
-           lpc54_eth_poll_expiry, (wdparm_t)priv);
-
   /* Enable the Ethernet interrupt */
 
   priv->eth_bifup = 1;
@@ -2209,9 +2004,8 @@ static int lpc54_eth_ifdown(struct net_driver_s *dev)
   flags = enter_critical_section();
   up_disable_irq(LPC54_IRQ_ETHERNET);
 
-  /* Cancel the TX poll timer and TX timeout timers */
+  /* Cancel the TX timeout timers */
 
-  wd_cancel(&priv->eth_txpoll);
   wd_cancel(&priv->eth_txtimeout);
 
   /* Put the EMAC in its post-reset, non-operational state.  This should be
@@ -2246,6 +2040,7 @@ static int lpc54_eth_ifdown(struct net_driver_s *dev)
   if (ret < 0)
     {
       nerr("ERROR: lpc54_phy_reset failed: %d\n", ret);
+      leave_critical_section(flags);
       return ret;
     }
 
@@ -3031,14 +2826,13 @@ static int lpc54_phy_reset(struct lpc54_ethdriver_s *priv)
  *
  ****************************************************************************/
 
-int arm_netinitialize(int intf)
+void arm_netinitialize(void)
 {
   struct lpc54_ethdriver_s *priv;
   int ret;
 
   /* Get the interface structure associated with this interface number. */
 
-  DEBUGASSERT(intf == 0);
   priv = &g_ethdriver;
 
   /* Attach the three Ethernet-related IRQs to the handlers */
@@ -3049,7 +2843,7 @@ int arm_netinitialize(int intf)
       /* We could not attach the ISR to the interrupt */
 
       nerr("ERROR: irq_attach failed: %d\n", ret);
-      return -EAGAIN;
+      return;
     }
 
 #if 0 /* Not used */
@@ -3059,7 +2853,7 @@ int arm_netinitialize(int intf)
       /* We could not attach the ISR to the interrupt */
 
       nerr("ERROR:  irq_attach for PMT failed: %d\n", ret);
-      return -EAGAIN;
+      return;
     }
 
   ret = irq_attach(LPC54_IRQ_ETHERNETMACLP, lpc54_mac_interrupt, priv);
@@ -3068,7 +2862,7 @@ int arm_netinitialize(int intf)
       /* We could not attach the ISR to the interrupt */
 
       nerr("ERROR:  irq_attach for MAC failed: %d\n", ret);
-      return -EAGAIN;
+      return;
     }
 #endif
 
@@ -3153,11 +2947,10 @@ int arm_netinitialize(int intf)
       goto errout_with_clock;
     }
 
-  return OK;
+  return;
 
 errout_with_clock:
   lpc54_eth_disableclk();
-  return ret;
 }
 
 #endif /* CONFIG_LPC54_ETHERNET */

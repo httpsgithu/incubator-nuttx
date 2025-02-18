@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/lpc17xx_40xx/lpc17_40_gpioint.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -32,7 +34,7 @@
 #include <nuttx/irq.h>
 #include <nuttx/arch.h>
 
-#include "arm_arch.h"
+#include "arm_internal.h"
 #include "chip.h"
 #include "lpc17_40_gpio.h"
 
@@ -388,7 +390,7 @@ static void lpc17_40_gpiodemux(uint32_t intbase, uint32_t intmask,
  *
  ****************************************************************************/
 
-static int lpc17_40_gpiointerrupt(int irq, void *context, FAR void *arg)
+static int lpc17_40_gpiointerrupt(int irq, void *context, void *arg)
 {
   /* Get the GPIO interrupt status */
 

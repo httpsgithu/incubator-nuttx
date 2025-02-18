@@ -1,6 +1,8 @@
 /****************************************************************************
  * include/netinet/ether.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -50,6 +52,7 @@ extern "C"
 #endif
 
 FAR char *ether_ntoa(FAR const struct ether_addr *addr);
+FAR char *ether_ntoa_r(FAR const struct ether_addr *addr, FAR char *buf);
 FAR struct ether_addr *ether_aton(FAR const char *asc);
 int ether_ntohost(FAR char *hostname, FAR const struct ether_addr *addr);
 int ether_hostton(FAR const char *hostname, FAR struct ether_addr *addr);

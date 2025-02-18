@@ -1,5 +1,7 @@
-/********************************************************************************
+/****************************************************************************
  * libs/libc/pthread/pthread_barrierattr_destroy.c
+ *
+ * SPDX-License-Identifier: Apache-2.0
  *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -16,11 +18,11 @@
  * License for the specific language governing permissions and limitations
  * under the License.
  *
- ********************************************************************************/
+ ****************************************************************************/
 
-/********************************************************************************
+/****************************************************************************
  * Included Files
- ********************************************************************************/
+ ****************************************************************************/
 
 #include <nuttx/config.h>
 
@@ -28,18 +30,18 @@
 #include <errno.h>
 #include <debug.h>
 
-/********************************************************************************
+/****************************************************************************
  * Public Functions
- ********************************************************************************/
+ ****************************************************************************/
 
-/********************************************************************************
+/****************************************************************************
  * Name: pthread_barrierattr_destroy
  *
  * Description:
- *   The pthread_barrierattr_destroy() function will destroy a barrier attributes
- *   object.  A destroyed attr attributes object can be reinitialized using
- *   pthread_barrierattr_init(); the results of otherwise referencing the object
- *   after it has been destroyed are undefined.
+ *   The pthread_barrierattr_destroy() function will destroy a barrier
+ *   attributes object.  A destroyed attr attributes object can be
+ *   reinitialized using pthread_barrierattr_init(); the results of otherwise
+ *   referencing the object after it has been destroyed are undefined.
  *
  * Input Parameters:
  *   attr - barrier attributes to be destroyed.
@@ -49,7 +51,7 @@
  *
  * Assumptions:
  *
- ********************************************************************************/
+ ****************************************************************************/
 
 int pthread_barrierattr_destroy(FAR pthread_barrierattr_t *attr)
 {

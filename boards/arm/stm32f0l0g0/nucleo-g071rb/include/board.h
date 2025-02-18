@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/stm32f0l0g0/nucleo-g071rb/include/board.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -196,8 +198,8 @@
  * USART2_TX - PA2
  */
 
-#define GPIO_USART2_RX GPIO_USART2_RX_1 /* PA3 */
-#define GPIO_USART2_TX GPIO_USART2_TX_1 /* PA2 */
+#define GPIO_USART2_RX (GPIO_USART2_RX_1|GPIO_SPEED_HIGH) /* PA3 */
+#define GPIO_USART2_TX (GPIO_USART2_TX_1|GPIO_SPEED_HIGH) /* PA2 */
 
 /* DMA channels *************************************************************/
 

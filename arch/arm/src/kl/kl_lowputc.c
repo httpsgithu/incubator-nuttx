@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/kl/kl_lowputc.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -31,8 +33,6 @@
 #include <arch/board/board.h>
 
 #include "arm_internal.h"
-#include "arm_arch.h"
-
 #include "kl_config.h"
 #include "kl_lowputc.h"
 #include "kl_gpio.h"
@@ -40,7 +40,6 @@
 #include "hardware/kl_uart.h"
 #include "hardware/kl_sim.h"
 #include "hardware/kl_port.h"
-#include "hardware/kl_uart.h"
 #include "hardware/kl_pinmux.h"
 
 /****************************************************************************

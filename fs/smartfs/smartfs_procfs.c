@@ -1,6 +1,8 @@
 /****************************************************************************
  * fs/smartfs/smartfs_procfs.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -42,14 +44,14 @@
 #include <nuttx/kmalloc.h>
 #include <nuttx/fs/fs.h>
 #include <nuttx/fs/procfs.h>
-#include <nuttx/fs/dirent.h>
 #include <nuttx/fs/ioctl.h>
 #include <nuttx/mtd/smart.h>
 
 #include <arch/irq.h>
 #include "smartfs.h"
+#include "fs_heap.h"
 
-#if defined(CONFIG_FS_PROCFS) && !defined(CONFIG_FS_EXCLUDE_SMARTFS)
+#if defined(CONFIG_FS_PROCFS) && !defined(CONFIG_FS_PROCFS_EXCLUDE_SMARTFS)
 
 /****************************************************************************
  * Pre-processor Definitions
@@ -116,9 +118,10 @@ static int      smartfs_dup(FAR const struct file *oldp,
                  FAR struct file *newp);
 
 static int      smartfs_opendir(const char *relpath,
-                  FAR struct fs_dirent_s *dir);
+                  FAR struct fs_dirent_s **dir);
 static int      smartfs_closedir(FAR struct fs_dirent_s *dir);
-static int      smartfs_readdir(FAR struct fs_dirent_s *dir);
+static int      smartfs_readdir(FAR struct fs_dirent_s *dir,
+                                FAR struct dirent *entry);
 static int      smartfs_rewinddir(FAR struct fs_dirent_s *dir);
 
 static int      smartfs_stat(FAR const char *relpath, FAR struct stat *buf);
@@ -168,7 +171,7 @@ static const uint8_t g_direntrycount = sizeof(g_direntry) /
  * with any compiler.
  */
 
-const struct procfs_operations smartfs_procfsoperations =
+const struct procfs_operations g_smartfs_procfs_operations =
 {
   smartfs_open,       /* open */
   smartfs_close,      /* close */
@@ -177,6 +180,7 @@ const struct procfs_operations smartfs_procfsoperations =
   /* No write supported */
 
   smartfs_write,      /* write */
+  NULL,               /* poll */
 
   smartfs_dup,        /* dup */
 
@@ -348,7 +352,7 @@ static int smartfs_open(FAR struct file *filep, FAR const char *relpath,
    */
 
   if (((oflags & O_WRONLY) != 0 || (oflags & O_RDONLY) == 0) &&
-      (smartfs_procfsoperations.write == NULL))
+      (g_smartfs_procfs_operations.write == NULL))
     {
       ferr("ERROR: Only O_RDONLY supported\n");
       return -EACCES;
@@ -356,7 +360,7 @@ static int smartfs_open(FAR struct file *filep, FAR const char *relpath,
 
   /* Allocate a container to hold the task and attribute selection */
 
-  priv = kmm_malloc(sizeof(struct smartfs_file_s));
+  priv = fs_heap_malloc(sizeof(struct smartfs_file_s));
   if (!priv)
     {
       ferr("ERROR: Failed to allocate file attributes\n");
@@ -370,7 +374,7 @@ static int smartfs_open(FAR struct file *filep, FAR const char *relpath,
     {
       /* Entry not found */
 
-      kmm_free(priv);
+      fs_heap_free(priv);
       return ret;
     }
 
@@ -397,7 +401,7 @@ static int smartfs_close(FAR struct file *filep)
 
   /* Release the file attributes structure */
 
-  kmm_free(priv);
+  fs_heap_free(priv);
   filep->f_priv = NULL;
   return OK;
 }
@@ -508,7 +512,7 @@ static int smartfs_dup(FAR const struct file *oldp, FAR struct file *newp)
 
   /* Allocate a new container to hold the task and attribute selection */
 
-  newpriv = kmm_malloc(sizeof(struct smartfs_file_s));
+  newpriv = fs_heap_malloc(sizeof(struct smartfs_file_s));
   if (!newpriv)
     {
       ferr("ERROR: Failed to allocate file attributes\n");
@@ -534,20 +538,20 @@ static int smartfs_dup(FAR const struct file *oldp, FAR struct file *newp)
  ****************************************************************************/
 
 static int smartfs_opendir(FAR const char *relpath,
-                           FAR struct fs_dirent_s *dir)
+                           FAR struct fs_dirent_s **dir)
 {
   FAR struct smartfs_level1_s *level1;
   int        ret;
 
   finfo("relpath: \"%s\"\n", relpath ? relpath : "NULL");
-  DEBUGASSERT(relpath && dir && !dir->u.procfs);
+  DEBUGASSERT(relpath);
 
   /* The path refers to the 1st level subdirectory.  Allocate the level1
    * dirent structure.
    */
 
   level1 = (FAR struct smartfs_level1_s *)
-     kmm_malloc(sizeof(struct smartfs_level1_s));
+     fs_heap_malloc(sizeof(struct smartfs_level1_s));
 
   if (!level1)
     {
@@ -561,11 +565,11 @@ static int smartfs_opendir(FAR const char *relpath,
 
   if (ret == OK)
     {
-      dir->u.procfs = (FAR void *) level1;
+      *dir = (FAR struct fs_dirent_s *)level1;
     }
   else
     {
-      kmm_free(level1);
+      fs_heap_free(level1);
     }
 
   return ret;
@@ -580,17 +584,8 @@ static int smartfs_opendir(FAR const char *relpath,
 
 static int smartfs_closedir(FAR struct fs_dirent_s *dir)
 {
-  FAR struct smartfs_level1_s *priv;
-
-  DEBUGASSERT(dir && dir->u.procfs);
-  priv = dir->u.procfs;
-
-  if (priv)
-    {
-      kmm_free(priv);
-    }
-
-  dir->u.procfs = NULL;
+  DEBUGASSERT(dir);
+  fs_heap_free(dir);
   return OK;
 }
 
@@ -601,13 +596,15 @@ static int smartfs_closedir(FAR struct fs_dirent_s *dir)
  *
  ****************************************************************************/
 
-static int smartfs_readdir(struct fs_dirent_s *dir)
+static int smartfs_readdir(FAR struct fs_dirent_s *dir,
+                           FAR struct dirent *entry)
 {
   FAR struct smartfs_level1_s *level1;
-  int ret, index;
+  int ret;
+  int index;
 
-  DEBUGASSERT(dir && dir->u.procfs);
-  level1 = dir->u.procfs;
+  DEBUGASSERT(dir);
+  level1 = (FAR struct smartfs_level1_s *)dir;
 
   /* Have we reached the end of the directory */
 
@@ -639,9 +636,9 @@ static int smartfs_readdir(struct fs_dirent_s *dir)
               return -ENOENT;
             }
 
-          dir->fd_dir.d_type = DTYPE_DIRECTORY;
-          strncpy(dir->fd_dir.d_name, level1->mount->fs_blkdriver->i_name,
-                  NAME_MAX);
+          entry->d_type = DTYPE_DIRECTORY;
+          strlcpy(entry->d_name, level1->mount->fs_blkdriver->i_name,
+                  sizeof(entry->d_name));
 
           /* Advance to next entry */
 
@@ -652,17 +649,17 @@ static int smartfs_readdir(struct fs_dirent_s *dir)
         {
           /* Listing the contents of a specific mount */
 
-          dir->fd_dir.d_type = g_direntry[level1->base.index].type;
-          strncpy(dir->fd_dir.d_name, g_direntry[level1->base.index++].name,
-                  NAME_MAX);
+          entry->d_type = g_direntry[level1->base.index].type;
+          strlcpy(entry->d_name, g_direntry[level1->base.index++].name,
+                  sizeof(entry->d_name));
         }
       else if (level1->base.level == 3)
         {
           /* Listing the contents of a specific entry */
 
-          dir->fd_dir.d_type = g_direntry[level1->base.index].type;
-          strncpy(dir->fd_dir.d_name, g_direntry[level1->direntry].name,
-                  NAME_MAX);
+          entry->d_type = g_direntry[level1->base.index].type;
+          strlcpy(entry->d_name, g_direntry[level1->direntry].name,
+                  sizeof(entry->d_name));
           level1->base.index++;
         }
 
@@ -687,8 +684,8 @@ static int smartfs_rewinddir(struct fs_dirent_s *dir)
 {
   FAR struct smartfs_level1_s *priv;
 
-  DEBUGASSERT(dir && dir->u.procfs);
-  priv = dir->u.procfs;
+  DEBUGASSERT(dir);
+  priv = (FAR struct smartfs_level1_s *)dir;
 
   priv->base.index = 0;
   return OK;
@@ -874,7 +871,8 @@ static size_t   smartfs_mem_read(FAR struct file *filep, FAR char *buffer,
   FAR struct smartfs_file_s *priv;
   int       ret;
   uint16_t  x;
-  size_t    len, total;
+  size_t    len;
+  size_t    total;
 
   priv = (FAR struct smartfs_file_s *) filep->f_priv;
 
@@ -938,9 +936,13 @@ static size_t   smartfs_erasemap_read(FAR struct file *filep,
 {
   struct mtd_smart_procfs_data_s procfs_data;
   FAR struct smartfs_file_s *priv;
-  int       ret, rows, cols;
-  size_t    x, y;
-  size_t    len, copylen;
+  int       ret;
+  int       rows;
+  int       cols;
+  size_t    x;
+  size_t    y;
+  size_t    len;
+  size_t    copylen;
 
   priv = (FAR struct smartfs_file_s *) filep->f_priv;
 

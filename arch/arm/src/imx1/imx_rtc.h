@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/imx1/imx_rtc.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -18,8 +20,8 @@
  *
  ****************************************************************************/
 
-#ifndef __ARCH_ARM_IMX_RTC_H
-#define __ARCH_ARM_IMX_RTC_H
+#ifndef __ARCH_ARM_SRC_IMX1_IMX_RTC_H
+#define __ARCH_ARM_SRC_IMX1_IMX_RTC_H
 
 /****************************************************************************
  * Included Files
@@ -67,4 +69,4 @@
  * Inline Functions
  ****************************************************************************/
 
-#endif /* __ARCH_ARM_IMX_RTC_H */
+#endif /* __ARCH_ARM_SRC_IMX1_IMX_RTC_H */

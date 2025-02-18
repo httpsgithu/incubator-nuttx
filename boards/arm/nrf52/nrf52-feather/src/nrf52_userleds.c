@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/nrf52/nrf52-feather/src/nrf52_userleds.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -31,9 +33,7 @@
 #include <arch/board/board.h>
 
 #include "chip.h"
-#include "arm_arch.h"
 #include "arm_internal.h"
-
 #include "nrf52-feather.h"
 
 #ifndef CONFIG_ARCH_LEDS
@@ -77,7 +77,7 @@ static const uint32_t g_ledcfg[BOARD_NLEDS] =
  ****************************************************************************/
 
 #ifdef LED_VERBOSE
-static void led_dumppins(FAR const char *msg)
+static void led_dumppins(const char *msg)
 {
   nrf52_pin_dump(PINCONFIG_LED, msg);
   nrf52_gpio_dump(GPIO_LED, msg);

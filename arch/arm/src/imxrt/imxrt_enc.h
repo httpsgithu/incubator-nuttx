@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/imxrt/imxrt_enc.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -25,10 +27,7 @@
  * Included Files
  ****************************************************************************/
 
-#include <nuttx/config.h>
-
-#include "chip.h"
-#include "hardware/imxrt_enc.h"
+#include <nuttx/sensors/qencoder.h>
 
 /****************************************************************************
  * Pre-processor Definitions
@@ -63,6 +62,6 @@
  *
  ****************************************************************************/
 
-int imxrt_qeinitialize(FAR const char *devpath, int enc);
+int imxrt_qeinitialize(const char *devpath, int enc);
 
 #endif /* __ARCH_ARM_SRC_IMXRT_IMXRT_ENC_H */

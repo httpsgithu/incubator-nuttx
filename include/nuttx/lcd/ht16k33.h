@@ -1,6 +1,8 @@
 /****************************************************************************
  * include/nuttx/lcd/ht16k33.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -18,8 +20,8 @@
  *
  ****************************************************************************/
 
-#ifndef __INCLUDE_NUTTX_LEDS_HT16K33_H
-#define __INCLUDE_NUTTX_LEDS_HT16K33_H
+#ifndef __INCLUDE_NUTTX_LCD_HT16K33_H
+#define __INCLUDE_NUTTX_LCD_HT16K33_H
 
 /****************************************************************************
  * Included Files
@@ -218,4 +220,4 @@ int ht16k33_register(int devno, FAR struct i2c_master_s *i2c);
 #endif
 
 #endif /* CONFIG_I2C && CONFIG_HT16K33 */
-#endif /* __INCLUDE_NUTTX_LEDS_HT16K33_H */
+#endif /* __INCLUDE_NUTTX_LCD_HT16K33_H */

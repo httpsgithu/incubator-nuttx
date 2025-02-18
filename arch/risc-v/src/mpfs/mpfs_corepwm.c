@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/risc-v/src/mpfs/mpfs_corepwm.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -43,16 +45,11 @@
 #include <arch/board/board.h>
 
 #include "hardware/mpfs_corepwm.h"
-
-#include "riscv_arch.h"
+#include "riscv_internal.h"
 
 /****************************************************************************
  * Pre-processor Definitions
  ****************************************************************************/
-
-#ifndef OK
-#  define OK 0
-#endif
 
 /* This module only compiles if at least one CorePWM instance
  * is configured to the FPGA
@@ -81,7 +78,6 @@ struct mpfs_pwmtimer_s
   struct mpfs_pwmchan_s channels[MPFS_MAX_PWM_CHANNELS];
   uint32_t frequency;          /* Current frequency setting */
   uintptr_t base;              /* The base address of the pwm block */
-  uint32_t pwmclk;             /* The frequency of the pwm clock */
 };
 
 /****************************************************************************
@@ -192,7 +188,6 @@ static struct mpfs_pwmtimer_s g_pwm0dev =
     }
   },
   .base        = CONFIG_MPFS_COREPWM0_BASE,
-  .pwmclk      = CONFIG_MPFS_COREPWM0_PWMCLK,
 };
 #endif
 
@@ -254,7 +249,6 @@ static struct mpfs_pwmtimer_s g_pwm1dev =
     }
   },
   .base        = CONFIG_MPFS_COREPWM1_BASE,
-  .pwmclk      = CONFIG_MPFS_COREPWM1_PWMCLK,
 };
 #endif
 
@@ -401,7 +395,7 @@ static int pwm_timer(struct mpfs_pwmtimer_s *priv,
    *
    * Example for clk = 25MHz, prescale 0 and 32 bit wide registers:
    *   PWM period granularity PWM_PG = (PRESCALE + 1) / pwmclk =
-   *   40 ns × 1 = 40 ns, so the smallest step is 40ns
+   *   40 ns * 1 = 40 ns, so the smallest step is 40ns
    *   pwmclk = clk / (PRESCALE + 1) = 25,000,000 / (PRESCALE + 1) =
    *     25,000,000
    *
@@ -409,12 +403,12 @@ static int pwm_timer(struct mpfs_pwmtimer_s *priv,
    *    PERIOD = pwmclk / frequency = 25,000,000 / 50 = 500,000
    */
 
-  pwminfo("PWM%u frequency: %u PWMCLK: %u prescaler: %u\n",
-          priv->pwmid, info->frequency, priv->pwmclk, prescaler);
+  pwminfo("PWM%u frequency: %u PWMCLK: %lu prescaler: %u\n",
+          priv->pwmid, info->frequency, MPFS_FPGA_PERIPHERAL_CLK, prescaler);
 
   /* Set the reload and prescaler values */
 
-  period = priv->pwmclk / info->frequency;
+  period = MPFS_FPGA_PERIPHERAL_CLK / info->frequency;
 
   pwm_putreg(priv, MPFS_COREPWM_PERIOD_OFFSET, period);
   pwm_putreg(priv, MPFS_COREPWM_PRESCALE_OFFSET, prescaler);
@@ -424,7 +418,7 @@ static int pwm_timer(struct mpfs_pwmtimer_s *priv,
   for (i = 0; i < CONFIG_PWM_NCHANNELS; i++)
     {
       ub32_t    duty;
-      uint8_t   channel;
+      int8_t   channel;
       uint32_t  neg_edge;
 
       channel   = info->channels[i].channel;
@@ -435,6 +429,13 @@ static int pwm_timer(struct mpfs_pwmtimer_s *priv,
 
       duty      = ub16toub32(info->channels[i].duty);
       neg_edge  = b32toi(duty * period + b32HALF);
+
+      /* Break the loop if all following channels are not configured */
+
+      if (channel == -1)
+        {
+          break;
+        }
 
       if (channel == 0)   /* A value of zero means to skip this channel */
         {
@@ -558,6 +559,13 @@ static int pwm_setup(struct pwm_lowerhalf_s *dev)
   struct mpfs_pwmtimer_s *priv = (struct mpfs_pwmtimer_s *)dev;
 
   pwminfo("PWMID%u\n", priv->pwmid);
+
+  /* Make sure that frequency is zero and channels has been disabled */
+
+  priv->frequency = 0;
+  pwm_putreg(priv, MPFS_COREPWM_PWM_ENABLE_0_7_OFFSET,  0x00);
+  pwm_putreg(priv, MPFS_COREPWM_PWM_ENABLE_8_15_OFFSET, 0x00);
+
   pwm_dumpregs(priv, "Initially");
 
   return OK;
@@ -627,7 +635,12 @@ static int pwm_start(struct pwm_lowerhalf_s *dev,
         {
           /* Set output if channel configured */
 
-          uint8_t chan = info->channels[i].channel;
+          int8_t chan = info->channels[i].channel;
+
+          if (chan == -1)
+            {
+              break;
+            }
 
           if (chan != 0 && chan <= priv->nchannels)
             {

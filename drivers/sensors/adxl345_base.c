@@ -1,6 +1,8 @@
 /****************************************************************************
  * drivers/sensors/adxl345_base.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -49,8 +51,6 @@
 
 /* Character driver methods */
 
-static int     adxl345_open(FAR struct file *filep);
-static int     adxl345_close(FAR struct file *filep);
 static ssize_t adxl345_read(FAR struct file *filep, FAR char *buffer,
                             size_t len);
 
@@ -62,39 +62,10 @@ static ssize_t adxl345_read(FAR struct file *filep, FAR char *buffer,
 
 static const struct file_operations g_adxl345fops =
 {
-  adxl345_open,    /* open */
-  adxl345_close,   /* close */
+  NULL,            /* open */
+  NULL,            /* close */
   adxl345_read,    /* read */
-  0,               /* write */
-  0,               /* seek */
-  0,               /* ioctl */
 };
-
-/****************************************************************************
- * Name: adxl345_open
- *
- * Description:
- *   Standard character driver open method.
- *
- ****************************************************************************/
-
-static int adxl345_open(FAR struct file *filep)
-{
-  return OK;
-}
-
-/****************************************************************************
- * Name: adxl345_close
- *
- * Description:
- *   Standard character driver close method.
- *
- ****************************************************************************/
-
-static int adxl345_close(FAR struct file *filep)
-{
-  return OK;
-}
 
 /****************************************************************************
  * Name: adxl345_read
@@ -113,11 +84,10 @@ static ssize_t adxl345_read(FAR struct file *filep,
   int                       ret;
 
   sninfo("len=%d\n", len);
-  DEBUGASSERT(filep);
   inode = filep->f_inode;
 
-  DEBUGASSERT(inode && inode->i_private);
-  priv  = (FAR struct adxl345_dev_s *)inode->i_private;
+  DEBUGASSERT(inode->i_private);
+  priv  = inode->i_private;
 
   /* Verify that the caller has provided a buffer large enough to receive
    * the accelerometer data.
@@ -134,7 +104,7 @@ static ssize_t adxl345_read(FAR struct file *filep,
 
   /* Get exclusive access to the driver data structure */
 
-  ret = nxsem_wait(&priv->exclsem);
+  ret = nxmutex_lock(&priv->lock);
   if (ret < 0)
     {
       return ret;
@@ -159,7 +129,7 @@ static ssize_t adxl345_read(FAR struct file *filep,
 
   buffer = (FAR char *) &sample;
 
-  nxsem_post(&priv->exclsem);
+  nxmutex_unlock(&priv->lock);
   return sizeof(struct adxl345_sample_s);
 }
 
@@ -191,7 +161,7 @@ int adxl345_register(ADXL345_HANDLE handle, int minor)
 
   /* Get exclusive access to the device structure */
 
-  ret = nxsem_wait(&priv->exclsem);
+  ret = nxmutex_lock(&priv->lock);
   if (ret < 0)
     {
       snerr("ERROR: nxsem_wait failed: %d\n", ret);
@@ -206,19 +176,19 @@ int adxl345_register(ADXL345_HANDLE handle, int minor)
 
   /* Register the character driver */
 
-  snprintf(devname, DEV_NAMELEN, DEV_FORMAT, minor);
-  ret = register_driver(devname, &g_adxl345fops, 0666, priv);
+  snprintf(devname, sizeof(devname), DEV_FORMAT, minor);
+  ret = register_driver(devname, &g_adxl345fops, 0444, priv);
   if (ret < 0)
     {
       snerr("ERROR: Failed to register driver %s: %d\n", devname, ret);
-      nxsem_post(&priv->exclsem);
+      nxmutex_unlock(&priv->lock);
       return ret;
     }
 
   /* Indicate that the accelerometer was successfully initialized */
 
   priv->status |= ADXL345_STAT_INITIALIZED;  /* Accelerometer is initialized */
-  nxsem_post(&priv->exclsem);
+  nxmutex_unlock(&priv->lock);
   return ret;
 }
 
@@ -397,7 +367,7 @@ ADXL345_HANDLE adxl345_instantiate(FAR struct i2c_master_s *dev,
 
   /* Initialize the device state structure */
 
-  nxsem_init(&priv->exclsem, 0, 1);
+  nxmutex_init(&priv->lock);
   priv->config = config;
 
 #ifdef CONFIG_ADXL345_SPI
@@ -413,6 +383,7 @@ ADXL345_HANDLE adxl345_instantiate(FAR struct i2c_master_s *dev,
   if (ret < 0)
     {
       snerr("ERROR: Wrong Device ID!\n");
+      nxmutex_destroy(&priv->lock);
       kmm_free(priv);
       return NULL;
     }

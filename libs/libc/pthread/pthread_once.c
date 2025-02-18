@@ -1,6 +1,8 @@
 /****************************************************************************
  * libs/libc/pthread/pthread_once.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -25,9 +27,10 @@
 #include <nuttx/config.h>
 
 #include <assert.h>
+#include <errno.h>
 #include <stdbool.h>
 #include <pthread.h>
-#include <sched.h>
+#include <nuttx/mutex.h>
 #include <debug.h>
 
 /****************************************************************************
@@ -65,28 +68,25 @@ int pthread_once(FAR pthread_once_t *once_control,
 {
   /* Sanity checks */
 
-  DEBUGASSERT(once_control != NULL);
-  DEBUGASSERT(init_routine != NULL);
-
-  /* Prohibit pre-emption while we test and set the once_control. */
-
-  sched_lock();
-
-  if (!*once_control)
+  if (once_control == NULL || init_routine == NULL)
     {
-      *once_control = true;
-
-      /* Call the init_routine with pre-emption enabled. */
-
-      sched_unlock();
-      init_routine();
-      return OK;
+      return EINVAL;
     }
 
-  /* The init_routine has already been called.
-   * Restore pre-emption and return.
-   */
+  if (!once_control->done)
+    {
+      pthread_mutex_lock(&once_control->mutex);
 
-  sched_unlock();
+      if (!once_control->done)
+        {
+          /* Call the init_routine with pre-emption enabled. */
+
+          init_routine();
+          once_control->done = true;
+        }
+
+      pthread_mutex_unlock(&once_control->mutex);
+    }
+
   return OK;
 }

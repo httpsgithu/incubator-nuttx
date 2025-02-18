@@ -1,6 +1,8 @@
 ############################################################################
 # arch/arm/src/armv7-m/Toolchain.defs
 #
+# SPDX-License-Identifier: Apache-2.0
+#
 # Licensed to the Apache Software Foundation (ASF) under one or more
 # contributor license agreements.  See the NOTICE file distributed with
 # this work for additional information regarding copyright ownership.  The
@@ -18,145 +20,151 @@
 #
 ############################################################################
 
-# Setup for the selected toolchain
-
-#
-# Handle old-style chip-specific toolchain names in the absence of
-# a new-style toolchain specification, force the selection of a single
-# toolchain and allow the selected toolchain to be overridden by a
-# command-line selection.
-#
-
-ifeq ($(filter y, \
-      $(CONFIG_ARMV7M_TOOLCHAIN_BUILDROOT) \
-    ),y)
-  CONFIG_ARMV7M_TOOLCHAIN ?= BUILDROOT
-endif
-
-ifeq ($(filter y, \
-      $(CONFIG_ARMV7M_TOOLCHAIN_GNU_EABIL) \
-    ),y)
-  CONFIG_ARMV7M_TOOLCHAIN ?= GNU_EABI
-endif
-
-ifeq ($(filter y, \
-      $(CONFIG_ARMV7M_TOOLCHAIN_GNU_EABIW) \
-    ),y)
-  CONFIG_ARMV7M_TOOLCHAIN ?= GNU_EABI
-endif
-
-ifeq ($(filter y, \
-      $(CONFIG_ARMV7M_TOOLCHAIN_CLANGL) \
-    ),y)
-  CONFIG_ARMV7M_TOOLCHAIN ?= CLANG
-endif
-
-ifeq ($(filter y, \
-      $(CONFIG_ARMV7M_TOOLCHAIN_CLANGW) \
-    ),y)
-  CONFIG_ARMV7M_TOOLCHAIN ?= CLANG
-endif
-
-#
-# Supported toolchains
-#
-# Each toolchain definition should set:
-#
-#  CROSSDEV         The GNU toolchain triple (command prefix)
-#  ARCHCPUFLAGS     CPU-specific flags selecting the instruction set
-#                   FPU options, etc.
-#  MAXOPTIMIZATION  The maximum optimization level that results in
-#                   reliable code generation.
-#
-
-ifeq ($(CONFIG_DEBUG_CUSTOMOPT),y)
-  MAXOPTIMIZATION := $(CONFIG_DEBUG_OPTLEVEL)
-else
-  MAXOPTIMIZATION ?= -Os
-endif
-
 # Parametrization for ARCHCPUFLAGS
 
 ifeq ($(CONFIG_ARCH_CORTEXM4),y)
   TOOLCHAIN_ARM7EM   := y
-  TOOLCHAIN_MTUNE    := -mtune=cortex-m4
-  TOOLCHAIN_MARCH    := -march=armv7e-m
-  ifeq ($(CONFIG_ARCH_FPU),y)
-    TOOLCHAIN_MFLOAT := -mfpu=fpv4-sp-d16 -mfloat-abi=hard
+  ifeq ($(CONFIG_ARM_TOOLCHAIN_GHS),y)
+    TOOLCHAIN_MTUNE  := -cpu=cortexm4
+    ifeq ($(CONFIG_ARCH_FPU),y)
+      ifeq ($(CONFIG_ARCH_DPFPU),y)
+        TOOLCHAIN_MFLOAT := -fpu=vfpv3
+      else
+        TOOLCHAIN_MFLOAT := -fpu=vfpv3_d16
+      endif
+    endif
   else
-    TOOLCHAIN_MFLOAT := -mfloat-abi=soft
+    TOOLCHAIN_MTUNE    := -mtune=cortex-m4
+    TOOLCHAIN_MARCH    := -march=armv7e-m
+    LLVM_CPUTYPE       := cortex-m4
+    ifeq ($(CONFIG_ARCH_FPU),y)
+      TOOLCHAIN_MFLOAT := -mfpu=fpv4-sp-d16
+    endif
   endif
 else ifeq ($(CONFIG_ARCH_CORTEXM7),y)
   TOOLCHAIN_ARM7EM   := y
-  TOOLCHAIN_MTUNE    := -mtune=cortex-m7
-  TOOLCHAIN_MARCH    := -march=armv7e-m
-  ifeq ($(CONFIG_ARCH_FPU),y)
-  ifeq ($(CONFIG_ARCH_DPFPU),y)
-    TOOLCHAIN_MFLOAT := -mfpu=fpv5-d16 -mfloat-abi=hard
+  ifeq ($(CONFIG_ARM_TOOLCHAIN_GHS),y)
+    TOOLCHAIN_MTUNE  := -cpu=cortexm7
+    ifeq ($(CONFIG_ARCH_FPU),y)
+      ifeq ($(CONFIG_ARCH_DPFPU),y)
+        TOOLCHAIN_MFLOAT := -fpu=vfpv3
+      else
+        TOOLCHAIN_MFLOAT := -fpu=vfpv3_d16
+      endif
+    endif
   else
-    TOOLCHAIN_MFLOAT := -mfpu=fpv5-sp-d16 -mfloat-abi=hard
-  endif
-  else
-    TOOLCHAIN_MFLOAT := -mfloat-abi=soft
+    TOOLCHAIN_MTUNE  := -mtune=cortex-m7
+    TOOLCHAIN_MARCH  := -march=armv7e-m
+    LLVM_CPUTYPE     := cortex-m7
+    ifeq ($(CONFIG_ARCH_FPU),y)
+      ifeq ($(CONFIG_ARCH_DPFPU),y)
+        TOOLCHAIN_MFLOAT := -mfpu=fpv5-d16
+      else
+        TOOLCHAIN_MFLOAT := -mfpu=fpv5-sp-d16
+      endif
+    endif
   endif
 else # ifeq ($(CONFIG_ARCH_CORTEXM3),y)
   TOOLCHAIN_ARM7EM   := n
   TOOLCHAIN_MTUNE    := -mtune=cortex-m3
   TOOLCHAIN_MARCH    := -march=armv7-m
   TOOLCHAIN_MFLOAT   := -mfloat-abi=soft
+  LLVM_CPUTYPE       := cortex-m3
 endif
 
-# NuttX buildroot under Linux or Cygwin
-
-ifeq ($(CONFIG_ARMV7M_TOOLCHAIN),BUILDROOT)
-ifeq ($(CONFIG_ARMV7M_OABI_TOOLCHAIN),y)
-  CROSSDEV ?= arm-nuttx-elf-
-  ARCHCPUFLAGS = $(TOOLCHAIN_MARCH) $(TOOLCHAIN_MTUNE) $(TOOLCHAIN_MFLOAT)
+ifeq ($(CONFIG_ARCH_FPU),y)
+  LLVM_ABITYPE := eabihf
+  ifeq ($(CONFIG_ARM_TOOLCHAIN_GHS),y)
+    ifeq ($(CONFIG_ARM_FPU_ABI_SOFT),y)
+      TOOLCHAIN_MFLOAT += -fsoft
+    else ifeq ($(CONFIG_ARCH_DPFPU),y)
+      TOOLCHAIN_MFLOAT += -fhard
+    else
+      TOOLCHAIN_MFLOAT += -fsingle
+    endif
+  else
+    ifeq ($(CONFIG_ARM_FPU_ABI_SOFT),y)
+      TOOLCHAIN_MFLOAT += -mfloat-abi=softfp
+    else
+      TOOLCHAIN_MFLOAT += -mfloat-abi=hard
+    endif
+  endif
 else
-  CROSSDEV ?= arm-nuttx-eabi-
-  ARCHCPUFLAGS = $(TOOLCHAIN_MARCH) $(TOOLCHAIN_MTUNE) -mthumb $(TOOLCHAIN_MFLOAT)
-endif
-endif
-
-# Generic GNU EABI toolchain
-
-ifeq ($(CONFIG_ARMV7M_TOOLCHAIN),GNU_EABI)
-  CROSSDEV ?= arm-none-eabi-
-  ARCHCPUFLAGS = $(TOOLCHAIN_MARCH) $(TOOLCHAIN_MTUNE) -mthumb $(TOOLCHAIN_MFLOAT)
+  LLVM_ABITYPE := eabi
+  ifeq ($(CONFIG_ARM_TOOLCHAIN_GHS),)
+    TOOLCHAIN_MFLOAT += -mfloat-abi=soft
+  else
+    TOOLCHAIN_MFLOAT += -fsoft
+  endif
 endif
 
-# Clang toolchain
-
-ifeq ($(CONFIG_ARMV7M_TOOLCHAIN),CLANG)
-  CROSSDEV ?= arm-none-eabi-
-  ARCHCPUFLAGS = -target arm-none-eabi $(TOOLCHAIN_MARCH) $(TOOLCHAIN_MTUNE) $(TOOLCHAIN_MFLOAT)
-  CC = clang
-  CXX = clang++
-  CPP = clang -E -P -x c
+ifeq ($(CONFIG_ARCH_CORTEXM3),y)
+  LLVM_ARCHTYPE := thumbv7m
 else
-  CC = $(CROSSDEV)gcc
-  CXX = $(CROSSDEV)g++
-  CPP = $(CROSSDEV)gcc -E -P -x c
+  LLVM_ARCHTYPE := thumbv7em
 endif
 
-LD = $(CROSSDEV)ld
-STRIP = $(CROSSDEV)strip --strip-unneeded
-AR = $(CROSSDEV)ar rcs
-NM = $(CROSSDEV)nm
-OBJCOPY = $(CROSSDEV)objcopy
-OBJDUMP = $(CROSSDEV)objdump
+# Clang Configuration files
 
-# Add the builtin library
+ifeq ($(CONFIG_ARM_TOOLCHAIN_CLANG),y)
 
-EXTRA_LIBS += -lgcc
-EXTRA_LIBPATHS += -L "${shell dirname "`$(CC) $(ARCHCPUFLAGS) --print-libgcc-file-name`"}"
+  ifeq ($(CONFIG_ARCH_CORTEXM4),y)
+    ifeq ($(CONFIG_ARCH_FPU),y)
+      TOOLCHAIN_CLANG_CONFIG = armv7em_hard_fpv4_sp_d16
+    else
+      TOOLCHAIN_CLANG_CONFIG = armv7em_soft_nofp
+    endif
+  else ifeq ($(CONFIG_ARCH_CORTEXM7),y)
+    ifeq ($(CONFIG_ARCH_FPU),y)
+      TOOLCHAIN_CLANG_CONFIG = armv7em_hard_fpv5_d16
+    else
+      TOOLCHAIN_CLANG_CONFIG = armv7em_soft_nofp
+    endif
+  else # ifeq ($(CONFIG_ARCH_CORTEXM3),y)
+      TOOLCHAIN_CLANG_CONFIG = armv7m_soft_nofp
+  endif
 
-ifneq ($(CONFIG_LIBM),y)
-  EXTRA_LIBS += -lm
-  EXTRA_LIBPATHS += -L "${shell dirname "`$(CC) $(ARCHCPUFLAGS) --print-file-name=libm.a`"}"
+else ifeq ($(CONFIG_ARM_TOOLCHAIN_ARMCLANG),y)
+
+  ifeq ($(CONFIG_ARCH_CORTEXM4),y)
+    ifeq ($(CONFIG_ARCH_FPU),y)
+      LDFLAGS += --cpu=Cortex-M4
+    else
+      LDFLAGS += --cpu=Cortex-M4.no_fp
+    endif
+  else ifeq ($(CONFIG_ARCH_CORTEXM7),y)
+    ifeq ($(CONFIG_ARCH_FPU),y)
+      ifeq ($(CONFIG_ARCH_DPFPU),y)
+        LDFLAGS += --cpu=Cortex-M7
+      else
+        LDFLAGS += --cpu=Cortex-M7.fp.sp
+      endif
+    else
+      LDFLAGS += --cpu=Cortex-M7.no_fp
+    endif
+  else # ifeq ($(CONFIG_ARCH_CORTEXM3),y)
+    LDFLAGS += --cpu=Cortex-M3
+  endif
+
+else ifeq ($(CONFIG_ARM_TOOLCHAIN_GHS),y)
+  MKDEP = $(TOPDIR)$(DELIM)tools$(DELIM)mknulldeps.sh
+
+  undefine PREPROCESS
+  define PREPROCESS
+    $(ECHO_BEGIN)"CPP: $1->$2 "
+    $(Q) $(CPP) $(CPPFLAGS) $($(strip $1)_CPPFLAGS) -filetype.cpp $1 -o $2
+    $(ECHO_END)
+  endef
+
+  undefine ARCHIVE
+  define ARCHIVE
+    $(AR) $2 -archive -o $1
+  endef
+
 endif
 
-ifeq ($(CONFIG_LIBSUPCXX),y)
-  EXTRA_LIBS += -lsupc++
-  EXTRA_LIBPATHS += -L "${shell dirname "`$(CC) $(ARCHCPUFLAGS) --print-file-name=libsupc++.a`"}"
+ifeq ($(CONFIG_ARMV7M_STACKCHECK),y)
+  ARCHOPTIMIZATION += -finstrument-functions -ffixed-r10
 endif
+
+include $(TOPDIR)/arch/arm/src/common/Toolchain.defs

@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/lpc17xx_40xx/hardware/lpc178x_40xx_memorymap.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -18,8 +20,8 @@
  *
  ****************************************************************************/
 
-#ifndef __ARCH_ARM_SRC_LPC17XX_40XX_HARDWARE_LPC178X_MEMORYMAP_H
-#define __ARCH_ARM_SRC_LPC17XX_40XX_HARDWARE_LPC178X_MEMORYMAP_H
+#ifndef __ARCH_ARM_SRC_LPC17XX_40XX_HARDWARE_LPC178X_40XX_MEMORYMAP_H
+#define __ARCH_ARM_SRC_LPC17XX_40XX_HARDWARE_LPC178X_40XX_MEMORYMAP_H
 
 /****************************************************************************
  * Included Files
@@ -50,15 +52,15 @@
 /* Off chip Memory via External Memory Interface */
 
 #define LPC17_40_EXTRAM_BASE    0x80000000 /*  */
-# define LPC17_40_EXTSRAM_CS0   0x80000000 /* Chip select 0 /up to 64MB/  */
-# define LPC17_40_EXTSRAM_CS1   0x90000000 /* Chip select 1 /up to 64MB/  */
-# define LPC17_40_EXTSRAM_CS2   0x98000000 /* Chip select 2 /up to 64MB/  */
-# define LPC17_40_EXTSRAM_CS3   0x9c000000 /* Chip select 3 /up to 64MB/  */
+#  define LPC17_40_EXTSRAM_CS0  0x80000000 /* Chip select 0 /up to 64MB/  */
+#  define LPC17_40_EXTSRAM_CS1  0x90000000 /* Chip select 1 /up to 64MB/  */
+#  define LPC17_40_EXTSRAM_CS2  0x98000000 /* Chip select 2 /up to 64MB/  */
+#  define LPC17_40_EXTSRAM_CS3  0x9c000000 /* Chip select 3 /up to 64MB/  */
 
-# define LPC17_40_EXTDRAM_CS0   0xa0000000 /* Chip select 0 /up to 256MB/  */
-# define LPC17_40_EXTDRAM_CS1   0xb0000000 /* Chip select 1 /up to 256MB/  */
-# define LPC17_40_EXTDRAM_CS2   0xc0000000 /* Chip select 2 /up to 256MB/  */
-# define LPC17_40_EXTDRAM_CS3   0xd0000000 /* Chip select 3 /up to 256MB/  */
+#  define LPC17_40_EXTDRAM_CS0  0xa0000000 /* Chip select 0 /up to 256MB/  */
+#  define LPC17_40_EXTDRAM_CS1  0xb0000000 /* Chip select 1 /up to 256MB/  */
+#  define LPC17_40_EXTDRAM_CS2  0xc0000000 /* Chip select 2 /up to 256MB/  */
+#  define LPC17_40_EXTDRAM_CS3  0xd0000000 /* Chip select 3 /up to 256MB/  */
 
 #define LPC17_40_CORTEXM3_BASE  0xe0000000 /* -0xe00fffff: (see armv7-m/nvic.h) */
 #define LPC17_40_SCS_BASE       0xe000e000
@@ -141,4 +143,4 @@
  * Public Functions Prototypes
  ****************************************************************************/
 
-#endif /* __ARCH_ARM_SRC_LPC17XX_40XX_HARDWARE_LPC178X_MEMORYMAP_H */
+#endif /* __ARCH_ARM_SRC_LPC17XX_40XX_HARDWARE_LPC178X_40XX_MEMORYMAP_H */

@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/armv7-a/arm_addrenv_shm.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -37,8 +39,9 @@
 #include "mmu.h"
 #include "addrenv.h"
 #include "pgalloc.h"
+#include "sched/sched.h"
 
-#if defined(CONFIG_BUILD_KERNEL) && defined(CONFIG_MM_SHM)
+#if defined(CONFIG_BUILD_KERNEL) && defined(CONFIG_ARCH_VMA_MAPPING)
 
 /****************************************************************************
  * Public Functions
@@ -63,30 +66,24 @@
  *
  ****************************************************************************/
 
-int up_shmat(FAR uintptr_t *pages, unsigned int npages, uintptr_t vaddr)
+int up_shmat(uintptr_t *pages, unsigned int npages, uintptr_t vaddr)
 {
-  FAR struct tcb_s *tcb = nxsched_self();
-  FAR struct task_group_s *group;
-  FAR uintptr_t *l1entry;
-  FAR uint32_t *l2table;
+  struct tcb_s *tcb = this_task();
+  struct arch_addrenv_s *addrenv;
+  uintptr_t *l1entry;
+  uint32_t *l2table;
   irqstate_t flags;
   uintptr_t paddr;
-#ifndef CONFIG_ARCH_PGPOOL_MAPPING
-  uint32_t l1save;
-#endif
   unsigned int nmapped;
   unsigned int shmndx;
 
-  shminfo("pages=%p npages=%d vaddr=%08lx\n",
-          pages, npages, (unsigned long)vaddr);
-
   /* Sanity checks */
 
-  DEBUGASSERT(pages && npages > 0 && tcb && tcb->group);
+  DEBUGASSERT(pages && npages > 0 && tcb && tcb->addrenv_own);
   DEBUGASSERT(vaddr >= CONFIG_ARCH_SHM_VBASE && vaddr < ARCH_SHM_VEND);
   DEBUGASSERT(MM_ISALIGNED(vaddr));
 
-  group = tcb->group;
+  addrenv = &tcb->addrenv_own->addrenv;
 
   /* Loop until all pages have been mapped into the caller's address space. */
 
@@ -100,7 +97,7 @@ int up_shmat(FAR uintptr_t *pages, unsigned int npages, uintptr_t vaddr)
        * address.
        */
 
-      l1entry = group->tg_addrenv.shm[shmndx];
+      l1entry = addrenv->shm[shmndx];
       if (l1entry == NULL)
         {
           /* No.. Allocate one physical page for the L2 page table */
@@ -118,27 +115,21 @@ int up_shmat(FAR uintptr_t *pages, unsigned int npages, uintptr_t vaddr)
            */
 
           flags = enter_critical_section();
-          group->tg_addrenv.shm[shmndx] = (FAR uintptr_t *)paddr;
+          addrenv->shm[shmndx] = (uintptr_t *)paddr;
 
-#ifdef CONFIG_ARCH_PGPOOL_MAPPING
           /* Get the virtual address corresponding to the physical page
            * address.
            */
 
-          l2table = (FAR uint32_t *)arm_pgvaddr(paddr);
-#else
-          /* Temporarily map the page into the virtual address space */
-
-          l1save = mmu_l1_getentry(ARCH_SCRATCH_VBASE);
-          mmu_l1_setentry(paddr & ~SECTION_MASK, ARCH_SCRATCH_VBASE,
-                          MMU_MEMFLAGS);
-          l2table = (FAR uint32_t *)
-            (ARCH_SCRATCH_VBASE | (paddr & SECTION_MASK));
-#endif
+          l2table = (uint32_t *)arm_pgvaddr(paddr);
 
           /* Initialize the page table */
 
           memset(l2table, 0, ENTRIES_PER_L2TABLE * sizeof(uint32_t));
+
+          /* In case first time set shm l1 entry */
+
+          mmu_l1_setentry(paddr, vaddr, MMU_L1_PGTABFLAGS);
         }
       else
         {
@@ -146,24 +137,14 @@ int up_shmat(FAR uintptr_t *pages, unsigned int npages, uintptr_t vaddr)
            * table entry.
            */
 
-          paddr = (uintptr_t)l1entry & ~SECTION_MASK;
+          paddr = (uintptr_t)l1entry;
           flags = enter_critical_section();
 
-#ifdef CONFIG_ARCH_PGPOOL_MAPPING
           /* Get the virtual address corresponding to the physical page\
            * address.
            */
 
-          l2table = (FAR uint32_t *)arm_pgvaddr(paddr);
-#else
-          /* Temporarily map the page into the virtual address space */
-
-          l1save = mmu_l1_getentry(ARCH_SCRATCH_VBASE);
-          mmu_l1_setentry(paddr & ~SECTION_MASK, ARCH_SCRATCH_VBASE,
-                          MMU_MEMFLAGS);
-          l2table = (FAR uint32_t *)
-            (ARCH_SCRATCH_VBASE | (paddr & SECTION_MASK));
-#endif
+          l2table = (uint32_t *)arm_pgvaddr(paddr);
         }
 
       /* Map the virtual address to this physical address */
@@ -171,7 +152,7 @@ int up_shmat(FAR uintptr_t *pages, unsigned int npages, uintptr_t vaddr)
       DEBUGASSERT(get_l2_entry(l2table, vaddr) == 0);
 
       paddr = *pages++;
-      set_l2_entry(l2table, paddr, vaddr, MMU_MEMFLAGS);
+      set_l2_entry(l2table, paddr, vaddr, MMU_L2_UDATAFLAGS);
       nmapped++;
       vaddr += MM_PGSIZE;
 
@@ -186,11 +167,6 @@ int up_shmat(FAR uintptr_t *pages, unsigned int npages, uintptr_t vaddr)
                       (uintptr_t)l2table +
                       ENTRIES_PER_L2TABLE * sizeof(uint32_t));
 
-#ifndef CONFIG_ARCH_PGPOOL_MAPPING
-      /* Restore the scratch section L1 page table entry */
-
-      mmu_l1_restore(ARCH_SCRATCH_VBASE, l1save);
-#endif
       leave_critical_section(flags);
     }
 
@@ -216,27 +192,22 @@ int up_shmat(FAR uintptr_t *pages, unsigned int npages, uintptr_t vaddr)
 
 int up_shmdt(uintptr_t vaddr, unsigned int npages)
 {
-  FAR struct tcb_s *tcb = nxsched_self();
-  FAR struct task_group_s *group;
-  FAR uintptr_t *l1entry;
-  FAR uint32_t *l2table;
+  struct tcb_s *tcb = this_task();
+  struct arch_addrenv_s *addrenv;
+  uintptr_t *l1entry;
+  uint32_t *l2table;
   irqstate_t flags;
   uintptr_t paddr;
-#ifndef CONFIG_ARCH_PGPOOL_MAPPING
-  uint32_t l1save;
-#endif
   unsigned int nunmapped;
   unsigned int shmndx;
 
-  shminfo("npages=%d vaddr=%08lx\n", npages, (unsigned long)vaddr);
-
   /* Sanity checks */
 
-  DEBUGASSERT(npages > 0 && tcb && tcb->group);
+  DEBUGASSERT(npages > 0 && tcb && tcb->addrenv_own);
   DEBUGASSERT(vaddr >= CONFIG_ARCH_SHM_VBASE && vaddr < ARCH_SHM_VEND);
   DEBUGASSERT(MM_ISALIGNED(vaddr));
 
-  group = tcb->group;
+  addrenv = &tcb->addrenv_own->addrenv;
 
   /* Loop until all pages have been unmapped from the caller's address
    * space.
@@ -250,31 +221,21 @@ int up_shmdt(uintptr_t vaddr, unsigned int npages)
 
       /* Get the level 1 page table entry for this virtual address */
 
-      l1entry = group->tg_addrenv.shm[shmndx];
+      l1entry = addrenv->shm[shmndx];
       DEBUGASSERT(l1entry != NULL);
 
       /* Get the physical address of the L2 page table from the L1 page
        * table entry.
        */
 
-       paddr = (uintptr_t)l1entry & ~SECTION_MASK;
+       paddr = (uintptr_t)l1entry;
        flags = enter_critical_section();
 
-#ifdef CONFIG_ARCH_PGPOOL_MAPPING
       /* Get the virtual address corresponding to the physical page
        * address.
        */
 
-      l2table = (FAR uint32_t *)arm_pgvaddr(paddr);
-#else
-      /* Temporarily map the page into the virtual address space */
-
-      l1save = mmu_l1_getentry(ARCH_SCRATCH_VBASE);
-      mmu_l1_setentry(paddr & ~SECTION_MASK, ARCH_SCRATCH_VBASE,
-                      MMU_MEMFLAGS);
-      l2table = (FAR uint32_t *)
-        (ARCH_SCRATCH_VBASE | (paddr & SECTION_MASK));
-#endif
+      l2table = (uint32_t *)arm_pgvaddr(paddr);
 
       /* Unmap this virtual page address.
        *
@@ -304,15 +265,10 @@ int up_shmdt(uintptr_t vaddr, unsigned int npages)
                       (uintptr_t)l2table +
                       ENTRIES_PER_L2TABLE * sizeof(uint32_t));
 
-#ifndef CONFIG_ARCH_PGPOOL_MAPPING
-      /* Restore the scratch section L1 page table entry */
-
-      mmu_l1_restore(ARCH_SCRATCH_VBASE, l1save);
-#endif
       leave_critical_section(flags);
     }
 
   return OK;
 }
 
-#endif /* CONFIG_BUILD_KERNEL && CONFIG_MM_SHM */
+#endif /* CONFIG_BUILD_KERNEL && CONFIG_ARCH_VMA_MAPPING */

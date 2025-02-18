@@ -1,6 +1,8 @@
 /****************************************************************************
  * net/can/can_conn.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -26,7 +28,6 @@
 
 #include <stdint.h>
 #include <string.h>
-#include <queue.h>
 #include <assert.h>
 #include <errno.h>
 #include <debug.h>
@@ -34,7 +35,8 @@
 #include <arch/irq.h>
 
 #include <nuttx/kmalloc.h>
-#include <nuttx/semaphore.h>
+#include <nuttx/queue.h>
+#include <nuttx/mutex.h>
 #include <nuttx/net/netconfig.h>
 #include <nuttx/net/net.h>
 
@@ -44,43 +46,27 @@
 #ifdef CONFIG_NET_CAN
 
 /****************************************************************************
+ * Pre-processor Definitions
+ ****************************************************************************/
+
+#ifndef CONFIG_CAN_MAX_CONNS
+#  define CONFIG_CAN_MAX_CONNS 0
+#endif
+
+/****************************************************************************
  * Private Data
  ****************************************************************************/
 
 /* The array containing all NetLink connections. */
 
-static struct can_conn_s g_can_connections[CONFIG_CAN_CONNS];
-
-/* A list of all free NetLink connections */
-
-static dq_queue_t g_free_can_connections;
-static sem_t g_free_sem;
+NET_BUFPOOL_DECLARE(g_can_connections, sizeof(struct can_conn_s),
+                    CONFIG_CAN_PREALLOC_CONNS, CONFIG_CAN_ALLOC_CONNS,
+                    CONFIG_CAN_MAX_CONNS);
+static mutex_t g_free_lock = NXMUTEX_INITIALIZER;
 
 /* A list of all allocated NetLink connections */
 
 static dq_queue_t g_active_can_connections;
-
-/****************************************************************************
- * Private Functions
- ****************************************************************************/
-
-/****************************************************************************
- * Name: _can_semtake() and _can_semgive()
- *
- * Description:
- *   Take/give semaphore
- *
- ****************************************************************************/
-
-static void _can_semtake(FAR sem_t *sem)
-{
-  net_lockedwait_uninterruptible(sem);
-}
-
-static void _can_semgive(FAR sem_t *sem)
-{
-  nxsem_post(sem);
-}
 
 /****************************************************************************
  * Public Functions
@@ -97,23 +83,6 @@ static void _can_semgive(FAR sem_t *sem)
 
 void can_initialize(void)
 {
-  int i;
-
-  /* Initialize the queues */
-
-  dq_init(&g_free_can_connections);
-  dq_init(&g_active_can_connections);
-  nxsem_init(&g_free_sem, 0, 1);
-
-  for (i = 0; i < CONFIG_CAN_CONNS; i++)
-    {
-      FAR struct can_conn_s *conn = &g_can_connections[i];
-
-      /* Mark the connection closed and move it to the free list */
-
-      memset(conn, 0, sizeof(*conn));
-      dq_addlast(&conn->node, &g_free_can_connections);
-    }
 }
 
 /****************************************************************************
@@ -129,16 +98,13 @@ FAR struct can_conn_s *can_alloc(void)
 {
   FAR struct can_conn_s *conn;
 
-  /* The free list is protected by a semaphore (that behaves like a mutex). */
+  /* The free list is protected by a a mutex. */
 
-  _can_semtake(&g_free_sem);
-  conn = (FAR struct can_conn_s *)dq_remfirst(&g_free_can_connections);
+  nxmutex_lock(&g_free_lock);
+
+  conn = NET_BUFPOOL_TRYALLOC(g_can_connections);
   if (conn != NULL)
     {
-      /* Make sure that the connection is marked as uninitialized */
-
-      memset(conn, 0, sizeof(*conn));
-
       /* FIXME SocketCAN default behavior enables loopback */
 
 #ifdef CONFIG_NET_CANPROTO_OPTIONS
@@ -159,10 +125,10 @@ FAR struct can_conn_s *can_alloc(void)
 
       /* Enqueue the connection into the active list */
 
-      dq_addlast(&conn->node, &g_active_can_connections);
+      dq_addlast(&conn->sconn.node, &g_active_can_connections);
     }
 
-  _can_semgive(&g_free_sem);
+  nxmutex_unlock(&g_free_lock);
   return conn;
 }
 
@@ -177,24 +143,21 @@ FAR struct can_conn_s *can_alloc(void)
 
 void can_free(FAR struct can_conn_s *conn)
 {
-  /* The free list is protected by a semaphore (that behaves like a mutex). */
+  /* The free list is protected by a mutex. */
 
   DEBUGASSERT(conn->crefs == 0);
 
-  _can_semtake(&g_free_sem);
+  nxmutex_lock(&g_free_lock);
 
   /* Remove the connection from the active list */
 
-  dq_rem(&conn->node, &g_active_can_connections);
+  dq_rem(&conn->sconn.node, &g_active_can_connections);
 
-  /* Reset structure */
+  /* Free the connection. */
 
-  memset(conn, 0, sizeof(*conn));
+  NET_BUFPOOL_FREE(g_can_connections, conn);
 
-  /* Free the connection */
-
-  dq_addlast(&conn->node, &g_free_can_connections);
-  _can_semgive(&g_free_sem);
+  nxmutex_unlock(&g_free_lock);
 }
 
 /****************************************************************************
@@ -216,8 +179,38 @@ FAR struct can_conn_s *can_nextconn(FAR struct can_conn_s *conn)
     }
   else
     {
-      return (FAR struct can_conn_s *)conn->node.flink;
+      return (FAR struct can_conn_s *)conn->sconn.node.flink;
     }
+}
+
+/****************************************************************************
+ * Name: can_active()
+ *
+ * Description:
+ *   Traverse the list of NetLink connections that match dev
+ *
+ * Input Parameters:
+ *   dev  - The device to search for.
+ *   conn - The current connection; may be NULL to start the search at the
+ *          beginning
+ *
+ * Assumptions:
+ *   This function is called from NetLink device logic.
+ *
+ ****************************************************************************/
+
+FAR struct can_conn_s *can_active(FAR struct net_driver_s *dev,
+                                  FAR struct can_conn_s *conn)
+{
+  while ((conn = can_nextconn(conn)) != NULL)
+    {
+      if (conn->dev == NULL || conn->dev == dev)
+        {
+          break;
+        }
+    }
+
+  return conn;
 }
 
 #endif /* CONFIG_NET_CAN */

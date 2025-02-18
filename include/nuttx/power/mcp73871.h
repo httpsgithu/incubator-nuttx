@@ -1,6 +1,7 @@
 /****************************************************************************
  * include/nuttx/power/mcp73871.h
- * Lower half driver for MCP73871 battery charger
+ *
+ * SPDX-License-Identifier: Apache-2.0
  *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -19,8 +20,8 @@
  *
  ****************************************************************************/
 
-#ifndef __DRIVERS_POWER_MCP73871_H
-#define __DRIVERS_POWER_MCP73871_H
+#ifndef __INCLUDE_NUTTX_POWER_MCP73871_H
+#define __INCLUDE_NUTTX_POWER_MCP73871_H
 
 /****************************************************************************
  * Pre-processor Definitions
@@ -74,4 +75,4 @@ struct mcp73871_config_s
 FAR struct battery_charger_dev_s *
            mcp73871_initialize(FAR struct mcp73871_config_s *config);
 
-#endif /* __DRIVERS_POWER_MCP73871_H */
+#endif /* __INCLUDE_NUTTX_POWER_MCP73871_H */

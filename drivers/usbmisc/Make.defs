@@ -1,6 +1,8 @@
 ############################################################################
 # drivers/usbmisc/Make.defs
 #
+# SPDX-License-Identifier: Apache-2.0
+#
 # Licensed to the Apache Software Foundation (ASF) under one or more
 # contributor license agreements.  See the NOTICE file distributed with
 # this work for additional information regarding copyright ownership.  The
@@ -26,13 +28,21 @@ ifeq ($(CONFIG_FUSB301),y)
   CSRCS += fusb301.c
 endif
 
+ifeq ($(CONFIG_FUSB302),y)
+  CSRCS += fusb302.c
+endif
+
 ifeq ($(CONFIG_FUSB303),y)
   CSRCS += fusb303.c
+endif
+
+ifeq ($(CONFIG_STUSB4500),y)
+  CSRCS += stusb4500.c
 endif
 
 # Include USB miscellaneous build support
 
 DEPPATH += --dep-path usbmisc
 VPATH += :usbmisc
-CFLAGS += ${shell $(INCDIR) "$(CC)" $(TOPDIR)$(DELIM)drivers$(DELIM)usbmisc}
+CFLAGS += ${INCDIR_PREFIX}$(TOPDIR)$(DELIM)drivers$(DELIM)usbmisc
 endif

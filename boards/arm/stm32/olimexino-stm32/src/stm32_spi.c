@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/stm32/olimexino-stm32/src/stm32_spi.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -91,7 +93,7 @@ void weak_function stm32_spidev_initialize(void)
  ****************************************************************************/
 
 #ifdef CONFIG_STM32_SPI1
-void stm32_spi1select(FAR struct spi_dev_s *dev,
+void stm32_spi1select(struct spi_dev_s *dev,
                       uint32_t devid, bool selected)
 {
   spiinfo("devid: %d CS: %s\n",
@@ -102,14 +104,14 @@ void stm32_spi1select(FAR struct spi_dev_s *dev,
     }
 }
 
-uint8_t stm32_spi1status(FAR struct spi_dev_s *dev, uint32_t devid)
+uint8_t stm32_spi1status(struct spi_dev_s *dev, uint32_t devid)
 {
   return 0;
 }
 #endif
 
 #ifdef CONFIG_STM32_SPI2
-void stm32_spi2select(FAR struct spi_dev_s *dev,
+void stm32_spi2select(struct spi_dev_s *dev,
                       uint32_t devid, bool selected)
 {
   spiinfo("devid: %d CS: %s\n",
@@ -122,7 +124,7 @@ void stm32_spi2select(FAR struct spi_dev_s *dev,
 #endif
 }
 
-uint8_t stm32_spi2status(FAR struct spi_dev_s *dev, uint32_t devid)
+uint8_t stm32_spi2status(struct spi_dev_s *dev, uint32_t devid)
 {
   /* No switch on SD card socket so assume it is here */
 
@@ -131,14 +133,14 @@ uint8_t stm32_spi2status(FAR struct spi_dev_s *dev, uint32_t devid)
 #endif
 
 #ifdef CONFIG_STM32_SPI3
-void stm32_spi3select(FAR struct spi_dev_s *dev,
+void stm32_spi3select(struct spi_dev_s *dev,
                       uint32_t devid, bool selected)
 {
   spiinfo("devid: %d CS: %s\n",
           (int)devid, selected ? "assert" : "de-assert");
 }
 
-uint8_t stm32_spi3status(FAR struct spi_dev_s *dev, uint32_t devid)
+uint8_t stm32_spi3status(struct spi_dev_s *dev, uint32_t devid)
 {
   return 0;
 }
@@ -169,21 +171,21 @@ uint8_t stm32_spi3status(FAR struct spi_dev_s *dev, uint32_t devid)
 
 #ifdef CONFIG_SPI_CMDDATA
 #ifdef CONFIG_STM32_SPI1
-int stm32_spi1cmddata(FAR struct spi_dev_s *dev, uint32_t devid, bool cmd)
+int stm32_spi1cmddata(struct spi_dev_s *dev, uint32_t devid, bool cmd)
 {
   return OK;
 }
 #endif
 
 #ifdef CONFIG_STM32_SPI2
-int stm32_spi2cmddata(FAR struct spi_dev_s *dev, uint32_t devid, bool cmd)
+int stm32_spi2cmddata(struct spi_dev_s *dev, uint32_t devid, bool cmd)
 {
   return OK;
 }
 #endif
 
 #ifdef CONFIG_STM32_SPI3
-int stm32_spi3cmddata(FAR struct spi_dev_s *dev, uint32_t devid, bool cmd)
+int stm32_spi3cmddata(struct spi_dev_s *dev, uint32_t devid, bool cmd)
 {
   return -ENODEV;
 }

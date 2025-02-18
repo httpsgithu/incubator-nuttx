@@ -1,6 +1,8 @@
 /****************************************************************************
  * include/sys/statvfs.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -38,7 +40,7 @@
 #define ST_RDONLY             0x0001 /* Mount read-only.  */
 #define ST_NOSUID             0x0002 /* Ignore suid and sgid bits.  */
 
-#if defined(CONFIG_FS_LARGEFILE) && defined(CONFIG_HAVE_LONG_LONG)
+#if defined(CONFIG_FS_LARGEFILE)
 #  define statvfs64           statvfs
 #  define fstatvfs64          fstatvfs
 #endif

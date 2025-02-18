@@ -1,6 +1,8 @@
 /****************************************************************************
  * include/nuttx/mqueue.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -29,15 +31,15 @@
 #include <nuttx/compiler.h>
 #include <nuttx/fs/fs.h>
 #include <nuttx/signal.h>
+#include <nuttx/list.h>
 
 #include <sys/types.h>
 #include <stdint.h>
 #include <stdbool.h>
 #include <mqueue.h>
-#include <queue.h>
 #include <poll.h>
 
-#if CONFIG_MQ_MAXMSGSIZE > 0
+#if defined(CONFIG_MQ_MAXMSGSIZE) && (CONFIG_MQ_MAXMSGSIZE > 0)
 
 /****************************************************************************
  * Pre-processor Definitions
@@ -78,28 +80,53 @@
 #  define _MQ_TIMEDRECEIVE(d,m,l,p,t) mq_timedreceive(d,m,l,p,t)
 #endif
 
+#ifndef CONFIG_FS_MQUEUE_NPOLLWAITERS
+#  define CONFIG_FS_MQUEUE_NPOLLWAITERS 0
+#endif
+
+#if CONFIG_FS_MQUEUE_NPOLLWAITERS > 0
+#  define nxmq_pollnotify(msgq, eventset) \
+   poll_notify(msgq->fds, CONFIG_FS_MQUEUE_NPOLLWAITERS, eventset)
+#else
+#  define nxmq_pollnotify(msgq, eventset)
+#endif
+
+#  define MQ_WNELIST(cmn)             (&((cmn).waitfornotempty))
+#  define MQ_WNFLIST(cmn)             (&((cmn).waitfornotfull))
+
 /****************************************************************************
  * Public Type Declarations
  ****************************************************************************/
+
+/* Common prologue of all message queue structures. */
+
+struct mqueue_cmn_s
+{
+  dq_queue_t waitfornotempty; /* Task list waiting for not empty */
+  dq_queue_t waitfornotfull;  /* Task list waiting for not full */
+  int16_t nwaitnotfull;       /* Number tasks waiting for not full */
+  int16_t nwaitnotempty;      /* Number tasks waiting for not empty */
+};
 
 /* This structure defines a message queue */
 
 struct mqueue_inode_s
 {
+  struct mqueue_cmn_s cmn;    /* Common prologue */
   FAR struct inode *inode;    /* Containing inode */
-  sq_queue_t msglist;         /* Prioritized message list */
+  struct list_node msglist;   /* Prioritized message list */
   int16_t maxmsgs;            /* Maximum number of messages in the queue */
   int16_t nmsgs;              /* Number of message in the queue */
-  int16_t nwaitnotfull;       /* Number tasks waiting for not full */
-  int16_t nwaitnotempty;      /* Number tasks waiting for not empty */
 #if CONFIG_MQ_MAXMSGSIZE < 256
   uint8_t maxmsgsize;         /* Max size of message in message queue */
 #else
   uint16_t maxmsgsize;        /* Max size of message in message queue */
 #endif
+#ifndef CONFIG_DISABLE_MQUEUE_NOTIFICATION
   pid_t ntpid;                /* Notification: Receiving Task's PID */
   struct sigevent ntevent;    /* Notification description */
   struct sigwork_s ntwork;    /* Notification work */
+#endif
   FAR struct pollfd *fds[CONFIG_FS_MQUEUE_NPOLLWAITERS];
 };
 
@@ -402,24 +429,6 @@ int nxmq_alloc_msgq(FAR struct mq_attr *attr,
                     FAR struct mqueue_inode_s **pmsgq);
 
 /****************************************************************************
- * Name: nxmq_pollnotify
- *
- * Description:
- *   pollnotify, used for notifying the poll
- *
- * Input Parameters:
- *   msgq     - Named message queue
- *   eventset - evnet
- *
- * Returned Value:
- *   The allocated and initialized message queue structure or NULL in the
- *   event of a failure.
- *
- ****************************************************************************/
-
-void nxmq_pollnotify(FAR struct mqueue_inode_s *msgq, pollevent_t eventset);
-
-/****************************************************************************
  * Name: file_mq_open
  *
  * Description:
@@ -582,6 +591,52 @@ int file_mq_timedsend(FAR struct file *mq, FAR const char *msg,
                       FAR const struct timespec *abstime);
 
 /****************************************************************************
+ * Name: file_mq_ticksend
+ *
+ * Description:
+ *   This function adds the specified message (msg) to the message queue
+ *   (mq).  file_mq_ticksend() behaves just like mq_send(), except that if
+ *   the queue is full and the O_NONBLOCK flag is not enabled for the
+ *   message queue description, then abstime points to a structure which
+ *   specifies a ceiling on the time for which the call will block.
+ *
+ *   file_mq_ticksend() is functionally equivalent to mq_timedsend() except
+ *   that:
+ *
+ *   - It is not a cancellation point, and
+ *   - It does not modify the errno value.
+ *
+ *  See comments with mq_timedsend() for a more complete description of the
+ *  behavior of this function
+ *
+ * Input Parameters:
+ *   mq      - Message queue descriptor
+ *   msg     - Message to send
+ *   msglen  - The length of the message in bytes
+ *   prio    - The priority of the message
+ *   ticks   - Ticks to wait from the start time until the semaphore is
+ *             posted.
+ *
+ * Returned Value:
+ *   This is an internal OS interface and should not be used by applications.
+ *   It follows the NuttX internal error return policy:  Zero (OK) is
+ *   returned on success.  A negated errno value is returned on failure.
+ *   (see mq_timedsend() for the list list valid return values).
+ *
+ *   EAGAIN   The queue was empty, and the O_NONBLOCK flag was set for the
+ *            message queue description referred to by mq.
+ *   EINVAL   Either msg or mq is NULL or the value of prio is invalid.
+ *   EBADF    Message queue opened not opened for writing.
+ *   EMSGSIZE 'msglen' was greater than the maxmsgsize attribute of the
+ *            message queue.
+ *   EINTR    The call was interrupted by a signal handler.
+ *
+ ****************************************************************************/
+
+int file_mq_ticksend(FAR struct file *mq, FAR const char *msg,
+                     size_t msglen, unsigned int prio, sclock_t ticks);
+
+/****************************************************************************
  * Name: file_mq_receive
  *
  * Description:
@@ -648,6 +703,44 @@ ssize_t file_mq_receive(FAR struct file *mq, FAR char *msg, size_t msglen,
 ssize_t file_mq_timedreceive(FAR struct file *mq, FAR char *msg,
                              size_t msglen, FAR unsigned int *prio,
                              FAR const struct timespec *abstime);
+
+/****************************************************************************
+ * Name: file_mq_tickreceive
+ *
+ * Description:
+ *   This function receives the oldest of the highest priority messages from
+ *   the message queue specified by "mq."  If the message queue is empty
+ *   and O_NONBLOCK was not set, file_mq_tickreceive() will block until a
+ *   message is added to the message queue (or until a timeout occurs).
+ *
+ *   file_mq_tickreceive() is an internal OS interface.  It is functionally
+ *   equivalent to mq_timedreceive() except that:
+ *
+ *   - It is not a cancellation point, and
+ *   - It does not modify the errno value.
+ *
+ *  See comments with mq_timedreceive() for a more complete description of
+ *  the behavior of this function
+ *
+ * Input Parameters:
+ *   mq      - Message Queue Descriptor
+ *   msg     - Buffer to receive the message
+ *   msglen  - Size of the buffer in bytes
+ *   prio    - If not NULL, the location to store message priority.
+ *   ticks   - Ticks to wait from the start time until the semaphore is
+ *             posted.
+ *
+ * Returned Value:
+ *   This is an internal OS interface and should not be used by applications.
+ *   It follows the NuttX internal error return policy:  Zero (OK) is
+ *   returned on success.  A negated errno value is returned on failure.
+ *   (see mq_timedreceive() for the list list valid return values).
+ *
+ ****************************************************************************/
+
+ssize_t file_mq_tickreceive(FAR struct file *mq, FAR char *msg,
+                            size_t msglen, FAR unsigned int *prio,
+                            sclock_t ticks);
 
 /****************************************************************************
  * Name:  file_mq_setattr

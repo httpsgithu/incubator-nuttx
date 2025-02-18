@@ -1,6 +1,8 @@
 /****************************************************************************
  * drivers/wireless/bluetooth/bt_uart_shim.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -30,7 +32,6 @@
 #include <poll.h>
 #include <stdbool.h>
 #include <stdint.h>
-#include <stdio.h>
 #include <string.h>
 #include <sys/stat.h>
 #include <sys/types.h>
@@ -40,8 +41,6 @@
 #include <nuttx/fs/ioctl.h>
 #include <nuttx/spinlock.h>
 #include <nuttx/kmalloc.h>
-#include <nuttx/kthread.h>
-#include <nuttx/semaphore.h>
 #include <nuttx/serial/tioctl.h>
 #include <nuttx/wireless/bluetooth/bt_uart_shim.h>
 
@@ -59,9 +58,8 @@ struct hciuart_state_s
   FAR void *arg;                /* Rx callback argument */
 
   struct file f;                /* File structure */
-  bool enabled;                 /* Flag indicating that reception is enabled */
-
-  int serialmontask;            /* The receive serial octets task handle */
+  struct pollfd p;              /* Poll structure */
+  spinlock_t lock;              /* Spinlock */
 };
 
 struct hciuart_config_s
@@ -80,6 +78,7 @@ struct hciuart_config_s
 
 static void hciuart_rxattach(FAR const struct btuart_lowerhalf_s *lower,
                              btuart_rxcallback_t callback, FAR void *arg);
+static void hciuart_rxpollcb(FAR struct pollfd *fds);
 static void hciuart_rxenable(FAR const struct btuart_lowerhalf_s *lower,
                              bool enable);
 static int hciuart_setbaud(FAR const struct btuart_lowerhalf_s *lower,
@@ -89,6 +88,8 @@ static ssize_t hciuart_read(FAR const struct btuart_lowerhalf_s *lower,
 static ssize_t hciuart_write(FAR const struct btuart_lowerhalf_s *lower,
                              FAR const void *buffer, size_t buflen);
 static ssize_t hciuart_rxdrain(FAR const struct btuart_lowerhalf_s *lower);
+static int hciuart_ioctl(FAR const struct btuart_lowerhalf_s *lower,
+                         int cmd, unsigned long arg);
 
 /****************************************************************************
  * Private Functions
@@ -120,7 +121,7 @@ hciuart_rxattach(FAR const struct btuart_lowerhalf_s *lower,
 
   /* If the callback is NULL, then we are detaching */
 
-  flags = spin_lock_irqsave(NULL);
+  flags = spin_lock_irqsave(&state->lock);
   if (callback == NULL)
     {
       /* Disable Rx callbacks and detach the Rx callback */
@@ -137,7 +138,36 @@ hciuart_rxattach(FAR const struct btuart_lowerhalf_s *lower,
       state->callback = callback;
     }
 
-  spin_unlock_irqrestore(NULL, flags);
+  spin_unlock_irqrestore(&state->lock, flags);
+}
+
+/****************************************************************************
+ * Name: hciuart_rxpollcb
+ *
+ * Description:
+ *   Callback to receive the UART driver POLLIN notification.
+ *
+ ****************************************************************************/
+
+static void hciuart_rxpollcb(FAR struct pollfd *fds)
+{
+  FAR struct hciuart_config_s *n = (FAR struct hciuart_config_s *)fds->arg;
+  FAR struct hciuart_state_s *s = &n->state;
+
+  if (fds->revents & POLLIN)
+    {
+      fds->revents = 0;
+      if (s->callback != NULL)
+        {
+          wlinfo("Activating callback\n");
+          s->callback(&n->lower, s->arg);
+        }
+      else
+        {
+          wlwarn("Dropping data (no CB)\n");
+          hciuart_rxdrain(&n->lower);
+        }
+    }
 }
 
 /****************************************************************************
@@ -159,15 +189,10 @@ static void hciuart_rxenable(FAR const struct btuart_lowerhalf_s *lower,
   FAR struct hciuart_config_s *config = (FAR struct hciuart_config_s *)lower;
   FAR struct hciuart_state_s *s = &config->state;
 
-  irqstate_t flags = spin_lock_irqsave(NULL);
-  if (enable != s->enabled)
+  if (enable != !!s->p.priv)
     {
-      wlinfo(enable ? "Enable\n" : "Disable\n");
+      file_poll(&s->f, &s->p, enable);
     }
-
-  s->enabled = enable;
-
-  spin_unlock_irqrestore(NULL, flags);
 }
 
 /****************************************************************************
@@ -188,12 +213,10 @@ static int
 hciuart_setbaud(FAR const struct btuart_lowerhalf_s *lower, uint32_t baud)
 {
 #ifdef CONFIG_SERIAL_TERMIOS
-  FAR struct hciuart_config_s *config = (FAR struct hciuart_config_s *)lower;
-  FAR struct hciuart_state_s *state = &config->state;
   struct termios tio;
   int ret;
 
-  ret = file_ioctl(&state->f, TCGETS, (long unsigned int)&tio);
+  ret = hciuart_ioctl(lower, TCGETS, (unsigned long)&tio);
   if (ret)
     {
       wlerr("ERROR during TCGETS\n");
@@ -209,7 +232,7 @@ hciuart_setbaud(FAR const struct btuart_lowerhalf_s *lower, uint32_t baud)
 
   tio.c_cflag |= CRTS_IFLOW | CCTS_OFLOW;
 
-  ret = file_ioctl(&state->f, TCSETS, (unsigned long int)&tio);
+  ret = hciuart_ioctl(lower, TCSETS, (unsigned long)&tio);
   if (ret)
     {
       wlerr("ERROR during TCSETS, does UART support CTS/RTS?\n");
@@ -241,8 +264,7 @@ hciuart_read(FAR const struct btuart_lowerhalf_s *lower,
   FAR struct hciuart_config_s *config = (FAR struct hciuart_config_s *)lower;
   FAR struct hciuart_state_s *state = &config->state;
 
-  wlinfo("config %p buffer %p buflen %lu\n",
-         config, buffer, (unsigned long)buflen);
+  wlinfo("config %p buffer %p buflen %zu\n", config, buffer, buflen);
 
   /* NOTE: This assumes that the caller has exclusive access to the Rx
    * buffer, i.e., one lower half instance can server only one upper half!
@@ -272,8 +294,7 @@ hciuart_write(FAR const struct btuart_lowerhalf_s *lower,
   FAR struct hciuart_config_s *config = (FAR struct hciuart_config_s *)lower;
   FAR struct hciuart_state_s *state = &config->state;
 
-  wlinfo("config %p buffer %p buflen %lu\n",
-         config, buffer, (unsigned long)buflen);
+  wlinfo("config %p buffer %p buflen %zu\n", config, buffer, buflen);
 
   return file_write(&state->f, buffer, buflen);
 }
@@ -288,78 +309,20 @@ hciuart_write(FAR const struct btuart_lowerhalf_s *lower,
 
 static ssize_t hciuart_rxdrain(FAR const struct btuart_lowerhalf_s *lower)
 {
-  FAR struct hciuart_config_s *config = (FAR struct hciuart_config_s *)lower;
-  FAR struct hciuart_state_s *s = &config->state;
-
-  return file_ioctl(&s->f, TCDRN, 0);
+  return hciuart_ioctl(lower, TCDRN, 0);
 }
 
 /****************************************************************************
- * Name: hcicollecttask
- *
- * Description:
- *   Loop and alert when serial data arrive
- *
+ * Name: hciuart_ioctl
  ****************************************************************************/
 
-static int hcicollecttask(int argc, FAR char **argv)
+static int hciuart_ioctl(FAR const struct btuart_lowerhalf_s *lower,
+                         int cmd, unsigned long arg)
 {
-  FAR struct hciuart_config_s *n;
-  FAR struct hciuart_state_s *s;
-  struct pollfd p;
+  FAR struct hciuart_config_s *config = (FAR struct hciuart_config_s *)lower;
+  FAR struct hciuart_state_s *s = &config->state;
 
-  n = (FAR struct hciuart_config_s *)
-    ((uintptr_t)strtoul(argv[1], NULL, 0));
-  s = &n->state;
-
-  /* Put materials into poll structure */
-
-  p.ptr = &s->f;
-  p.events = POLLIN | POLLFILE;
-
-  for (; ; )
-    {
-      /* Wait for data to arrive */
-
-      int ret = nx_poll(&p, 1, -1);
-      if (ret < 0)
-        {
-          wlwarn("Poll interrupted %d\n", ret);
-          continue;
-        }
-
-      wlinfo("Poll completed %d\n", p.revents);
-
-      /* Given the nature of file_poll, there are multiple reasons why
-       * we might be here, so make sure we only consider the read.
-       */
-
-      if (p.revents & POLLIN)
-        {
-          if (!s->enabled)
-            {
-              /* We aren't expected to be listening, so drop these data */
-
-              wlwarn("Dropping data\n");
-              hciuart_rxdrain(&n->lower);
-            }
-          else
-            {
-              if (s->callback != NULL)
-                {
-                  wlinfo("Activating callback\n");
-                  s->callback(&n->lower, s->arg);
-                }
-              else
-                {
-                  wlwarn("Dropping data (no CB)\n");
-                  hciuart_rxdrain(&n->lower);
-                }
-            }
-        }
-    }
-
-  return OK;
+  return file_ioctl(&s->f, cmd, arg);
 }
 
 /****************************************************************************
@@ -385,8 +348,6 @@ FAR struct btuart_lowerhalf_s *btuart_shim_getdevice(FAR const char *path)
 {
   FAR struct hciuart_config_s *n;
   FAR struct hciuart_state_s *s;
-  FAR char *argv[2];
-  char arg1[16];
   int ret;
 
   /* Get the memory for this shim instance */
@@ -401,12 +362,19 @@ FAR struct btuart_lowerhalf_s *btuart_shim_getdevice(FAR const char *path)
 
   s = &n->state;
 
-  ret = file_open(&s->f, path, O_RDWR | O_BINARY);
+  ret = file_open(&s->f, path, O_RDWR | O_CLOEXEC | O_NONBLOCK);
   if (ret < 0)
     {
       kmm_free(n);
       return NULL;
     }
+
+  /* Setup poll structure */
+
+  s->p.events = POLLIN;
+  s->p.arg    = n;
+  s->p.cb     = hciuart_rxpollcb;
+  spin_lock_init(&s->lock);
 
   /* Hook the routines in */
 
@@ -416,17 +384,7 @@ FAR struct btuart_lowerhalf_s *btuart_shim_getdevice(FAR const char *path)
   n->lower.read     = hciuart_read;
   n->lower.write    = hciuart_write;
   n->lower.rxdrain  = hciuart_rxdrain;
-
-  /* Create the monitor thread */
-
-  snprintf(arg1, 16, "%p", n);
-  argv[0] = arg1;
-  argv[1] = NULL;
-
-  s->serialmontask = kthread_create("BT HCI Rx",
-                                    CONFIG_BLUETOOTH_TXCONN_PRIORITY,
-                                    CONFIG_DEFAULT_TASK_STACKSIZE,
-                                    hcicollecttask, argv);
+  n->lower.ioctl    = hciuart_ioctl;
 
   return (FAR struct btuart_lowerhalf_s *)n;
 }

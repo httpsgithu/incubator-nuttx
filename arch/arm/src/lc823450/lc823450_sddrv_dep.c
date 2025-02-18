@@ -1,11 +1,13 @@
 /****************************************************************************
  * arch/arm/src/lc823450/lc823450_sddrv_dep.c
  *
- *   Copyright (C) 2014-2015 ON Semiconductor. All rights reserved.
- *   Copyright 2014,2015,2016,2017,2018 Sony Video & Sound Products Inc.
- *   Author: Masayuki Ishikawa <Masayuki.Ishikawa@jp.sony.com>
- *   Author: Masatoshi Tateishi <Masatoshi.Tateishi@jp.sony.com>
- *   Author: Nobutaka Toyoshima <Nobutaka.Toyoshima@jp.sony.com>
+ * SPDX-License-Identifier: BSD-3-Clause
+ * SPDX-FileCopyrightText: 2016,2017 Sony Video & Sound Products Inc.
+ * SPDX-FileCopyrightText: 2014,2015 Sony Video & Sound Products Inc.
+ * SPDX-FileCopyrightText: 2014-2015 ON Semiconductor. All rights reserved.
+ * SPDX-FileContributor: Masayuki Ishikawa <Masayuki.Ishikawa@jp.sony.com>
+ * SPDX-FileContributor: Masatoshi Tateishi <Masatoshi.Tateishi@jp.sony.com>
+ * SPDX-FileContributor: Nobutaka Toyoshima <Nobutaka.Toyoshima@jp.sony.com>
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -54,10 +56,9 @@
 #include <nuttx/semaphore.h>
 #include <nuttx/signal.h>
 
-#include "arm_arch.h"
+#include "arm_internal.h"
 #include "lc823450_sddrv_type.h"
 #include "lc823450_sddrv_if.h"
-#include "lc823450_dma.h"
 #include "lc823450_gpio.h"
 #include "lc823450_syscontrol.h"
 #include "lc823450_timer.h"
@@ -81,9 +82,17 @@
 
 #ifdef CONFIG_LC823450_SDC_DMA
 static DMA_HANDLE _hrdma[2];
-static sem_t      _sem_rwait[2];
+static sem_t _sem_rwait[2] =
+{
+  SEM_INITIALIZER(0),
+  SEM_INITIALIZER(0),
+};
 static DMA_HANDLE _hwdma[2];
-static sem_t      _sem_wwait[2];
+static sem_t _sem_wwait[2] =
+{
+  SEM_INITIALIZER(0),
+  SEM_INITIALIZER(0),
+};
 #endif /* CONFIG_LC823450_SDC_DMA */
 
 static uint64_t _sddep_timeout = (10 * 100); /* 10sec (in tick) */
@@ -110,7 +119,7 @@ static int _get_ch_from_cfg(struct sddrcfg_s *cfg)
         break;
 
       default:
-        DEBUGASSERT(false);
+        DEBUGPANIC();
     }
 
   return ch;
@@ -127,15 +136,6 @@ static void dma_callback(DMA_HANDLE hdma, void *arg, int result)
   nxsem_post(waitsem);
 }
 #endif /* CONFIG_LC823450_SDC_DMA */
-
-/****************************************************************************
- * Name: _sddep_semtake
- ****************************************************************************/
-
-static int _sddep_semtake(FAR sem_t *sem)
-{
-  return nxsem_wait_uninterruptible(sem);
-}
 
 /****************************************************************************
  * Public Functions
@@ -290,9 +290,7 @@ SINT_T sddep_os_init(struct sddrcfg_s *cfg)
 
 #ifdef CONFIG_LC823450_SDC_DMA
   _hrdma[ch] = lc823450_dmachannel(DMA_CHANNEL_VIRTUAL);
-  nxsem_init(&_sem_rwait[ch], 0, 0);
   _hwdma[ch] = lc823450_dmachannel(DMA_CHANNEL_VIRTUAL);
-  nxsem_init(&_sem_wwait[ch], 0, 0);
 #endif /* CONFIG_LC823450_SDC_DMA */
   return 0;
 }
@@ -427,7 +425,7 @@ SINT_T sddep_read(void *src, void *dst, UI_32 size, SINT_T type,
     }
 
   lc823450_dmastart(_hrdma[ch], dma_callback, &_sem_rwait[ch]);
-  return _sddep_semtake(&_sem_rwait[ch]);
+  return nxsem_wait_uninterruptible(&_sem_rwait[ch]);
 #else
   SINT_T i;
   UI_32 *p = (UI_32 *)src;
@@ -518,7 +516,7 @@ SINT_T sddep_write(void *src, void *dst, UI_32 size, SINT_T type,
     }
 
   lc823450_dmastart(_hwdma[ch], dma_callback, &_sem_wwait[ch]);
-  return _sddep_semtake(&_sem_wwait[ch]);
+  return nxsem_wait_uninterruptible(&_sem_wwait[ch]);
 
 #else
   SINT_T i;

@@ -1,6 +1,8 @@
 /****************************************************************************
  * drivers/sensors/mlx90393.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -29,10 +31,11 @@
 #include <debug.h>
 #include <string.h>
 
+#include <nuttx/arch.h>
 #include <nuttx/kmalloc.h>
 #include <nuttx/wqueue.h>
 #include <nuttx/fs/fs.h>
-#include <nuttx/semaphore.h>
+#include <nuttx/mutex.h>
 #include <nuttx/sensors/mlx90393.h>
 #include <nuttx/random.h>
 
@@ -58,7 +61,7 @@ struct mlx90393_dev_s
   FAR struct mlx90393_config_s *config; /* Pointer to the configuration of
                                          * the MLX90393 sensor */
 
-  sem_t datasem;                        /* Manages exclusive access to
+  mutex_t datalock;                     /* Manages exclusive access to
                                          * this structure */
   struct mlx90393_sensor_data_s data;   /* The data as measured by the
                                          * sensor */
@@ -91,9 +94,6 @@ static ssize_t mlx90393_read(FAR struct file *, FAR char *, size_t);
 static ssize_t mlx90393_write(FAR struct file *filep,
                               FAR const char *buffer,
                               size_t buflen);
-static int mlx90393_ioctl(FAR struct file *filep,
-                          int cmd,
-                          unsigned long arg);
 
 /****************************************************************************
  * Private Data
@@ -101,16 +101,10 @@ static int mlx90393_ioctl(FAR struct file *filep,
 
 static const struct file_operations g_mlx90393_fops =
 {
-  mlx90393_open,
-  mlx90393_close,
-  mlx90393_read,
-  mlx90393_write,
-  NULL,
-  mlx90393_ioctl,
-  NULL
-#ifndef CONFIG_DISABLE_PSEUDOFS_OPERATIONS
-  , NULL
-#endif
+  mlx90393_open,   /* open */
+  mlx90393_close,  /* close */
+  mlx90393_read,   /* read */
+  mlx90393_write,  /* write */
 };
 
 /* Single linked list to store instances of drivers */
@@ -204,12 +198,12 @@ static void mlx90393_read_measurement_data(FAR struct mlx90393_dev_s *dev)
 
   SPI_LOCK(dev->spi, false);
 
-  /* Acquire the semaphore before the data is copied */
+  /* Acquire the mutex before the data is copied */
 
-  ret = nxsem_wait(&dev->datasem);
+  ret = nxmutex_lock(&dev->datalock);
   if (ret != OK)
     {
-      snerr("ERROR: Could not acquire dev->datasem: %d\n", ret);
+      snerr("ERROR: Could not acquire dev->datalock: %d\n", ret);
       return;
     }
 
@@ -220,9 +214,9 @@ static void mlx90393_read_measurement_data(FAR struct mlx90393_dev_s *dev)
   dev->data.y_mag = (int16_t) (y_mag);
   dev->data.z_mag = (int16_t) (z_mag);
 
-  /* Give back the semaphore */
+  /* Give back the mutex */
 
-  nxsem_post(&dev->datasem);
+  nxmutex_unlock(&dev->datalock);
 
   /* Feed sensor data to entropy pool */
 
@@ -476,7 +470,7 @@ static ssize_t mlx90393_read(FAR struct file *filep, FAR char *buffer,
 
   /* Check if enough memory was provided for the read call */
 
-  if (buflen < sizeof(FAR struct mlx90393_sensor_data_s))
+  if (buflen < sizeof(struct mlx90393_sensor_data_s))
     {
       snerr("ERROR: "
             "Not enough memory for reading out a sensor data sample\n");
@@ -485,28 +479,28 @@ static ssize_t mlx90393_read(FAR struct file *filep, FAR char *buffer,
 
   /* Copy the sensor data into the buffer */
 
-  /* Acquire the semaphore before the data is copied */
+  /* Acquire the mutex before the data is copied */
 
-  ret = nxsem_wait(&priv->datasem);
+  ret = nxmutex_lock(&priv->datalock);
   if (ret < 0)
     {
-      snerr("ERROR: Could not acquire priv->datasem: %d\n", ret);
+      snerr("ERROR: Could not acquire priv->datalock: %d\n", ret);
       return ret;
     }
 
   data = (FAR struct mlx90393_sensor_data_s *)buffer;
-  memset(data, 0, sizeof(FAR struct mlx90393_sensor_data_s));
+  memset(data, 0, sizeof(struct mlx90393_sensor_data_s));
 
   data->x_mag = priv->data.x_mag;
   data->y_mag = priv->data.y_mag;
   data->z_mag = priv->data.z_mag;
   data->temperature = priv->data.temperature;
 
-  /* Give back the semaphore */
+  /* Give back the mutex */
 
-  nxsem_post(&priv->datasem);
+  nxmutex_unlock(&priv->datalock);
 
-  return sizeof(FAR struct mlx90393_sensor_data_s);
+  return sizeof(struct mlx90393_sensor_data_s);
 }
 
 /****************************************************************************
@@ -517,27 +511,6 @@ static ssize_t mlx90393_write(FAR struct file *filep, FAR const char *buffer,
                               size_t buflen)
 {
   return -ENOSYS;
-}
-
-/****************************************************************************
- * Name: mlx90393_ioctl
- ****************************************************************************/
-
-static int mlx90393_ioctl(FAR struct file *filep, int cmd, unsigned long arg)
-{
-  int ret = OK;
-
-  switch (cmd)
-    {
-      /* Command was not recognized */
-
-    default:
-      snerr("ERROR: Unrecognized cmd: %d\n", cmd);
-      ret = -ENOTTY;
-      break;
-    }
-
-  return ret;
 }
 
 /****************************************************************************
@@ -587,8 +560,7 @@ int mlx90393_register(FAR const char *devpath, FAR struct spi_dev_s *spi,
 
   priv->work.worker = NULL;
 
-  nxsem_init(&priv->datasem, 0, 1);     /* Initialize sensor data access
-                                         * semaphore */
+  nxmutex_init(&priv->datalock); /* Initialize sensor data access mutex */
 
   /* Setup SPI frequency and mode */
 
@@ -601,7 +573,9 @@ int mlx90393_register(FAR const char *devpath, FAR struct spi_dev_s *spi,
   if (ret < 0)
     {
       snerr("ERROR: Failed to attach interrupt\n");
-      return -ENODEV;
+      nxmutex_destroy(&priv->datalock);
+      kmm_free(priv);
+      return ret;
     }
 
   /* Register the character driver */
@@ -610,9 +584,9 @@ int mlx90393_register(FAR const char *devpath, FAR struct spi_dev_s *spi,
   if (ret < 0)
     {
       snerr("ERROR: Failed to register driver: %d\n", ret);
+      nxmutex_destroy(&priv->datalock);
       kmm_free(priv);
-      nxsem_destroy(&priv->datasem);
-      return -ENODEV;
+      return ret;
     }
 
   /* Since we support multiple MLX90393 devices are supported, we will need

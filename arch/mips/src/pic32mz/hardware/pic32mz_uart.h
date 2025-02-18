@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/mips/src/pic32mz/hardware/pic32mz_uart.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -18,8 +20,8 @@
  *
  ****************************************************************************/
 
-#ifndef __ARCH_MIPS_SRC_PIC32MZ_HARDWARE_UART_H
-#define __ARCH_MIPS_SRC_PIC32MZ_HARDWARE_UART_H
+#ifndef __ARCH_MIPS_SRC_PIC32MZ_HARDWARE_PIC32MZ_UART_H
+#define __ARCH_MIPS_SRC_PIC32MZ_HARDWARE_PIC32MZ_UART_H
 
 /****************************************************************************
  * Included Files
@@ -280,4 +282,4 @@ extern "C"
 #endif
 
 #endif /* __ASSEMBLY__ */
-#endif /* __ARCH_MIPS_SRC_PIC32MZ_HARDWARE_UART_H */
+#endif /* __ARCH_MIPS_SRC_PIC32MZ_HARDWARE_PIC32MZ_UART_H */

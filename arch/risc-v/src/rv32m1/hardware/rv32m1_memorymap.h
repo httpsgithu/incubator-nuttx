@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/risc-v/src/rv32m1/hardware/rv32m1_memorymap.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -32,7 +34,7 @@
 #elif defined(CONFIG_ARCH_CHIP_RV32M1_ZERORISCY)
 #  error "rv32m1 zero-riscy is to be continued..."
 #else
-#  error "Unspported rv32m1 cortex-m cores"
+#  error "Unsupported rv32m1 cortex-m cores"
 #endif
 
 #endif /* __ARCH_RISCV_SRC_RV32M1_HARDWARE_RV32M1_MEMORYMAP_H */

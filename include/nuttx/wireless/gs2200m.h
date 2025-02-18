@@ -1,6 +1,8 @@
 /****************************************************************************
  * include/nuttx/wireless/gs2200m.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -57,6 +59,8 @@ extern "C"
 #define GS2200M_IOC_ASSOC    _WLCIOC(GS2200M_FIRST + 6)
 #define GS2200M_IOC_IFREQ    _WLCIOC(GS2200M_FIRST + 7)
 #define GS2200M_IOC_NAME     _WLCIOC(GS2200M_FIRST + 8)
+
+#define DISASSOCIATION_CID  ('x')
 
 /* NOTE: do not forget to update include/nuttx/wireless/ioctl.h */
 

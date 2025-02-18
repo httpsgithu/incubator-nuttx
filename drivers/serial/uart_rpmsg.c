@@ -1,6 +1,8 @@
 /****************************************************************************
  * drivers/serial/uart_rpmsg.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -30,7 +32,8 @@
 
 #include <nuttx/fs/ioctl.h>
 #include <nuttx/kmalloc.h>
-#include <nuttx/rptun/openamp.h>
+#include <nuttx/mutex.h>
+#include <nuttx/rpmsg/rpmsg.h>
 #include <nuttx/serial/serial.h>
 #include <nuttx/serial/uart_rpmsg.h>
 
@@ -73,13 +76,11 @@ begin_packed_struct struct uart_rpmsg_wakeup_s
 struct uart_rpmsg_priv_s
 {
   struct rpmsg_endpoint ept;
+  mutex_t               lock;
   FAR const char        *devname;
   FAR const char        *cpuname;
   FAR void              *recv_data;
   bool                  last_upper;
-#ifdef CONFIG_SERIAL_TERMIOS
-  struct termios        termios;
-#endif
 };
 
 /****************************************************************************
@@ -90,8 +91,6 @@ static int  uart_rpmsg_setup(FAR struct uart_dev_s *dev);
 static void uart_rpmsg_shutdown(FAR struct uart_dev_s *dev);
 static int  uart_rpmsg_attach(FAR struct uart_dev_s *dev);
 static void uart_rpmsg_detach(FAR struct uart_dev_s *dev);
-static int  uart_rpmsg_ioctl(FAR struct file *filep,
-                             int cmd, unsigned long arg);
 static void uart_rpmsg_rxint(FAR struct uart_dev_s *dev, bool enable);
 static bool uart_rpmsg_rxflowcontrol(FAR struct uart_dev_s *dev,
                                      unsigned int nbuffered, bool upper);
@@ -120,7 +119,6 @@ static const struct uart_ops_s g_uart_rpmsg_ops =
   .shutdown      = uart_rpmsg_shutdown,
   .attach        = uart_rpmsg_attach,
   .detach        = uart_rpmsg_detach,
-  .ioctl         = uart_rpmsg_ioctl,
   .rxint         = uart_rpmsg_rxint,
   .rxflowcontrol = uart_rpmsg_rxflowcontrol,
   .dmasend       = uart_rpmsg_dmasend,
@@ -155,54 +153,6 @@ static void uart_rpmsg_detach(FAR struct uart_dev_s *dev)
 {
 }
 
-static int uart_rpmsg_ioctl(FAR struct file *filep, int cmd,
-                            unsigned long arg)
-{
-  int ret = -ENOTTY;
-
-#ifdef CONFIG_SERIAL_TERMIOS
-  struct uart_dev_s *dev = filep->f_inode->i_private;
-  struct uart_rpmsg_priv_s *priv = dev->priv;
-
-  switch (cmd)
-    {
-    case TCGETS:
-      {
-        FAR struct termios *termiosp = (struct termios *)arg;
-
-        if (termiosp)
-          {
-            *termiosp = priv->termios;
-            ret = OK;
-          }
-        else
-          {
-            ret = -EINVAL;
-          }
-      }
-      break;
-
-    case TCSETS:
-      {
-        FAR struct termios *termiosp = (struct termios *)arg;
-
-        if (termiosp)
-          {
-            priv->termios = *termiosp;
-            ret = OK;
-          }
-        else
-          {
-            ret = -EINVAL;
-          }
-      }
-      break;
-    }
-#endif
-
-  return ret;
-}
-
 static void uart_rpmsg_rxint(FAR struct uart_dev_s *dev, bool enable)
 {
 }
@@ -213,6 +163,7 @@ static bool uart_rpmsg_rxflowcontrol(FAR struct uart_dev_s *dev,
   FAR struct uart_rpmsg_priv_s *priv = dev->priv;
   FAR struct uart_rpmsg_wakeup_s msg;
 
+  nxmutex_lock(&priv->lock);
   if (!upper && upper != priv->last_upper)
     {
       memset(&msg, 0, sizeof(msg));
@@ -225,6 +176,7 @@ static bool uart_rpmsg_rxflowcontrol(FAR struct uart_dev_s *dev,
     }
 
   priv->last_upper = upper;
+  nxmutex_unlock(&priv->lock);
   return false;
 }
 
@@ -245,7 +197,7 @@ static void uart_rpmsg_dmasend(FAR struct uart_dev_s *dev)
 
   memset(msg, 0, sizeof(*msg));
 
-  space = C2B(space - sizeof(*msg));
+  space = space - sizeof(*msg);
 
   if (len > space)
     {
@@ -254,13 +206,12 @@ static void uart_rpmsg_dmasend(FAR struct uart_dev_s *dev)
 
   if (len > xfer->length)
     {
-      cmem2bmem(msg->data, 0, xfer->buffer, xfer->length);
-      cmem2bmem(msg->data + B2C_OFF(xfer->length), B2C_REM(xfer->length),
-              xfer->nbuffer, len - xfer->length);
+      memcpy(msg->data, xfer->buffer, xfer->length);
+      memcpy(msg->data + xfer->length, xfer->nbuffer, len - xfer->length);
     }
   else
     {
-      cmem2bmem(msg->data, 0, xfer->buffer, len);
+      memcpy(msg->data, xfer->buffer, len);
     }
 
   msg->count          = len;
@@ -268,7 +219,10 @@ static void uart_rpmsg_dmasend(FAR struct uart_dev_s *dev)
   msg->header.result  = -ENXIO;
   msg->header.cookie  = (uintptr_t)dev;
 
-  rpmsg_send_nocopy(&priv->ept, msg, sizeof(*msg) + B2C(len));
+  if (rpmsg_send_nocopy(&priv->ept, msg, sizeof(*msg) + len) < 0)
+    {
+      rpmsg_release_tx_buffer(&priv->ept, msg);
+    }
 }
 
 static void uart_rpmsg_dmareceive(FAR struct uart_dev_s *dev)
@@ -286,13 +240,12 @@ static void uart_rpmsg_dmareceive(FAR struct uart_dev_s *dev)
 
   if (len > xfer->length)
     {
-      bmem2cmem(xfer->buffer, msg->data, 0, xfer->length);
-      bmem2cmem(xfer->nbuffer, msg->data + B2C_OFF(xfer->length),
-              B2C_REM(xfer->length), len - xfer->length);
+      memcpy(xfer->buffer, msg->data, xfer->length);
+      memcpy(xfer->nbuffer, msg->data + xfer->length, len - xfer->length);
     }
   else
     {
-      bmem2cmem(xfer->buffer, msg->data, 0, len);
+      memcpy(xfer->buffer, msg->data, len);
     }
 
   xfer->nbytes = len;
@@ -314,10 +267,14 @@ static void uart_rpmsg_dmatxavail(FAR struct uart_dev_s *dev)
 {
   FAR struct uart_rpmsg_priv_s *priv = dev->priv;
 
+  nxmutex_lock(&priv->lock);
+
   if (is_rpmsg_ept_ready(&priv->ept) && dev->dmatx.length == 0)
     {
       uart_xmitchars_dma(dev);
     }
+
+  nxmutex_unlock(&priv->lock);
 }
 
 static void uart_rpmsg_send(FAR struct uart_dev_s *dev, int ch)
@@ -373,7 +330,8 @@ static void uart_rpmsg_device_created(FAR struct rpmsg_device *rdev,
   if (strcmp(priv->cpuname, rpmsg_get_cpuname(rdev)) == 0)
     {
       priv->ept.priv = dev;
-      sprintf(eptname, "%s%s", UART_RPMSG_EPT_PREFIX, priv->devname);
+      snprintf(eptname, sizeof(eptname), "%s%s",
+               UART_RPMSG_EPT_PREFIX, priv->devname);
       rpmsg_create_ept(&priv->ept, rdev, eptname,
                        RPMSG_ADDR_ANY, RPMSG_ADDR_ANY,
                        uart_rpmsg_ept_cb, NULL);
@@ -386,22 +344,29 @@ static void uart_rpmsg_device_destroy(FAR struct rpmsg_device *rdev,
   FAR struct uart_dev_s *dev = priv_;
   FAR struct uart_rpmsg_priv_s *priv = dev->priv;
 
-  if (strcmp(priv->cpuname, rpmsg_get_cpuname(rdev)) == 0)
+  if (priv->ept.priv != NULL &&
+      strcmp(priv->cpuname, rpmsg_get_cpuname(rdev)) == 0)
     {
       rpmsg_destroy_ept(&priv->ept);
     }
+
+  dev->dmatx.nbytes = dev->dmatx.length + dev->dmatx.nlength;
+  uart_xmitchars_done(dev);
 }
 
 static int uart_rpmsg_ept_cb(FAR struct rpmsg_endpoint *ept, FAR void *data,
                              size_t len, uint32_t src, FAR void *priv_)
 {
   FAR struct uart_dev_s *dev = priv_;
+  FAR struct uart_rpmsg_priv_s *priv = dev->priv;
   FAR struct uart_rpmsg_header_s *header = data;
   FAR struct uart_rpmsg_write_s *msg = data;
 
   if (header->response)
     {
       /* Get write-cmd response, this tell how many data have sent */
+
+      nxmutex_lock(&priv->lock);
 
       dev->dmatx.nbytes = header->result;
       if (header->result < 0)
@@ -410,6 +375,8 @@ static int uart_rpmsg_ept_cb(FAR struct rpmsg_endpoint *ept, FAR void *data,
         }
 
       uart_xmitchars_done(dev);
+
+      nxmutex_unlock(&priv->lock);
 
       /* If have sent some data succeed, then continue send */
 
@@ -420,13 +387,13 @@ static int uart_rpmsg_ept_cb(FAR struct rpmsg_endpoint *ept, FAR void *data,
     }
   else if (header->command == UART_RPMSG_TTY_WRITE)
     {
-      FAR struct uart_rpmsg_priv_s *priv = dev->priv;
-
       /* Get write-cmd, there are some data, we need receive them */
 
+      nxmutex_lock(&dev->recv.lock);
       priv->recv_data = data;
       uart_recvchars_dma(dev);
       priv->recv_data = NULL;
+      nxmutex_unlock(&dev->recv.lock);
 
       header->response = 1;
       rpmsg_send(ept, msg, sizeof(*msg));
@@ -482,6 +449,7 @@ int uart_rpmsg_init(FAR const char *cpuname, FAR const char *devname,
       goto fail;
     }
 
+  nxmutex_init(&priv->lock);
   priv->cpuname = cpuname;
   priv->devname = devname;
 
@@ -490,13 +458,16 @@ int uart_rpmsg_init(FAR const char *cpuname, FAR const char *devname,
   ret = rpmsg_register_callback(dev,
                                 uart_rpmsg_device_created,
                                 uart_rpmsg_device_destroy,
+                                NULL,
                                 NULL);
   if (ret < 0)
     {
+      nxmutex_destroy(&priv->lock);
       goto fail;
     }
 
-  sprintf(dev_name, "%s%s", UART_RPMSG_DEV_PREFIX, devname);
+  snprintf(dev_name, sizeof(dev_name), "%s%s",
+           UART_RPMSG_DEV_PREFIX, devname);
   uart_register(dev_name, dev);
 
   if (dev->isconsole)
@@ -514,15 +485,3 @@ fail:
 
   return ret;
 }
-
-#ifdef CONFIG_RPMSG_SERIALINIT
-/* Dummy function to make linker happy */
-
-void up_earlyserialinit(void)
-{
-}
-
-void up_serialinit(void)
-{
-}
-#endif /* CONFIG_RPMSG_SERIALINIT */

@@ -1,6 +1,8 @@
 /****************************************************************************
  * graphics/nxglib/lcd/nxglib_copyrectangle.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -92,7 +94,7 @@ void NXGL_FUNCNAME(nxgl_copyrectangle, NXGLIB_SUFFIX)
                                                      pinfo->buffer,
                                                      remainder,
                                                      ncols);
-          pinfo->putrun(row, dest->pt1.x, pinfo->buffer, ncols);
+          pinfo->putrun(pinfo->dev, row, dest->pt1.x, pinfo->buffer, ncols);
         }
       else
 #endif
@@ -101,7 +103,7 @@ void NXGL_FUNCNAME(nxgl_copyrectangle, NXGLIB_SUFFIX)
            * Copy the image data directly from the image memory.
            */
 
-          pinfo->putrun(row, dest->pt1.x, sline, ncols);
+          pinfo->putrun(pinfo->dev, row, dest->pt1.x, sline, ncols);
         }
 
       /* Then adjust the source pointer to refer to the next line in

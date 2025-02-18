@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/stm32/stm3210e-eval/src/stm32_pmbuttons.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -30,9 +32,10 @@
 #include <arch/irq.h>
 
 #include <stdbool.h>
+#include <sys/param.h>
 #include <debug.h>
 
-#include "arm_arch.h"
+#include "arm_internal.h"
 #include "nvic.h"
 #include "stm32_pwr.h"
 #include "stm32_pm.h"
@@ -96,16 +99,7 @@
 #  define CONFIG_PM_BUTTON_ACTIVITY 10
 #endif
 
-#define PM_IDLE_DOMAIN 0 /* Revisit */
-
 /* Miscellaneous Definitions ************************************************/
-
-#ifndef MIN
-#  define MIN(a,b) (a < b ? a : b)
-#endif
-#ifndef MAX
-#  define MAX(a,b) (a > b ? a : b)
-#endif
 
 #define MIN_BUTTON MIN(CONFIG_PM_BUTTONS_MIN, CONFIG_PM_IRQBUTTONS_MIN)
 #define MAX_BUTTON MAX(CONFIG_PM_BUTTONS_MAX, CONFIG_PM_IRQBUTTONS_MAX)
@@ -134,7 +128,7 @@
  *
  ****************************************************************************/
 
-static int button_handler(int irq, FAR void *context, FAR void *arg)
+static int button_handler(int irq, void *context, void *arg)
 {
   /* At this point the MCU should have already awakened.  The state
    * change will be handled in the IDLE loop when the system is re-awakened

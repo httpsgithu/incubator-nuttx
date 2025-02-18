@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/sam34/sam4s_nand.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -18,8 +20,8 @@
  *
  ****************************************************************************/
 
-#ifndef __ARCH_ARM_SRC_SAM4S_SAM_NAND_H
-#define __ARCH_ARM_SRC_SAM4S_SAM_NAND_H
+#ifndef __ARCH_ARM_SRC_SAM34_SAM4S_NAND_H
+#define __ARCH_ARM_SRC_SAM34_SAM4S_NAND_H
 
 /****************************************************************************
  * Included Files
@@ -35,7 +37,7 @@
 #include <nuttx/mtd/nand_raw.h>
 #include <nuttx/semaphore.h>
 
-#include "arm_arch.h"
+#include "arm_internal.h"
 #include "chip.h"
 #include "sam_gpio.h"
 #include "hardware/sam_smc.h"
@@ -47,7 +49,7 @@
 /* Only NCS0 can support NAND.  The rest is a fantasy */
 
 #if defined(CONFIG_SAM34_EXTNAND)
-  # define CONFIG_SAM34_NCS0_NAND 1
+  #  define CONFIG_SAM34_NCS0_NAND 1
 #else
   # undef CONFIG_SAM34_NCS0_NAND
 #endif
@@ -82,6 +84,8 @@
  * Public Types
  ****************************************************************************/
 
+#ifndef __ASSEMBLY__
+
 /* This type represents the state of a raw NAND MTD device on a single chip
  * select.  The struct nand_raw_s must appear at the beginning of the
  * definition so that you can freely cast between pointers to struct
@@ -99,14 +103,11 @@ struct sam_nandcs_s
 
   uint8_t cs;                /* Chip select number (0..3) */
   gpio_pinset_t rb;          /* NAND Ready/Busy detect GPIO pin */
-#endif
 };
 
 /****************************************************************************
  * Public Data
  ****************************************************************************/
-
-#ifndef __ASSEMBLY__
 
 #undef EXTERN
 #if defined(__cplusplus)
@@ -177,3 +178,4 @@ int board_nandflash_config(int cs);
 #endif
 
 #endif /* __ASSEMBLY__ */
+#endif /* __ARCH_ARM_SRC_SAM34_SAM4S_NAND_H */

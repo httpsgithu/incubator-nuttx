@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/kinetis/freedom-k66f/src/k66_pwm.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -34,7 +36,7 @@
 #include <arch/board/board.h>
 
 #include "chip.h"
-#include "arm_arch.h"
+#include "arm_internal.h"
 #include "kinetis_pwm.h"
 
 #ifdef CONFIG_PWM
@@ -53,7 +55,7 @@
 
 int k66_pwm_setup(void)
 {
-  FAR struct pwm_lowerhalf_s *pwm;
+  struct pwm_lowerhalf_s *pwm;
   static bool initialized = false;
   int ret;
 

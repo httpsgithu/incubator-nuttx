@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/kl/kl_lowputc.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -18,8 +20,8 @@
  *
  ****************************************************************************/
 
-#ifndef __ARCH_ARM_SRC_KL_KINETIS_LOWPUTC_H
-#define __ARCH_ARM_SRC_KL_KINETIS_LOWPUTC_H
+#ifndef __ARCH_ARM_SRC_KL_KL_LOWPUTC_H
+#define __ARCH_ARM_SRC_KL_KL_LOWPUTC_H
 
 /****************************************************************************
  * Included Files
@@ -110,4 +112,4 @@ void kl_uartconfigure(uintptr_t uart_base, uint32_t baud, uint32_t clock,
 }
 #endif
 #endif /* __ASSEMBLY__ */
-#endif /* __ARCH_ARM_SRC_KL_KINETIS_LOWPUTC_H */
+#endif /* __ARCH_ARM_SRC_KL_KL_LOWPUTC_H */

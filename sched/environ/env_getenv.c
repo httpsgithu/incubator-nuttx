@@ -1,6 +1,8 @@
 /****************************************************************************
  * sched/environ/env_getenv.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -49,7 +51,7 @@
  *   name - The name of the variable to find.
  *
  * Returned Value:
- *   The value of the valiable (read-only) or NULL on failure
+ *   The value of the variable (read-only) or NULL on failure
  *
  * Assumptions:
  *   Not called from an interrupt handler
@@ -60,53 +62,52 @@ FAR char *getenv(FAR const char *name)
 {
   FAR struct tcb_s *rtcb;
   FAR struct task_group_s *group;
-  FAR char *pvar;
   FAR char *pvalue = NULL;
-  int ret = OK;
+  irqstate_t flags;
+  ssize_t ret = OK;
+
+  flags = enter_critical_section();
 
   /* Verify that a string was passed */
 
   if (name == NULL)
     {
-      ret = EINVAL;
+      ret = -EINVAL;
       goto errout;
     }
 
   /* Get a reference to the thread-private environ in the TCB. */
 
-  sched_lock();
   rtcb  = this_task();
   group = rtcb->group;
 
   /* Check if the variable exists */
 
-  if (group == NULL || (pvar = env_findvar(group, name)) == NULL)
+  if (group == NULL || (ret = env_findvar(group, name)) < 0)
     {
-      ret = ENOENT;
-      goto errout_with_lock;
+      goto errout;
     }
 
   /* It does!  Get the value sub-string from the name=value string */
 
-  pvalue = strchr(pvar, '=');
+  pvalue = strchr(group->tg_envp[ret], '=');
   if (pvalue == NULL)
     {
       /* The name=value string has no '='  This is a bug! */
 
-      ret = EINVAL;
-      goto errout_with_lock;
+      ret = -EINVAL;
+      goto errout;
     }
 
   /* Adjust the pointer so that it points to the value right after the '=' */
 
   pvalue++;
-  sched_unlock();
+  leave_critical_section(flags);
   return pvalue;
 
-errout_with_lock:
-  sched_unlock();
 errout:
-  set_errno(ret);
+  leave_critical_section(flags);
+  set_errno(-ret);
   return NULL;
 }
 

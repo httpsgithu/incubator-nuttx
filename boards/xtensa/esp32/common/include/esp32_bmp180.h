@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/xtensa/esp32/common/include/esp32_bmp180.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -18,8 +20,8 @@
  *
  ****************************************************************************/
 
-#ifndef __BOARDS_XTENSA_ESP32_COMMON_INCLUDE_BOARD_BMP180_H
-#define __BOARDS_XTENSA_ESP32_COMMON_INCLUDE_BOARD_BMP180_H
+#ifndef __BOARDS_XTENSA_ESP32_COMMON_INCLUDE_ESP32_BMP180_H
+#define __BOARDS_XTENSA_ESP32_COMMON_INCLUDE_ESP32_BMP180_H
 
 /****************************************************************************
  * Included Files
@@ -81,4 +83,4 @@ int board_bmp180_initialize(int devno, int busno);
 }
 #endif
 
-#endif /* __BOARDS_XTENSA_ESP32_COMMON_INCLUDE_BOARD_BMP180_H */
+#endif /* __BOARDS_XTENSA_ESP32_COMMON_INCLUDE_ESP32_BMP180_H */

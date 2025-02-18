@@ -1,6 +1,8 @@
 /****************************************************************************
  * net/mld/mld_msg.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -116,7 +118,7 @@ int mld_waitmsg(FAR struct mld_group_s *group, uint8_t msgtype)
     {
       /* Wait for the semaphore to be posted */
 
-      ret = net_lockedwait_uninterruptible(&group->sem);
+      ret = net_sem_wait_uninterruptible(&group->sem);
       if (ret < 0)
         {
           break;

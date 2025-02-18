@@ -1,6 +1,8 @@
 /****************************************************************************
  * include/nuttx/usb/rndis.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -42,21 +44,24 @@
 
 /* Endpoint configuration ***************************************************/
 
-#define RNDIS_MKEPINTIN(desc)     (USB_DIR_IN | (desc)->epno[RNDIS_EP_INTIN_IDX])
-#define RNDIS_EPINTIN_ATTR        (USB_EP_ATTR_XFER_INT)
-
-#define RNDIS_MKEPBULKIN(desc)    (USB_DIR_IN | (desc)->epno[RNDIS_EP_BULKIN_IDX])
-#define RNDIS_EPOUTBULK_ATTR      (USB_EP_ATTR_XFER_BULK)
-
-#define RNDIS_MKEPBULKOUT(desc)   ((desc)->epno[RNDIS_EP_BULKOUT_IDX])
-#define RNDIS_EPINBULK_ATTR       (USB_EP_ATTR_XFER_BULK)
-
 #ifndef CONFIG_RNDIS_EPINTIN_FSSIZE
 #  define CONFIG_RNDIS_EPINTIN_FSSIZE 16
 #endif
 
 #ifndef CONFIG_RNDIS_EPINTIN_HSSIZE
 #  define CONFIG_RNDIS_EPINTIN_HSSIZE 16
+#endif
+
+#ifdef CONFIG_USBDEV_SUPERSPEED
+
+#ifndef CONFIG_RNDIS_EPINTIN_SSSIZE
+#  define CONFIG_RNDIS_EPINTIN_SSSIZE 16
+#endif
+
+#ifndef CONFIG_RNDIS_EPINTIN_MAXBURST
+#  define CONFIG_RNDIS_EPINTIN_MAXBURST 0
+#endif
+
 #endif
 
 #ifndef CONFIG_RNDIS_EPBULKIN_FSSIZE
@@ -67,12 +72,44 @@
 #  define CONFIG_RNDIS_EPBULKIN_HSSIZE 512
 #endif
 
+#ifdef CONFIG_USBDEV_SUPERSPEED
+
+#ifndef CONFIG_RNDIS_EPBULKIN_SSSIZE
+#  define CONFIG_RNDIS_EPBULKIN_SSSIZE 1024
+#endif
+
+#ifndef CONFIG_RNDIS_EPBULKIN_MAXBURST
+#  define CONFIG_RNDIS_EPBULKIN_MAXBURST 0
+#endif
+
+#ifndef CONFIG_RNDIS_EPBULKIN_MAXSTREAM
+#  define CONFIG_RNDIS_EPBULKIN_MAXSTREAM 0
+#endif
+
+#endif
+
 #ifndef CONFIG_RNDIS_EPBULKOUT_FSSIZE
 #  define CONFIG_RNDIS_EPBULKOUT_FSSIZE 64
 #endif
 
 #ifndef CONFIG_RNDIS_EPBULKOUT_HSSIZE
 #  define CONFIG_RNDIS_EPBULKOUT_HSSIZE 512
+#endif
+
+#ifdef CONFIG_USBDEV_SUPERSPEED
+
+#ifndef CONFIG_RNDIS_EPBULKOUT_SSSIZE
+#  define CONFIG_RNDIS_EPBULKOUT_SSSIZE 1024
+#endif
+
+#ifndef CONFIG_RNDIS_EPBULKOUT_MAXBURST
+#  define CONFIG_RNDIS_EPBULKOUT_MAXBURST 0
+#endif
+
+#ifndef CONFIG_RNDIS_EPBULKOUT_MAXSTREAM
+#  define CONFIG_RNDIS_EPBULKOUT_MAXSTREAM 0
+#endif
+
 #endif
 
 /****************************************************************************

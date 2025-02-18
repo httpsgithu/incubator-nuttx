@@ -1,6 +1,8 @@
 /****************************************************************************
  * libs/libc/string/lib_strcasestr.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -32,19 +34,17 @@
  * Private Functions
  ****************************************************************************/
 
+#undef strcasechr /* See mm/README.txt */
 static FAR char *strcasechr(FAR const char *s, int uc)
 {
   register char ch;
 
-  if (s)
+  for (; *s != '\0'; s++)
     {
-      for (; *s; s++)
+      ch = *s;
+      if (toupper(ch) == uc)
         {
-          ch = *s;
-          if (toupper(ch) == uc)
-            {
-              return (FAR char *)s;
-            }
+          return (FAR char *)s;
         }
     }
 
@@ -94,7 +94,7 @@ FAR char *strcasestr(FAR const char *str, FAR const char *substr)
            * substring.
            */
 
-          return NULL;
+          break;
         }
 
       /* Check if this is the beginning of a matching substring

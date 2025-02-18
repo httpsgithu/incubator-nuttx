@@ -1,6 +1,8 @@
 /****************************************************************************
  * libs/libc/netdb/lib_getservbynamer.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -33,8 +35,6 @@
 #include <netdb.h>
 
 #include "lib_netdb.h"
-
-#ifdef CONFIG_LIBC_NETDB
 
 /****************************************************************************
  * Private Data
@@ -87,7 +87,7 @@ int getservbyname_r(FAR const char *name, FAR const char *proto,
     }
   else
     {
-      return EINVAL;
+      return -EINVAL;
     }
 
   for (i = 0; g_services_db[i].s_name; i++)
@@ -97,7 +97,7 @@ int getservbyname_r(FAR const char *name, FAR const char *proto,
         {
           result_buf->s_name = (FAR char *)name;
           result_buf->s_aliases = NULL;
-          result_buf->s_port = htons(g_services_db[i].s_port);
+          result_buf->s_port = HTONS(g_services_db[i].s_port);
 
           if (g_services_db[i].s_protocol == IPPROTO_TCP)
             {
@@ -116,4 +116,3 @@ int getservbyname_r(FAR const char *name, FAR const char *proto,
   return ENOENT;
 }
 
-#endif /* CONFIG_LIBC_NETDB */

@@ -1,6 +1,7 @@
 /****************************************************************************
  * net/mld/mld.h
- * Multicast Listener Discovery (MLD) Definitions
+ *
+ * SPDX-License-Identifier: Apache-2.0
  *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -82,8 +83,8 @@
  *   -----------------
  */
 
-#ifndef __NET_NETLINK_MLD_H
-#define __NET_NETLINK_MLD_H
+#ifndef __NET_MLD_MLD_H
+#define __NET_MLD_MLD_H
 
 /****************************************************************************
  * Included Files
@@ -92,7 +93,6 @@
 #include <nuttx/config.h>
 
 #include <sys/types.h>
-#include <queue.h>
 #include <debug.h>
 
 #include <nuttx/semaphore.h>
@@ -510,4 +510,4 @@ void mld_removemcastmac(FAR struct net_driver_s *dev,
 #endif
 
 #endif /* CONFIG_NET_MLD */
-#endif /* __NET_NETLINK_MLD_H */
+#endif /* __NET_MLD_MLD_H */

@@ -1,6 +1,8 @@
 /****************************************************************************
  * net/socket/net_sendfile.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -113,7 +115,6 @@ ssize_t psock_sendfile(FAR struct socket *psock, FAR struct file *infile,
   if (psock == NULL || psock->s_conn == NULL)
     {
       nerr("ERROR: Invalid socket\n");
-      psock->s_error = EBADF;
       return -EBADF;
     }
 
@@ -130,11 +131,6 @@ ssize_t psock_sendfile(FAR struct socket *psock, FAR struct file *infile,
       /* The address family can handle the optimized file send */
 
       ret = psock->s_sockif->si_sendfile(psock, infile, offset, count);
-    }
-
-  if (ret < 0)
-    {
-      psock->s_error = -ret;
     }
 
   return ret;

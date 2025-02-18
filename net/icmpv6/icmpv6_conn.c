@@ -1,6 +1,8 @@
 /****************************************************************************
  * net/icmpv6/icmpv6_conn.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -31,15 +33,25 @@
 
 #include <arch/irq.h>
 
-#include <nuttx/semaphore.h>
+#include <nuttx/kmalloc.h>
+#include <nuttx/mutex.h>
 #include <nuttx/net/netconfig.h>
 #include <nuttx/net/net.h>
 #include <nuttx/net/netdev.h>
 
 #include "devif/devif.h"
 #include "icmpv6/icmpv6.h"
+#include "utils/utils.h"
 
 #ifdef CONFIG_NET_ICMPv6_SOCKET
+
+/****************************************************************************
+ * Pre-processor Definitions
+ ****************************************************************************/
+
+#ifndef CONFIG_NET_ICMPv6_MAX_CONNS
+#  define CONFIG_NET_ICMPv6_MAX_CONNS 0
+#endif
 
 /****************************************************************************
  * Private Data
@@ -47,12 +59,11 @@
 
 /* The array containing all IPPROTO_ICMP socket connections */
 
-static struct icmpv6_conn_s g_icmpv6_connections[CONFIG_NET_ICMPv6_NCONNS];
-
-/* A list of all free IPPROTO_ICMP socket connections */
-
-static dq_queue_t g_free_icmpv6_connections;
-static sem_t g_free_sem;
+NET_BUFPOOL_DECLARE(g_icmpv6_connections, sizeof(struct icmpv6_conn_s),
+                    CONFIG_NET_ICMPv6_PREALLOC_CONNS,
+                    CONFIG_NET_ICMPv6_ALLOC_CONNS,
+                    CONFIG_NET_ICMPv6_MAX_CONNS);
+static mutex_t g_free_lock = NXMUTEX_INITIALIZER;
 
 /* A list of all allocated IPPROTO_ICMP socket connections */
 
@@ -61,33 +72,6 @@ static dq_queue_t g_active_icmpv6_connections;
 /****************************************************************************
  * Public Functions
  ****************************************************************************/
-
-/****************************************************************************
- * Name: icmpv6_sock_initialize
- *
- * Description:
- *   Initialize the IPPROTO_ICMP socket connection structures.  Called once
- *   and only from the network initialization layer.
- *
- ****************************************************************************/
-
-void icmpv6_sock_initialize(void)
-{
-  int i;
-
-  /* Initialize the queues */
-
-  dq_init(&g_free_icmpv6_connections);
-  dq_init(&g_active_icmpv6_connections);
-  nxsem_init(&g_free_sem, 0, 1);
-
-  for (i = 0; i < CONFIG_NET_ICMPv6_NCONNS; i++)
-    {
-      /* Move the connection structure to the free list */
-
-      dq_addlast(&g_icmpv6_connections[i].node, &g_free_icmpv6_connections);
-    }
-}
 
 /****************************************************************************
  * Name: icmpv6_alloc
@@ -104,25 +88,20 @@ FAR struct icmpv6_conn_s *icmpv6_alloc(void)
   FAR struct icmpv6_conn_s *conn = NULL;
   int ret;
 
-  /* The free list is protected by a semaphore (that behaves like a mutex). */
+  /* The free list is protected by a mutex. */
 
-  ret = net_lockedwait(&g_free_sem);
+  ret = nxmutex_lock(&g_free_lock);
   if (ret >= 0)
     {
-      conn = (FAR struct icmpv6_conn_s *)
-             dq_remfirst(&g_free_icmpv6_connections);
+      conn = NET_BUFPOOL_TRYALLOC(g_icmpv6_connections);
       if (conn != NULL)
         {
-          /* Clear the connection structure */
-
-          memset(conn, 0, sizeof(struct icmpv6_conn_s));
-
           /* Enqueue the connection into the active list */
 
-          dq_addlast(&conn->node, &g_active_icmpv6_connections);
+          dq_addlast(&conn->sconn.node, &g_active_icmpv6_connections);
         }
 
-      nxsem_post(&g_free_sem);
+      nxmutex_unlock(&g_free_lock);
     }
 
   return conn;
@@ -139,22 +118,23 @@ FAR struct icmpv6_conn_s *icmpv6_alloc(void)
 
 void icmpv6_free(FAR struct icmpv6_conn_s *conn)
 {
-  /* The free list is protected by a semaphore (that behaves like a mutex). */
+  /* The free list is protected by a mutex. */
 
   DEBUGASSERT(conn->crefs == 0);
 
-  /* Take the semaphore (perhaps waiting) */
+  /* Take the mutex (perhaps waiting) */
 
-  net_lockedwait_uninterruptible(&g_free_sem);
+  nxmutex_lock(&g_free_lock);
 
   /* Remove the connection from the active list */
 
-  dq_rem(&conn->node, &g_active_icmpv6_connections);
+  dq_rem(&conn->sconn.node, &g_active_icmpv6_connections);
 
-  /* Free the connection */
+  /* Free the connection. */
 
-  dq_addlast(&conn->node, &g_free_icmpv6_connections);
-  nxsem_post(&g_free_sem);
+  NET_BUFPOOL_FREE(g_icmpv6_connections, conn);
+
+  nxmutex_unlock(&g_free_lock);
 }
 
 /****************************************************************************
@@ -187,7 +167,7 @@ FAR struct icmpv6_conn_s *icmpv6_active(uint16_t id)
 
       /* Look at the next active connection */
 
-      conn = (FAR struct icmpv6_conn_s *)conn->node.flink;
+      conn = (FAR struct icmpv6_conn_s *)conn->sconn.node.flink;
     }
 
   return conn;
@@ -212,36 +192,41 @@ FAR struct icmpv6_conn_s *icmpv6_nextconn(FAR struct icmpv6_conn_s *conn)
     }
   else
     {
-      return (FAR struct icmpv6_conn_s *)conn->node.flink;
+      return (FAR struct icmpv6_conn_s *)conn->sconn.node.flink;
     }
 }
 
 /****************************************************************************
- * Name: icmpv6_findconn
+ * Name: icmpv6_foreach
  *
  * Description:
- *   Find an ICMPv6 connection structure that is expecting a ICMPv6 ECHO
- *  response with this ID from this device
+ *   Enumerate each ICMPv6 connection structure. This function will terminate
+ *   when either (1) all connection have been enumerated or (2) when a
+ *   callback returns any non-zero value.
  *
  * Assumptions:
  *   This function is called from network logic at with the network locked.
  *
  ****************************************************************************/
 
-FAR struct icmpv6_conn_s *icmpv6_findconn(FAR struct net_driver_s *dev,
-                                          uint16_t id)
+int icmpv6_foreach(icmpv6_callback_t callback, FAR void *arg)
 {
   FAR struct icmpv6_conn_s *conn;
+  int ret = 0;
 
-  for (conn = icmpv6_nextconn(NULL); conn != NULL;
-       conn = icmpv6_nextconn(conn))
+  if (callback != NULL)
     {
-      if (conn->id == id && conn->dev == dev && conn->nreqs > 0)
+      for (conn = icmpv6_nextconn(NULL); conn != NULL;
+           conn = icmpv6_nextconn(conn))
         {
-          return conn;
+          ret = callback(conn, arg);
+          if (ret != 0)
+            {
+              break;
+            }
         }
     }
 
-  return conn;
+  return ret;
 }
 #endif /* CONFIG_NET_ICMP */

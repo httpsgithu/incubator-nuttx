@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/risc-v/src/bl602/bl602_rtc.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -18,8 +20,8 @@
  *
  ****************************************************************************/
 
-#ifndef __ARCH_RISCV_SRC_BL602_RTC_LOWERHALF_H
-#define __ARCH_RISCV_SRC_BL602_RTC_LOWERHALF_H
+#ifndef __ARCH_RISCV_SRC_BL602_BL602_RTC_H
+#define __ARCH_RISCV_SRC_BL602_BL602_RTC_H
 
 /****************************************************************************
  * Included Files
@@ -89,9 +91,9 @@ void bl602_hbn_clear_rtc_int(void);
  *
  * Input Parameters:
  *   delay: RTC interrupt delay 32 clocks
- *   compval_low: RTC interrupt commpare value low 32 bits
- *   compval_high: RTC interrupt commpare value high 32 bits
- *   comp_mode: RTC interrupt commpare
+ *   compval_low: RTC interrupt compare value low 32 bits
+ *   compval_high: RTC interrupt compare value high 32 bits
+ *   comp_mode: RTC interrupt compare
  *
  * Returned Value:
  *   None.
@@ -167,4 +169,4 @@ void bl602_hbn_get_rtc_timer_val(uint32_t *val_low, uint32_t *val_high);
 
 struct rtc_lowerhalf_s *bl602_rtc_lowerhalf_initialize(void);
 
-#endif /* __ARCH_RISCV_SRC_BL602_RTC_LOWERHALF_H */
+#endif /* __ARCH_RISCV_SRC_BL602_BL602_RTC_H */

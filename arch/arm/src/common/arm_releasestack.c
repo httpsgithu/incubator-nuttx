@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/common/arm_releasestack.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -67,7 +69,7 @@
  *
  ****************************************************************************/
 
-void up_release_stack(FAR struct tcb_s *dtcb, uint8_t ttype)
+void up_release_stack(struct tcb_s *dtcb, uint8_t ttype)
 {
   /* Is there a stack allocated? */
 

@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/samv7/samv71-xult/src/sam_boot.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -33,7 +35,7 @@
 #include <nuttx/clock.h>
 #include <arch/board/board.h>
 
-#include "arm_arch.h"
+#include "arm_internal.h"
 #include "sam_start.h"
 #include "sam_pck.h"
 #include "samv71-xult.h"
@@ -55,7 +57,7 @@
 
 void sam_boardinitialize(void)
 {
-#ifdef CONFIG_SCHED_TICKLESS
+#if defined(CONFIG_SCHED_TICKLESS) || defined(CONFIG_TIMER)
   uint32_t frequency;
   uint32_t actual;
 
@@ -72,6 +74,16 @@ void sam_boardinitialize(void)
    */
 
   frequency = USEC_PER_SEC / CONFIG_USEC_PER_TICK;
+
+#if defined(CONFIG_TIMER)
+  /* Timer driver needs at least microseconds resolution */
+
+  if (frequency < USEC_PER_SEC)
+    {
+      frequency = USEC_PER_SEC;
+    }
+#endif
+
   DEBUGASSERT(frequency >= (BOARD_MAINOSC_FREQUENCY / 256));
 
   actual = sam_pck_configure(PCK6, PCKSRC_MAINCK, frequency);
@@ -128,7 +140,7 @@ void sam_boardinitialize(void)
  *   If CONFIG_BOARD_LATE_INITIALIZE is selected, then an additional
  *   initialization call will be performed in the boot-up sequence to a
  *   function called board_late_initialize(). board_late_initialize() will be
- *   called immediately after up_intitialize() is called and just before the
+ *   called immediately after up_initialize() is called and just before the
  *   initial application is started.  This additional initialization phase
  *   may be used, for example, to initialize board-specific device drivers.
  *

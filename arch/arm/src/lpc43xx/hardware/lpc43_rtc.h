@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/lpc43xx/hardware/lpc43_rtc.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -18,8 +20,8 @@
  *
  ****************************************************************************/
 
-#ifndef __ARCH_ARM_SRC_LPC43XX_HARDWARE_LPC43RTC_H
-#define __ARCH_ARM_SRC_LPC43XX_HARDWARE_LPC43RTC_H
+#ifndef __ARCH_ARM_SRC_LPC43XX_HARDWARE_LPC43_RTC_H
+#define __ARCH_ARM_SRC_LPC43XX_HARDWARE_LPC43_RTC_H
 
 /****************************************************************************
  * Included Files
@@ -367,4 +369,4 @@
  * Public Functions Prototypes
  ****************************************************************************/
 
-#endif /* __ARCH_ARM_SRC_LPC43XX_HARDWARE_LPC43RTC_H */
+#endif /* __ARCH_ARM_SRC_LPC43XX_HARDWARE_LPC43_RTC_H */

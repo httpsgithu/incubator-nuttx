@@ -1,9 +1,10 @@
 /****************************************************************************
  * include/lzf.h
- * http://liblzf.plan9.de/
  *
- *   Copyright (c) 2000-2008 Marc Alexander Lehmann <schmorp@schmorp.de>
- *   This algorithm is believed to be patent-free.
+ * SPDX-License-Identifier: BSD-2-Clause
+ * SPDX-FileCopyrightText: 2000-2008 Marc Alexander Lehmann <schmorp@schmorp.de>
+ *
+ * This algorithm is believed to be patent-free.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -33,8 +34,17 @@
 #define __INCLUDE_LZF_H
 
 /****************************************************************************
+ * Included Files
+ ****************************************************************************/
+
+#include <sys/types.h>
+#include <stdint.h>
+
+/****************************************************************************
  * Pre-processor Definitions
  ****************************************************************************/
+
+#ifdef CONFIG_LIBC_LZF
 
 #define LZF_VERSION 0x0105 /* 1.5, API version */
 #define HLOG        CONFIG_LIBC_LZF_HLOG
@@ -78,10 +88,10 @@ struct lzf_type1_header_s   /* Compressed data header */
 /* LZF hash table */
 
 #if LZF_USE_OFFSETS
-# define LZF_HSLOT_BIAS ((const uint8_t *)in_data)
+#  define LZF_HSLOT_BIAS ((const uint8_t *)in_data)
   typedef unsigned int lzf_hslot_t;
 #else
-# define LZF_HSLOT_BIAS 0
+#  define LZF_HSLOT_BIAS 0
   typedef const uint8_t *lzf_hslot_t;
 #endif
 
@@ -151,4 +161,5 @@ unsigned int lzf_decompress(FAR const void *const in_data,
                             unsigned int in_len, FAR void *out_data,
                             unsigned int out_len);
 
+#endif /* CONFIG_LIBC_LZF */
 #endif /* __INCLUDE_LZF_H */

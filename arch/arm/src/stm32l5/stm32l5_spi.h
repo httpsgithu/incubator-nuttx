@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/stm32l5/stm32l5_spi.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -69,7 +71,7 @@ struct spi_dev_s;
  *
  ****************************************************************************/
 
-FAR struct spi_dev_s *stm32l5_spibus_initialize(int bus);
+struct spi_dev_s *stm32l5_spibus_initialize(int bus);
 
 /****************************************************************************
  * Name:  stm32l5_spi1/2/...select and stm32l5_spi1/2/...status
@@ -103,24 +105,24 @@ FAR struct spi_dev_s *stm32l5_spibus_initialize(int bus);
  ****************************************************************************/
 
 #ifdef CONFIG_STM32L5_SPI1
-void stm32l5_spi1select(FAR struct spi_dev_s *dev, uint32_t devid,
+void stm32l5_spi1select(struct spi_dev_s *dev, uint32_t devid,
                         bool selected);
-uint8_t stm32l5_spi1status(FAR struct spi_dev_s *dev, uint32_t devid);
-int stm32l5_spi1cmddata(FAR struct spi_dev_s *dev, uint32_t devid, bool cmd);
+uint8_t stm32l5_spi1status(struct spi_dev_s *dev, uint32_t devid);
+int stm32l5_spi1cmddata(struct spi_dev_s *dev, uint32_t devid, bool cmd);
 #endif
 
 #ifdef CONFIG_STM32L5_SPI2
-void stm32l5_spi2select(FAR struct spi_dev_s *dev, uint32_t devid,
+void stm32l5_spi2select(struct spi_dev_s *dev, uint32_t devid,
                         bool selected);
-uint8_t stm32l5_spi2status(FAR struct spi_dev_s *dev, uint32_t devid);
-int stm32l5_spi2cmddata(FAR struct spi_dev_s *dev, uint32_t devid, bool cmd);
+uint8_t stm32l5_spi2status(struct spi_dev_s *dev, uint32_t devid);
+int stm32l5_spi2cmddata(struct spi_dev_s *dev, uint32_t devid, bool cmd);
 #endif
 
 #ifdef CONFIG_STM32L5_SPI3
-void stm32l5_spi3select(FAR struct spi_dev_s *dev, uint32_t devid,
+void stm32l5_spi3select(struct spi_dev_s *dev, uint32_t devid,
                         bool selected);
-uint8_t stm32l5_spi3status(FAR struct spi_dev_s *dev, uint32_t devid);
-int stm32l5_spi3cmddata(FAR struct spi_dev_s *dev, uint32_t devid, bool cmd);
+uint8_t stm32l5_spi3status(struct spi_dev_s *dev, uint32_t devid);
+int stm32l5_spi3cmddata(struct spi_dev_s *dev, uint32_t devid, bool cmd);
 #endif
 
 /****************************************************************************
@@ -145,21 +147,21 @@ int stm32l5_spi3cmddata(FAR struct spi_dev_s *dev, uint32_t devid, bool cmd);
 
 #ifdef CONFIG_SPI_CALLBACK
 #ifdef CONFIG_STM32L5_SPI1
-int stm32l5_spi1register(FAR struct spi_dev_s *dev,
+int stm32l5_spi1register(struct spi_dev_s *dev,
                          spi_mediachange_t callback,
-                         FAR void *arg);
+                         void *arg);
 #endif
 
 #ifdef CONFIG_STM32L5_SPI2
-int stm32l5_spi2register(FAR struct spi_dev_s *dev,
+int stm32l5_spi2register(struct spi_dev_s *dev,
                          spi_mediachange_t callback,
-                         FAR void *arg);
+                         void *arg);
 #endif
 
 #ifdef CONFIG_STM32L5_SPI3
-int stm32l5_spi3register(FAR struct spi_dev_s *dev,
+int stm32l5_spi3register(struct spi_dev_s *dev,
                          spi_mediachange_t callback,
-                         FAR void *arg);
+                         void *arg);
 #endif
 #endif
 

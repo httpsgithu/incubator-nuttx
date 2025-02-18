@@ -1,6 +1,8 @@
 /****************************************************************************
  * include/nuttx/timers/arch_rtc.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -42,11 +44,11 @@ extern "C"
 
 #ifdef CONFIG_RTC_ARCH
 
-void up_rtc_set_lowerhalf(FAR struct rtc_lowerhalf_s *lower);
+void up_rtc_set_lowerhalf(FAR struct rtc_lowerhalf_s *lower, bool sync);
 
 #else
 
-#  define up_rtc_set_lowerhalf(lower)
+#  define up_rtc_set_lowerhalf(lower, sync)
 
 #endif /* CONFIG_RTC_ARCH */
 

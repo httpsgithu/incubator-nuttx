@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/stm32/stm32f4discovery/src/stm32_ethernet.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -42,6 +44,7 @@
 #include <nuttx/arch.h>
 #include <nuttx/fs/ioctl.h>
 #include <nuttx/mtd/mtd.h>
+#include <nuttx/spinlock.h>
 
 #include "stm32_gpio.h"
 #include "stm32_eth.h"
@@ -79,6 +82,7 @@
  ****************************************************************************/
 
 #ifdef HAVE_NETMONITOR
+static spinlock_t g_phy_lock = SP_UNLOCKED;
 static xcpt_t g_ethmac_handler;
 static void  *g_ethmac_arg;
 #endif
@@ -201,7 +205,7 @@ void weak_function stm32_netinitialize(void)
  ****************************************************************************/
 
 #ifdef HAVE_NETMONITOR
-int arch_phy_irq(FAR const char *intf, xcpt_t handler, void *arg,
+int arch_phy_irq(const char *intf, xcpt_t handler, void *arg,
                  phy_enable_t *enable)
 {
   phy_enable_t enabler;
@@ -212,7 +216,7 @@ int arch_phy_irq(FAR const char *intf, xcpt_t handler, void *arg,
 
   DEBUGASSERT(intf);
 
-  flags = enter_critical_section();
+  flags = spin_lock_irqsave(&g_phy_lock);
 
   if (strcmp(intf, STM32_ETHMAC_DEVNAME) == 0)
     {
@@ -232,7 +236,7 @@ int arch_phy_irq(FAR const char *intf, xcpt_t handler, void *arg,
       *enable = enabler;
     }
 
-  leave_critical_section(flags);
+  spin_unlock_irqrestore(&g_phy_lock, flags);
   return OK;
 }
 #endif

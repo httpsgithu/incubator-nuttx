@@ -24,7 +24,7 @@
 
 #include <nuttx/config.h>
 
-#ifdef CONFIG_ESP32_I2C
+#ifdef CONFIG_ESPRESSIF_I2C_PERIPH
 
 #include <sys/types.h>
 #include <stdio.h>
@@ -40,8 +40,8 @@
 #include <nuttx/arch.h>
 #include <nuttx/irq.h>
 #include <nuttx/clock.h>
+#include <nuttx/mutex.h>
 #include <nuttx/semaphore.h>
-#include <nuttx/spinlock.h>
 #include <nuttx/i2c/i2c_master.h>
 
 #include <arch/board/board.h>
@@ -79,9 +79,12 @@
 #define TIMESPEC_TO_US(sec, nano)  ((sec * USEC_PER_SEC) + (nano / NSEC_PER_USEC))
 #endif
 
+#define ESP32_I2CTIMEOTICKS \
+    (SEC2TICK(CONFIG_ESP32_I2CTIMEOSEC) + MSEC2TICK(CONFIG_ESP32_I2CTIMEOMS))
+
 /* Default option */
 
-#define I2C_FIFO_SIZE (255)
+#define I2C_FIFO_SIZE (32)
 
 #define I2C_FILTER_CYC_NUM_DEF (7)
 
@@ -197,7 +200,7 @@ struct esp32_i2c_priv_s
 
   const struct esp32_i2c_config_s *config;
   int refs;                    /* Reference count */
-  sem_t sem_excl;              /* Mutual exclusion semaphore */
+  mutex_t lock;                /* Mutual exclusion mutex */
 
 #ifndef CONFIG_I2C_POLLED
   sem_t sem_isr;               /* Interrupt wait semaphore */
@@ -219,8 +222,6 @@ struct esp32_i2c_priv_s
   bool ready_read;             /* If I2C has read data */
 
   uint32_t clk_freq;           /* Current I2C Clock frequency */
-
-  spinlock_t lock;             /* Device specific lock */
 
   /* I2C trace support */
 
@@ -305,6 +306,10 @@ static struct esp32_i2c_priv_s esp32_i2c0_priv =
   .ops        = &esp32_i2c_ops,
   .config     = &esp32_i2c0_config,
   .refs       = 0,
+  .lock       = NXMUTEX_INITIALIZER,
+#ifndef CONFIG_I2C_POLLED
+  .sem_isr    = SEM_INITIALIZER(0),
+#endif
   .i2cstate   = I2CSTATE_IDLE,
   .msgv       = NULL,
   .msgid      = 0,
@@ -337,6 +342,10 @@ static struct esp32_i2c_priv_s esp32_i2c1_priv =
   .ops        = &esp32_i2c_ops,
   .config     = &esp32_i2c1_config,
   .refs       = 0,
+  .lock       = NXMUTEX_INITIALIZER,
+#ifndef CONFIG_I2C_POLLED
+  .sem_isr    = SEM_INITIALIZER(0),
+#endif
   .i2cstate   = I2CSTATE_IDLE,
   .msgv       = NULL,
   .msgid      = 0,
@@ -611,7 +620,7 @@ static void esp32_i2c_init_clock(struct esp32_i2c_priv_s *priv,
 
   if (clk_freq == priv->clk_freq)
     {
-      return ;
+      return;
     }
 
   esp32_i2c_set_reg(priv, I2C_SCL_LOW_PERIOD_OFFSET, half_cycles);
@@ -723,31 +732,9 @@ static void esp32_i2c_reset_fsmc(struct esp32_i2c_priv_s *priv)
 #ifndef CONFIG_I2C_POLLED
 static int esp32_i2c_sem_waitdone(struct esp32_i2c_priv_s *priv)
 {
-  int ret;
-  struct timespec abstime;
-
-  /* Get the current absolute time and adds a offset as timeout */
-
-  clock_gettime(CLOCK_REALTIME, &abstime);
-
-#if CONFIG_ESP32_I2CTIMEOSEC > 0
-  abstime.tv_sec += CONFIG_ESP32_I2CTIMEOSEC;
-#endif
-
-#if CONFIG_ESP32_I2CTIMEOMS > 0
-  abstime.tv_nsec += CONFIG_ESP32_I2CTIMEOMS * NSEC_PER_MSEC;
-  if (abstime.tv_nsec >= 1000 * NSEC_PER_MSEC)
-    {
-      abstime.tv_sec++;
-      abstime.tv_nsec -= 1000 * NSEC_PER_MSEC;
-    }
-#endif
-
   /* Wait on ISR semaphore */
 
-  ret = nxsem_timedwait_uninterruptible(&priv->sem_isr, &abstime);
-
-  return ret;
+  return nxsem_tickwait_uninterruptible(&priv->sem_isr, ESP32_I2CTIMEOTICKS);
 }
 #endif
 
@@ -772,10 +759,8 @@ static int esp32_i2c_sem_waitdone(struct esp32_i2c_priv_s *priv)
 static int esp32_i2c_polling_waitdone(struct esp32_i2c_priv_s *priv)
 {
   int ret;
-  struct timespec current_time;
-  struct timespec timeout;
-  uint64_t current_us;
-  uint64_t timeout_us;
+  clock_t current;
+  clock_t timeout;
   uint32_t status = 0;
 
   /* Get the current absolute time and add an offset as timeout.
@@ -784,23 +769,14 @@ static int esp32_i2c_polling_waitdone(struct esp32_i2c_priv_s *priv)
    * forward and backwards.
    */
 
-  #ifdef CONFIG_CLOCK_MONOTONIC
-    clock_gettime(CLOCK_MONOTONIC, &current_time);
-  #else
-    clock_gettime(CLOCK_REALTIME, &current_time);
-  #endif
-
-  timeout.tv_sec  = current_time.tv_sec  + 10;
-  timeout.tv_nsec = current_time.tv_nsec +  0;
-
-  current_us = TIMESPEC_TO_US(current_time.tv_sec, current_time.tv_nsec);
-  timeout_us = TIMESPEC_TO_US(timeout.tv_sec, timeout.tv_nsec);
+  current = clock_systime_ticks();
+  timeout = current + SEC2TICK(10);
 
   /* Loop while a transfer is in progress
    * and an error didn't occur within the timeout
    */
 
-  while ((current_us < timeout_us) && (priv->error == 0))
+  while ((current < timeout) && (priv->error == 0))
     {
       /* Check if any interrupt triggered, clear them
        * process the operation.
@@ -829,12 +805,7 @@ static int esp32_i2c_polling_waitdone(struct esp32_i2c_priv_s *priv)
 
       /* Update current time */
 
-      #ifdef CONFIG_CLOCK_MONOTONIC
-        clock_gettime(CLOCK_MONOTONIC, &current_time);
-      #else
-        clock_gettime(CLOCK_REALTIME, &current_time);
-      #endif
-      current_us = TIMESPEC_TO_US(current_time.tv_sec, current_time.tv_nsec);
+      current = clock_systime_ticks();
     }
 
   /* Return a negated value in case of timeout, and in the other scenarios
@@ -843,7 +814,7 @@ static int esp32_i2c_polling_waitdone(struct esp32_i2c_priv_s *priv)
    * scenarios.
    */
 
-  if (current_us >= timeout_us)
+  if (current >= timeout)
     {
       ret = -ETIMEDOUT;
     }
@@ -863,70 +834,6 @@ static int esp32_i2c_polling_waitdone(struct esp32_i2c_priv_s *priv)
   return ret;
 }
 #endif
-
-/****************************************************************************
- * Name: esp32_i2c_sem_wait
- *
- * Description:
- *   Take the exclusive access, waiting as necessary
- *
- ****************************************************************************/
-
-static int esp32_i2c_sem_wait(struct esp32_i2c_priv_s *priv)
-{
-  return nxsem_wait_uninterruptible(&priv->sem_excl);
-}
-
-/****************************************************************************
- * Name: esp32_i2c_sem_post
- *
- * Description:
- *   Release the mutual exclusion semaphore
- *
- ****************************************************************************/
-
-static void esp32_i2c_sem_post(struct esp32_i2c_priv_s *priv)
-{
-  nxsem_post(&priv->sem_excl);
-}
-
-/****************************************************************************
- * Name: esp32_i2c_sem_destroy
- *
- * Description:
- *   Destroy semaphores.
- *
- ****************************************************************************/
-
-static void esp32_i2c_sem_destroy(struct esp32_i2c_priv_s *priv)
-{
-  nxsem_destroy(&priv->sem_excl);
-#ifndef CONFIG_I2C_POLLED
-  nxsem_destroy(&priv->sem_isr);
-#endif
-}
-
-/****************************************************************************
- * Name: esp32_i2c_sem_init
- *
- * Description:
- *   Initialize semaphores
- *
- ****************************************************************************/
-
-static inline void esp32_i2c_sem_init(struct esp32_i2c_priv_s *priv)
-{
-  nxsem_init(&priv->sem_excl, 0, 1);
-
-  /* This semaphore is used for signaling and, hence, should not have
-   * priority inheritance enabled.
-   */
-
-#ifndef CONFIG_I2C_POLLED
-  nxsem_init(&priv->sem_isr, 0, 0);
-  nxsem_set_protocol(&priv->sem_isr, SEM_PRIO_NONE);
-#endif
-}
 
 /****************************************************************************
  * Device Driver Operations
@@ -950,7 +857,7 @@ static int esp32_i2c_transfer(struct i2c_master_s *dev,
 
   DEBUGASSERT(count > 0);
 
-  ret = esp32_i2c_sem_wait(priv);
+  ret = nxmutex_lock(&priv->lock);
   if (ret < 0)
     {
       return ret;
@@ -988,16 +895,39 @@ static int esp32_i2c_transfer(struct i2c_master_s *dev,
 
       esp32_i2c_init_clock(priv, msgs[i].frequency);
 
-      /* Reset I2C trace logic */
+      if ((msgs[i].flags & I2C_M_NOSTART) != 0)
+        {
+          esp32_i2c_traceevent(priv, I2CEVENT_SENDBYTE, priv->bytes,
+                               esp32_i2c_get_reg(priv, I2C_SR_OFFSET));
+          esp32_i2c_senddata(priv);
 
-      esp32_i2c_tracereset(priv);
+          if (priv->bytes == msgs[i].length)
+            {
+              if ((msgs[i].flags & I2C_M_NOSTOP) == 0)
+                {
+                  priv->i2cstate = I2CSTATE_STOP;
+                }
+#ifndef CONFIG_I2C_POLLED
+              else
+                {
+                  priv->i2cstate = I2CSTATE_FINISH;
+                }
+#endif
+            }
+        }
+      else
+        {
+          /* Reset I2C trace logic */
 
-      esp32_i2c_traceevent(priv, I2CEVENT_SENDADDR, msgs[i].addr,
-                           esp32_i2c_get_reg(priv, I2C_SR_OFFSET));
+          esp32_i2c_tracereset(priv);
 
-      /* Send the start cmd */
+          esp32_i2c_traceevent(priv, I2CEVENT_SENDADDR, msgs[i].addr,
+                               esp32_i2c_get_reg(priv, I2C_SR_OFFSET));
 
-      esp32_i2c_sendstart(priv);
+          /* Send the start cmd */
+
+          esp32_i2c_sendstart(priv);
+        }
 
 #ifndef CONFIG_I2C_POLLED
       if (esp32_i2c_sem_waitdone(priv) < 0)
@@ -1052,8 +982,7 @@ static int esp32_i2c_transfer(struct i2c_master_s *dev,
 
   esp32_i2c_tracedump(priv);
 
-  esp32_i2c_sem_post(priv);
-
+  nxmutex_unlock(&priv->lock);
   return ret;
 }
 
@@ -1168,19 +1097,15 @@ out:
 #ifdef CONFIG_I2C_RESET
 static int esp32_i2c_reset(struct i2c_master_s *dev)
 {
-  irqstate_t flags;
   struct esp32_i2c_priv_s *priv = (struct esp32_i2c_priv_s *)dev;
 
   DEBUGASSERT(dev);
-
   DEBUGASSERT(priv->refs > 0);
 
-  flags = spin_lock_irqsave(&priv->lock);
+  nxmutex_lock(&priv->lock);
 
   esp32_i2c_deinit(priv);
-
   esp32_i2c_clear_bus(priv);
-
   esp32_i2c_init(priv);
 
   priv->i2cstate = I2CSTATE_IDLE;
@@ -1188,8 +1113,7 @@ static int esp32_i2c_reset(struct i2c_master_s *dev)
   priv->bytes = 0;
   priv->ready_read = 0;
 
-  spin_unlock_irqrestore(&priv->lock, flags);
-
+  nxmutex_unlock(&priv->lock);
   return OK;
 }
 #endif
@@ -1324,8 +1248,8 @@ static void esp32_i2c_traceevent(struct esp32_i2c_priv_s *priv,
 
       /* Initialize the new trace entry */
 
-      trace->event  = event;
-      trace->parm   = parm;
+      trace->event = event;
+      trace->parm  = parm;
 
       /* Bump up the trace index (unless we are out of trace entries) */
 
@@ -1490,7 +1414,16 @@ static inline void esp32_i2c_process(struct esp32_i2c_priv_s *priv,
 
               if (priv->bytes == msg->length)
                 {
-                  priv->i2cstate = I2CSTATE_STOP;
+                  if ((msg->flags & I2C_M_NOSTOP) == 0)
+                    {
+                      priv->i2cstate = I2CSTATE_STOP;
+                    }
+#ifndef CONFIG_I2C_POLLED
+                  else
+                    {
+                      priv->i2cstate = I2CSTATE_FINISH;
+                    }
+#endif
                 }
             }
         }
@@ -1533,7 +1466,6 @@ static inline void esp32_i2c_process(struct esp32_i2c_priv_s *priv,
 
 struct i2c_master_s *esp32_i2cbus_initialize(int port)
 {
-  irqstate_t flags;
   struct esp32_i2c_priv_s *priv;
 #ifndef CONFIG_I2C_POLLED
   const struct esp32_i2c_config_s *config;
@@ -1556,12 +1488,10 @@ struct i2c_master_s *esp32_i2cbus_initialize(int port)
       return NULL;
     }
 
-  flags = spin_lock_irqsave(&priv->lock);
-
-  if ((volatile int)priv->refs++ != 0)
+  nxmutex_lock(&priv->lock);
+  if (priv->refs++ != 0)
     {
-      spin_unlock_irqrestore(&priv->lock, flags);
-
+      nxmutex_unlock(&priv->lock);
       return (struct i2c_master_s *)priv;
     }
 
@@ -1570,14 +1500,15 @@ struct i2c_master_s *esp32_i2cbus_initialize(int port)
 
   /* Set up to receive peripheral interrupts on the current CPU */
 
-  priv->cpu = up_cpu_index();
+  priv->cpu = this_cpu();
   priv->cpuint = esp32_setup_irq(priv->cpu, config->periph,
                                  1, ESP32_CPUINT_LEVEL);
   if (priv->cpuint < 0)
     {
       /* Failed to allocate a CPU interrupt of this type */
 
-      spin_unlock_irqrestore(&priv->lock, flags);
+      priv->refs--;
+      nxmutex_unlock(&priv->lock);
 
       return NULL;
     }
@@ -1586,20 +1517,17 @@ struct i2c_master_s *esp32_i2cbus_initialize(int port)
   if (ret != OK)
     {
       esp32_teardown_irq(priv->cpu, config->periph, priv->cpuint);
+      priv->refs--;
 
-      spin_unlock_irqrestore(&priv->lock, flags);
-
+      nxmutex_unlock(&priv->lock);
       return NULL;
     }
 
   up_enable_irq(config->irq);
 #endif
 
-  esp32_i2c_sem_init(priv);
-
   esp32_i2c_init(priv);
-
-  spin_unlock_irqrestore(&priv->lock, flags);
+  nxmutex_unlock(&priv->lock);
 
   return (struct i2c_master_s *)priv;
 }
@@ -1614,7 +1542,6 @@ struct i2c_master_s *esp32_i2cbus_initialize(int port)
 
 int esp32_i2cbus_uninitialize(struct i2c_master_s *dev)
 {
-  irqstate_t flags;
   struct esp32_i2c_priv_s *priv = (struct esp32_i2c_priv_s *)dev;
 
   DEBUGASSERT(dev);
@@ -1624,15 +1551,12 @@ int esp32_i2cbus_uninitialize(struct i2c_master_s *dev)
       return ERROR;
     }
 
-  flags = spin_lock_irqsave(&priv->lock);
-
+  nxmutex_lock(&priv->lock);
   if (--priv->refs)
     {
-      spin_unlock_irqrestore(&priv->lock, flags);
+      nxmutex_unlock(&priv->lock);
       return OK;
     }
-
-  spin_unlock_irqrestore(&priv->lock, flags);
 
 #ifndef CONFIG_I2C_POLLED
   up_disable_irq(priv->config->irq);
@@ -1640,10 +1564,9 @@ int esp32_i2cbus_uninitialize(struct i2c_master_s *dev)
 #endif
 
   esp32_i2c_deinit(priv);
-
-  esp32_i2c_sem_destroy(priv);
+  nxmutex_unlock(&priv->lock);
 
   return OK;
 }
 
-#endif /* CONFIG_ESP32_I2C */
+#endif /* CONFIG_ESPRESSIF_I2C_PERIPH */

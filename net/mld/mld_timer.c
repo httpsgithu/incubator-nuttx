@@ -1,6 +1,8 @@
 /****************************************************************************
  * net/mld/mld_timer.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -115,7 +117,7 @@ static void mld_gendog_work(FAR void *arg)
    * index.
    */
 
-  ifindex = (int)arg;
+  ifindex = (intptr_t)arg;
   DEBUGASSERT(ifindex > 0);
 
   net_lock();
@@ -234,7 +236,7 @@ static void mld_v1dog_work(FAR void *arg)
    * index.
    */
 
-  ifindex = (int)arg;
+  ifindex = (intptr_t)arg;
   DEBUGASSERT(ifindex > 0);
 
   net_lock();
@@ -253,7 +255,7 @@ static void mld_v1dog_work(FAR void *arg)
 
       CLR_MLD_V1COMPAT(dev->d_mld.flags);
 
-      /* REVIST:  Whenever a host changes its compatibility mode, it cancels
+      /* REVISIT:  Whenever a host changes its compatibility mode, it cancels
        * all of its pending responses and retransmission timers.
        */
     }
@@ -343,6 +345,7 @@ static void mld_polldog_work(FAR void *arg)
 
           fwarn("WARNING: No device associated with ifindex=%d\n",
                 group->ifindex);
+          net_unlock();
           return;
         }
 

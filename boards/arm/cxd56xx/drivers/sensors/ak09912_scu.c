@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/cxd56xx/drivers/sensors/ak09912_scu.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -132,16 +134,14 @@
  * Private Type Definitions
  ****************************************************************************/
 
-/**
- * @brief Structure for ak09912 device
- */
+/* Structure for ak09912 device */
 
 struct ak09912_dev_s
 {
-  FAR struct i2c_master_s *i2c; /* I2C interface */
-  uint8_t       addr;           /* I2C address */
-  int           freq;           /* Frequency <= 3.4MHz */
-  int           port;           /* I2C port */
+  struct i2c_master_s *i2c; /* I2C interface */
+  uint8_t       addr;       /* I2C address */
+  int           freq;       /* Frequency <= 3.4MHz */
+  int           port;       /* I2C port */
 
   struct seq_s *seq;
   int           id;
@@ -153,13 +153,13 @@ struct ak09912_dev_s
 
 /* Character driver methods */
 
-static int ak09912_open(FAR struct file *filep);
-static int ak09912_close(FAR struct file *filep);
-static ssize_t ak09912_read(FAR struct file *filep, FAR char *buffer,
-                           size_t buflen);
-static ssize_t ak09912_write(FAR struct file *filep, FAR const char *buffer,
+static int ak09912_open(struct file *filep);
+static int ak09912_close(struct file *filep);
+static ssize_t ak09912_read(struct file *filep, char *buffer,
                             size_t buflen);
-static int ak09912_ioctl(FAR struct file *filep, int cmd, unsigned long arg);
+static ssize_t ak09912_write(struct file *filep, const char *buffer,
+                             size_t buflen);
+static int ak09912_ioctl(struct file *filep, int cmd, unsigned long arg);
 
 /****************************************************************************
  * Private Data
@@ -171,12 +171,8 @@ static const struct file_operations g_ak09912fops =
   ak09912_close,                 /* close */
   ak09912_read,                  /* read */
   ak09912_write,                 /* write */
-  0,                             /* seek */
+  NULL,                          /* seek */
   ak09912_ioctl,                 /* ioctl */
-#ifndef CONFIG_DISABLE_POLL
-  0,                             /* poll */
-#endif
-  0                              /* unlink */
 };
 
 /* Take XYZ data, temperature and Status 2 register.
@@ -193,7 +189,7 @@ static struct ak09912_sensadj_s g_asa;
 
 /* Sequencer instance */
 
-static FAR struct seq_s *g_seq = NULL;
+static struct seq_s *g_seq = NULL;
 
 /* Reference count */
 
@@ -211,7 +207,7 @@ static int g_refcnt = 0;
  *
  ****************************************************************************/
 
-static uint8_t ak09912_getreg8(FAR struct ak09912_dev_s *priv,
+static uint8_t ak09912_getreg8(struct ak09912_dev_s *priv,
                                uint8_t regaddr)
 {
   uint8_t regval = 0;
@@ -235,7 +231,7 @@ static uint8_t ak09912_getreg8(FAR struct ak09912_dev_s *priv,
  *
  ****************************************************************************/
 
-static void ak09912_putreg8(FAR struct ak09912_dev_s *priv, uint8_t regaddr,
+static void ak09912_putreg8(struct ak09912_dev_s *priv, uint8_t regaddr,
                            uint8_t regval)
 {
   uint16_t inst[2];
@@ -256,7 +252,7 @@ static void ak09912_putreg8(FAR struct ak09912_dev_s *priv, uint8_t regaddr,
  *
  ****************************************************************************/
 
-static int ak09912_getreg(FAR struct ak09912_dev_s *priv, uint8_t regaddr,
+static int ak09912_getreg(struct ak09912_dev_s *priv, uint8_t regaddr,
                           uint8_t *buffer, uint32_t cnt)
 {
   uint16_t inst[2];
@@ -279,7 +275,7 @@ static int ak09912_getreg(FAR struct ak09912_dev_s *priv, uint8_t regaddr,
  *
  ****************************************************************************/
 
-static int ak09912_checkid(FAR struct ak09912_dev_s *priv)
+static int ak09912_checkid(struct ak09912_dev_s *priv)
 {
   uint16_t devid = 0;
 
@@ -300,7 +296,7 @@ static int ak09912_checkid(FAR struct ak09912_dev_s *priv)
   return OK;
 }
 
-static int ak09912_seqinit(FAR struct ak09912_dev_s *priv)
+static int ak09912_seqinit(struct ak09912_dev_s *priv)
 {
   DEBUGASSERT(g_seq == NULL);
 
@@ -333,10 +329,10 @@ static int ak09912_seqinit(FAR struct ak09912_dev_s *priv)
  *
  ****************************************************************************/
 
-static int ak09912_open(FAR struct file *filep)
+static int ak09912_open(struct file *filep)
 {
-  FAR struct inode        *inode = filep->f_inode;
-  FAR struct ak09912_dev_s *priv  = inode->i_private;
+  struct inode        *inode = filep->f_inode;
+  struct ak09912_dev_s *priv = inode->i_private;
 
   if (g_refcnt == 0)
     {
@@ -371,10 +367,10 @@ static int ak09912_open(FAR struct file *filep)
  *
  ****************************************************************************/
 
-static int ak09912_close(FAR struct file *filep)
+static int ak09912_close(struct file *filep)
 {
-  FAR struct inode        *inode = filep->f_inode;
-  FAR struct ak09912_dev_s *priv  = inode->i_private;
+  struct inode        *inode = filep->f_inode;
+  struct ak09912_dev_s *priv = inode->i_private;
 
   g_refcnt--;
 
@@ -402,11 +398,11 @@ static int ak09912_close(FAR struct file *filep)
  * Name: ak09912_read
  ****************************************************************************/
 
-static ssize_t ak09912_read(FAR struct file *filep, FAR char *buffer,
+static ssize_t ak09912_read(struct file *filep, char *buffer,
                             size_t len)
 {
-  FAR struct inode        *inode = filep->f_inode;
-  FAR struct ak09912_dev_s *priv  = inode->i_private;
+  struct inode        *inode = filep->f_inode;
+  struct ak09912_dev_s *priv = inode->i_private;
 
   len = len / AK09912_BYTESPERSAMPLE * AK09912_BYTESPERSAMPLE;
   len = seq_read(priv->seq, priv->id, buffer, len);
@@ -418,8 +414,8 @@ static ssize_t ak09912_read(FAR struct file *filep, FAR char *buffer,
  * Name: ak09912_write
  ****************************************************************************/
 
-static ssize_t ak09912_write(FAR struct file *filep, FAR const char *buffer,
-                            size_t buflen)
+static ssize_t ak09912_write(struct file *filep, const char *buffer,
+                             size_t buflen)
 {
   return -ENOSYS;
 }
@@ -428,10 +424,10 @@ static ssize_t ak09912_write(FAR struct file *filep, FAR const char *buffer,
  * Name: ak09912_write
  ****************************************************************************/
 
-static int ak09912_ioctl(FAR struct file *filep, int cmd, unsigned long arg)
+static int ak09912_ioctl(struct file *filep, int cmd, unsigned long arg)
 {
-  FAR struct inode *inode = filep->f_inode;
-  FAR struct ak09912_dev_s *priv  = inode->i_private;
+  struct inode *inode = filep->f_inode;
+  struct ak09912_dev_s *priv = inode->i_private;
   int ret = OK;
 
   switch (cmd)
@@ -475,7 +471,7 @@ static int ak09912_ioctl(FAR struct file *filep, int cmd, unsigned long arg)
  * Public Functions
  ****************************************************************************/
 
-int ak09912_init(FAR struct i2c_master_s *i2c, int port)
+int ak09912_init(struct i2c_master_s *i2c, int port)
 {
   struct ak09912_dev_s tmp;
   struct ak09912_dev_s *priv = &tmp;
@@ -517,31 +513,33 @@ int ak09912_init(FAR struct i2c_master_s *i2c, int port)
 }
 
 /****************************************************************************
- * Name: ak09912_register
+ * Name: ak09912_scu_register
  *
  * Description:
  *   Register the AK09912 character device as 'devpath'
  *
  * Input Parameters:
  *   devpath - The full path to the driver to register. E.g., "/dev/mag"
+ *   minor   - The number of sequencer
  *   i2c     - An instance of the I2C interface to use to communicate with
  *             AK09912
+ *   port    - I2C port number
  *
  * Returned Value:
  *   Zero (OK) on success; a negated errno value on failure.
  *
  ****************************************************************************/
 
-int ak09912_register(FAR const char *devpath, int minor,
-                     FAR struct i2c_master_s *i2c, int port)
+int ak09912_scu_register(const char *devpath, int minor,
+                         struct i2c_master_s *i2c, int port)
 {
-  FAR struct ak09912_dev_s *priv;
+  struct ak09912_dev_s *priv;
   char path[16];
   int ret;
 
   /* Initialize the AK09912 device structure */
 
-  priv = (FAR struct ak09912_dev_s *)
+  priv = (struct ak09912_dev_s *)
           kmm_malloc(sizeof(struct ak09912_dev_s));
   if (!priv)
     {

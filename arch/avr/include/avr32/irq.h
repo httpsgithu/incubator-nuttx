@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/avr/include/avr32/irq.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -82,6 +84,7 @@
 
 #define INTCONTEXT_REGS   8 /* r8-r12, lr, pc, sr */
 #define XCPTCONTEXT_REGS 17 /* Plus r0-r7, sp */
+#define XCPTCONTEXT_SIZE (4 * XCPTCONTEXT_REGS)
 
 /****************************************************************************
  * Public Types
@@ -92,12 +95,6 @@
 #ifndef __ASSEMBLY__
 struct xcptcontext
 {
-  /* The following function pointer is non-zero if there are pending signals
-   * to be processed.
-   */
-
-  void *sigdeliver; /* Actual type is sig_deliver_t */
-
   /* These are saved copies of PC and SR used during signal processing.
    *
    * REVISIT:  Because there is only one copy of these save areas,
@@ -132,7 +129,7 @@ struct xcptcontext
 
 /* Read the AVR32 status register */
 
-static inline uint32_t avr32_sr(void)
+static inline_function uint32_t avr32_sr(void)
 {
   uint32_t sr;
   __asm__ __volatile__ (
@@ -145,7 +142,7 @@ static inline uint32_t avr32_sr(void)
 
 /* Read the interrupt vector base address */
 
-static inline uint32_t avr32_evba(void)
+static inline_function uint32_t avr32_evba(void)
 {
   uint32_t evba;
   __asm__ __volatile__ (
@@ -156,9 +153,24 @@ static inline uint32_t avr32_evba(void)
   return evba;
 }
 
+/* Return the current value of the stack pointer */
+
+static inline_function uint32_t up_getsp(void)
+{
+  uint32_t retval;
+  __asm__ __volatile__
+    (
+      "mov\t%0,sp\n\t"
+      : "=r" (retval)
+      :
+    );
+
+  return retval;
+}
+
 /* Return the current interrupt enable state and disable all interrupts */
 
-static inline irqstate_t up_irq_save(void)
+static inline_function irqstate_t up_irq_save(void)
 {
   irqstate_t sr = (irqstate_t)avr32_sr();
   __asm__ __volatile__ (
@@ -173,7 +185,7 @@ static inline irqstate_t up_irq_save(void)
 
 /* Restore saved interrupt state */
 
-static inline void up_irq_restore(irqstate_t flags)
+static inline_function void up_irq_restore(irqstate_t flags)
 {
   if ((flags & AVR32_SR_GM_MASK) == 0)
     {
@@ -189,7 +201,7 @@ static inline void up_irq_restore(irqstate_t flags)
 
 /* Return the current interrupt enable state and enable all interrupts */
 
-static inline irqstate_t up_irq_enable(void)
+static inline_function irqstate_t up_irq_enable(void)
 {
   irqstate_t sr = (irqstate_t)avr32_sr();
   __asm__ __volatile__ (
@@ -211,6 +223,13 @@ static inline irqstate_t up_irq_enable(void)
 /****************************************************************************
  * Public Function Prototypes
  ****************************************************************************/
+
+/****************************************************************************
+ * Name: up_getusrpc
+ ****************************************************************************/
+
+#define up_getusrpc(regs) \
+    (((uint32_t *)((regs) ? (regs) : up_current_regs()))[REG_PC])
 
 #ifndef __ASSEMBLY__
 #ifdef __cplusplus

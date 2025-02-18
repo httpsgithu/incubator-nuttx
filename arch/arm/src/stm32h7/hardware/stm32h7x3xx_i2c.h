@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/stm32h7/hardware/stm32h7x3xx_i2c.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -18,8 +20,8 @@
  *
  ****************************************************************************/
 
-#ifndef __ARCH_ARM_SRC_STM32H7_STM32H7X3XX_I2C_H
-#define __ARCH_ARM_SRC_STM32H7_STM32H7X3XX_I2C_H
+#ifndef __ARCH_ARM_SRC_STM32H7_HARDWARE_STM32H7X3XX_I2C_H
+#define __ARCH_ARM_SRC_STM32H7_HARDWARE_STM32H7X3XX_I2C_H
 
 /****************************************************************************
  * Pre-processor Definitions

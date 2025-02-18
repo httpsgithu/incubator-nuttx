@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/hc/src/m9s12/m9s12_initialstate.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -29,7 +31,7 @@
 #include <nuttx/sched.h>
 #include <arch/irq.h>
 
-#include "up_internal.h"
+#include "hc_internal.h"
 
 /****************************************************************************
  * Public Functions
@@ -56,7 +58,7 @@ void up_initial_state(struct tcb_s *tcb)
 
   /* Initialize the idle thread stack */
 
-  if (tcb->pid == 0)
+  if (tcb->pid == IDLE_PROCESS_ID)
     {
       char *stack_ptr = (char *)(g_idle_topstack -
                                  CONFIG_IDLETHREAD_STACKSIZE);
@@ -85,20 +87,20 @@ void up_initial_state(struct tcb_s *tcb)
 
   /* Save the initial stack pointer */
 
-  sp                      = (uintptr_t)tcb->stack_base_ptr +
-                                       tcb->adj_stack_size;
-  xcp->regs[REG_SPH]      = sp >> 8;
-  xcp->regs[REG_SPL]      = sp & 0xff;
+  sp                   = (uintptr_t)tcb->stack_base_ptr +
+                                    tcb->adj_stack_size;
+  xcp->regs[REG_SPH]   = sp >> 8;
+  xcp->regs[REG_SPL]   = sp & 0xff;
 
   /* Save the task entry point */
 
-  xcp->regs[REG_PCH]      = (uint16_t)tcb->start >> 8;
-  xcp->regs[REG_PCL]      = (uint16_t)tcb->start & 0xff;
+  xcp->regs[REG_PCH]   = (uint16_t)tcb->start >> 8;
+  xcp->regs[REG_PCL]   = (uint16_t)tcb->start & 0xff;
 
 #ifndef CONFIG_HCS12_NONBANKED
   /* Can only directly start in PPAGE 0x30 */
 
-  xcp->regs[REG_PPAGE]    = 0x30;
+  xcp->regs[REG_PPAGE] = 0x30;
 #endif
 
   /* Condition code register:
@@ -113,13 +115,13 @@ void up_initial_state(struct tcb_s *tcb)
    *   Bit 7: S STOP instruction control bit
    */
 
-# ifdef CONFIG_SUPPRESS_INTERRUPTS
+#ifdef CONFIG_SUPPRESS_INTERRUPTS
   /* Disable STOP, Mask I- and Z- interrupts */
 
-  xcp->regs[REG_CCR]      = HCS12_CCR_S | HCS12_CCR_X | HCS12_CCR_I;
-# else
+  xcp->regs[REG_CCR]   = HCS12_CCR_S | HCS12_CCR_X | HCS12_CCR_I;
+#else
   /* Disable STOP, Enable I- and Z-interrupts */
 
-  xcp->regs[REG_CCR]      = HCS12_CCR_S;
-# endif
+  xcp->regs[REG_CCR]   = HCS12_CCR_S;
+#endif
 }

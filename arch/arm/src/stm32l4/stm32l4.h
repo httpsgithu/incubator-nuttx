@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/stm32l4/stm32l4.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -43,10 +45,8 @@
 #include "stm32l4_dma.h"
 #include "stm32l4_exti.h"
 #include "stm32l4_flash.h"
-#include "stm32l4_fsmc.h"
 #include "stm32l4_gpio.h"
 #include "stm32l4_i2c.h"
-#include "stm32l4_lcd.h"
 #include "stm32l4_pwr.h"
 #include "stm32l4_rcc.h"
 #include "stm32l4_rtc.h"

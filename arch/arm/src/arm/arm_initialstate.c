@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/arm/arm_initialstate.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -31,7 +33,6 @@
 
 #include "arm.h"
 #include "arm_internal.h"
-#include "arm_arch.h"
 
 /****************************************************************************
  * Public Functions
@@ -56,9 +57,13 @@ void up_initial_state(struct tcb_s *tcb)
   struct xcptcontext *xcp = &tcb->xcp;
   uint32_t cpsr;
 
+  /* Initialize the initial exception register context structure */
+
+  memset(xcp, 0, sizeof(struct xcptcontext));
+
   /* Initialize the idle thread stack */
 
-  if (tcb->pid == 0)
+  if (tcb->pid == IDLE_PROCESS_ID)
     {
       tcb->stack_alloc_ptr = (void *)(g_idle_topstack -
                                       CONFIG_IDLETHREAD_STACKSIZE);
@@ -73,11 +78,19 @@ void up_initial_state(struct tcb_s *tcb)
 
       arm_stack_color(tcb->stack_alloc_ptr, 0);
 #endif /* CONFIG_STACK_COLORATION */
+
+      return;
     }
 
-  /* Initialize the initial exception register context structure */
+  /* Initialize the context registers to stack top */
 
-  memset(xcp, 0, sizeof(struct xcptcontext));
+  xcp->regs = (void *)((uint32_t)tcb->stack_base_ptr +
+                                 tcb->adj_stack_size -
+                                 XCPTCONTEXT_SIZE);
+
+  /* Initialize the xcp registers */
+
+  memset(xcp->regs, 0, XCPTCONTEXT_SIZE);
 
   /* Save the initial stack pointer */
 
@@ -112,7 +125,7 @@ void up_initial_state(struct tcb_s *tcb)
     {
       /* It is a kernel thread.. set supervisor mode */
 
-      cpsr               = PSR_MODE_SVC | PSR_F_BIT;
+      cpsr               = PSR_MODE_SYS | PSR_F_BIT;
     }
   else
     {
@@ -125,14 +138,18 @@ void up_initial_state(struct tcb_s *tcb)
    * supervisor-mode.
    */
 
-  cpsr                   = PSR_MODE_SVC | PSR_F_BIT;
+  cpsr                   = PSR_MODE_SYS | PSR_F_BIT;
 #endif
 
   /* Enable or disable interrupts, based on user configuration */
 
-# ifdef CONFIG_SUPPRESS_INTERRUPTS
+#ifdef CONFIG_SUPPRESS_INTERRUPTS
   cpsr                  |= PSR_I_BIT;
-# endif
+#endif
+
+#ifdef CONFIG_ARM_THUMB
+  cpsr                  |= PSR_T_BIT;
+#endif
 
   xcp->regs[REG_CPSR]    = cpsr;
 }

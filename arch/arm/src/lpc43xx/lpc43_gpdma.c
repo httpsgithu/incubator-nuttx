@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/lpc43xx/lpc43_gpdma.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -32,10 +34,9 @@
 #include <debug.h>
 
 #include <nuttx/arch.h>
+#include <nuttx/mutex.h>
 
 #include "arm_internal.h"
-#include "arm_arch.h"
-
 #include "chip.h"
 
 #include "lpc43_ccu.h"
@@ -68,7 +69,7 @@ struct lpc43_dmach_s
 
 struct lpc43_gpdma_s
 {
-  sem_t exclsem;           /* For exclusive access to the DMA channel list */
+  mutex_t lock;            /* For exclusive access to the DMA channel list */
 
   /* This is the state of each DMA channel */
 
@@ -85,7 +86,10 @@ struct lpc43_gpdma_s
 
 /* The state of the LPC43 DMA block */
 
-static struct lpc43_gpdma_s g_gpdma;
+static struct lpc43_gpdma_s g_gpdma =
+{
+  .lock = NXMUTEX_INITIALIZER,
+};
 
 /****************************************************************************
  * Public Data
@@ -176,7 +180,7 @@ static void lpc43_dmadone(struct lpc43_dmach_s *dmach)
  *
  ****************************************************************************/
 
-static int gpdma_interrupt(int irq, FAR void *context, FAR void *arg)
+static int gpdma_interrupt(int irq, void *context, void *arg)
 {
   struct lpc43_dmach_s *dmach;
   uint32_t regval;
@@ -292,8 +296,6 @@ void weak_function arm_dma_initialize(void)
 
   /* Initialize the DMA state structure */
 
-  nxsem_init(&g_gpdma.exclsem, 0, 1);
-
   for (i = 0; i < LPC43_NDMACH; i++)
     {
       g_gpdma.dmach[i].chn   = i;      /* Channel number */
@@ -381,7 +383,7 @@ DMA_HANDLE lpc43_dmachannel(void)
 
   /* Get exclusive access to the GPDMA state structure */
 
-  ret = nxsem_wait_uninterruptible(&g_gpdma.exclsem);
+  ret = nxmutex_lock(&g_gpdma.lock);
   if (ret < 0)
     {
       return NULL;
@@ -403,7 +405,7 @@ DMA_HANDLE lpc43_dmachannel(void)
 
   /* Return what we found (or not) */
 
-  nxsem_post(&g_gpdma.exclsem);
+  nxmutex_unlock(&g_gpdma.lock);
   return (DMA_HANDLE)dmach;
 }
 

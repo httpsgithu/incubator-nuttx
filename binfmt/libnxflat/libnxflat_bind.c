@@ -1,6 +1,8 @@
 /****************************************************************************
  * binfmt/libnxflat/libnxflat_bind.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -36,7 +38,7 @@
 #include <arpa/inet.h>
 
 #include <nuttx/binfmt/nxflat.h>
-#include <nuttx/binfmt/symtab.h>
+#include <nuttx/symtab.h>
 
 #include "libnxflat.h"
 
@@ -53,9 +55,9 @@
 #endif
 
 #ifdef CONFIG_NXFLAT_DUMPBUFFER
-# define nxflat_dumpbuffer(m,b,n) binfodumpbuffer(m,b,n)
+#  define nxflat_dumpbuffer(m,b,n) binfodumpbuffer(m,b,n)
 #else
-# define nxflat_dumpbuffer(m,b,n)
+#  define nxflat_dumpbuffer(m,b,n)
 #endif
 
 /****************************************************************************
@@ -221,8 +223,8 @@ static inline int nxflat_gotrelocs(FAR struct nxflat_loadinfo_s *loadinfo)
 
   /* From this, we can get the offset to the list of relocation entries */
 
-  offset  = ntohl(hdr->h_relocstart);
-  nrelocs = ntohs(hdr->h_reloccount);
+  offset  = NTOHL(hdr->h_relocstart);
+  nrelocs = NTOHS(hdr->h_reloccount);
   binfo("offset: %08lx nrelocs: %d\n", (long)offset, nrelocs);
 
   /* The value of the relocation list that we get from the header is a
@@ -379,7 +381,7 @@ static inline int nxflat_bindimports(FAR struct nxflat_loadinfo_s *loadinfo,
   FAR struct nxflat_hdr_s    *hdr;
   FAR const struct symtab_s  *symbol;
 
-  char    *symname;
+  FAR char *symname;
   uint32_t offset;
   uint16_t nimports;
 #ifdef CONFIG_ARCH_ADDRENV
@@ -395,8 +397,8 @@ static inline int nxflat_bindimports(FAR struct nxflat_loadinfo_s *loadinfo,
    * this module and the number of symbols imported by this module.
    */
 
-  offset   = ntohl(hdr->h_importsymbols);
-  nimports = ntohs(hdr->h_importcount);
+  offset   = NTOHL(hdr->h_importsymbols);
+  nimports = NTOHS(hdr->h_importcount);
   binfo("Imports offset: %08" PRIx32 " nimports: %d\n", offset, nimports);
 
   /* The import[] table resides within the D-Space allocation.  If

@@ -1,6 +1,8 @@
 /****************************************************************************
  * drivers/mtd/mtd_progmem.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -101,6 +103,8 @@ static struct progmem_dev_s g_progmem =
     progmem_write,
 #endif
     progmem_ioctl,
+    NULL,
+    NULL,
     "progmem",
   }
 };
@@ -310,6 +314,8 @@ static int progmem_ioctl(FAR struct mtd_dev_s *dev, int cmd,
           FAR struct mtd_geometry_s *geo = (FAR struct mtd_geometry_s *)arg;
           if (geo)
             {
+              memset(geo, 0, sizeof(*geo));
+
               /* Populate the geometry structure with information needed to
                * know the capacity and how to access the device.
                *
@@ -364,6 +370,15 @@ static int progmem_ioctl(FAR struct mtd_dev_s *dev, int cmd,
           /* Erase the entire device */
 
           ret = progmem_erase(dev, 0, nblocks);
+        }
+        break;
+
+      case MTDIOC_ERASESTATE:
+        {
+          FAR uint8_t *result = (FAR uint8_t *)arg;
+          *result = up_progmem_erasestate();
+
+          ret = OK;
         }
         break;
 

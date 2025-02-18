@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/z80/src/z180/z180_irq.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -38,12 +40,6 @@
 /****************************************************************************
  * Public Data
  ****************************************************************************/
-
-/* This holds a references to the current interrupt level register storage
- * structure.  If is non-NULL only during interrupt processing.
- */
-
-volatile chipreg_t *g_current_regs;
 
 /* This holds the value of the MMU's CBR register.  This value is set to the
  * interrupted tasks's CBR on interrupt entry, changed to the new task's CBR

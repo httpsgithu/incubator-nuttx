@@ -1,6 +1,8 @@
 /****************************************************************************
  * libs/libc/pthread/pthread_attr_setschedparam.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -55,7 +57,7 @@ int pthread_attr_setschedparam(FAR pthread_attr_t *attr,
 {
   int ret;
 
-  linfo("attr=0x%p param=0x%p\n", attr, param);
+  linfo("attr=%p param=%p\n", attr, param);
 
   if (!attr || !param)
     {

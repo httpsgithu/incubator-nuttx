@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/stm32l4/stm32l4_rtc.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -37,18 +39,18 @@
  ****************************************************************************/
 
 #define STM32L4_RTC_PRESCALER_SECOND         32767  /* Default prescaler to get a second base */
-#define STM32L4_RTC_PRESCALER_MIN             1     /* Maximum speed of 16384 Hz */
+#define STM32L4_RTC_PRESCALER_MIN            1      /* Maximum speed of 16384 Hz */
 
 #if !defined(CONFIG_STM32L4_RTC_MAGIC)
-# define CONFIG_STM32L4_RTC_MAGIC           (0xfacefeee)
+#  define CONFIG_STM32L4_RTC_MAGIC           (0xfacefeee)
 #endif
 
 #if !defined(CONFIG_STM32L4_RTC_MAGIC_TIME_SET)
-#  define CONFIG_STM32L4_RTC_MAGIC_TIME_SET (0xf00dface)
+#  define CONFIG_STM32L4_RTC_MAGIC_TIME_SET  (0xf00dface)
 #endif
 
 #if !defined(CONFIG_STM32L4_RTC_MAGIC_REG)
-# define CONFIG_STM32L4_RTC_MAGIC_REG       (0)
+#  define CONFIG_STM32L4_RTC_MAGIC_REG       (0)
 #endif
 
 #define RTC_MAGIC                           CONFIG_STM32L4_RTC_MAGIC
@@ -65,7 +67,7 @@
 
 /* The form of an alarm callback */
 
-typedef CODE void (*alm_callback_t)(FAR void *arg, unsigned int alarmid);
+typedef void (*alm_callback_t)(void *arg, unsigned int alarmid);
 
 enum alm_id_e
 {
@@ -81,7 +83,7 @@ struct alm_setalarm_s
   int as_id;                    /* enum alm_id_e */
   struct tm as_time;            /* Alarm expiration time */
   alm_callback_t as_cb;         /* Callback (if non-NULL) */
-  FAR void *as_arg;             /* Argument for callback */
+  void *as_arg;                 /* Argument for callback */
 };
 
 /* Structure used to pass parameters to query an alarm */
@@ -89,13 +91,13 @@ struct alm_setalarm_s
 struct alm_rdalarm_s
 {
   int ar_id;                    /* enum alm_id_e */
-  FAR struct rtc_time *ar_time; /* Argument for storing ALARM RTC time */
+  struct rtc_time *ar_time;     /* Argument for storing ALARM RTC time */
 };
 
 #endif /* CONFIG_RTC_ALARM */
 
 #ifdef CONFIG_RTC_PERIODIC
-typedef CODE int (*wakeupcb_t)(void);
+typedef int (*wakeupcb_t)(void);
 #endif
 
 /****************************************************************************
@@ -155,8 +157,8 @@ bool stm32l4_rtc_is_initialized(void);
  ****************************************************************************/
 
 #ifdef CONFIG_STM32L4_HAVE_RTC_SUBSECONDS
-int stm32l4_rtc_getdatetime_with_subseconds(FAR struct tm *tp,
-                                            FAR long *nsec);
+int stm32l4_rtc_getdatetime_with_subseconds(struct tm *tp,
+                                            long *nsec);
 #endif
 
 /****************************************************************************
@@ -177,7 +179,7 @@ int stm32l4_rtc_getdatetime_with_subseconds(FAR struct tm *tp,
 
 #ifdef CONFIG_RTC_DATETIME
 struct tm;
-int stm32l4_rtc_setdatetime(FAR const struct tm *tp);
+int stm32l4_rtc_setdatetime(const struct tm *tp);
 #endif
 
 /****************************************************************************
@@ -208,7 +210,7 @@ bool stm32l4_rtc_havesettime(void);
  *
  ****************************************************************************/
 
-int stm32l4_rtc_setalarm(FAR struct alm_setalarm_s *alminfo);
+int stm32l4_rtc_setalarm(struct alm_setalarm_s *alminfo);
 
 /****************************************************************************
  * Name: stm32l4_rtc_rdalarm
@@ -224,7 +226,7 @@ int stm32l4_rtc_setalarm(FAR struct alm_setalarm_s *alminfo);
  *
  ****************************************************************************/
 
-int stm32l4_rtc_rdalarm(FAR struct alm_rdalarm_s *alminfo);
+int stm32l4_rtc_rdalarm(struct alm_rdalarm_s *alminfo);
 
 /****************************************************************************
  * Name: stm32l4_rtc_cancelalarm
@@ -260,7 +262,7 @@ int stm32l4_rtc_cancelalarm(enum alm_id_e alarmid);
  *
  ****************************************************************************/
 
-int stm32l4_rtc_setperiodic(FAR const struct timespec *period,
+int stm32l4_rtc_setperiodic(const struct timespec *period,
                             wakeupcb_t callback);
 
 /****************************************************************************
@@ -303,7 +305,7 @@ int stm32l4_rtc_cancelperiodic(void);
 
 #ifdef CONFIG_RTC_DRIVER
 struct rtc_lowerhalf_s;
-FAR struct rtc_lowerhalf_s *stm32l4_rtc_lowerhalf(void);
+struct rtc_lowerhalf_s *stm32l4_rtc_lowerhalf(void);
 #endif
 
 #undef EXTERN

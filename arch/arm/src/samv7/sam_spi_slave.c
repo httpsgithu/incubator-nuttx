@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/samv7/sam_spi_slave.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -34,11 +36,10 @@
 #include <nuttx/arch.h>
 #include <nuttx/kmalloc.h>
 #include <nuttx/irq.h>
-#include <nuttx/semaphore.h>
+#include <nuttx/mutex.h>
 #include <nuttx/spi/slave.h>
 
-#include "arm_arch.h"
-
+#include "arm_internal.h"
 #include "sam_config.h"
 #include "sam_gpio.h"
 #include "sam_periphclks.h"
@@ -81,7 +82,7 @@ struct sam_spidev_s
   struct spi_slave_dev_s *dev;
   xcpt_t handler;              /* SPI interrupt handler */
   uint32_t base;               /* SPI controller register base address */
-  sem_t spisem;                /* Assures mutually exclusive access to SPI */
+  mutex_t spilock;             /* Assures mutually exclusive access to SPI */
   uint16_t outval;             /* Default shift-out value */
   uint16_t irq;                /* SPI IRQ number */
   uint8_t mode;                /* Mode 0,1,2,3 */
@@ -117,7 +118,7 @@ struct sam_spidev_s
 static bool     spi_checkreg(struct sam_spidev_s *priv, bool wr,
                              uint32_t value, uint32_t address);
 #else
-# define        spi_checkreg(priv,wr,value,address) (false)
+#  define       spi_checkreg(priv,wr,value,address) (false)
 #endif
 
 static uint32_t spi_getreg(struct sam_spidev_s *priv,
@@ -128,16 +129,12 @@ static void     spi_putreg(struct sam_spidev_s *priv, uint32_t value,
 #ifdef CONFIG_DEBUG_SPI_INFO
 static void     spi_dumpregs(struct sam_spidev_s *priv, const char *msg);
 #else
-# define        spi_dumpregs(priv,msg)
+#  define       spi_dumpregs(priv,msg)
 #endif
-
-static int      spi_semtake(struct sam_spidev_s *priv);
-static void     spi_semtake_noncancelable(struct sam_spidev_s *priv);
-#define         spi_semgive(priv) (nxsem_post(&(priv)->spisem))
 
 /* Interrupt Handling */
 
-static int      spi_interrupt(int irq, void *context, FAR void *arg);
+static int      spi_interrupt(int irq, void *context, void *arg);
 
 /* SPI Helpers */
 
@@ -155,7 +152,7 @@ static void     spi_bind(struct spi_slave_ctrlr_s *ctrlr,
                          int nbits);
 static void     spi_unbind(struct spi_slave_ctrlr_s *ctrlr);
 static int      spi_enqueue(struct spi_slave_ctrlr_s *ctrlr,
-                            FAR const void *data, size_t len);
+                            const void *data, size_t len);
 static bool     spi_qfull(struct spi_slave_ctrlr_s *ctrlr);
 static void     spi_qflush(struct spi_slave_ctrlr_s *ctrlr);
 
@@ -175,23 +172,47 @@ static const uint8_t g_csroffset[4] =
 
 static const struct spi_slave_ctrlrops_s g_ctrlr_ops =
 {
-  .bind              = spi_bind,
-  .unbind            = spi_unbind,
-  .enqueue           = spi_enqueue,
-  .qfull             = spi_qfull,
-  .qflush            = spi_qflush,
+  .bind    = spi_bind,
+  .unbind  = spi_unbind,
+  .enqueue = spi_enqueue,
+  .qfull   = spi_qfull,
+  .qflush  = spi_qflush,
 };
 
 #ifdef CONFIG_SAMV7_SPI0_SLAVE
 /* This is the overall state of the SPI0 controller */
 
-static struct sam_spidev_s g_spi0_ctrlr;
+static struct sam_spidev_s g_spi0_ctrlr =
+{
+  .ctrlr   =
+  {
+    .ops   = g_ctrlr_ops,
+  },
+  .base    = SAM_SPI0_BASE,
+  .spilock = NXMUTEX_INITIALIZER,
+  .irq     = SAM_IRQ_SPI0,
+  .nbits   = 8,
+  .spino   = 0,
+  .nss     = true,
+};
 #endif
 
 #ifdef CONFIG_SAMV7_SPI1_SLAVE
 /* This is the overall state of the SPI0 controller */
 
-static struct sam_spidev_s g_spi1_ctrlr;
+static struct sam_spidev_s g_spi1_ctrlr =
+{
+  .ctrlr   =
+  {
+    .ops   = g_ctrlr_ops,
+  },
+  .base    = SAM_SPI1_BASE,
+  .spilock = NXMUTEX_INITIALIZER,
+  .irq     = SAM_IRQ_SPI0,
+  .nbits   = 8,
+  .spino   = 1,
+  .nss     = true,
+};
 #endif
 
 /****************************************************************************
@@ -337,56 +358,6 @@ static void spi_dumpregs(struct sam_spidev_s *priv, const char *msg)
 #endif
 
 /****************************************************************************
- * Name: spi_semtake
- *
- * Description:
- *   Take the semaphore that enforces mutually exclusive access to SPI
- *   resources.  May return ECANCELED if the calling thread was canceled.
- *
- * Input Parameters:
- *   priv - A reference to the MCAN peripheral state
- *
- * Returned Value:
- *  None
- *
- ****************************************************************************/
-
-static int spi_semtake(struct sam_spidev_s *priv)
-{
-  return nxsem_wait_uninterruptible(&priv->spisem);
-}
-
-/****************************************************************************
- * Name: spi_semtake_noncancelable
- *
- * Description:
- *   Take the semaphore that enforces mutually exclusive access to SPI
- *   resources, handling any exceptional conditions.  Always successful.
- *
- * Input Parameters:
- *   priv - A reference to the MCAN peripheral state
- *
- * Returned Value:
- *  None
- *
- ****************************************************************************/
-
-static void spi_semtake_noncancelable(struct sam_spidev_s *priv)
-{
-  int ret;
-
-  do
-    {
-      ret = nxsem_wait_uninterruptible(&priv->spisem);
-
-      /* ECANCELED is the only error expected here */
-
-      DEBUGASSERT(ret == OK || ret == -ECANCELED);
-    }
-  while (ret < 0);
-}
-
-/****************************************************************************
  * Name: spi_interrupt
  *
  * Description:
@@ -400,7 +371,7 @@ static void spi_semtake_noncancelable(struct sam_spidev_s *priv)
  *
  ****************************************************************************/
 
-static int spi_interrupt(int irq, void *context, FAR void *arg)
+static int spi_interrupt(int irq, void *context, void *arg)
 {
   struct sam_spidev_s *priv = (struct sam_spidev_s *)arg;
   uint32_t sr;
@@ -493,6 +464,7 @@ static int spi_interrupt(int irq, void *context, FAR void *arg)
 
           SPIS_DEV_RECEIVE(priv->dev, (const uint16_t *)&data,
                            sizeof(data));
+          SPIS_DEV_NOTIFY(priv->dev, SPISLAVE_RX_COMPLETE);
         }
 
       /* When a transfer starts, the data shifted out is the data present
@@ -540,6 +512,7 @@ static int spi_interrupt(int irq, void *context, FAR void *arg)
 
           regval = spi_dequeue(priv);
           spi_putreg(priv, regval, SAM_SPI_TDR_OFFSET);
+          SPIS_DEV_NOTIFY(priv->dev, SPISLAVE_TX_COMPLETE);
         }
 
       /* The SPI slave hardware provides only an event when NSS rises
@@ -774,7 +747,7 @@ static void spi_bind(struct spi_slave_ctrlr_s *ctrlr,
   struct sam_spidev_s *priv = (struct sam_spidev_s *)ctrlr;
   uint32_t regval;
   int ret;
-  FAR const void *data;
+  const void *data;
 
   spiinfo("dev=%p mode=%d nbits=%d\n", sdv, mode, nbits);
 
@@ -782,14 +755,14 @@ static void spi_bind(struct spi_slave_ctrlr_s *ctrlr,
 
   /* Get exclusive access to the SPI device */
 
-  ret = spi_semtake(priv);
+  ret = nxmutex_lock(&priv->spilock);
   if (ret < 0)
     {
       /* REVISIT:  No mechanism to report error.  This error should only
        * occur if the calling task was canceled.
        */
 
-      spierr("RROR: spi_semtake failed: %d\n", ret);
+      spierr("RROR: nxmutex_lock failed: %d\n", ret);
       return;
     }
 
@@ -864,7 +837,7 @@ static void spi_bind(struct spi_slave_ctrlr_s *ctrlr,
 
   spi_putreg(priv, regval, SAM_SPI_IER_OFFSET);
 
-  spi_semgive(priv);
+  nxmutex_unlock(&priv->spilock);
 }
 
 /****************************************************************************
@@ -894,7 +867,7 @@ static void spi_unbind(struct spi_slave_ctrlr_s *ctrlr)
 
   /* Get exclusive access to the SPI device */
 
-  spi_semtake_noncancelable(priv);
+  nxmutex_lock(&priv->spilock);
 
   /* Disable SPI interrupts (still enabled at the NVIC) */
 
@@ -913,7 +886,7 @@ static void spi_unbind(struct spi_slave_ctrlr_s *ctrlr)
   spi_putreg(priv, SPI_CR_SWRST, SAM_SPI_CR_OFFSET);
   spi_putreg(priv, SPI_CR_SWRST, SAM_SPI_CR_OFFSET);
 
-  spi_semgive(priv);
+  nxmutex_unlock(&priv->spilock);
 }
 
 /****************************************************************************
@@ -941,7 +914,7 @@ static void spi_unbind(struct spi_slave_ctrlr_s *ctrlr)
  ****************************************************************************/
 
 static int spi_enqueue(struct spi_slave_ctrlr_s *ctrlr,
-                       FAR const void *data, size_t len)
+                       const void *data, size_t len)
 {
   struct sam_spidev_s *priv = (struct sam_spidev_s *)ctrlr;
   irqstate_t flags;
@@ -954,7 +927,7 @@ static int spi_enqueue(struct spi_slave_ctrlr_s *ctrlr,
 
   /* Get exclusive access to the SPI device */
 
-  ret = spi_semtake(priv);
+  ret = nxmutex_lock(&priv->spilock);
   if (ret < 0)
     {
       return ret;
@@ -999,7 +972,7 @@ static int spi_enqueue(struct spi_slave_ctrlr_s *ctrlr,
     }
 
   leave_critical_section(flags);
-  spi_semgive(priv);
+  nxmutex_unlock(&priv->spilock);
   return ret;
 }
 
@@ -1030,14 +1003,14 @@ static bool spi_qfull(struct spi_slave_ctrlr_s *ctrlr)
 
   /* Get exclusive access to the SPI device */
 
-  ret = spi_semtake(priv);
+  ret = nxmutex_lock(&priv->spilock);
   if (ret < 0)
     {
       /* REVISIT:  No mechanism to report error.  This error should only
        * occurr if the calling task was canceled.
        */
 
-      spierr("RROR: spi_semtake failed: %d\n", ret);
+      spierr("RROR: nxmutex_lock failed: %d\n", ret);
       return true;
     }
 
@@ -1055,7 +1028,7 @@ static bool spi_qfull(struct spi_slave_ctrlr_s *ctrlr)
 
   bret = (next == priv->tail);
   leave_critical_section(flags);
-  spi_semgive(priv);
+  nxmutex_unlock(&priv->spilock);
   return bret;
 }
 
@@ -1086,7 +1059,7 @@ static void spi_qflush(struct spi_slave_ctrlr_s *ctrlr)
 
   /* Get exclusive access to the SPI device */
 
-  spi_semtake_noncancelable(priv);
+  nxmutex_lock(&priv->spilock);
 
   /* Mark the buffer empty, momentarily disabling interrupts */
 
@@ -1094,7 +1067,7 @@ static void spi_qflush(struct spi_slave_ctrlr_s *ctrlr)
   priv->head = 0;
   priv->tail = 0;
   leave_critical_section(flags);
-  spi_semgive(priv);
+  nxmutex_unlock(&priv->spilock);
 }
 
 /****************************************************************************
@@ -1152,20 +1125,6 @@ struct spi_slave_ctrlr_s *sam_spi_slave_initialize(int port)
   priv = &g_spi1_ctrlr;
 #endif
 
-  /* Set up the initial state for this chip select structure.  Other fields
-   * are zeroed.
-   */
-
-  memset(priv, 0, sizeof(struct sam_spidev_s));
-
-  /* Initialize the SPI operations */
-
-  priv->ctrlr.ops = &g_ctrlr_ops;
-
-  /* Save the SPI controller number */
-
-  priv->spino = spino;
-
   /* Has the SPI hardware been initialized? */
 
   if (!priv->initialized)
@@ -1178,11 +1137,6 @@ struct spi_slave_ctrlr_s *sam_spi_slave_initialize(int port)
 #endif
 #if defined(CONFIG_SAMV7_SPI0_SLAVE)
         {
-          /* Set the SPI0 register base address and interrupt information */
-
-          priv->base = SAM_SPI0_BASE,
-          priv->irq  = SAM_IRQ_SPI0;
-
           /* Enable peripheral clocking to SPI0 */
 
           sam_spi0_enableclk();
@@ -1200,11 +1154,6 @@ struct spi_slave_ctrlr_s *sam_spi_slave_initialize(int port)
 #endif
 #if defined(CONFIG_SAMV7_SPI1_SLAVE)
         {
-          /* Set the SPI1 register base address and interrupt information */
-
-          priv->base = SAM_SPI1_BASE,
-          priv->irq  = SAM_IRQ_SPI1;
-
           /* Enable peripheral clocking to SPI1 */
 
           sam_spi1_enableclk();
@@ -1242,12 +1191,6 @@ struct spi_slave_ctrlr_s *sam_spi_slave_initialize(int port)
       spi_getreg(priv, SAM_SPI_SR_OFFSET);
       spi_getreg(priv, SAM_SPI_RDR_OFFSET);
 
-      /* Initialize the SPI semaphore that enforces mutually exclusive
-       * access to the SPI registers.
-       */
-
-      nxsem_init(&priv->spisem, 0, 1);
-      priv->nss         = true;
       priv->initialized = true;
 
       /* Disable all SPI interrupts at the SPI peripheral */
@@ -1269,7 +1212,6 @@ struct spi_slave_ctrlr_s *sam_spi_slave_initialize(int port)
   regval |= (SPI_CSR_NCPHA | SPI_CSR_BITS(8));
   spi_putreg(priv, regval, SAM_SPI_CSR0_OFFSET);
 
-  priv->nbits = 8;
   spiinfo("csr[offset=%02x]=%08x\n", offset, regval);
 
   return &priv->ctrlr;

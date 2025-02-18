@@ -1,6 +1,8 @@
 /****************************************************************************
  * drivers/video/isx012_range.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -221,6 +223,16 @@
 #define ISX012_STEP_PHOTOMETRY    (1)
 #define ISX012_REG_PHOTOMETRY     AE_SUB_SN1
 #define ISX012_SIZE_PHOTOMETRY    (1)
+
+/* Definition for control spot position */
+
+#define ISX012_TYPE_SPOTPOS       V4L2_CTRL_TYPE_INTEGER
+#define ISX012_DEF_SPOTPOS        (0x051003cc)
+#define ISX012_MIN_SPOTPOS        (0)
+#define ISX012_MAX_SPOTPOS        (0x0a200798)
+#define ISX012_STEP_SPOTPOS       (1)
+#define ISX012_REG_SPOTPOS        SPOT_FRM_NUM
+#define ISX012_SIZE_SPOTPOS       (1)
 
 /* Definition for control zoom */
 

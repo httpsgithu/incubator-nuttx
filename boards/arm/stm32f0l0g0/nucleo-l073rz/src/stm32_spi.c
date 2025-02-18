@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/stm32f0l0g0/nucleo-l073rz/src/stm32_spi.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -31,7 +33,7 @@
 
 #include <nuttx/spi/spi.h>
 
-#include "arm_arch.h"
+#include "arm_internal.h"
 #include "chip.h"
 #include "stm32_gpio.h"
 #include "stm32_spi.h"
@@ -136,7 +138,7 @@ void stm32_spidev_initialize(void)
  ****************************************************************************/
 
 #ifdef CONFIG_STM32F0L0G0_SPI1
-void stm32_spi1select(FAR struct spi_dev_s *dev, uint32_t devid,
+void stm32_spi1select(struct spi_dev_s *dev, uint32_t devid,
                       bool selected)
 {
   spiinfo("devid: %d CS: %s\n",
@@ -177,7 +179,7 @@ void stm32_spi1select(FAR struct spi_dev_s *dev, uint32_t devid,
     }
 }
 
-uint8_t stm32_spi1status(FAR struct spi_dev_s *dev, uint32_t devid)
+uint8_t stm32_spi1status(struct spi_dev_s *dev, uint32_t devid)
 {
   uint8_t status = 0;
 
@@ -210,7 +212,7 @@ uint8_t stm32_spi1status(FAR struct spi_dev_s *dev, uint32_t devid)
 #endif /* CONFIG_STM32F0L0G0_SPI1 */
 
 #ifdef CONFIG_STM32F0L0G0_SPI2
-void stm32_spi2select(FAR struct spi_dev_s *dev, uint32_t devid,
+void stm32_spi2select(struct spi_dev_s *dev, uint32_t devid,
                       bool selected)
 {
   spiinfo("devid: %d CS: %s\n",
@@ -232,7 +234,7 @@ void stm32_spi2select(FAR struct spi_dev_s *dev, uint32_t devid,
     }
 }
 
-uint8_t stm32_spi2status(FAR struct spi_dev_s *dev, uint32_t devid)
+uint8_t stm32_spi2status(struct spi_dev_s *dev, uint32_t devid)
 {
   uint8_t status = 0;
 

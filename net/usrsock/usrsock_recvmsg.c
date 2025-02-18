@@ -1,35 +1,22 @@
 /****************************************************************************
  * net/usrsock/usrsock_recvmsg.c
  *
- *  Copyright (C) 2015, 2017 Haltian Ltd. All rights reserved.
- *  Author: Jussi Kivilinna <jussi.kivilinna@haltian.com>
+ * SPDX-License-Identifier: Apache-2.0
  *
- * Redistribution and use in source and binary forms, with or without
- * modification, are permitted provided that the following conditions
- * are met:
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.  The
+ * ASF licenses this file to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance with the
+ * License.  You may obtain a copy of the License at
  *
- * 1. Redistributions of source code must retain the above copyright
- *    notice, this list of conditions and the following disclaimer.
- * 2. Redistributions in binary form must reproduce the above copyright
- *    notice, this list of conditions and the following disclaimer in
- *    the documentation and/or other materials provided with the
- *    distribution.
- * 3. Neither the name NuttX nor the names of its contributors may be
- *    used to endorse or promote products derived from this software
- *    without specific prior written permission.
+ *   http://www.apache.org/licenses/LICENSE-2.0
  *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
- * "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
- * LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS
- * FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE
- * COPYRIGHT OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT,
- * INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING,
- * BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS
- * OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED
- * AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
- * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN
- * ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
- * POSSIBILITY OF SUCH DAMAGE.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.  See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
  *
  ****************************************************************************/
 
@@ -59,11 +46,10 @@
  ****************************************************************************/
 
 static uint16_t recvfrom_event(FAR struct net_driver_s *dev,
-                               FAR void *pvconn, FAR void *pvpriv,
-                               uint16_t flags)
+                               FAR void *pvpriv, uint16_t flags)
 {
   FAR struct usrsock_data_reqstate_s *pstate = pvpriv;
-  FAR struct usrsock_conn_s *conn = pvconn;
+  FAR struct usrsock_conn_s *conn = pstate->reqstate.conn;
 
   if (flags & USRSOCK_EVENT_ABORT)
     {
@@ -75,9 +61,9 @@ static uint16_t recvfrom_event(FAR struct net_driver_s *dev,
 
       /* Stop further callbacks */
 
-      pstate->reqstate.cb->flags   = 0;
-      pstate->reqstate.cb->priv    = NULL;
-      pstate->reqstate.cb->event   = NULL;
+      pstate->reqstate.cb->flags = 0;
+      pstate->reqstate.cb->priv  = NULL;
+      pstate->reqstate.cb->event = NULL;
 
       /* Wake up the waiting thread */
 
@@ -99,8 +85,9 @@ static uint16_t recvfrom_event(FAR struct net_driver_s *dev,
           pstate->valuelen_nontrunc = conn->resp.valuelen_nontrunc;
         }
 
-      if (pstate->reqstate.result >= 0 ||
-          pstate->reqstate.result == -EAGAIN)
+      if (!(flags & USRSOCK_EVENT_RECVFROM_AVAIL) &&
+           (pstate->reqstate.result >= 0 ||
+            pstate->reqstate.result == -EAGAIN))
         {
           /* After reception of data, mark input not ready. Daemon will
            * send event to restore this flag.
@@ -111,9 +98,9 @@ static uint16_t recvfrom_event(FAR struct net_driver_s *dev,
 
       /* Stop further callbacks */
 
-      pstate->reqstate.cb->flags   = 0;
-      pstate->reqstate.cb->priv    = NULL;
-      pstate->reqstate.cb->event   = NULL;
+      pstate->reqstate.cb->flags = 0;
+      pstate->reqstate.cb->priv  = NULL;
+      pstate->reqstate.cb->event = NULL;
 
       /* Wake up the waiting thread */
 
@@ -127,9 +114,9 @@ static uint16_t recvfrom_event(FAR struct net_driver_s *dev,
 
       /* Stop further callbacks */
 
-      pstate->reqstate.cb->flags   = 0;
-      pstate->reqstate.cb->priv    = NULL;
-      pstate->reqstate.cb->event   = NULL;
+      pstate->reqstate.cb->flags = 0;
+      pstate->reqstate.cb->priv  = NULL;
+      pstate->reqstate.cb->event = NULL;
 
       /* Wake up the waiting thread */
 
@@ -143,9 +130,9 @@ static uint16_t recvfrom_event(FAR struct net_driver_s *dev,
 
       /* Stop further callbacks */
 
-      pstate->reqstate.cb->flags   = 0;
-      pstate->reqstate.cb->priv    = NULL;
-      pstate->reqstate.cb->event   = NULL;
+      pstate->reqstate.cb->flags = 0;
+      pstate->reqstate.cb->priv  = NULL;
+      pstate->reqstate.cb->event = NULL;
 
       /* Wake up the waiting thread */
 
@@ -174,9 +161,9 @@ static int do_recvfrom_request(FAR struct usrsock_conn_s *conn,
       addrlen = UINT16_MAX;
     }
 
-  if (buflen > UINT16_MAX)
+  if (buflen > UINT32_MAX)
     {
-      buflen = UINT16_MAX;
+      buflen = UINT32_MAX;
     }
 
   /* Prepare request for daemon to read. */
@@ -190,7 +177,7 @@ static int do_recvfrom_request(FAR struct usrsock_conn_s *conn,
   bufs[0].iov_base = (FAR void *)&req;
   bufs[0].iov_len = sizeof(req);
 
-  return usrsockdev_do_request(conn, bufs, ARRAY_SIZE(bufs));
+  return usrsock_do_request(conn, bufs, nitems(bufs));
 }
 
 /****************************************************************************
@@ -235,7 +222,10 @@ ssize_t usrsock_recvmsg(FAR struct socket *psock, FAR struct msghdr *msg,
   socklen_t outaddrlen = 0;
   ssize_t ret;
 
-  DEBUGASSERT(conn);
+  if (msg->msg_iovlen != 1)
+    {
+      return -ENOTSUP;
+    }
 
   if (fromlen)
     {
@@ -262,7 +252,7 @@ ssize_t usrsock_recvmsg(FAR struct socket *psock, FAR struct msghdr *msg,
       goto errout_unlock;
     }
 
-  if (conn->type == SOCK_STREAM || conn->type == SOCK_SEQPACKET)
+  if (psock->s_type == SOCK_STREAM || psock->s_type == SOCK_SEQPACKET)
     {
       if (!conn->connected)
         {
@@ -317,7 +307,8 @@ ssize_t usrsock_recvmsg(FAR struct socket *psock, FAR struct msghdr *msg,
 
       if (!(conn->flags & USRSOCK_EVENT_RECVFROM_AVAIL))
         {
-          if (_SS_ISNONBLOCK(psock->s_flags) || (flags & MSG_DONTWAIT) != 0)
+          if (_SS_ISNONBLOCK(conn->sconn.s_flags) ||
+              (flags & MSG_DONTWAIT) != 0)
             {
               /* Nothing to receive from daemon side. */
 
@@ -333,14 +324,15 @@ ssize_t usrsock_recvmsg(FAR struct socket *psock, FAR struct msghdr *msg,
               USRSOCK_EVENT_REMOTE_CLOSED);
           if (ret < 0)
             {
-              nwarn("usrsock_setup_request_callback failed: %d\n", ret);
+              nwarn("usrsock_setup_request_callback failed: %zd\n", ret);
               goto errout_unlock;
             }
 
           /* Wait for receive-avail (or abort, or timeout, or signal). */
 
-          ret = net_timedwait(&state.reqstate.recvsem,
-                              _SO_TIMEOUT(psock->s_rcvtimeo));
+          ret = net_sem_timedwait(&state.reqstate.recvsem,
+                              _SO_TIMEOUT(conn->sconn.s_rcvtimeo));
+          usrsock_teardown_data_request_callback(&state);
           if (ret < 0)
             {
               if (ret == -ETIMEDOUT)
@@ -355,17 +347,10 @@ ssize_t usrsock_recvmsg(FAR struct socket *psock, FAR struct msghdr *msg,
                 }
               else
                 {
-                  nerr("net_timedwait errno: %d\n", ret);
-                  DEBUGASSERT(false);
+                  nerr("net_sem_timedwait errno: %zd\n", ret);
+                  DEBUGPANIC();
                 }
-            }
 
-          usrsock_teardown_data_request_callback(&state);
-
-          /* Did wait timeout or got signal? */
-
-          if (ret != 0)
-            {
               goto errout_unlock;
             }
 
@@ -396,7 +381,7 @@ ssize_t usrsock_recvmsg(FAR struct socket *psock, FAR struct msghdr *msg,
           USRSOCK_EVENT_ABORT | USRSOCK_EVENT_REQ_COMPLETE);
       if (ret < 0)
         {
-          nwarn("usrsock_setup_request_callback failed: %d\n", ret);
+          nwarn("usrsock_setup_request_callback failed: %zd\n", ret);
           goto errout_unlock;
         }
 
@@ -405,7 +390,7 @@ ssize_t usrsock_recvmsg(FAR struct socket *psock, FAR struct msghdr *msg,
       inbufs[1].iov_base = (FAR void *)buf;
       inbufs[1].iov_len = len;
 
-      usrsock_setup_datain(conn, inbufs, ARRAY_SIZE(inbufs));
+      usrsock_setup_datain(conn, inbufs, nitems(inbufs));
 
       /* MSG_DONTWAIT is only use in usrsock. */
 
@@ -418,7 +403,7 @@ ssize_t usrsock_recvmsg(FAR struct socket *psock, FAR struct msghdr *msg,
         {
           /* Wait for completion of request. */
 
-          net_lockedwait_uninterruptible(&state.reqstate.recvsem);
+          net_sem_wait_uninterruptible(&state.reqstate.recvsem);
           ret = state.reqstate.result;
 
           DEBUGASSERT(ret <= (ssize_t)len);

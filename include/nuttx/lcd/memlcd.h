@@ -1,6 +1,7 @@
 /****************************************************************************
  * include/nuttx/lcd/memlcd.h
- * Common definitions for the Sharp Memory LCD driver
+ *
+ * SPDX-License-Identifier: Apache-2.0
  *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -19,8 +20,8 @@
  *
  ****************************************************************************/
 
-#ifndef __INCLUDE_NUTTX_MEMLCD_H
-#define __INCLUDE_NUTTX_MEMLCD_H
+#ifndef __INCLUDE_NUTTX_LCD_MEMLCD_H
+#define __INCLUDE_NUTTX_LCD_MEMLCD_H
 
 /****************************************************************************
  * Included Files
@@ -104,4 +105,4 @@ FAR struct lcd_dev_s *memlcd_initialize(FAR struct spi_dev_s *spi,
 }
 #endif
 
-#endif /* __INCLUDE_NUTTX_MEMLCD_H */
+#endif /* __INCLUDE_NUTTX_LCD_MEMLCD_H */

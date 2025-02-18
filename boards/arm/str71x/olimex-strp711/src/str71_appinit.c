@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/str71x/olimex-strp711/src/str71_appinit.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -114,7 +116,7 @@
 int board_app_initialize(uintptr_t arg)
 {
 #ifdef NSH_HAVEMMCSD
-  FAR struct spi_dev_s *spi;
+  struct spi_dev_s *spi;
   int ret;
 
   /* Get the SPI port */

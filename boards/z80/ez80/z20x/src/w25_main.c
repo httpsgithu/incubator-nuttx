@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/z80/ez80/z20x/src/w25_main.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -131,7 +133,7 @@ static int w25_read_hex(FAR uint24_t *len)
   printf("Send Intel HEX file now\n");
   fflush(stdout);
 
-  ret = hex2bin(&rawinstream.public, &memoutstream.public,
+  ret = hex2bin(&rawinstream.common, &memoutstream.common,
                 (uint32_t)PROGSTART, (uint32_t)(PROGSTART + PROGSIZE),
                 0);
 
@@ -147,7 +149,7 @@ static int w25_read_hex(FAR uint24_t *len)
   printf("Intel HEX file into memory loaded into RAM...\n");
   fflush(stdout);
 
-  *len = memoutstream.public.nput;
+  *len = memoutstream.common.nput;
   return OK;
 }
 
@@ -545,7 +547,6 @@ static int w25_boot_program(void)
       return ret;
     }
 
-#ifdef CONFIG_SERIAL_TERMIOS
   /* Drain all pending Tx output in stdout. "Booting..." message will be
    * lost if the outgoing Tx bytes are not drained.
    */
@@ -557,7 +558,6 @@ static int w25_boot_program(void)
       fprintf(stderr, "ERROR: tcdrain() failed: %d\n", ret);
       return ret;
     }
-#endif
 
   /* Start the successfully loaded program */
 
@@ -729,7 +729,7 @@ errout:
  *
  ****************************************************************************/
 
-int w25_main(int argc, char *argv)
+int w25_main(int argc, char *argv[])
 {
   bool disable = false;
   int ret;

@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/rtl8720c/ameba_flash.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -18,8 +20,8 @@
  *
  ****************************************************************************/
 
-#ifndef __INCLUDE_AMEBA_FLASH_H
-#define __INCLUDE_AMEBA_FLASH_H
+#ifndef __ARCH_ARM_SRC_RTL8720C_AMEBA_FLASH_H
+#define __ARCH_ARM_SRC_RTL8720C_AMEBA_FLASH_H
 
 /****************************************************************************
  * Included Files
@@ -43,4 +45,4 @@
  * Public Function Prototypes
  ****************************************************************************/
 
-#endif /* __INCLUDE_AMEBA_FLASH_H */
+#endif /* __ARCH_ARM_SRC_RTL8720C_AMEBA_FLASH_H */

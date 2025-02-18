@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/cxd56xx/spresense/include/cxd56_bm1383glv.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -59,7 +61,7 @@ extern "C"
  ****************************************************************************/
 
 #if defined(CONFIG_SENSORS_BM1383GLV) || defined(CONFIG_SENSORS_BM1383GLV_SCU)
-int board_bm1383glv_initialize(FAR const char *devpath, int bus);
+int board_bm1383glv_initialize(const char *devpath, int bus);
 #endif
 
 #undef EXTERN

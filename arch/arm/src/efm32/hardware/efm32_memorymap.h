@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/efm32/hardware/efm32_memorymap.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -18,8 +20,8 @@
  *
  ****************************************************************************/
 
-#ifndef __ARCH_ARM_SRC_EFM32_CHIP_EFM32_MEMORYMAP_H
-#define __ARCH_ARM_SRC_EFM32_CHIP_EFM32_MEMORYMAP_H
+#ifndef __ARCH_ARM_SRC_EFM32_HARDWARE_EFM32_MEMORYMAP_H
+#define __ARCH_ARM_SRC_EFM32_HARDWARE_EFM32_MEMORYMAP_H
 
 /****************************************************************************
  * Included Files
@@ -38,4 +40,4 @@
 #  error "Unsupported EFM32 memory map"
 #endif
 
-#endif /* __ARCH_ARM_SRC_EFM32_CHIP_EFM32_MEMORYMAP_H */
+#endif /* __ARCH_ARM_SRC_EFM32_HARDWARE_EFM32_MEMORYMAP_H */

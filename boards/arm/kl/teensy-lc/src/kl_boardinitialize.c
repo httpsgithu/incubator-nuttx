@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/kl/teensy-lc/src/kl_boardinitialize.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -31,8 +33,7 @@
 #include "chip.h"
 #include "kl_gpio.h"
 #include "hardware/kl_pinmux.h"
-
-#include "arm_arch.h"
+#include "arm_internal.h"
 #include "teensy-lc.h"
 
 /****************************************************************************

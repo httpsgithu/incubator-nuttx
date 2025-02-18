@@ -1,6 +1,8 @@
 /****************************************************************************
  * include/nuttx/sensors/ioctl.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -94,7 +96,6 @@
 
 /* IOCTL commands unique to the MS58XX */
 
-#define SNIOC_MEASURE              _SNIOC(0x0025) /* Arg: None */
 #define SNIOC_TEMPERATURE          _SNIOC(0x0026) /* Arg: int32_t* pointer */
 #define SNIOC_PRESSURE             _SNIOC(0x0027) /* Arg: int32_t* pointer */
 #define SNIOC_RESET                _SNIOC(0x0028) /* Arg: None */
@@ -147,17 +148,15 @@
 
 /* IOCTL commands unique to the LSM6DSL */
 
-#define SNIOC_START                _SNIOC(0x0042) /* Arg: None */
-#define SNIOC_STOP                 _SNIOC(0x0043) /* Arg: None */
 #define SNIOC_LSM6DSLSENSORREAD    _SNIOC(0x0046) /* Arg: file *filep, FAR char *buffer,size_t buflen */
-#define SNIOC_START_SELFTEST       _SNIOC(0x0047) /* Arg: file *filep, FAR char *buffer,size_t mode */
+
+/* SNIOC_START_SELFTEST */                        /* Arg: file *filep, FAR char *buffer,size_t mode */
 
 /* IOCTL commands unique to the LSM303AGR */
 
-#define SNIOC_START                _SNIOC(0x0049) /* Arg: None */
-#define SNIOC_STOP                 _SNIOC(0x0050) /* Arg: None */
 #define SNIOC_LSM303AGRSENSORREAD  _SNIOC(0x0051) /* Arg: file *filep, FAR char *buffer,size_t buflen */
-#define SNIOC_START_SELFTEST       _SNIOC(0x0052) /* Arg: file *filep, FAR char *buffer,size_t mode */
+
+/* SNIOC_START_SELFTEST */                        /* Arg: file *filep, FAR char *buffer,size_t mode */
 
 /* IOCTL commands unique to the MLX90614 */
 
@@ -172,7 +171,8 @@
 /* SNIOC_STOP */                                  /* Arg: None */
 
 /* SNIOC_READ_CONVERT_DATA */                     /* Arg: struct scd30_conv_data_s* */
-#define SNIOC_SET_INTERVAL         _SNIOC(0x0054) /* Arg: uint16_t value (seconds) */
+
+/* SNIOC_SET_INTERVAL */                          /* Arg: uint16_t value (seconds) */
 #define SNIOC_SET_TEMP_OFFSET      _SNIOC(0x0055) /* Arg: uint16_t value (0.01 Kelvin) */
 #define SNIOC_SET_PRESSURE_COMP    _SNIOC(0x0056) /* Arg: uint16_t value (mbar) */
 #define SNIOC_SET_ALTITUDE_COMP    _SNIOC(0x0057) /* Arg: uint16_t value (meters) */
@@ -214,7 +214,6 @@
 
 #define SNIOC_DISTANCESHORT        _SNIOC(0x0060) /* Arg: None */
 #define SNIOC_DISTANCELONG         _SNIOC(0x0061) /* Arg: None */
-#define SNIOC_CALIBRATE            _SNIOC(0x0062) /* Arg: b16_t value */
 #define SNIOC_TEMPUPDATE           _SNIOC(0x0063) /* Arg: b16_t value */
 
 /* IOCTL commands unique to the ISL29023 */
@@ -236,12 +235,42 @@
 #define SNIOC_READROMCODE          _SNIOC(0x0067)  /* Arg: uint64_t* pointer */
 #define SNIOC_SETALARM             _SNIOC(0x0068)  /* Arg: struct ds18b20_alarm_s* */
 
-/* Command:      SNIOC_ACTIVATE
- * Description:  Enable or disable sensor
- * Argument:     true or false.
+/* IOCTL commands for accelerators */
+
+#define SNIOC_SIMPLE_CHECK         _SNIOC(0x0069)  /* Simple check */
+#define SNIOC_FULL_CHECK           _SNIOC(0x006a)  /* Full check */
+#define SNIOC_FEAT_MANAGE          _SNIOC(0x006b)  /* Feature manage command */
+#define SNIOC_SET_SCALE_XL         _SNIOC(0x006c)  /* Set accelerator scale command */
+
+/* IOCTL commands unique to AMG88xx */
+
+/* Command:      SNIOC_SET_OPERATIONAL_MODE
+ * Description:  Control power mode: Normal / Sleep
+ *               Reuse from ISL29023
+ * Arg:          amg88xx_operation_mode_e pointer
  */
 
-#define SNIOC_ACTIVATE             _SNIOC(0x0080)
+/* Command:      SNIOC_SET_FRAMERATE
+ * Description:  Set the framerate of the sensor
+ * Arg:          amg88xx_fps_e
+ */
+
+#define SNIOC_SET_FRAMERATE        _SNIOC(0x006d)
+
+/* Command:      SNIOC_SET_MOVING_AVG
+ * Description:  Toggle moving average mode
+ * Arg:          bool
+ */
+
+#define SNIOC_SET_MOVING_AVG       _SNIOC(0x006e)
+
+/* Command:      SNIOC_GET_STATE
+ * Description:  Get state for all subscribers, include min_interval,
+ *               min_latency and the number of subscribers.
+ * Argument:     This is the state pointer
+ */
+
+#define SNIOC_GET_STATE            _SNIOC(0x0080)
 
 /* Command:      SNIOC_SET_INTERVAL
  * Description:  Set interval between samples
@@ -257,22 +286,12 @@
 
 #define SNIOC_BATCH                _SNIOC(0x0082)
 
-/* Command:      SNIOC_GET_NEVENTBUF
- * Description:  the number of sensor events that sensor buffer of upper half
- *               holds.
- * Argument:     This is the number of events pointer, is output parameter.
- * Note:         Tell the application layer number of sensor events in sensor
- *               buffer.
- *               This buffer is used to solve the problem that the
- *               application layer can't read the sensor event in time.
- *               Recommend the number of sensor events in application layer's
- *               buffer is same as result by call this function.
- *               This is number of sensor events rather than the length of
- *               buffer.
- *               See sensor.h(struct sensor_lower_half_s buffer_bytes).
+/* Command:      SNIOC_SET_USERPRIV
+ * Description:  Set the private data of userspace user.
+ * Argument:     This is the pointer of private data.
  */
 
-#define SNIOC_GET_NEVENTBUF        _SNIOC(0x0083)
+#define SNIOC_SET_USERPRIV         _SNIOC(0x0083)
 
 /* Command:      SNIOC_SET_BUFFER_NUMBER
  * Description:  Set the number of events intermediate circualr buffer can
@@ -296,5 +315,189 @@
  */
 
 #define SNIOC_SELFTEST             _SNIOC(0x0086)
+
+/* Command:      SNIOC_SET_CALIBVALUE
+ * Description:  Set calibration value for sensor.
+ * Argument:     Calibration value for the sensor.
+ * Note:         If setting calibvalue failed, a negated errno value is
+ *               returned, otherwise, OK is returned.
+ *               This cmd is handled by sensor_ops_s::set_calibvalue.
+ */
+
+#define SNIOC_SET_CALIBVALUE       _SNIOC(0x0087)
+
+/* Command:      SNIOC_CALIBRATE
+ * Description:  Trigger calibration and obtain calibration value.
+ * Argument:     A argument of calibration value for sensor.
+ * Note:         If getting calibvalue is failed, return errno, otherwise,
+ *               return OK.
+ *               This cmd is handled by sensor_ops_s::get_calibvalue.
+ */
+
+#define SNIOC_CALIBRATE            _SNIOC(0x0088)
+
+#ifdef CONFIG_USENSOR
+/* Command:      SNIOC_REGISTER
+ * Description:  Register user sensor.
+ * Argument:     A pointer of structure sensor_reginfo_s for user sensor.
+ * Note:         If register is failed, return errno, otherwise,
+ *               return OK.
+ */
+
+#define SNIOC_REGISTER             _SNIOC(0x0089)
+
+/* Command:      SNIOC_UNREGISTER
+ * Description:  Unregister user sensor.
+ * Argument:     The path name of user sensor character node.
+ * Note:         If register is failed, return errno, otherwise,
+ *               return OK.
+ */
+
+#define SNIOC_UNREGISTER           _SNIOC(0x0090)
+#endif
+
+/* Command:      SNIOC_UPDATED
+ * Description:  Check whether the topic has been updated since
+ *               it was last read.
+ * Argument:     Sets *(bool *)arg
+ */
+
+#define SNIOC_UPDATED              _SNIOC(0x0091)
+
+/* Command:      SNIOC_GET_USTATE
+ * Description:  Get state for user.
+ * Argument:     This is the state pointer(struct sensor_state_s)
+ */
+
+#define SNIOC_GET_USTATE           _SNIOC(0x0092)
+
+/* IOCTL commands unique to the APDS9922 sensor.
+ * The sensor detects both ambient light and proximity.
+ */
+
+                                                  /* Args:                 */
+
+/* SNIOC_RESET - as defined already, above           None                  */
+
+/* SNIOC_GET_DEV_ID - as defined already, above      uint8_t* pointer      */
+
+#define SNIOC_ALS_CONFIG           _SNIOC(0x0093) /* struct
+                                                   * apds9922_als_setup_s* */
+#define SNIOC_PS_CONFIG            _SNIOC(0x0094) /* struct
+                                                   * apds9922_ps_setup_s*  */
+
+/* Set proximity sensor cancellation level */
+
+#define SNIOC_PS_CANC_LVL          _SNIOC(0x0095) /* uint16_t level        */
+
+/* IOCTL commands for MPU60x0 IMU */
+
+/* Command:      SNIOC_SET_AFS_SEL
+ * Description:  Sets the accelerometer full scale range.
+ * Argument:     Accepts 0, 1, 2 or 3 (uint8_t).
+ */
+
+#define SNIOC_SET_AFS_SEL             _SNIOC(0x0096)
+
+/* Command:      SNIOC_SMPLRT_DIV
+ * Description:  Set the divider from the gyroscope output rate
+ *               used to generate the sample rate.
+ * Argument:     Sets the 8bit sample rate divider (uint8_t).
+ */
+
+#define SNIOC_SMPLRT_DIV              _SNIOC(0x0097)
+
+/* Command:      SNIOC_READ_SAMPLE_RATE
+ * Description:  Reads the current sample rate for the IMU.
+ * Argument:     Requires pointer *uint32_t as argument to
+ *               store integer approximation of current sample rate.
+ */
+
+#define SNIOC_READ_SAMPLE_RATE        _SNIOC(0x0098)
+
+/* Command:      SNIOC_READ_FIFO_COUNT
+ * Description:  Reads the current number of bytes in FIFO buffer.
+ * Argument:     Requires pointer *uint16_t as argument to
+ *               store current number of bytes available.
+ */
+
+#define SNIOC_READ_FIFO_COUNT         _SNIOC(0x0099)
+
+/* Command:      SNIOC_ENABLE_FIFO
+ * Description:  Enables or disabled FIFO buffer.
+ * Argument:     Bool value: true enables and false disables.
+ */
+
+#define SNIOC_ENABLE_FIFO             _SNIOC(0x009A)
+
+/* Command:      SNIOC_HEAT
+ * Description:  Turn on the heater.
+ * Argument:     Heater configuration.
+ */
+
+#define SNIOC_HEAT             _SNIOC(0x009B)
+
+/* Command:      SNIOC_GET_INFO
+ * Description:  Get device information.
+ * Argument:     This is the device info pointer.
+ */
+
+#define SNIOC_GET_INFO                _SNIOC(0x009B)
+
+#ifdef CONFIG_USENSOR
+/* Command:      SNIOC_SET_INFO
+ * Description:  Set device information. Only used by user space.
+ * Argument:     This is the device info pointer.
+ */
+
+#  define SNIOC_SET_INFO              _SNIOC(0x009C)
+#endif
+
+/* Command:      SNIOC_FLUSH
+ * Description:  Flush sensor hardware fifo buffer.
+ */
+
+#define SNIOC_FLUSH                   _SNIOC(0x009D)
+
+/* Command:      SNIOC_GET_EVENTS
+ * Description:  Get events of the sensor device.
+ * Argument:     The events pointer, (unsigned int *)
+ */
+
+#define SNIOC_GET_EVENTS              _SNIOC(0x009E)
+
+/* Command:      SNIOC_SET_THERMO
+ * Description:  Set the thermocouple type.
+ * Argument:     An option from `enum sensor_thermo_type_e`
+ */
+
+#define SNIOC_SET_THERMO              _SNIOC(0x009F)
+
+/* Command:      SNIOC_LPF
+ * Description:  Enable the low pass filter
+ * Argument:     Boolean true for enable, false to disable.
+ */
+
+#define SNIOC_LPF                     _SNIOC(0x00A0)
+
+/****************************************************************************
+ * Public types
+ ****************************************************************************/
+
+/* Possible thermocouple types. Implementations should not rely on the enum's
+ * underlying value.
+ */
+
+enum sensor_thermo_type_e
+{
+  SENSOR_THERMO_TYPE_K,
+  SENSOR_THERMO_TYPE_J,
+  SENSOR_THERMO_TYPE_T,
+  SENSOR_THERMO_TYPE_N,
+  SENSOR_THERMO_TYPE_S,
+  SENSOR_THERMO_TYPE_E,
+  SENSOR_THERMO_TYPE_B,
+  SENSOR_THERMO_TYPE_R,
+};
 
 #endif /* __INCLUDE_NUTTX_SENSORS_IOCTL_H */

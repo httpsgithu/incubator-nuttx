@@ -91,8 +91,8 @@ static const struct timer_ops_s g_esp32s2_timer_ops =
   .getstatus   = esp32s2_timer_getstatus,
   .settimeout  = esp32s2_timer_settimeout,
   .setcallback = esp32s2_timer_setcallback,
-  .maxtimeout  = esp32s2_timer_maxtimeout,
   .ioctl       = NULL,
+  .maxtimeout  = esp32s2_timer_maxtimeout
 };
 
 #ifdef CONFIG_ESP32S2_TIMER0
@@ -153,6 +153,8 @@ static int esp32s2_timer_handler(int irq, void *context, void *arg)
     (struct esp32s2_timer_lowerhalf_s *)arg;
   uint32_t next_interval_us = 0;
 
+  ESP32S2_TIM_ACKINT(priv->tim);        /* Clear the Interrupt */
+
   if (priv->callback(&next_interval_us, priv->upper))
     {
       if (next_interval_us > 0)
@@ -168,7 +170,6 @@ static int esp32s2_timer_handler(int irq, void *context, void *arg)
     }
 
   ESP32S2_TIM_SETALRM(priv->tim, true); /* Re-enables the alarm */
-  ESP32S2_TIM_ACKINT(priv->tim);        /* Clear the Interrupt */
   return OK;
 }
 
@@ -471,7 +472,7 @@ static void esp32s2_timer_setcallback(struct timer_lowerhalf_s *lower,
 
   /* There is a user callback and the timer has already been started */
 
-  if (callback != NULL && priv->started == true)
+  if (callback != NULL && priv->started)
     {
       ret = ESP32S2_TIM_SETISR(priv->tim, esp32s2_timer_handler, priv);
       ESP32S2_TIM_ENABLEINT(priv->tim);

@@ -1,6 +1,8 @@
 /****************************************************************************
  * audio/pcm_decode.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -24,6 +26,7 @@
 
 #include <nuttx/config.h>
 
+#include <sys/param.h>
 #include <sys/types.h>
 #include <inttypes.h>
 #include <stdint.h>
@@ -39,24 +42,6 @@
 #include <nuttx/audio/pcm.h>
 
 #if defined(CONFIG_AUDIO) && defined(CONFIG_AUDIO_FORMAT_PCM)
-
-/****************************************************************************
- * Pre-processor Definitions
- ****************************************************************************/
-
-/* Configuration ************************************************************/
-
-#define CONFIG_PCM_DEBUG 1 /* For now */
-
-/* Often defined and re-defined macros */
-
-#ifndef MIN
-#  define MIN(a,b) (((a) < (b)) ? (a) : (b))
-#endif
-
-#ifndef MAX
-#  define MAX(a,b) (((a) > (b)) ? (a) : (b))
-#endif
 
 /****************************************************************************
  * Private Types
@@ -118,7 +103,7 @@ struct pcm_decode_s
 
 /* Helper functions *********************************************************/
 
-#ifdef CONFIG_PCM_DEBUG
+#ifdef CONFIG_DEBUG_AUDIO_INFO
 static void pcm_dump(FAR const struct wav_header_s *wav);
 #else
 #  define pcm_dump(w)
@@ -236,7 +221,7 @@ static void pcm_callback(FAR void *arg, uint16_t reason,
  *
  ****************************************************************************/
 
-#ifdef CONFIG_PCM_DEBUG
+#ifdef CONFIG_DEBUG_AUDIO_INFO
 static void pcm_dump(FAR const struct wav_header_s *wav)
 {
   _info("Wave file header\n");
@@ -268,6 +253,7 @@ static void pcm_dump(FAR const struct wav_header_s *wav)
  *
  ****************************************************************************/
 
+#ifndef CONFIG_AUDIO_FORMAT_RAW
 static uint16_t pcm_leuint16(FAR const uint16_t *ptr)
 {
   FAR const uint8_t *p = (FAR const uint8_t *)ptr;
@@ -302,7 +288,7 @@ static uint32_t pcm_leuint32(FAR const uint32_t *ptr)
  *   Return true if this is a valid WAV file header
  *
  ****************************************************************************/
-#ifndef CONFIG_AUDIO_FORMAT_RAW
+
 static inline bool pcm_validwav(FAR const struct wav_header_s *wav)
 {
   return (wav->hdr.chunkid  == WAV_HDR_CHUNKID  &&
@@ -1048,7 +1034,6 @@ static int pcm_enqueuebuffer(FAR struct audio_lowerhalf_s *dev,
   FAR struct pcm_decode_s *priv = (FAR struct pcm_decode_s *)dev;
   FAR struct audio_lowerhalf_s *lower;
   apb_samp_t bytesleft;
-  ssize_t headersize;
   int ret;
 
   DEBUGASSERT(priv);
@@ -1102,10 +1087,12 @@ static int pcm_enqueuebuffer(FAR struct audio_lowerhalf_s *dev,
   /* Parse and verify the candidate PCM WAV file header */
 
 #ifndef CONFIG_AUDIO_FORMAT_RAW
-  headersize = pcm_parsewav(priv, &apb->samp[apb->curbyte], bytesleft);
+  ssize_t headersize = pcm_parsewav(priv, &apb->samp[apb->curbyte],
+                                    bytesleft);
   if (headersize > 0)
     {
       struct audio_caps_s caps;
+      memset(&caps, 0, sizeof(caps));
 
       /* Configure the lower level for the number of channels, bitrate,
        * and sample bitwidth.
@@ -1404,7 +1391,7 @@ FAR struct audio_lowerhalf_s *
 
   /* Allocate an instance of our private data structure */
 
-  priv = (FAR struct pcm_decode_s *)kmm_zalloc(sizeof(struct pcm_decode_s));
+  priv = kmm_zalloc(sizeof(struct pcm_decode_s));
   if (!priv)
     {
       auderr("ERROR: Failed to allocate driver structure\n");

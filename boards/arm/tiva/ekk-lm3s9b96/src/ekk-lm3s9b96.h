@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/tiva/ekk-lm3s9b96/src/ekk-lm3s9b96.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -18,8 +20,8 @@
  *
  ****************************************************************************/
 
-#ifndef __BOARDS_ARM_TIVA_EKK_LM3S9B96_SRC_EKKLM3S9B96_H
-#define __BOARDS_ARM_TIVA_EKK_LM3S9B96_SRC_EKKLM3S9B96_H
+#ifndef __BOARDS_ARM_TIVA_EKK_LM3S9B96_SRC_EKK_LM3S9B96_H
+#define __BOARDS_ARM_TIVA_EKK_LM3S9B96_SRC_EKK_LM3S9B96_H
 
 /****************************************************************************
  * Included Files
@@ -92,4 +94,4 @@
 extern void weak_function lm_ssidev_initialize(void);
 
 #endif /* __ASSEMBLY__ */
-#endif /* __BOARDS_ARM_TIVA_EKK_LM3S9B96_SRC_EKKLM3S9B96_H */
+#endif /* __BOARDS_ARM_TIVA_EKK_LM3S9B96_SRC_EKK_LM3S9B96_H */

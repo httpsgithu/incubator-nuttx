@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/rp2040/rp2040_testset.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -28,8 +30,7 @@
 #include <nuttx/spinlock.h>
 
 #include "hardware/rp2040_sio.h"
-
-#include "arm_arch.h"
+#include "arm_internal.h"
 
 /****************************************************************************
  * Pre-processor Definitions
@@ -60,7 +61,7 @@
  *
  ****************************************************************************/
 
-spinlock_t up_testset(volatile FAR spinlock_t *lock)
+spinlock_t up_testset(volatile spinlock_t *lock)
 {
   spinlock_t ret;
 
@@ -74,7 +75,7 @@ spinlock_t up_testset(volatile FAR spinlock_t *lock)
   if (ret == SP_UNLOCKED)
     {
       *lock = SP_LOCKED;
-      SP_DMB();
+      UP_DMB();
     }
 
   /* Unlock hardware spinlock */

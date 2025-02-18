@@ -1,6 +1,8 @@
 /****************************************************************************
  * net/pkt/pkt_callback.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -63,7 +65,7 @@ uint16_t pkt_callback(FAR struct net_driver_s *dev,
     {
       /* Perform the callback */
 
-      flags = devif_conn_event(dev, conn, flags, conn->list);
+      flags = devif_conn_event(dev, flags, conn->sconn.list);
     }
 
   return flags;

@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/stm32h7/stm32_exti_wakeup.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -32,7 +34,7 @@
 
 #include <arch/irq.h>
 
-#include "arm_arch.h"
+#include "arm_internal.h"
 #include "chip.h"
 #include "stm32_gpio.h"
 #include "stm32_exti.h"
@@ -58,7 +60,7 @@ static void  *g_callback_arg;
  *
  ****************************************************************************/
 
-static int stm32_exti_wakeup_isr(int irq, void *context, FAR void *arg)
+static int stm32_exti_wakeup_isr(int irq, void *context, void *arg)
 {
   int ret = OK;
 

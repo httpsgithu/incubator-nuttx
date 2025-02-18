@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/kinetis/twr-k60n512/src/twr-k60n512.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -18,8 +20,8 @@
  *
  ****************************************************************************/
 
-#ifndef __BOARDS_ARM_KINETIS_TWR_K60N512_SRC_TWRK60_H
-#define __BOARDS_ARM_KINETIS_TWR_K60N512_SRC_TWRK60_H
+#ifndef __BOARDS_ARM_KINETIS_TWR_K60N512_SRC_TWR_K60N512_H
+#define __BOARDS_ARM_KINETIS_TWR_K60N512_SRC_TWR_K60N512_H
 
 /****************************************************************************
  * Included Files
@@ -279,4 +281,4 @@ void weak_function kinetis_spidev_initialize(void);
 void weak_function kinetis_usbinitialize(void);
 
 #endif /* __ASSEMBLY__ */
-#endif /* __BOARDS_ARM_KINETIS_TWR_K60N512_SRC_TWRK60_H */
+#endif /* __BOARDS_ARM_KINETIS_TWR_K60N512_SRC_TWR_K60N512_H */

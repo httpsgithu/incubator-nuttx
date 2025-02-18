@@ -1,6 +1,8 @@
 /****************************************************************************
  * sched/paging/paging.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -26,9 +28,10 @@
  ****************************************************************************/
 
 #include <nuttx/config.h>
-#include <queue.h>
 
-#ifdef CONFIG_PAGING
+#include <signal.h>
+
+#ifdef CONFIG_LEGACY_PAGING
 
 /****************************************************************************
  * Pre-processor Definitions
@@ -51,6 +54,8 @@
 #ifndef CONFIG_PAGING_STACKSIZE
 #  define CONFIG_PAGING_STACKSIZE  CONFIG_IDLETHREAD_STACKSIZE
 #endif
+
+#define SIGPAGING SIGRTMIN
 
 /****************************************************************************
  * Public Data
@@ -96,8 +101,8 @@ extern FAR struct tcb_s *g_pftcb;
  *
  ****************************************************************************/
 
-int pg_worker(int argc, char *argv[]);
+int pg_worker(int argc, FAR char *argv[]);
 
 #endif /* __ASSEMBLY__ */
-#endif /* CONFIG_PAGING */
+#endif /* CONFIG_LEGACY_PAGING */
 #endif /* __SCHED_PAGING_PAGING_H */

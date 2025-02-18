@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/lpc54xx/lpcxpresso-lpc54628/include/board.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -161,12 +163,12 @@
 #  define BOARD_SYSTICK_CLOCK    (BOARD_AHB_FREQUENCY / BOARD_SYSTICKCLKDIV)
 #endif
 
-/* Flexcomm0:  USART0 (REVIST) */
+/* Flexcomm0:  USART0 (REVISIT) */
 
 #define BOARD_FLEXCOMM0_CLKSEL   SYSCON_FCLKSEL_FRO12M
 #define BOARD_FLEXCOMM0_FCLK     LPC54_FRO_12MHZ
 
-/* Flexcomm2:  I2C2 (REVIST) */
+/* Flexcomm2:  I2C2 (REVISIT) */
 
 #define BOARD_FLEXCOMM2_CLKSEL   SYSCON_FCLKSEL_FRO12M
 #define BOARD_FLEXCOMM2_FCLK     LPC54_FRO_12MHZ

@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/lpc17xx_40xx/lpc4088-quickstart/src/lpc17_40_bringup.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -149,7 +151,10 @@
 static struct usbhost_connection_s *g_usbconn;
 #endif
 #ifdef NSH_HAVE_MMCSD
-static FAR struct sdio_dev_s *g_sdiodev;
+static struct sdio_dev_s *g_sdiodev;
+#endif
+#ifdef NSH_HAVE_MMCSD_CD
+static bool g_sd_inserted;
 #endif
 
 /****************************************************************************
@@ -203,16 +208,15 @@ static int nsh_waiter(int argc, char *argv[])
  ****************************************************************************/
 
 #ifdef NSH_HAVE_MMCSD_CDINT
-static int nsh_cdinterrupt(int irq, FAR void *context, FAR void *arg)
+static int nsh_cdinterrupt(int irq, void *context, void *arg)
 {
-  static bool inserted = 0xff; /* Impossible value */
   bool present;
 
   present = !lpc17_40_gpioread(GPIO_SD_CD);
-  if (present != inserted)
+  if (present != g_sd_inserted)
     {
       sdio_mediachange(g_sdiodev, present);
-      inserted = present;
+      g_sd_inserted = present;
     }
 
   return OK;
@@ -275,7 +279,8 @@ static int nsh_sdinitialize(void)
    */
 
 #ifdef NSH_HAVE_MMCSD_CD
-  sdio_mediachange(g_sdiodev, !lpc17_40_gpioread(GPIO_SD_CD));
+  g_sd_inserted = !lpc17_40_gpioread(GPIO_SD_CD);
+  sdio_mediachange(g_sdiodev, g_sd_inserted);
 #else
   sdio_mediachange(g_sdiodev, true);
 #endif
@@ -296,7 +301,6 @@ static int nsh_sdinitialize(void)
 #ifdef NSH_HAVE_USBHOST
 static int nsh_usbhostinitialize(void)
 {
-  int pid;
   int ret;
 
   /* First, register all of the class drivers needed to support the drivers
@@ -338,10 +342,10 @@ static int nsh_usbhostinitialize(void)
 
       syslog(LOG_INFO, "Start nsh_waiter\n");
 
-      pid = kthread_create("usbhost", CONFIG_USBHOST_DEFPRIO,
+      ret = kthread_create("usbhost", CONFIG_USBHOST_DEFPRIO,
                            CONFIG_USBHOST_STACKSIZE,
-                           (main_t)nsh_waiter, (FAR char * const *)NULL);
-      return pid < 0 ? -ENOEXEC : OK;
+                           nsh_waiter, NULL);
+      return ret < 0 ? -ENOEXEC : OK;
     }
 
   return -ENODEV;

@@ -1,6 +1,8 @@
 ;*************************************************************************
 ; arch/z80/src/ez80/ez80_saveusercontext.asm
 ;
+; SPDX-License-Identifier: Apache-2.0
+;
 ; Licensed to the Apache Software Foundation (ASF) under one or more
 ; contributor license agreements.  See the NOTICE file distributed with
 ; this work for additional information regarding copyright ownership.  The
@@ -26,7 +28,7 @@
 ; Global Symbols Expported
 ;**************************************************************************
 
-	xdef	_ez80_saveusercontext
+	xdef	_up_saveusercontext
 
 ;*************************************************************************
 ; Constants
@@ -86,10 +88,10 @@ SP_OFFSET	equ	3*3
 	.assume ADL=1
 
 ;*************************************************************************
-; Name: z80_saveusercontext
+; Name: up_saveusercontext
 ;*************************************************************************
 
-_ez80_saveusercontext:
+_up_saveusercontext:
 	; Set up a stack frame
 
 	push	ix			; Save IX and IY

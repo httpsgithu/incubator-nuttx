@@ -1,6 +1,8 @@
 /****************************************************************************
  * net/icmpv6/icmpv6_autoconfig.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -40,6 +42,7 @@
 #include "netdev/netdev.h"
 #include "inet/inet.h"
 #include "icmpv6/icmpv6.h"
+#include "utils/utils.h"
 
 #ifdef CONFIG_NET_ICMPv6_AUTOCONF
 
@@ -90,7 +93,6 @@ static void icmpv6_router_terminate(FAR struct icmpv6_router_s *state,
  ****************************************************************************/
 
 static uint16_t icmpv6_router_eventhandler(FAR struct net_driver_s *dev,
-                                           FAR void *pvconn,
                                            FAR void *priv, uint16_t flags)
 {
   FAR struct icmpv6_router_s *state = (FAR struct icmpv6_router_s *)priv;
@@ -126,6 +128,13 @@ static uint16_t icmpv6_router_eventhandler(FAR struct net_driver_s *dev,
           return flags;
         }
 
+      /* Prepare device buffer */
+
+      if (netdev_iob_prepare(dev, false, 0) != OK)
+        {
+          return flags;
+        }
+
       /* It looks like we are good to send the data.
        *
        * Copy the packet data into the device packet buffer and send it.
@@ -133,9 +142,11 @@ static uint16_t icmpv6_router_eventhandler(FAR struct net_driver_s *dev,
 
       if (state->snd_advertise)
         {
-          /* Send the ICMPv6 Neighbor Advertisement message */
+          /* Send the ICMPv6 Neighbor Advertisement message, we should
+           * already have link-local address by previous logic.
+           */
 
-          icmpv6_advertise(dev, g_ipv6_allnodes);
+          icmpv6_advertise(dev, netdev_ipv6_lladdr(dev), g_ipv6_allnodes);
         }
       else
         {
@@ -178,19 +189,13 @@ static int icmpv6_send_message(FAR struct net_driver_s *dev, bool advertise)
   struct icmpv6_router_s state;
   int ret;
 
-  /* Initialize the state structure with the network locked.
-   *
-   *
-   * This semaphore is used for signaling and, hence, should not have
-   * priority inheritance enabled.
-   */
+  /* Initialize the state structure with the network locked. */
 
   nxsem_init(&state.snd_sem, 0, 0); /* Doesn't really fail */
-  nxsem_set_protocol(&state.snd_sem, SEM_PRIO_NONE);
 
   /* Remember the routing device name */
 
-  strncpy((FAR char *)state.snd_ifname, (FAR const char *)dev->d_ifname,
+  strlcpy((FAR char *)state.snd_ifname, (FAR const char *)dev->d_ifname,
           IFNAMSIZ);
 
   /* Allocate resources to receive a callback.  This and the following
@@ -222,12 +227,12 @@ static int icmpv6_send_message(FAR struct net_driver_s *dev, bool advertise)
   netdev_txnotify_dev(dev);
 
   /* Wait for the send to complete or an error to occur
-   * net_lockedwait will also terminate if a signal is received.
+   * net_sem_wait will also terminate if a signal is received.
    */
 
   do
     {
-      net_lockedwait(&state.snd_sem);
+      net_sem_wait(&state.snd_sem);
     }
   while (!state.snd_sent);
 
@@ -311,13 +316,18 @@ int icmpv6_autoconfig(FAR struct net_driver_s *dev)
    *    will be derived from the link layer (MAC) address.
    */
 
+  if (netdev_ipv6_lladdr(dev) != NULL)
+    {
+      goto got_lladdr;
+    }
+
   icmpv6_linkipaddr(dev, lladdr);
 
   ninfo("lladdr=%04x:%04x:%04x:%04x:%04x:%04x:%04x:%04x\n",
-        ntohs(lladdr[0]), ntohs(lladdr[1]),
-        ntohs(lladdr[2]), ntohs(lladdr[3]),
-        ntohs(lladdr[4]), ntohs(lladdr[5]),
-        ntohs(lladdr[6]), ntohs(lladdr[7]));
+        NTOHS(lladdr[0]), NTOHS(lladdr[1]),
+        NTOHS(lladdr[2]), NTOHS(lladdr[3]),
+        NTOHS(lladdr[4]), NTOHS(lladdr[5]),
+        NTOHS(lladdr[6]), NTOHS(lladdr[7]));
 
 #ifdef CONFIG_NET_ICMPv6_NEIGHBOR
   /* 2. Link-Local Address Uniqueness Test:  The node tests to ensure that
@@ -332,17 +342,21 @@ int icmpv6_autoconfig(FAR struct net_driver_s *dev)
    *    method must be employed.
    */
 
-  ret = icmpv6_neighbor(lladdr);
-  if (ret >= 0)
+  if (dev->d_lltype == NET_LL_ETHERNET ||
+      dev->d_lltype == NET_LL_IEEE80211)
     {
-      /* Hmmm... someone else responded to our Neighbor Solicitation.  We
-       * have no back-up plan in place.  Just bail.
-       */
+      ret = icmpv6_neighbor(dev, lladdr);
+      if (ret >= 0)
+        {
+          /* Hmmm... someone else responded to our Neighbor Solicitation.  We
+           * have no back-up plan in place.  Just bail.
+           */
 
-      nerr("ERROR: IP conflict\n");
+          nerr("ERROR: IP conflict\n");
 
-      net_unlock();
-      return -EEXIST;
+          net_unlock();
+          return -EEXIST;
+        }
     }
 #endif
 
@@ -352,8 +366,14 @@ int icmpv6_autoconfig(FAR struct net_driver_s *dev)
    *    on the wider Internet (since link-local addresses are not routed).
    */
 
-  net_ipv6addr_copy(dev->d_ipv6addr, lladdr);
+  ret = netdev_ipv6_add(dev, lladdr, net_ipv6_mask2pref(g_ipv6_llnetmask));
+  if (ret < 0)
+    {
+      net_unlock();
+      return ret;
+    }
 
+got_lladdr:
   /* 4. Router Contact: The node next attempts to contact a local router for
    *    more information on continuing the configuration. This is done either
    *    by listening for Router Advertisement messages sent periodically by
@@ -374,6 +394,12 @@ int icmpv6_autoconfig(FAR struct net_driver_s *dev)
       ret = icmpv6_send_message(dev, false);
       if (ret < 0)
         {
+          /* Remove our wait structure from the list (we may no longer be
+           *  at the head of the list).
+           */
+
+          icmpv6_rwait_cancel(&notify);
+
           nerr("ERROR: Failed send router solicitation: %d\n", ret);
           break;
         }
@@ -413,13 +439,12 @@ int icmpv6_autoconfig(FAR struct net_driver_s *dev)
           nerr("ERROR: Failed send neighbor advertisement: %d\n", senderr);
         }
 
-      /* No off-link communications; No router address. */
+      if (ret != -EADDRNOTAVAIL)
+        {
+          /* No off-link communications; No router address. */
 
-      net_ipv6addr_copy(dev->d_ipv6draddr, g_ipv6_unspecaddr);
-
-      /* Set a netmask for the local link address */
-
-      net_ipv6addr_copy(dev->d_ipv6netmask, g_ipv6_llnetmask);
+          net_ipv6addr_copy(dev->d_ipv6draddr, g_ipv6_unspecaddr);
+        }
     }
 
   /* 5. Router Direction: The router provides direction to the node on how

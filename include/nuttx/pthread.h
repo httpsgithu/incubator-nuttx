@@ -1,6 +1,7 @@
 /****************************************************************************
  * include/nuttx/pthread.h
- * Non-standard, NuttX-specific pthread-related declarations.
+ *
+ * SPDX-License-Identifier: Apache-2.0
  *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -37,11 +38,7 @@
 
 /* Default pthread attribute initializer */
 
-#if CONFIG_RR_INTERVAL == 0
-#  define PTHREAD_DEFAULT_POLICY SCHED_FIFO
-#else
-#  define PTHREAD_DEFAULT_POLICY SCHED_RR
-#endif
+#define PTHREAD_DEFAULT_POLICY SCHED_NORMAL
 
 /* A lot of hassle to use the old-fashioned struct initializers.  But this
  * gives us backward compatibility with some very old compilers.
@@ -140,7 +137,6 @@ EXTERN const pthread_attr_t g_default_pthread_attr;
  *                 for the new thread
  *    entry      - The new thread starts execution by invoking entry
  *    arg        - It is passed as the sole argument of entry
- *    exit       - The user-space pthread exit function
  *
  * Returned Value:
  *   OK (0) on success; a (non-negated) errno value on failure. The errno
@@ -150,8 +146,7 @@ EXTERN const pthread_attr_t g_default_pthread_attr;
 
 int nx_pthread_create(pthread_trampoline_t trampoline, FAR pthread_t *thread,
                       FAR const pthread_attr_t *attr,
-                      pthread_startroutine_t entry, pthread_addr_t arg,
-                      pthread_exitroutine_t exit);
+                      pthread_startroutine_t entry, pthread_addr_t arg);
 
 /****************************************************************************
  * Name: nx_pthread_exit
@@ -168,26 +163,6 @@ int nx_pthread_create(pthread_trampoline_t trampoline, FAR pthread_t *thread,
  ****************************************************************************/
 
 void nx_pthread_exit(FAR void *exit_value) noreturn_function;
-
-/****************************************************************************
- * Name: pthread_cleanup_popall
- *
- * Description:
- *   The pthread_cleanup_popall() is an internal function that will pop and
- *   execute all clean-up functions.  This function is only called from
- *   within the pthread_exit() and pthread_cancellation() logic
- *
- * Input Parameters:
- *   None
- *
- * Returned Value:
- *   None
- *
- ****************************************************************************/
-
-#ifdef CONFIG_PTHREAD_CLEANUP
-void pthread_cleanup_popall(void);
-#endif
 
 #undef EXTERN
 #ifdef __cplusplus

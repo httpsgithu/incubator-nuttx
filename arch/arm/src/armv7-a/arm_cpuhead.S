@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/armv7-a/arm_cpuhead.S
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -24,8 +26,9 @@
 
 #include <nuttx/config.h>
 
+#include <arch/irq.h>
+
 #include "arm.h"
-#include "cp15.h"
 #include "sctlr.h"
 #include "mmu.h"
 #include "smp.h"
@@ -39,14 +42,6 @@
 /****************************************************************************
  * Configuration
  ****************************************************************************/
-
-/* Hard-coded options */
-
-#undef CPU_ALIGNMENT_TRAP
-#undef CPU_CACHE_ROUND_ROBIN
-#undef CPU_DCACHE_DISABLE
-#undef CPU_ICACHE_DISABLE
-#undef CPU_AFE_ENABLE
 
 /* Check for the identity mapping:  For this configuration, this would be
  * the case where the virtual beginning of RAM is the same as the physical
@@ -66,6 +61,8 @@
  ****************************************************************************/
 
 	.text
+	.syntax	unified
+	.arm
 
 /****************************************************************************
  * Name: __cpu[n]_start
@@ -90,9 +87,14 @@
 	.type	__cpu1_start, #function
 
 __cpu1_start:
+	/* Make sure that we are in SYS mode with IRQs and FIQs disabled */
+
+	cpsid		if, #PSR_MODE_SYS
+
 	/* Set up the stack pointer and the CPU index */
 
 	ldr		sp, .Lcpu1_stackpointer
+	sub		sp, sp, #XCPTCONTEXT_SIZE
 	mov		r5, #1
 
 	/* Then branch to the common startup logic (PC-relative) */
@@ -108,9 +110,14 @@ __cpu1_start:
 	.type	__cpu2_start, #function
 
 __cpu2_start:
+	/* Make sure that we are in SYS mode with IRQs and FIQs disabled */
+
+	cpsid		if, #PSR_MODE_SYS
+
 	/* Set up the stack pointer and the CPU index */
 
 	ldr		sp, .Lcpu2_stackpointer
+	sub		sp, sp, #XCPTCONTEXT_SIZE
 	mov		r5, #2
 
 	/* Then branch to the common startup logic (PC-relative) */
@@ -126,9 +133,14 @@ __cpu2_start:
 	.type	__cpu3_start, #function
 
 __cpu3_start:
+	/* Make sure that we are in SYS mode with IRQs and FIQs disabled */
+
+	cpsid		if, #PSR_MODE_SYS
+
 	/* Set up the stack pointer and the CPU index */
 
 	ldr		sp, .Lcpu3_stackpointer
+	sub		sp, sp, #XCPTCONTEXT_SIZE
 	mov		r5, #3
 
 	/* Then branch to the common startup logic (PC-relative) */
@@ -162,11 +174,6 @@ __cpu3_start:
 	.type	.Lcpu_start, #function
 
 .Lcpu_start:
-	/* Make sure that we are in SVC mode with IRQs and FIQs disabled */
-
-	mov		r0, #(PSR_MODE_SVC | PSR_I_BIT | PSR_F_BIT)
-	msr		cpsr_c, r0
-
 	/* The MMU and caches should be disabled */
 
 	mrc		CP15_SCTLR(r0)
@@ -188,11 +195,19 @@ __cpu3_start:
 	 */
 
 	mov		r0, #0
+	mcr		CP15_TPIDRPRW(r0)	/* Initialize percpu reg TPIDRPRW */
+#ifdef CONFIG_ARM_HAVE_MPCORE
+	mcr		CP15_TLBIALLIS(r0)	/* Invalidate the entire unified TLB */
+	mcr		CP15_BPIALLIS(r0)	/* Invalidate entire branch prediction array */
+	mcr		CP15_ICIALLUIS(r0)	/* Invalidate I-cache */
+#else
 	mcr		CP15_TLBIALL(r0,c7)	/* Invalidate the entire unified TLB */
 	mcr		CP15_TLBIALL(r0,c6)
 	mcr		CP15_TLBIALL(r0,c5)
 	mcr		CP15_BPIALL(r0)		/* Invalidate entire branch prediction array */
 	mcr		CP15_ICIALLU(r0)	/* Invalidate I-cache */
+#endif
+	isb
 
 	/* Load the page table address.
 	 *
@@ -205,6 +220,10 @@ __cpu3_start:
 	 */
 
 	ldr		r1, .LCppgtable		/* r1=phys. page table */
+#ifdef CONFIG_ARCH_ADDRENV
+	mov		r2, #PGTABLE_SIZE
+	mla		r1, r2, r5, r1		/* page table of cpu1,2,3 */
+#endif
 	orr		r1, r1, #(TTBR0_RGN_WBWA | TTBR0_IRGN0)	/* Select cache properties */
 	mcr		CP15_TTBR0(r1)
 	mcr		CP15_TTBR1(r1)
@@ -282,7 +301,7 @@ __cpu3_start:
 	orr		r0, r0, #(SCTLR_V)
 #endif
 
-#if defined(CPU_CACHE_ROUND_ROBIN) && !defined(CONFIG_ARCH_CORTEXA5)
+#if defined(CONFIG_ARMV7A_CACHE_ROUND_ROBIN) && !defined(CONFIG_ARCH_CORTEXA5)
 	/* Round Robin cache replacement
 	 *
 	 *   SCTLR_RR   Bit 14: The Cortex-A5 processor only supports a fixed random
@@ -296,7 +315,7 @@ __cpu3_start:
 	 * after SMP cache coherency has been setup.
 	 */
 
-#if 0 /* !defined(CPU_DCACHE_DISABLE) && !defined(CONFIG_SMP) */
+#if !defined(CONFIG_ARMV7A_DCACHE_DISABLE) && !defined(CONFIG_SMP)
 	/* Dcache enable
 	 *
 	 *   SCTLR_C    Bit 2:  DCache enable
@@ -305,7 +324,7 @@ __cpu3_start:
 	orr		r0, r0, #(SCTLR_C)
 #endif
 
-#ifndef CPU_ICACHE_DISABLE
+#if !defined(CONFIG_ARMV7A_ICACHE_DISABLE) && !defined(CONFIG_SMP)
 	/* Icache enable
 	 *
 	 *   SCTLR_I    Bit 12: ICache enable
@@ -314,7 +333,7 @@ __cpu3_start:
 	orr		r0, r0, #(SCTLR_I)
 #endif
 
-#ifdef CPU_ALIGNMENT_TRAP
+#ifdef CONFIG_ARMV7A_ALIGNMENT_TRAP
 	/* Alignment abort enable
 	 *
 	 *   SCTLR_A    Bit 1:  Strict alignment enabled
@@ -332,7 +351,7 @@ __cpu3_start:
 	orr		r0, r0, #(SCTLR_EE)
 #endif
 
-#ifdef CPU_AFE_ENABLE
+#ifdef CONFIG_ARMV7A_AFE_ENABLE
 	/* AP[0:2] Permissions model
 	 *
 	 *   SCTLR_AFE  Bit 29: Full, legacy access permissions behavior (reset value).
@@ -347,6 +366,7 @@ __cpu3_start:
 	/* Then write the configured control register */
 
 	mcr		CP15_SCTLR(r0)			/* Write control reg */
+	isb
 	.rept		12				/* Cortex A8 wants lots of NOPs here */
 	nop
 	.endr
@@ -429,7 +449,7 @@ __cpu3_start:
 #ifdef CONFIG_STACK_COLORATION
 	.type	.Lstkinit, %object
 .Lstkinit:
-	.long	SMP_STACK_WORDS
+	.long	SMP_STACK_WORDS - (XCPTCONTEXT_SIZE / 4)
 	.long	STACK_COLOR				/* Stack coloration word */
 	.size	.Lstkinit, . -.Lstkinit
 #endif

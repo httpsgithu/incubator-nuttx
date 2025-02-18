@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/str71x/str71x_xti.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -34,7 +36,6 @@
 #include <arch/board/board.h>
 
 #include "chip.h"
-#include "arm_arch.h"
 #include "arm_internal.h"
 #include "str71x.h"
 
@@ -80,7 +81,7 @@ static const struct xtiregs_s g_xtiregs[2] =
  *
  ****************************************************************************/
 
-static int str71x_xtiinterrupt(int irq, FAR void *context, FAR void *arg)
+static int str71x_xtiinterrupt(int irq, void *context, void *arg)
 {
   uint16_t enabled = (uint16_t)getreg8(STR71X_XTI_MRH) << 8 |
                      (uint16_t)getreg8(STR71X_XTI_MRL);

@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/xtensa/esp32/ttgo_lora_esp32/src/ttgo_lora_esp32.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -35,16 +37,10 @@
 
 /* TTGO-LoRa-SX1276-ESP32 GPIOs *********************************************/
 
-/* OLED SSD1306 */
+/* SX1276 pins */
 
-#define HAVE_SSD1306 1
-
-#if !defined(CONFIG_ESP32_I2C) || !defined(CONFIG_ESP32_I2C0) || \
-    !defined(CONFIG_LCD_SSD1306_I2C)
-#  undef HAVE_SSD1306
-#endif
-
-#define GPIO_SSD1306_RST 16
+#define GPIO_SX127X_RESET   23    /* RESET connected to IO23 */
+#define GPIO_SX127X_DIO0    26    /* DIO0 connected to IO26  */
 
 /* BOOT Button */
 
@@ -146,6 +142,25 @@ int esp32_gpio_init(void);
 
 #ifdef CONFIG_SPI_DRIVER
 int board_spidev_initialize(int bus);
+#endif
+
+/****************************************************************************
+ * Name: esp32_lpwaninitialize
+ *
+ * Description:
+ *   Initialize the SX127x driver
+ *
+ * Input Parameters:
+ *   None
+ *
+ * Returned Value:
+ *   Zero (OK) is returned on success; A negated errno value is returned
+ *   to indicate the nature of any failure.
+ *
+ ****************************************************************************/
+
+#ifdef CONFIG_LPWAN_SX127X
+int esp32_lpwaninitialize(void);
 #endif
 
 #endif /* __ASSEMBLY__ */

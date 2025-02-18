@@ -1,6 +1,8 @@
 /****************************************************************************
  * libs/libc/string/lib_strpbrk.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -33,15 +35,6 @@
 #undef strpbrk /* See mm/README.txt */
 FAR char *strpbrk(FAR const char *str, FAR const char *charset)
 {
-  /* Sanity checking */
-
-#ifdef CONFIG_DEBUG_FEATURES
-  if (!str || !charset)
-    {
-      return NULL;
-    }
-#endif
-
   /* Check each character in the string */
 
   while (*str)

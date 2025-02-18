@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/lc823450/lc823450_mmcl.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -43,9 +45,9 @@ extern "C"
  * Public Function Prototypes
  ****************************************************************************/
 
-int mmcl_initialize(int minor, FAR struct mtd_dev_s *mtd);
-int mmcl_uninitialize(FAR const char *devname);
-int mmcl_createpartition(int minor, int number, FAR struct mtd_dev_s *mtd);
+int mmcl_initialize(int minor, struct mtd_dev_s *mtd);
+int mmcl_uninitialize(const char *devname);
+int mmcl_createpartition(int minor, int number, struct mtd_dev_s *mtd);
 
 #if defined(__cplusplus)
 }

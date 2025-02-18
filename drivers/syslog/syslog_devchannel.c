@@ -1,6 +1,8 @@
 /****************************************************************************
  * drivers/syslog/syslog_devchannel.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -42,14 +44,6 @@
 #define OPEN_MODE  (S_IROTH | S_IRGRP | S_IRUSR | S_IWUSR)
 
 /****************************************************************************
- * Private Data
- ****************************************************************************/
-
-/* Handle to the SYSLOG channel */
-
-FAR static struct syslog_channel_s *g_syslog_dev_channel;
-
-/****************************************************************************
  * Public Functions
  ****************************************************************************/
 
@@ -61,9 +55,10 @@ FAR static struct syslog_channel_s *g_syslog_dev_channel;
  *   SYSLOG channel.
  *
  *   This tiny function is simply a wrapper around syslog_dev_initialize()
- *   and syslog_channel().  It calls syslog_dev_initialize() to configure
- *   the character device at CONFIG_SYSLOG_DEVPATH then calls
- *   syslog_channel() to use that device as the SYSLOG output channel.
+ *   and syslog_channel_register().  It calls syslog_dev_initialize() to
+ *   configure the character device at CONFIG_SYSLOG_DEVPATH then calls
+ *   syslog_channel_register() to use that device as the SYSLOG output
+ *   channel.
  *
  *   NOTE interrupt level SYSLOG output will be lost in this case unless
  *   the interrupt buffer is used.
@@ -76,26 +71,28 @@ FAR static struct syslog_channel_s *g_syslog_dev_channel;
  *
  ****************************************************************************/
 
-FAR struct syslog_channel_s *syslog_dev_channel(void)
+FAR syslog_channel_t *syslog_dev_channel(void)
 {
+  FAR syslog_channel_t *dev_channel;
+
   /* Initialize the character driver interface */
 
-  g_syslog_dev_channel = syslog_dev_initialize(CONFIG_SYSLOG_DEVPATH,
-                                               OPEN_FLAGS, OPEN_MODE);
-  if (g_syslog_dev_channel == NULL)
+  dev_channel = syslog_dev_initialize(CONFIG_SYSLOG_DEVPATH,
+                                      OPEN_FLAGS, OPEN_MODE);
+  if (dev_channel == NULL)
     {
       return NULL;
     }
 
   /* Use the character driver as the SYSLOG channel */
 
-  if (syslog_channel(g_syslog_dev_channel) != OK)
+  if (syslog_channel_register(dev_channel) != OK)
     {
-      syslog_dev_uninitialize(g_syslog_dev_channel);
-      g_syslog_dev_channel = NULL;
+      syslog_dev_uninitialize(dev_channel);
+      dev_channel = NULL;
     }
 
-  return g_syslog_dev_channel;
+  return dev_channel;
 }
 
 #endif /* CONFIG_SYSLOG_CHAR */

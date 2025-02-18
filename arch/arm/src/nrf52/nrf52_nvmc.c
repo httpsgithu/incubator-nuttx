@@ -1,14 +1,11 @@
 /****************************************************************************
  * arch/arm/src/nrf52/nrf52_nvmc.c
  *
- *   Copyright (C) 2018 Zglue Inc. All rights reserved.
- *   Author: Levin Li <zhiqiang@zglue.com>
- *   Author: Alan Carvalho de Assis <acassis@gmail.com>
- *
- * Ported from the Nordic SDK, this is the original license:
- *
- * Copyright (c) 2012 - 2018, Nordic Semiconductor ASA
- * All rights reserved.
+ * SPDX-License-Identifier: BSD-3-Clause
+ * SPDX-FileCopyrightText: 2018 Zglue Inc. All rights reserved.
+ * SPDX-FileCopyrightText: 2012 - 2018, Nordic Semiconductor ASA
+ * SPDX-FileContributor: Levin Li <zhiqiang@zglue.com>
+ * SPDX-FileContributor: Alan Carvalho de Assis <acassis@gmail.com>
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -46,12 +43,21 @@
 #include <nuttx/config.h>
 #include <stdbool.h>
 
-#include "arm_arch.h"
-#include "barriers.h"
+#include <arch/barriers.h>
+
+#include "arm_internal.h"
 
 #include "hardware/nrf52_ficr.h"
 #include "hardware/nrf52_nvmc.h"
 #include "nrf52_nvmc.h"
+
+/****************************************************************************
+ * Pre-processor Definitions
+ ****************************************************************************/
+
+#ifndef CONFIG_ALLOW_BSD_COMPONENTS
+#  error "This file requires Kconfig ALLOW_BSD_COMPONENTS"
+#endif
 
 /****************************************************************************
  * Private Functions
@@ -94,85 +100,12 @@ static inline void wait_for_flash_ready(void)
 
 static inline void nrf_mem_barrier(void)
 {
-  ARM_ISB();
-  ARM_DSB();
+  UP_MB();
 }
 
 /****************************************************************************
  * Public Functions
  ****************************************************************************/
-
-/****************************************************************************
- * Name: nrf_nvmc_enable_icache
- *
- * Description:
- *   Enable I-Cache for Flash
- *
- * Input Parameter:
- *   flag - Flag to enable or disable.
- *
- * Returned Values:
- *   None
- *
- ****************************************************************************/
-
-void nrf_nvmc_enable_icache(bool flag)
-{
-  uint32_t value;
-
-  /* Read the current icache configuration */
-
-  value = getreg32(NRF52_NVMC_ICACHECNF);
-
-  if (flag)
-    {
-      value |= NVMC_ICACHECNF_CACHEEN;
-    }
-  else
-    {
-      value &= ~NVMC_ICACHECNF_CACHEEN;
-    }
-
-  /* Setup the new icache configuration */
-
-  putreg32(value, NRF52_NVMC_ICACHECNF);
-}
-
-/****************************************************************************
- * Name: nrf_nvmc_enable_profile
- *
- * Description:
- *   Enable profiling I-Cache for flash
- *
- * Input Parameter:
- *   flag - Flag to enable or disable.
- *
- * Returned Values:
- *   None
- *
- ****************************************************************************/
-
-void nrf_nvmc_enable_profile(bool flag)
-{
-  uint32_t value;
-
-  /* Read the current icache configuration */
-
-  value = getreg32(NRF52_NVMC_ICACHECNF);
-
-  if (flag)
-    {
-      value |= NVMC_ICACHECNF_CACHEPROFEN;
-    }
-  else
-    {
-      value &= ~NVMC_ICACHECNF_CACHEPROFEN;
-    }
-
-  /* Setup the new icache configuration */
-
-  putreg32(value, NRF52_NVMC_ICACHECNF);
-}
 
 /****************************************************************************
  * Name: nrf_nvmc_get_profiling_ihit
@@ -304,8 +237,7 @@ uint32_t nrf_nvmc_read_dev_id1(void)
 
 uint32_t system_image_start_address(void)
 {
-  extern uint32_t _stext;
-  return (uint32_t)&_stext;
+  return (uint32_t)_stext;
 }
 
 /****************************************************************************
@@ -324,8 +256,7 @@ uint32_t system_image_start_address(void)
 
 uint32_t system_image_ro_section_end(void)
 {
-  extern uint32_t _eronly;
-  return (uint32_t)&_eronly;
+  return (uint32_t)_eronly;
 }
 
 /****************************************************************************
@@ -344,16 +275,7 @@ uint32_t system_image_ro_section_end(void)
 
 uint32_t system_image_data_section_size(void)
 {
-  extern uint32_t _edata;
-  extern uint32_t _sdata;
-  uint32_t data_size;
-  uint32_t start;
-  uint32_t end;
-
-  start     = (uint32_t)&_sdata;
-  end       = (uint32_t)&_edata;
-  data_size = end - start;
-  return data_size;
+  return _edata - _sdata;
 }
 
 /****************************************************************************

@@ -1,5 +1,7 @@
-/************************************************************************************
+/****************************************************************************
  * arch/mips/src/pic32mz/hardware/pic32mz_memorymap.h
+ *
+ * SPDX-License-Identifier: Apache-2.0
  *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -16,14 +18,14 @@
  * License for the specific language governing permissions and limitations
  * under the License.
  *
- ************************************************************************************/
+ ****************************************************************************/
 
 #ifndef __ARCH_MIPS_SRC_PIC32MZ_HARDWARE_PIC32MZ_MEMORYMAP_H
 #define __ARCH_MIPS_SRC_PIC32MZ_HARDWARE_PIC32MZ_MEMORYMAP_H
 
-/************************************************************************************
+/****************************************************************************
  * Included Files
- ************************************************************************************/
+ ****************************************************************************/
 
 #include <nuttx/config.h>
 

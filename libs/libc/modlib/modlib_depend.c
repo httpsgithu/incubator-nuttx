@@ -1,6 +1,8 @@
 /****************************************************************************
  * libs/libc/modlib/modlib_depend.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -31,6 +33,8 @@
 
 #include <nuttx/lib/modlib.h>
 
+#if CONFIG_MODLIB_MAXDEPEND > 0
+
 /****************************************************************************
  * Public Functions
  ****************************************************************************/
@@ -55,8 +59,7 @@
 int modlib_depend(FAR struct module_s *importer,
                   FAR struct module_s *exporter)
 {
-#if CONFIG_MODLIB_MAXDEPEND > 0
-  int freendx;
+  int freendx = -1;
   int i;
 
   DEBUGASSERT(importer != NULL && exporter != NULL);
@@ -71,7 +74,7 @@ int modlib_depend(FAR struct module_s *importer,
    * is small.  Otherwise, a more dynamic data structure would be in order.
    */
 
-  for (i = 0, freendx = -1; i < CONFIG_MODLIB_MAXDEPEND; i++)
+  for (i = 0; i < CONFIG_MODLIB_MAXDEPEND; i++)
     {
       FAR const struct module_s *modp;
 
@@ -127,10 +130,6 @@ int modlib_depend(FAR struct module_s *importer,
 
   DEBUGPANIC();
   return -ENFILE;
-
-#else
-  return OK;
-#endif
 }
 
 /****************************************************************************
@@ -152,7 +151,6 @@ int modlib_depend(FAR struct module_s *importer,
 
 int modlib_undepend(FAR struct module_s *importer)
 {
-#if CONFIG_MODLIB_MAXDEPEND > 0
   FAR struct module_s *exporter;
   int i;
 
@@ -178,7 +176,8 @@ int modlib_undepend(FAR struct module_s *importer)
           importer->dependencies[i] = NULL;
         }
     }
-#endif
 
   return OK;
 }
+
+#endif

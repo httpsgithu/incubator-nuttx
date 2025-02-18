@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/nrf52/hardware/nrf52_ficr.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -146,5 +148,10 @@
 #define NRF52_FICR_INFO_VARIANT_AAB0     (0x41414230)
 #define NRF52_FICR_INFO_VARIANT_ABB0     (0x41424230)
 #define NRF52_FICR_INFO_VARIANT_AAE0     (0x41414530)
+
+/* Device address type */
+
+#define FICR_DEVICEADDRTYPE_PUBLIC (0)
+#define FICR_DEVICEADDRTYPE_RANDOM (1)
 
 #endif /* __ARCH_ARM_SRC_NRF52_HARDWARE_NRF52_FICR_H */

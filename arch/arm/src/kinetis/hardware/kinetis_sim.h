@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/kinetis/hardware/kinetis_sim.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -639,7 +641,7 @@
 #endif
                                                         /* Bits 13-14: Reserved */
 #if defined(KINETIS_SIM_SOPT7_ADC1ALTTRGEN)
-# define SIM_SOPT7_ADC1ALTTRGEN               (1 << 15) /* Bit 15: ADC1 alternate trigger enable */
+#  define SIM_SOPT7_ADC1ALTTRGEN              (1 << 15) /* Bit 15: ADC1 alternate trigger enable */
 #endif
                                                         /* Bits 16-31: Reserved */
 #if defined(KINETIS_SIM_HAS_SOPT7_ADC2TRGSEL)

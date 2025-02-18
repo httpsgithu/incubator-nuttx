@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/cxd56xx/cxd56_rtc.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -39,7 +41,7 @@
 
 /* The form of an alarm callback */
 
-typedef CODE void (*alm_callback_t)(FAR void *arg, unsigned int alarmid);
+typedef void (*alm_callback_t)(void *arg, unsigned int alarmid);
 
 enum alm_id_e
 {
@@ -56,7 +58,7 @@ struct alm_setalarm_s
   int             as_id;    /* enum alm_id_e */
   struct timespec as_time;  /* Alarm expiration time */
   alm_callback_t  as_cb;    /* Callback (if non-NULL) */
-  FAR void       *as_arg;   /* Argument for callback */
+  void       *as_arg;       /* Argument for callback */
 };
 
 #endif /* CONFIG_RTC_ALARM */
@@ -90,6 +92,7 @@ extern "C"
  ****************************************************************************/
 
 uint64_t cxd56_rtc_count(void);
+uint64_t cxd56_rtc_count_nolock(void);
 
 /****************************************************************************
  * Name: cxd56_rtc_almcount
@@ -121,7 +124,7 @@ uint64_t cxd56_rtc_almcount(void);
  ****************************************************************************/
 
 #ifdef CONFIG_RTC_ALARM
-int cxd56_rtc_setalarm(FAR struct alm_setalarm_s *alminfo);
+int cxd56_rtc_setalarm(struct alm_setalarm_s *alminfo);
 #endif /* CONFIG_RTC_ALARM */
 
 /****************************************************************************
@@ -165,7 +168,7 @@ int cxd56_rtc_cancelalarm(enum alm_id_e alarmid);
  ****************************************************************************/
 
 #ifdef CONFIG_RTC_DRIVER
-FAR struct rtc_lowerhalf_s *cxd56_rtc_lowerhalf(void);
+struct rtc_lowerhalf_s *cxd56_rtc_lowerhalf(void);
 #endif /* CONFIG_RTC_DRIVER */
 
 #undef EXTERN

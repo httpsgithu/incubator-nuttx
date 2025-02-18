@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/mips/pic32mz/flipnclick-pic32mz/src/flipnclick-pic32mz.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -91,7 +93,7 @@
 /* SPI Chip Selects
  *
  * SPI3 is available on pins D10-D13 of the Arduino Shield connectors where
- * you would expect then.  The SPI connector is configured as follows:
+ * you would expect them.  The SPI connector is configured as follows:
  *
  *   Pin J1 Board Signal PIC32MZ
  *   --- -- ------------ -------
@@ -269,7 +271,7 @@ int pic32mz_bringup(void);
 
 #ifdef HAVE_SSD1306
 struct lcd_dev_s;  /* Forward reference */
-FAR struct lcd_dev_s *pic32mz_graphics_setup(unsigned int devno);
+struct lcd_dev_s *pic32mz_graphics_setup(unsigned int devno);
 #endif
 
 #undef EXTERN

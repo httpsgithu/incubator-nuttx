@@ -1,6 +1,8 @@
 /****************************************************************************
  * libs/libc/machine/xtensa/arch_memset.S
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -27,6 +29,10 @@
 #include <arch/chip/core-isa.h>
 #include <arch/xtensa/xtensa_abi.h>
 
+#include "libc.h"
+
+#ifdef LIBC_BUILD_MEMMOVE
+
 /****************************************************************************
  * Pre-processor Macros
  ****************************************************************************/
@@ -41,7 +47,7 @@
  ****************************************************************************/
   .text
   .begin schedule
-  .global memmove
+  .global ARCH_LIBCFUN(memmove)
 
 /*
  * Byte by byte copy
@@ -304,7 +310,7 @@
           # return to main algorithm
 
   .align  4
-memmove:
+ARCH_LIBCFUN(memmove):
 
   ENTRY(16)
   # a2/ dst, a3/ src, a4/ len
@@ -396,6 +402,7 @@ memmove:
   _beqz a4, .Lbackdone  # avoid loading anything for zero-length copies
   # copy 16 bytes per iteration for word-aligned dst and unaligned src
   ssa8  a3    # set shift amount from byte offset
+#undef SIM_CHECKS_ALIGNMENT
 #define SIM_CHECKS_ALIGNMENT  1 /* set to 1 when running on ISS with
            * the lint or ferret client, or 0
            * to save a few cycles */
@@ -477,4 +484,6 @@ memmove:
   RET(16)
 
   .end schedule
-  .size memmove, . - memmove
+  .size ARCH_LIBCFUN(memmove), . - ARCH_LIBCFUN(memmove)
+
+#endif

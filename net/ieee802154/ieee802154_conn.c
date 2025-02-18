@@ -1,6 +1,8 @@
 /****************************************************************************
  * net/ieee802154/ieee802154_conn.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -31,6 +33,7 @@
 
 #include <arch/irq.h>
 
+#include <nuttx/kmalloc.h>
 #include <nuttx/mm/iob.h>
 #include <nuttx/net/netconfig.h>
 #include <nuttx/net/net.h>
@@ -39,8 +42,17 @@
 
 #include "devif/devif.h"
 #include "ieee802154/ieee802154.h"
+#include "utils/utils.h"
 
 #ifdef CONFIG_NET_IEEE802154
+
+/****************************************************************************
+ * Pre-processor Definitions
+ ****************************************************************************/
+
+#ifndef CONFIG_NET_IEEE802154_MAX_CONNS
+#  define CONFIG_NET_IEEE802154_MAX_CONNS 0
+#endif
 
 /****************************************************************************
  * Private Data
@@ -50,12 +62,11 @@
  * network lock.
  */
 
-static struct ieee802154_conn_s
-  g_ieee802154_connections[CONFIG_NET_IEEE802154_NCONNS];
-
-/* A list of all free packet socket connections */
-
-static dq_queue_t g_free_ieee802154_connections;
+NET_BUFPOOL_DECLARE(g_ieee802154_connections,
+                    sizeof(struct ieee802154_conn_s),
+                    CONFIG_NET_IEEE802154_PREALLOC_CONNS,
+                    CONFIG_NET_IEEE802154_ALLOC_CONNS,
+                    CONFIG_NET_IEEE802154_MAX_CONNS);
 
 /* A list of all allocated packet socket connections */
 
@@ -64,36 +75,6 @@ static dq_queue_t g_active_ieee802154_connections;
 /****************************************************************************
  * Public Functions
  ****************************************************************************/
-
-/****************************************************************************
- * Name: ieee802154_conn_initialize
- *
- * Description:
- *   Initialize the IEEE 802.15.4 connection structure allocator.  Called
- *   once and only from ieee802154_initialize().
- *
- * Assumptions:
- *   Called early in the initialization sequence
- *
- ****************************************************************************/
-
-void ieee802154_conn_initialize(void)
-{
-  int i;
-
-  /* Initialize the queues */
-
-  dq_init(&g_free_ieee802154_connections);
-  dq_init(&g_active_ieee802154_connections);
-
-  for (i = 0; i < CONFIG_NET_IEEE802154_NCONNS; i++)
-    {
-      /* Link each pre-allocated connection structure into the free list. */
-
-      dq_addlast(&g_ieee802154_connections[i].node,
-                 &g_free_ieee802154_connections);
-    }
-}
 
 /****************************************************************************
  * Name: ieee802154_conn_alloc()
@@ -111,15 +92,11 @@ FAR struct ieee802154_conn_s *ieee802154_conn_alloc(void)
   /* The free list is protected by the network lock. */
 
   net_lock();
-  conn = (FAR struct ieee802154_conn_s *)
-    dq_remfirst(&g_free_ieee802154_connections);
 
+  conn = NET_BUFPOOL_TRYALLOC(g_ieee802154_connections);
   if (conn)
     {
-      /* Enqueue the connection into the active list */
-
-      memset(conn, 0, sizeof(struct ieee802154_conn_s));
-      dq_addlast(&conn->node, &g_active_ieee802154_connections);
+      dq_addlast(&conn->sconn.node, &g_active_ieee802154_connections);
     }
 
   net_unlock();
@@ -147,7 +124,7 @@ void ieee802154_conn_free(FAR struct ieee802154_conn_s *conn)
   /* Remove the connection from the active list */
 
   net_lock();
-  dq_rem(&conn->node, &g_active_ieee802154_connections);
+  dq_rem(&conn->sconn.node, &g_active_ieee802154_connections);
 
   /* Check if there any any frames attached to the container */
 
@@ -162,7 +139,7 @@ void ieee802154_conn_free(FAR struct ieee802154_conn_s *conn)
 
       if (container->ic_iob)
         {
-          iob_free(container->ic_iob, IOBUSER_NET_SOCK_IEEE802154);
+          iob_free(container->ic_iob);
         }
 
       /* And free the container itself */
@@ -170,9 +147,10 @@ void ieee802154_conn_free(FAR struct ieee802154_conn_s *conn)
       ieee802154_container_free(container);
     }
 
-  /* Free the connection */
+  /* Free the connection. */
 
-  dq_addlast(&conn->node, &g_free_ieee802154_connections);
+  NET_BUFPOOL_FREE(g_ieee802154_connections, conn);
+
   net_unlock();
 }
 
@@ -198,7 +176,7 @@ FAR struct ieee802154_conn_s *
   for (conn  = (FAR struct ieee802154_conn_s *)
        g_active_ieee802154_connections.head;
        conn != NULL;
-       conn = (FAR struct ieee802154_conn_s *)conn->node.flink)
+       conn = (FAR struct ieee802154_conn_s *)conn->sconn.node.flink)
     {
       /* Does the destination address match the bound address of the socket.
        *
@@ -276,7 +254,7 @@ FAR struct ieee802154_conn_s *
     }
   else
     {
-      return (FAR struct ieee802154_conn_s *)conn->node.flink;
+      return (FAR struct ieee802154_conn_s *)conn->sconn.node.flink;
     }
 }
 

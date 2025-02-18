@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/sam34/arduino-due/include/board.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -131,6 +133,11 @@
 
 #define BOARD_FWS                  4
 
+/* Serial Peripheral Interface (SPI) */
+
+#define GPIO_SPI0_SPCK GPIO_SPI0_SPCK_1
+#define GPIO_SPI0_CS   (GPIO_OUTPUT | GPIO_CFG_DEFAULT | GPIO_OUTPUT_SET | GPIO_PORT_PIOC | GPIO_PIN21)
+
 /* LED definitions **********************************************************/
 
 /*  There are three user-controllable LEDs on board the Arduino Due board:
@@ -146,6 +153,8 @@
  * driving the corresponding
  * GPIO output to low.
  */
+
+#define LED_DRIVER_PATH "/dev/userleds"
 
 /* LED index values for use with board_userled() */
 

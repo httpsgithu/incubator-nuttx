@@ -1,6 +1,8 @@
 /****************************************************************************
  * libs/libc/modlib/modlib_init.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -38,32 +40,14 @@
 #include "modlib/modlib.h"
 
 /****************************************************************************
- * Pre-processor Definitions
- ****************************************************************************/
-
-/* CONFIG_DEBUG_FEATURES, CONFIG_DEBUG_INFO, and CONFIG_MODLIB_DUMPBUFFER
- * have to be defined or CONFIG_MODLIB_DUMPBUFFER does nothing.
- */
-
-#if !defined(CONFIG_DEBUG_INFO) || !defined (CONFIG_MODLIB_DUMPBUFFER)
-#  undef CONFIG_MODLIB_DUMPBUFFER
-#endif
-
-#ifdef CONFIG_MODLIB_DUMPBUFFER
-# define modlib_dumpbuffer(m,b,n) binfodumpbuffer(m,b,n)
-#else
-# define modlib_dumpbuffer(m,b,n)
-#endif
-
-/****************************************************************************
  * Private Functions
  ****************************************************************************/
 
 /****************************************************************************
- * Name: modlib_filelen
+ * Name: modlib_fileinfo
  *
  * Description:
- *  Get the size of the ELF file
+ *  Get the info of the ELF file
  *
  * Returned Value:
  *   0 (OK) is returned on success and a negated errno is returned on
@@ -71,15 +55,14 @@
  *
  ****************************************************************************/
 
-static inline int modlib_filelen(FAR struct mod_loadinfo_s *loadinfo,
-                                 FAR const char *filename)
+static inline int modlib_fileinfo(FAR struct mod_loadinfo_s *loadinfo)
 {
   struct stat buf;
   int ret;
 
   /* Get the file stats */
 
-  ret = _NX_STAT(filename, &buf);
+  ret = _NX_STAT(loadinfo->filfd, &buf);
   if (ret < 0)
     {
       int errval = _NX_GETERRNO(ret);
@@ -87,21 +70,12 @@ static inline int modlib_filelen(FAR struct mod_loadinfo_s *loadinfo,
       return -errval;
     }
 
-  /* Verify that it is a regular file */
+  /* Return some stats info of the file in the loadinfo structure */
 
-  if (!S_ISREG(buf.st_mode))
-    {
-      berr("ERROR: Not a regular file.  mode: %d\n", buf.st_mode);
-      return -ENOENT;
-    }
-
-  /* TODO:  Verify that the file is readable.  Not really important because
-   * we will detect this when we try to open the file read-only.
-   */
-
-  /* Return the size of the file in the loadinfo structure */
-
-  loadinfo->filelen = buf.st_size;
+  loadinfo->filelen  = buf.st_size;
+  loadinfo->fileuid  = buf.st_uid;
+  loadinfo->filegid  = buf.st_gid;
+  loadinfo->filemode = buf.st_mode;
   return OK;
 }
 
@@ -132,16 +106,6 @@ int modlib_initialize(FAR const char *filename,
   /* Clear the load info structure */
 
   memset(loadinfo, 0, sizeof(struct mod_loadinfo_s));
-  loadinfo->filfd = -1;
-
-  /* Get the length of the file. */
-
-  ret = modlib_filelen(loadinfo, filename);
-  if (ret < 0)
-    {
-      berr("ERROR: modlib_filelen failed: %d\n", ret);
-      return ret;
-    }
 
   /* Open the binary file for reading (only) */
 
@@ -151,6 +115,15 @@ int modlib_initialize(FAR const char *filename,
       int errval = _NX_GETERRNO(loadinfo->filfd);
       berr("ERROR: Failed to open ELF binary %s: %d\n", filename, errval);
       return -errval;
+    }
+
+  /* Get some stats info of the file. */
+
+  ret = modlib_fileinfo(loadinfo);
+  if (ret < 0)
+    {
+      berr("ERROR: modlib_fileinfo failed: %d\n", ret);
+      return ret;
     }
 
   /* Read the ELF ehdr from offset 0 */
@@ -179,8 +152,7 @@ int modlib_initialize(FAR const char *filename,
        */
 
       berr("ERROR: Bad ELF header: %d\n", ret);
-      return ret;
     }
 
-  return OK;
+  return ret;
 }

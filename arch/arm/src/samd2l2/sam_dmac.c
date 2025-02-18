@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/samd2l2/sam_dmac.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -33,9 +35,9 @@
 
 #include <nuttx/irq.h>
 #include <nuttx/arch.h>
+#include <nuttx/mutex.h>
 #include <nuttx/semaphore.h>
 
-#include "arm_arch.h"
 #include "arm_internal.h"
 #include "sched/sched.h"
 #include "chip.h"
@@ -99,14 +101,8 @@ struct sam_dmach_s
  * Private Function Prototypes
  ****************************************************************************/
 
-static int   sam_takechsem(void);
-static inline void sam_givechsem(void);
-#if CONFIG_SAMD2L2_DMAC_NDESC > 0
-static void   sam_takedsem(void);
-static inline void sam_givedsem(void);
-#endif
 static void   sam_dmaterminate(struct sam_dmach_s *dmach, int result);
-static int    sam_dmainterrupt(int irq, void *context, FAR void *arg);
+static int    sam_dmainterrupt(int irq, void *context, void *arg);
 static struct dma_desc_s *sam_alloc_desc(struct sam_dmach_s *dmach);
 static struct dma_desc_s *sam_append_desc(struct sam_dmach_s *dmach,
                 uint16_t btctrl, uint16_t btcnt,
@@ -123,11 +119,11 @@ static int    sam_rxbuffer(struct sam_dmach_s *dmach, uint32_t paddr,
  * Private Data
  ****************************************************************************/
 
-/* These semaphores protect the DMA channel and descriptor tables */
+/* These mutex protect the DMA channel and descriptor tables */
 
-static sem_t g_chsem;
+static mutex_t g_chlock = NXMUTEX_INITIALIZER;
 #if CONFIG_SAMD2L2_DMAC_NDESC > 0
-static sem_t g_dsem;
+static sem_t g_dsem = SEM_INITIALIZER(CONFIG_SAMD2L2_DMAC_NDESC);
 #endif
 
 /* This array describes the state of each DMA channel */
@@ -143,9 +139,9 @@ static struct sam_dmach_s g_dmach[SAMD2L2_NDMACHAN];
  */
 
 static struct dma_desc_s g_base_desc[SAMD2L2_NDMACHAN]
-  locate_data(".lpram"), aligned(16);
+  locate_data(".lpram") aligned_data(16);
 static struct dma_desc_s g_writeback_desc[SAMD2L2_NDMACHAN]
-  locate_data(".lpram"), aligned(16);
+  locate_data(".lpram") aligned_data(16);
 
 #if CONFIG_SAMD2L2_DMAC_NDESC > 0
 /* Additional DMA descriptors for (optional) multi-block transfer support.
@@ -153,50 +149,12 @@ static struct dma_desc_s g_writeback_desc[SAMD2L2_NDMACHAN]
  */
 
 static struct dma_desc_s g_dma_desc[CONFIG_SAMD2L2_DMAC_NDESC]
-  locate_data(".lpram"), aligned(16);
+  locate_data(".lpram") aligned_data(16);
 #endif
 
 /****************************************************************************
  * Private Functions
  ****************************************************************************/
-
-/****************************************************************************
- * Name: sam_takechsem() and sam_givechsem()
- *
- * Description:
- *   Used to get exclusive access to the DMA channel table
- *
- ****************************************************************************/
-
-static int sam_takechsem(void)
-{
-  return nxsem_wait_uninterruptible(&g_chsem);
-}
-
-static inline void sam_givechsem(void)
-{
-  nxsem_post(&g_chsem);
-}
-
-/****************************************************************************
- * Name: sam_takedsem() and sam_givedsem()
- *
- * Description:
- *   Used to wait for availability of descriptors in the descriptor table.
- *
- ****************************************************************************/
-
-#if CONFIG_SAMD2L2_DMAC_NDESC > 0
-static void sam_takedsem(void)
-{
-  nxsem_wait_uninterruptible(&g_dsem);
-}
-
-static inline void sam_givedsem(void)
-{
-  nxsem_post(&g_dsem);
-}
-#endif
 
 /****************************************************************************
  * Name: sam_dmaterminate
@@ -222,7 +180,7 @@ static void sam_dmaterminate(struct sam_dmach_s *dmach, int result)
 
   /* Disable all channel interrupts */
 
-  putreg8(1 << dmach->dc_chan, SAM_DMAC_CHINTENCLR);
+  putreg8(DMAC_INT_ALL, SAM_DMAC_CHINTENCLR);
   leave_critical_section(flags);
 
   /* Free the DMA descriptor list */
@@ -249,7 +207,7 @@ static void sam_dmaterminate(struct sam_dmach_s *dmach, int result)
  *
  ****************************************************************************/
 
-static int sam_dmainterrupt(int irq, void *context, FAR void *arg)
+static int sam_dmainterrupt(int irq, void *context, void *arg)
 {
   struct sam_dmach_s *dmach;
   unsigned int chndx;
@@ -376,7 +334,7 @@ static struct dma_desc_s *sam_alloc_desc(struct sam_dmach_s *dmach)
        * it is ours.
        */
 
-      sam_takedsem();
+      nxsem_wait_uninterruptible(&g_dsem);
 
       /* Examine each list entry to find an available one -- i.e., one
        * with srcaddr == 0.  That srcaddr field is set to zero by the DMA
@@ -532,7 +490,7 @@ static void sam_free_desc(struct sam_dmach_s *dmach)
 
       next = (struct dma_desc_s *)desc->descaddr;
       memset(desc, 0, sizeof(struct dma_desc_s));
-      sam_givedsem();
+      nxsem_post(&g_dsem);
     }
 #endif
 }
@@ -771,13 +729,6 @@ void weak_function arm_dma_initialize(void)
   dmainfo("Initialize DMAC\n");
   int i;
 
-  /* Initialize global semaphores */
-
-  nxsem_init(&g_chsem, 0, 1);
-#if CONFIG_SAMD2L2_DMAC_NDESC > 0
-  nxsem_init(&g_dsem, 0, CONFIG_SAMD2L2_DMAC_NDESC);
-#endif
-
   /* Initialized the DMA channel table */
 
   for (i = 0; i < SAMD2L2_NDMACHAN; i++)
@@ -854,7 +805,7 @@ DMA_HANDLE sam_dmachannel(uint32_t chflags)
   /* Search for an available DMA channel */
 
   dmach = NULL;
-  ret = sam_takechsem();
+  ret = nxmutex_lock(&g_chlock);
   if (ret < 0)
     {
       return NULL;
@@ -884,13 +835,13 @@ DMA_HANDLE sam_dmachannel(uint32_t chflags)
 
           /* Disable all channel interrupts */
 
-          putreg8(1 << chndx, SAM_DMAC_CHINTENCLR);
+          putreg8(DMAC_INT_ALL, SAM_DMAC_CHINTENCLR);
           leave_critical_section(flags);
           break;
         }
     }
 
-  sam_givechsem();
+  nxmutex_unlock(&g_chlock);
 
   dmainfo("chflags: %08x returning dmach: %p\n",  (int)chflags, dmach);
   return (DMA_HANDLE)dmach;

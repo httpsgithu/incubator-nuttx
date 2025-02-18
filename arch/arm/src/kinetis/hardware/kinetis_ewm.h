@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/kinetis/hardware/kinetis_ewm.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -54,7 +56,7 @@
 #define EWM_CTRL_EWMEN             (1 << 0)  /* Bit 0:  EWM enable */
 #define EWM_CTRL_ASSIN             (1 << 2)  /* Bit 1:  EWM_in's Assertion State Select */
 #define EWM_CTRL_INEN              (1 << 3)  /* Bit 2:  Input Enable */
-                                             /* Bits 7–3: Reserved */
+                                             /* Bits 7-3: Reserved */
 
 /* Service Register (8-bit values:  0xb4 followed by 0x2c) */
 

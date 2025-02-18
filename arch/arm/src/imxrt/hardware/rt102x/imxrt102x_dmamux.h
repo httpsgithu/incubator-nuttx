@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/imxrt/hardware/rt102x/imxrt102x_dmamux.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -18,8 +20,8 @@
  *
  ****************************************************************************/
 
-#ifndef __ARCH_ARM_SRC_IMXRT_HARDWARE_IMXRT102X_DMAMUX_H
-#define __ARCH_ARM_SRC_IMXRT_HARDWARE_IMXRT102X_DMAMUX_H
+#ifndef __ARCH_ARM_SRC_IMXRT_HARDWARE_RT102X_IMXRT102X_DMAMUX_H
+#define __ARCH_ARM_SRC_IMXRT_HARDWARE_RT102X_IMXRT102X_DMAMUX_H
 
 /****************************************************************************
  * Included Files
@@ -124,4 +126,4 @@
 
 #define IMXRT_DMA_NCHANNELS          128  /* Includes reserved channels */
 
-#endif /* __ARCH_ARM_SRC_IMXRT_HARDWARE_IMXRT102X_DMAMUX_H */
+#endif /* __ARCH_ARM_SRC_IMXRT_HARDWARE_RT102X_IMXRT102X_DMAMUX_H */

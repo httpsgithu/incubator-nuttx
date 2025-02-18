@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/stm32l4/hardware/stm32l4_flash.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -243,7 +245,7 @@
 #endif
 #define FLASH_CR_START              (1 << 16)               /* Bit 16: Start Erase */
 #define FLASH_CR_OPTSTRT            (1 << 17)               /* Bit 17: Options modification Start */
-#define FLASH_CR_FSTPG              (1 << 23)               /* Bit 23: Fast programming */
+#define FLASH_CR_FSTPG              (1 << 18)               /* Bit 18: Fast programming */
 #define FLASH_CR_EOPIE              (1 << 24)               /* Bit 24: End of operation interrupt enable */
 #define FLASH_CR_ERRIE              (1 << 25)               /* Bit 25: Error interrupt enable */
 #define FLASH_CR_RDERRIE            (1 << 26)               /* Bit 26: PCROP read error interrupt enable */
@@ -253,7 +255,7 @@
 
 /* Flash ECC Register (ECCR) */
 
-#define FLASH_ECCR_ADDR_ECC_SHIFT   (0)                    /* Bits 8-15: Read protect */
+#define FLASH_ECCR_ADDR_ECC_SHIFT   (0)                    /* Bits 0-18: ECC fail address */
 #define FLASH_ECCR_ADDR_ECC_MASK    (0x07ffff << FLASH_ECCR_ADDR_ECC_SHIFT)
 #if defined(CONFIG_STM32L4_STM32L4X5) || defined(CONFIG_STM32L4_STM32L4X6) || \
     defined(CONFIG_STM32L4_STM32L4XR)

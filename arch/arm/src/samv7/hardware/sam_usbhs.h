@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/samv7/hardware/sam_usbhs.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -692,9 +694,9 @@
 
 #define USBHS_HSTPIPISR_CURRBK_SHIFT       (14)              /* Bits 14-15: Current Bank */
 #define USBHS_HSTPIPISR_CURRBK_MASK        (3 << USBHS_HSTPIPISR_CURRBK_SHIFT)
-# define USBHS_HSTPIPISR_CURRBK_BANK0      (0 << USBHS_HSTPIPISR_CURRBK_SHIFT) /* Current bank is bank0 */
-# define USBHS_HSTPIPISR_CURRBK_BANK1      (1 << USBHS_HSTPIPISR_CURRBK_SHIFT) /* Current bank is bank1 */
-# define USBHS_HSTPIPISR_CURRBK_BANK2      (2 << USBHS_HSTPIPISR_CURRBK_SHIFT) /* Current bank is bank2 */
+#  define USBHS_HSTPIPISR_CURRBK_BANK0     (0 << USBHS_HSTPIPISR_CURRBK_SHIFT) /* Current bank is bank0 */
+#  define USBHS_HSTPIPISR_CURRBK_BANK1     (1 << USBHS_HSTPIPISR_CURRBK_SHIFT) /* Current bank is bank1 */
+#  define USBHS_HSTPIPISR_CURRBK_BANK2     (2 << USBHS_HSTPIPISR_CURRBK_SHIFT) /* Current bank is bank2 */
 
 #define USBHS_HSTPIPISR_RWALL              (1 << 16)         /* Bit 16: Read/Write Allowed */
 #define USBHS_HSTPIPISR_CFGOK              (1 << 18)         /* Bit 18: Configuration OK Status */

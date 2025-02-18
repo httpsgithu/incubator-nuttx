@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/risc-v/src/rv32m1/rv32m1_timersvc.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -25,8 +27,7 @@
 #include <nuttx/config.h>
 #include <stdint.h>
 
-#include "riscv_arch.h"
-
+#include "riscv_internal.h"
 #include "rv32m1.h"
 #include "hardware/rv32m1_tstmr.h"
 #include "rv32m1_timersvc.h"

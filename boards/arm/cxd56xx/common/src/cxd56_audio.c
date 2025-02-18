@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/cxd56xx/common/src/cxd56_audio.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -33,13 +35,13 @@
 
 #include <nuttx/arch.h>
 #include <nuttx/audio/audio.h>
-#include <nuttx/audio/cxd56.h>
 #include <nuttx/audio/pcm.h>
 #include <nuttx/signal.h>
 #include <arch/chip/audio.h>
+#include <arch/chip/nxaudio.h>
 
 #include "chip.h"
-#include "arm_arch.h"
+#include "arm_internal.h"
 
 #include <arch/board/board.h>
 #include "cxd56_pmic.h"
@@ -466,8 +468,8 @@ static struct cxd56_lower_s g_cxd56_lower[2];
 
 int board_audio_initialize_driver(int minor)
 {
-  FAR struct audio_lowerhalf_s *cxd56;
-  FAR struct audio_lowerhalf_s *pcm;
+  struct audio_lowerhalf_s *cxd56;
+  struct audio_lowerhalf_s *pcm;
   char devname[12];
   int ret;
 
@@ -481,6 +483,10 @@ int board_audio_initialize_driver(int minor)
       return -ENODEV;
     }
 
+#ifndef CONFIG_AUDIO_FORMAT_PCM
+  pcm = cxd56;
+#else
+
   /* Initialize a PCM decoder with the CXD56 instance. */
 
   pcm = pcm_decode_initialize(cxd56);
@@ -491,9 +497,11 @@ int board_audio_initialize_driver(int minor)
       return -ENODEV;
     }
 
+#endif
+
   /* Create a device name */
 
-  snprintf(devname, 12, "pcm%d",  minor);
+  snprintf(devname, sizeof(devname), "pcm%d",  minor);
 
   /* Finally, we can register the PCM/CXD56 audio device. */
 
@@ -518,7 +526,7 @@ int board_audio_initialize_driver(int minor)
 
   /* Create a device name */
 
-  snprintf(devname, 12, "pcm_in%d",  minor);
+  snprintf(devname, sizeof(devname), "pcm_in%d",  minor);
 
   /* Finally, we can register the CXD56 audio input device. */
 

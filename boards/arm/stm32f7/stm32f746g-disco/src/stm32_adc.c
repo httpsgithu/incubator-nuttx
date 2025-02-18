@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/stm32f7/stm32f746g-disco/src/stm32_adc.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -51,9 +53,9 @@
  */
 
 #ifdef ADC_HAVE_DMA
-# define ADC3_NCHANNELS 6
+#  define ADC3_NCHANNELS 6
 #else
-# define ADC3_NCHANNELS 1
+#  define ADC3_NCHANNELS 1
 #endif
 
 /* The number of ADC channels in the conversion list */

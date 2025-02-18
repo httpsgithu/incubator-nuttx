@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/nuc1xx/nuc_irq.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -33,9 +35,7 @@
 #include <arch/irq.h>
 
 #include "nvic.h"
-#include "arm_arch.h"
 #include "arm_internal.h"
-
 #include "nuc_irq.h"
 
 /****************************************************************************
@@ -47,22 +47,6 @@
 #define DEFPRIORITY32 \
   (NVIC_SYSH_PRIORITY_DEFAULT << 24 | NVIC_SYSH_PRIORITY_DEFAULT << 16 | \
    NVIC_SYSH_PRIORITY_DEFAULT << 8  | NVIC_SYSH_PRIORITY_DEFAULT)
-
-/****************************************************************************
- * Public Data
- ****************************************************************************/
-
-/* g_current_regs[] holds a references to the current interrupt level
- * register storage structure.  If is non-NULL only during interrupt
- * processing.  Access to g_current_regs[] must be through the macro
- * CURRENT_REGS for portability.
- */
-
-volatile uint32_t *g_current_regs[1];
-
-/****************************************************************************
- * Private Data
- ****************************************************************************/
 
 /****************************************************************************
  * Private Functions
@@ -124,7 +108,7 @@ static void nuc_dumpnvic(const char *msg, int irq)
  ****************************************************************************/
 
 #ifdef CONFIG_DEBUG_FEATURES
-static int nuc_nmi(int irq, FAR void *context, FAR void *arg)
+static int nuc_nmi(int irq, void *context, void *arg)
 {
   up_irq_save();
   _err("PANIC!!! NMI received\n");
@@ -132,7 +116,7 @@ static int nuc_nmi(int irq, FAR void *context, FAR void *arg)
   return 0;
 }
 
-static int nuc_pendsv(int irq, FAR void *context, FAR void *arg)
+static int nuc_pendsv(int irq, void *context, void *arg)
 {
   up_irq_save();
   _err("PANIC!!! PendSV received\n");
@@ -140,7 +124,7 @@ static int nuc_pendsv(int irq, FAR void *context, FAR void *arg)
   return 0;
 }
 
-static int nuc_reserved(int irq, FAR void *context, FAR void *arg)
+static int nuc_reserved(int irq, void *context, void *arg)
 {
   up_irq_save();
   _err("PANIC!!! Reserved interrupt\n");
@@ -206,10 +190,6 @@ void up_irqinitialize(void)
       regaddr = ARMV6M_NVIC_IPR(i);
       putreg32(DEFPRIORITY32, regaddr);
     }
-
-  /* currents_regs is non-NULL only while processing an interrupt */
-
-  CURRENT_REGS = NULL;
 
   /* Attach the SVCall and Hard Fault exception handlers.  The SVCall
    * exception is used for performing context switches; The Hard Fault

@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/stm32/mikroe-stm32f4/src/stm32_touchscreen.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -27,6 +29,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <fcntl.h>
+#include <poll.h>
 #include <sched.h>
 #include <assert.h>
 #include <errno.h>
@@ -38,12 +41,11 @@
 #include <nuttx/wqueue.h>
 #include <nuttx/fs/fs.h>
 #include <nuttx/input/touchscreen.h>
+#include <nuttx/mutex.h>
 #include <nuttx/semaphore.h>
 
 #include <arch/board/board.h>
-#include "arm_arch.h"
 #include "arm_internal.h"
-
 #include "stm32_adc.h"
 #include "stm32_gpio.h"
 #include "mikroe-stm32f4.h"
@@ -215,7 +217,7 @@ struct tc_dev_s
   uint16_t newy;                       /* New, un-thresholded Y value */
   uint8_t sampcount;                   /* Count of samples for average so far */
   uint8_t resamplecount;               /* Countdown to PENUP */
-  sem_t devsem;                        /* Manages exclusive access to this structure */
+  mutex_t devlock;                     /* Manages exclusive access to this structure */
   sem_t waitsem;                       /* Used to wait for the availability of data */
   struct tc_sample_s sample;           /* Last sampled touch point data */
   struct work_s work;                  /* Supports the state machine delayed processing */
@@ -239,20 +241,20 @@ static void tc_y_sample(void);
 static void tc_x_sample(void);
 static inline bool tc_valid_sample(uint16_t sample);
 
-static void tc_notify(FAR struct tc_dev_s *priv);
-static int tc_sample(FAR struct tc_dev_s *priv,
-                     FAR struct tc_sample_s *sample);
-static int tc_waitsample(FAR struct tc_dev_s *priv,
-                         FAR struct tc_sample_s *sample);
-static void tc_worker(FAR void *arg);
+static void tc_notify(struct tc_dev_s *priv);
+static int tc_sample(struct tc_dev_s *priv,
+                     struct tc_sample_s *sample);
+static int tc_waitsample(struct tc_dev_s *priv,
+                         struct tc_sample_s *sample);
+static void tc_worker(void *arg);
 
 /* Character driver methods */
 
-static int tc_open(FAR struct file *filep);
-static int tc_close(FAR struct file *filep);
-static ssize_t tc_read(FAR struct file *filep, FAR char *buffer, size_t len);
-static int tc_ioctl(FAR struct file *filep, int cmd, unsigned long arg);
-static int tc_poll(FAR struct file *filep, struct pollfd *fds, bool setup);
+static int tc_open(struct file *filep);
+static int tc_close(struct file *filep);
+static ssize_t tc_read(struct file *filep, char *buffer, size_t len);
+static int tc_ioctl(struct file *filep, int cmd, unsigned long arg);
+static int tc_poll(struct file *filep, struct pollfd *fds, bool setup);
 
 /****************************************************************************
  * Private Data
@@ -260,14 +262,16 @@ static int tc_poll(FAR struct file *filep, struct pollfd *fds, bool setup);
 
 /* This the vtable that supports the character driver interface */
 
-static const struct file_operations tc_fops =
+static const struct file_operations g_tc_fops =
 {
   tc_open,    /* open */
   tc_close,   /* close */
   tc_read,    /* read */
-  0,          /* write */
-  0,          /* seek */
+  NULL,       /* write */
+  NULL,       /* seek */
   tc_ioctl,   /* ioctl */
+  NULL,       /* mmap */
+  NULL,       /* truncate */
   tc_poll     /* poll */
 };
 
@@ -572,10 +576,8 @@ static inline bool tc_valid_sample(uint16_t sample)
  * Name: tc_notify
  ****************************************************************************/
 
-static void tc_notify(FAR struct tc_dev_s *priv)
+static void tc_notify(struct tc_dev_s *priv)
 {
-  int i;
-
   /* If no threads have the driver open, then just dump the state */
 
 #ifdef CONFIG_TOUCHSCREEN_REFCNT
@@ -594,16 +596,7 @@ static void tc_notify(FAR struct tc_dev_s *priv)
    * read the data, then some make end up blocking after all.
    */
 
-  for (i = 0; i < CONFIG_TOUCHSCREEN_NPOLLWAITERS; i++)
-    {
-      struct pollfd *fds = priv->fds[i];
-      if (fds)
-        {
-          fds->revents |= POLLIN;
-          iinfo("Report events: %02x\n", fds->revents);
-          nxsem_post(fds->sem);
-        }
-    }
+  poll_notify(priv->fds, CONFIG_TOUCHSCREEN_NPOLLWAITERS, POLLIN);
 
   /* If there are threads waiting for read data, then signal one of them
    * that the read data is available.
@@ -626,8 +619,8 @@ static void tc_notify(FAR struct tc_dev_s *priv)
  *
  ****************************************************************************/
 
-static int tc_sample(FAR struct tc_dev_s *priv,
-                          FAR struct tc_sample_s *sample)
+static int tc_sample(struct tc_dev_s *priv,
+                          struct tc_sample_s *sample)
 {
   int ret = -EAGAIN;
 
@@ -671,23 +664,25 @@ static int tc_sample(FAR struct tc_dev_s *priv,
  * Name: tc_waitsample
  ****************************************************************************/
 
-static int tc_waitsample(FAR struct tc_dev_s *priv,
-                              FAR struct tc_sample_s *sample)
+static int tc_waitsample(struct tc_dev_s *priv,
+                              struct tc_sample_s *sample)
 {
   int ret;
+  irqstate_t flags;
 
-  /* Pre-emption must be disabled when this is called to prevent sampled
-   * data from changing until it has been reported.
+  /* Interrupts must be disabled when this is called to (1) prevent posting
+   * of semaphores from interrupt handlers, and (2) to prevent sampled data
+   * from changing until it has been reported.
    */
 
-  sched_lock();
+  flags = enter_critical_section();
 
-  /* Now release the semaphore that manages mutually exclusive access to
+  /* Now release the mutex that manages mutually exclusive access to
    * the device structure.  This may cause other tasks to become ready to
    * run, but they cannot run yet because pre-emption is disabled.
    */
 
-  nxsem_post(&priv->devsem);
+  nxmutex_unlock(&priv->devlock);
 
   /* Try to get the a sample... if we cannot, then wait on the semaphore
    * that is posted when new sample data is available.
@@ -712,16 +707,15 @@ static int tc_waitsample(FAR struct tc_dev_s *priv,
    * sample. Interrupts and pre-emption will be re-enabled while we wait.
    */
 
-  ret = nxsem_wait(&priv->devsem);
+  ret = nxmutex_lock(&priv->devlock);
 
 errout:
-  /* Restore pre-emption.  We might get suspended here but that is okay
-   * because we already have our sample.  Note:  this means that if there
-   * were two threads reading from the touchscreen for some reason, the data
-   * might be read out of order.
+  /* Then re-enable interrupts.  We might get interrupt here and there
+   * could be a new sample.  But no new threads will run because we still
+   * have pre-emption disabled.
    */
 
-  sched_unlock();
+  leave_critical_section(flags);
   return ret;
 }
 
@@ -729,9 +723,9 @@ errout:
  * Name: tc_worker
  ****************************************************************************/
 
-static void tc_worker(FAR void *arg)
+static void tc_worker(void *arg)
 {
-  FAR struct tc_dev_s *priv = (FAR struct tc_dev_s *)arg;
+  struct tc_dev_s *priv = (struct tc_dev_s *)arg;
   uint32_t delay = TC_PENUP_POLL_TICKS;
   uint16_t value;
   uint16_t newx = 0;
@@ -755,7 +749,7 @@ static void tc_worker(FAR void *arg)
          * the on-board transistor drive logic to energize the touch panel.
          */
 
-        *((uint32_t *) LCD_TP_PORT_SETRESET) = LCD_SAMPY_BITS;
+        *((uint32_t *)LCD_TP_PORT_SETRESET) = LCD_SAMPY_BITS;
 
         /* Allow time for the Y DRIVE to settle */
 
@@ -821,7 +815,7 @@ static void tc_worker(FAR void *arg)
          * the on-board transistor drive logic to energize the touch panel.
          */
 
-        *((uint32_t *) LCD_TP_PORT_SETRESET) = LCD_SAMPY_BITS;
+        *((uint32_t *)LCD_TP_PORT_SETRESET) = LCD_SAMPY_BITS;
 
         /* Allow time for the Y DRIVE to settle */
 
@@ -889,7 +883,7 @@ static void tc_worker(FAR void *arg)
              * touch panel.
              */
 
-            *((uint32_t *) LCD_TP_PORT_SETRESET) = LCD_SAMPX_BITS;
+            *((uint32_t *)LCD_TP_PORT_SETRESET) = LCD_SAMPX_BITS;
 
             /* Allow time for the X sampling */
 
@@ -1096,23 +1090,22 @@ static void tc_worker(FAR void *arg)
  * Name: tc_open
  ****************************************************************************/
 
-static int tc_open(FAR struct file *filep)
+static int tc_open(struct file *filep)
 {
 #ifdef CONFIG_TOUCHSCREEN_REFCNT
-  FAR struct inode         *inode;
-  FAR struct tc_dev_s *priv;
-  uint8_t                   tmp;
-  int                       ret;
+  struct inode    *inode;
+  struct tc_dev_s *priv;
+  uint8_t          tmp;
+  int              ret;
 
-  DEBUGASSERT(filep);
   inode = filep->f_inode;
 
-  DEBUGASSERT(inode && inode->i_private);
-  priv  = (FAR struct tc_dev_s *)inode->i_private;
+  DEBUGASSERT(inode->i_private);
+  priv  = inode->i_private;
 
   /* Get exclusive access to the driver data structure */
 
-  ret = nxsem_wait(&priv->devsem);
+  ret = nxmutex_lock(&priv->devlock);
   if (ret < 0)
     {
       return ret;
@@ -1126,7 +1119,7 @@ static int tc_open(FAR struct file *filep)
       /* More than 255 opens; uint8_t overflows to zero */
 
       ret = -EMFILE;
-      goto errout_with_sem;
+      goto errout_with_lock;
     }
 
   /* When the reference increments to 1, this is the first open event
@@ -1137,8 +1130,8 @@ static int tc_open(FAR struct file *filep)
 
   priv->crefs = tmp;
 
-errout_with_sem:
-  nxsem_post(&priv->devsem);
+errout_with_lock:
+  nxmutex_unlock(&priv->devlock);
   return ret;
 #else
   return OK;
@@ -1149,22 +1142,21 @@ errout_with_sem:
  * Name: tc_close
  ****************************************************************************/
 
-static int tc_close(FAR struct file *filep)
+static int tc_close(struct file *filep)
 {
 #ifdef CONFIG_TOUCHSCREEN_REFCNT
-  FAR struct inode         *inode;
-  FAR struct tc_dev_s *priv;
-  int                       ret;
+  struct inode    *inode;
+  struct tc_dev_s *priv;
+  int              ret;
 
-  DEBUGASSERT(filep);
   inode = filep->f_inode;
 
-  DEBUGASSERT(inode && inode->i_private);
-  priv  = (FAR struct tc_dev_s *)inode->i_private;
+  DEBUGASSERT(inode->i_private);
+  priv  = inode->i_private;
 
   /* Get exclusive access to the driver data structure */
 
-  ret = nxsem_wait(&priv->devsem);
+  ret = nxmutex_lock(&priv->devlock);
   if (ret < 0)
     {
       return ret;
@@ -1180,7 +1172,7 @@ static int tc_close(FAR struct file *filep)
       priv->crefs--;
     }
 
-  nxsem_post(&priv->devsem);
+  nxmutex_unlock(&priv->devlock);
 #endif
   return OK;
 }
@@ -1189,19 +1181,18 @@ static int tc_close(FAR struct file *filep)
  * Name: tc_read
  ****************************************************************************/
 
-static ssize_t tc_read(FAR struct file *filep, FAR char *buffer, size_t len)
+static ssize_t tc_read(struct file *filep, char *buffer, size_t len)
 {
-  FAR struct inode          *inode;
-  FAR struct tc_dev_s  *priv;
-  FAR struct touch_sample_s *report;
+  struct inode          *inode;
+  struct tc_dev_s       *priv;
+  struct touch_sample_s *report;
   struct tc_sample_s    sample;
-  int                        ret;
+  int                   ret;
 
-  DEBUGASSERT(filep);
   inode = filep->f_inode;
 
-  DEBUGASSERT(inode && inode->i_private);
-  priv  = (FAR struct tc_dev_s *)inode->i_private;
+  DEBUGASSERT(inode->i_private);
+  priv  = inode->i_private;
 
   /* Verify that the caller has provided a buffer large enough to receive
    * the touch data.
@@ -1218,7 +1209,7 @@ static ssize_t tc_read(FAR struct file *filep, FAR char *buffer, size_t len)
 
   /* Get exclusive access to the driver data structure */
 
-  ret = nxsem_wait(&priv->devsem);
+  ret = nxmutex_lock(&priv->devlock);
   if (ret < 0)
     {
       return ret;
@@ -1255,7 +1246,7 @@ static ssize_t tc_read(FAR struct file *filep, FAR char *buffer, size_t len)
    * to the caller.
    */
 
-  report = (FAR struct touch_sample_s *)buffer;
+  report = (struct touch_sample_s *)buffer;
   memset(report, 0, SIZEOF_TOUCH_SAMPLE_S(1));
   report->npoints            = 1;
   report->point[0].id        = sample.id;
@@ -1302,7 +1293,7 @@ static ssize_t tc_read(FAR struct file *filep, FAR char *buffer, size_t len)
   ret = SIZEOF_TOUCH_SAMPLE_S(1);
 
 errout:
-  nxsem_post(&priv->devsem);
+  nxmutex_unlock(&priv->devlock);
   return ret;
 }
 
@@ -1310,26 +1301,25 @@ errout:
  * Name: tc_ioctl
  ****************************************************************************/
 
-static int tc_ioctl(FAR struct file *filep, int cmd, unsigned long arg)
+static int tc_ioctl(struct file *filep, int cmd, unsigned long arg)
 {
 #if 1
   iinfo("cmd: %d arg: %ld\n", cmd, arg);
   return -ENOTTY; /* None yet supported */
 #else
-  FAR struct inode *inode;
-  FAR struct tc_dev_s *priv;
+  struct inode *inode;
+  struct tc_dev_s *priv;
   int ret;
 
   iinfo("cmd: %d arg: %ld\n", cmd, arg);
-  DEBUGASSERT(filep);
   inode = filep->f_inode;
 
-  DEBUGASSERT(inode && inode->i_private);
-  priv  = (FAR struct tc_dev_s *)inode->i_private;
+  DEBUGASSERT(inode->i_private);
+  priv  = inode->i_private;
 
   /* Get exclusive access to the driver data structure */
 
-  ret = nxsem_wait(&priv->devsem);
+  ret = nxmutex_lock(&priv->devlock);
   if (ret < 0)
     {
       return ret;
@@ -1346,7 +1336,7 @@ static int tc_ioctl(FAR struct file *filep, int cmd, unsigned long arg)
         break;
     }
 
-  nxsem_post(&priv->devsem);
+  nxmutex_unlock(&priv->devlock);
   return ret;
 #endif
 }
@@ -1355,24 +1345,23 @@ static int tc_ioctl(FAR struct file *filep, int cmd, unsigned long arg)
  * Name: tc_poll
  ****************************************************************************/
 
-static int tc_poll(FAR struct file *filep, FAR struct pollfd *fds,
-                        bool setup)
+static int tc_poll(struct file *filep, struct pollfd *fds, bool setup)
 {
-  FAR struct inode         *inode;
-  FAR struct tc_dev_s *priv;
-  int                       ret;
-  int                       i;
+  struct inode    *inode;
+  struct tc_dev_s *priv;
+  int              ret;
+  int              i;
 
   iinfo("setup: %d\n", (int)setup);
-  DEBUGASSERT(filep && fds);
+  DEBUGASSERT(fds);
   inode = filep->f_inode;
 
-  DEBUGASSERT(inode && inode->i_private);
-  priv  = (FAR struct tc_dev_s *)inode->i_private;
+  DEBUGASSERT(inode->i_private);
+  priv  = inode->i_private;
 
   /* Are we setting up the poll?  Or tearing it down? */
 
-  ret = nxsem_wait(&priv->devsem);
+  ret = nxmutex_lock(&priv->devlock);
   if (ret < 0)
     {
       return ret;
@@ -1384,7 +1373,8 @@ static int tc_poll(FAR struct file *filep, FAR struct pollfd *fds,
 
       if ((fds->events & POLLIN) == 0)
         {
-          ierr("ERROR: Missing POLLIN: revents: %08x\n", fds->revents);
+          ierr("ERROR: Missing POLLIN: revents: %08" PRIx32 "\n",
+               fds->revents);
           ret = -EDEADLK;
           goto errout;
         }
@@ -1410,8 +1400,8 @@ static int tc_poll(FAR struct file *filep, FAR struct pollfd *fds,
       if (i >= CONFIG_TOUCHSCREEN_NPOLLWAITERS)
         {
           ierr("ERROR: No available slot found: %d\n", i);
-          fds->priv    = NULL;
-          ret          = -EBUSY;
+          fds->priv = NULL;
+          ret       = -EBUSY;
           goto errout;
         }
 
@@ -1419,7 +1409,7 @@ static int tc_poll(FAR struct file *filep, FAR struct pollfd *fds,
 
       if (priv->penchange)
         {
-          tc_notify(priv);
+          poll_notify(&fds, 1, POLLIN);
         }
     }
   else if (fds->priv)
@@ -1431,12 +1421,12 @@ static int tc_poll(FAR struct file *filep, FAR struct pollfd *fds,
 
       /* Remove all memory of the poll setup */
 
-      *slot                = NULL;
-      fds->priv            = NULL;
+      *slot     = NULL;
+      fds->priv = NULL;
     }
 
 errout:
-  nxsem_post(&priv->devsem);
+  nxmutex_unlock(&priv->devlock);
   return ret;
 }
 
@@ -1463,7 +1453,7 @@ errout:
 
 int stm32_tsc_setup(int minor)
 {
-  FAR struct tc_dev_s *priv;
+  struct tc_dev_s *priv;
   char devname[DEV_NAMELEN];
 #ifdef CONFIG_TOUCHSCREEN_MULTIPLE
   irqstate_t flags;
@@ -1499,7 +1489,7 @@ int stm32_tsc_setup(int minor)
 #ifndef CONFIG_TOUCHSCREEN_MULTIPLE
   priv = &g_touchscreen;
 #else
-  priv = (FAR struct tc_dev_s *)kmm_malloc(sizeof(struct tc_dev_s));
+  priv = kmm_malloc(sizeof(struct tc_dev_s));
   if (!priv)
     {
       ierr("ERROR: kmm_malloc(%d) failed\n", sizeof(struct tc_dev_s));
@@ -1510,15 +1500,15 @@ int stm32_tsc_setup(int minor)
   /* Initialize the touchscreen device driver instance */
 
   memset(priv, 0, sizeof(struct tc_dev_s));
-  nxsem_init(&priv->devsem,  0, 1); /* Initialize device structure semaphore */
+  nxmutex_init(&priv->devlock);     /* Initialize device structure mutex */
   nxsem_init(&priv->waitsem, 0, 0); /* Initialize pen event wait semaphore */
 
   /* Register the device as an input device */
 
-  snprintf(devname, DEV_NAMELEN, DEV_FORMAT, minor);
+  snprintf(devname, sizeof(devname), DEV_FORMAT, minor);
   iinfo("Registering %s\n", devname);
 
-  ret = register_driver(devname, &tc_fops, 0666, priv);
+  ret = register_driver(devname, &g_tc_fops, 0666, priv);
   if (ret < 0)
     {
       ierr("ERROR: register_driver() failed: %d\n", ret);
@@ -1546,7 +1536,8 @@ int stm32_tsc_setup(int minor)
   return OK;
 
 errout_with_priv:
-  nxsem_destroy(&priv->devsem);
+  nxmutex_destroy(&priv->devlock);
+  nxsem_destroy(&priv->waitsem);
 #ifdef CONFIG_TOUCHSCREEN_MULTIPLE
   kmm_free(priv);
 #endif

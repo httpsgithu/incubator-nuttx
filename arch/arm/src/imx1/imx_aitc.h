@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/imx1/imx_aitc.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -18,8 +20,8 @@
  *
  ****************************************************************************/
 
-#ifndef __ARCH_ARM_IMX_AITC_H
-#define __ARCH_ARM_IMX_AITC_H
+#ifndef __ARCH_ARM_SRC_IMX1_IMX_AITC_H
+#define __ARCH_ARM_SRC_IMX1_IMX_AITC_H
 
 /****************************************************************************
  * Included Files
@@ -91,13 +93,13 @@
 
 /* AITC Register Bit Definitions ********************************************/
 
-#define AITC_NIVECSR_NIPRILVL_SHIFT  0  /* Bits 15–0: Priority of highest priority interrupt */
+#define AITC_NIVECSR_NIPRILVL_SHIFT 0 /* Bits 15-0: Priority of highest priority interrupt */
 #define AITC_NIVECSR_NIPRILVL_MASK   (0x0000ffff << AITC_NIVECSR_NIPRILVL_SHIFT);
-#define AITC_NIVECSR_NIVECTOR_SHIFT  16 /* Bits 31–16: Vector index of highest priority interrupt */
+#define AITC_NIVECSR_NIVECTOR_SHIFT 16 /* Bits 31-16: Vector index of highest priority interrupt */
 #define AITC_NIVECSR_NIVECTOR_MASK   (0x0000ffff << AITC_NIVECSR_NIVECTOR_SHIFT);
 
 /****************************************************************************
  * Inline Functions
  ****************************************************************************/
 
-#endif /* __ARCH_ARM_IMX_AITC_H */
+#endif /* __ARCH_ARM_SRC_IMX1_IMX_AITC_H */

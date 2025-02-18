@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/kinetis/teensy-3.x/src/teensy-3x.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -54,16 +56,6 @@
  */
 
 #define GPIO_LED          (GPIO_HIGHDRIVE | GPIO_OUTPUT_ZERO | PIN_PORTC | PIN5)
-
-/****************************************************************************
- * Public Types
- ****************************************************************************/
-
-/****************************************************************************
- * Public Data
- ****************************************************************************/
-
-FAR struct i2c_master_s *i2c_dev;
 
 #ifndef __ASSEMBLY__
 

@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/kinetis/hardware/kinetis_tsi.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -199,7 +201,7 @@
 
 #define TSI_SCANC_EXTCHRG_SHIFT        (19)      /* Bits 19-23: External oscillator charge current select */
 #define TSI_SCANC_EXTCHRG_MASK         (31 << TSI_SCANC_EXTCHRG_SHIFT)
-#  define TSI_SCANC_EXTCHRG_UA(n)      (((n)-1) << TSI_SCANC_EXTCHRG_SHIFT) /* n µA charge current, n=1..32 */
+#  define TSI_SCANC_EXTCHRG_UA(n)      (((n)-1) << TSI_SCANC_EXTCHRG_SHIFT) /* n ÂµA charge current, n=1..32 */
 
 #define TSI_SCANC_CAPTRM_SHIFT         (24)      /* Bits 24-26: Internal capacitance trim value */
 #define TSI_SCANC_CAPTRM_MASK          (7 << TSI_SCANC_CAPTRM_SHIFT)
@@ -214,7 +216,7 @@
 
 #define TSI_SCANC_REFCHRG_SHIFT        (27)      /* Bits 27-31: Reference oscillator charge current select */
 #define TSI_SCANC_REFCHRG_MASK         (31 << TSI_SCANC_REFCHRG_SHIFT)
-#  define TSI_SCANC_REFCHRG_UA(n)      (((n)-1) << TSI_SCANC_REFCHRG_SHIFT) /* n µA charge current, n=1..32 */
+#  define TSI_SCANC_REFCHRG_UA(n)      (((n)-1) << TSI_SCANC_REFCHRG_SHIFT) /* n ÂµA charge current, n=1..32 */
 
 /* Pin enable register */
 

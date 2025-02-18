@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/stm32/stm32butterfly2/src/stm32_mmcsd.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -68,7 +70,7 @@ static void *g_chmediaarg;
 
 /* Semafor to inform stm32_cd_thread that card was inserted or pulled out */
 
-static sem_t g_cdsem;
+static sem_t g_cdsem = SEM_INITIALIZER(0);
 
 /****************************************************************************
  * Private Functions
@@ -118,7 +120,7 @@ static int stm32_cd(int irq, void *context, void *arg)
   static uint32_t prev = 0;
   struct timespec tp;
 
-  clock_gettime(CLOCK_MONOTONIC, &tp);
+  clock_systime_timespec(&tp);
   now = tp.tv_sec * 1000 + tp.tv_nsec / 1000000;
 
   /* When inserting card, card detect plate might bounce causing this
@@ -185,9 +187,7 @@ int stm32_mmcsd_initialize(int minor)
 
   stm32_gpiosetevent(GPIO_SD_CD, true, true, true, stm32_cd, NULL);
 
-  nxsem_init(&g_cdsem, 0, 0);
   pthread_attr_init(&pattr);
-
 #ifdef CONFIG_DEBUG_FS
   pthread_attr_setstacksize(&pattr, 1024);
 #else

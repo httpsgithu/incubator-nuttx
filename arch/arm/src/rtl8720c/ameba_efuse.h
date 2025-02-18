@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/rtl8720c/ameba_efuse.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -18,8 +20,8 @@
  *
  ****************************************************************************/
 
-#ifndef __INCLUDE_AMEBA_HCI_EFUSE_H
-#define __INCLUDE_AMEBA_HCI_EFUSE_H
+#ifndef __ARCH_ARM_SRC_RTL8720C_AMEBA_EFUSE_H
+#define __ARCH_ARM_SRC_RTL8720C_AMEBA_EFUSE_H
 
 /****************************************************************************
  * Included Files
@@ -45,4 +47,4 @@ int ameba_efuse_fw_verify_enable(void);
 int ameba_efuse_fw_verify_check(void);
 int ameba_efuse_boot_message_disable(void);
 int ameba_efuse_boot_message_enable(void);
-#endif /* __INCLUDE_AMEBA_FLASH_H */
+#endif /* __ARCH_ARM_SRC_RTL8720C_AMEBA_EFUSE_H */

@@ -1,6 +1,8 @@
 /****************************************************************************
  * net/socket/connect.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -33,6 +35,7 @@
 #include <debug.h>
 
 #include <nuttx/cancelpt.h>
+#include <nuttx/fs/fs.h>
 #include <nuttx/net/net.h>
 
 #include "socket/socket.h"
@@ -134,24 +137,20 @@ int psock_connect(FAR struct socket *psock, FAR const struct sockaddr *addr,
 
   /* Let the address family's connect() method handle the operation */
 
-  DEBUGASSERT(psock->s_sockif != NULL &&
-              psock->s_sockif->si_connect != NULL);
+  DEBUGASSERT(psock->s_sockif != NULL);
+  if (psock->s_sockif->si_connect == NULL)
+    {
+      return -EOPNOTSUPP;
+    }
+
   ret = psock->s_sockif->si_connect(psock, addr, addrlen);
-  if (ret < 0)
+  if (ret >= 0 && addr->sa_family != AF_UNSPEC)
     {
-      return ret;
+      FAR struct socket_conn_s *conn = psock->s_conn;
+      conn->s_flags |= _SF_CONNECTED;
     }
 
-  if (addr != NULL)
-    {
-      psock->s_flags |= _SF_CONNECTED;
-    }
-  else
-    {
-      psock->s_flags &= ~_SF_CONNECTED;
-    }
-
-  return OK;
+  return ret;
 }
 
 /****************************************************************************
@@ -226,6 +225,7 @@ int psock_connect(FAR struct socket *psock, FAR const struct sockaddr *addr,
 int connect(int sockfd, FAR const struct sockaddr *addr, socklen_t addrlen)
 {
   FAR struct socket *psock;
+  FAR struct file *filep;
   int ret;
 
   /* accept() is a cancellation point */
@@ -234,14 +234,19 @@ int connect(int sockfd, FAR const struct sockaddr *addr, socklen_t addrlen)
 
   /* Get the underlying socket structure */
 
-  psock = sockfd_socket(sockfd);
+  ret = sockfd_socket(sockfd, &filep, &psock);
 
   /* Then let psock_connect() do all of the work */
 
-  ret = psock_connect(psock, addr, addrlen);
+  if (ret == OK)
+    {
+      ret = psock_connect(psock, addr, addrlen);
+      fs_putfilep(filep);
+    }
+
   if (ret < 0)
     {
-      _SO_SETERRNO(psock, -ret);
+      set_errno(-ret);
       ret = ERROR;
     }
 

@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/mips/src/pic32mz/pic32mz_lowinit.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -26,12 +28,11 @@
 
 #include <assert.h>
 
+#include <nuttx/arch.h>
 #include <arch/pic32mz/cp0.h>
 #include <arch/board/board.h>
 
 #include "mips_internal.h"
-#include "mips_arch.h"
-
 #include "hardware/pic32mz_features.h"
 #include "hardware/pic32mz_prefetch.h"
 #include "hardware/pic32mz_osc.h"
@@ -420,7 +421,7 @@ void pic32mz_lowinit(void)
    */
 
 #ifdef USE_EARLYSERIALINIT
-  up_earlyserialinit();
+  mips_earlyserialinit();
 #endif
 
   /* Perform board-level initialization */

@@ -1,6 +1,8 @@
 /****************************************************************************
  * drivers/lcd/ug-2864ambag01.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -290,9 +292,11 @@ static void ug2864ambag01_unlock(FAR struct spi_dev_s *spi);
 
 /* LCD Data Transfer Methods */
 
-static int ug2864ambag01_putrun(fb_coord_t row, fb_coord_t col,
+static int ug2864ambag01_putrun(FAR struct lcd_dev_s *dev,
+                                fb_coord_t row, fb_coord_t col,
                                 FAR const uint8_t *buffer, size_t npixels);
-static int ug2864ambag01_getrun(fb_coord_t row, fb_coord_t col,
+static int ug2864ambag01_getrun(FAR struct lcd_dev_s *dev,
+                                fb_coord_t row, fb_coord_t col,
                                 FAR uint8_t *buffer,
                                 size_t npixels);
 
@@ -455,6 +459,7 @@ static inline void ug2864ambag01_unlock(FAR struct spi_dev_s *spi)
  *   This method can be used to write a partial raster line to the LCD.
  *
  * Input Parameters:
+ *   dev     - The lcd device
  *   row     - Starting row to write to (range: 0 <= row < yres)
  *   col     - Starting column to write to (range: 0 <= col <= xres-npixels)
  *   buffer  - The buffer containing the run to be written to the LCD
@@ -464,16 +469,12 @@ static inline void ug2864ambag01_unlock(FAR struct spi_dev_s *spi)
  ****************************************************************************/
 
 #if defined(CONFIG_LCD_LANDSCAPE) || defined(CONFIG_LCD_RLANDSCAPE)
-static int ug2864ambag01_putrun(fb_coord_t row, fb_coord_t col,
-                                FAR const uint8_t *buffer,
-                                size_t npixels)
+static int ug2864ambag01_putrun(FAR struct lcd_dev_s *dev,
+                                fb_coord_t row, fb_coord_t col,
+                                FAR const uint8_t *buffer, size_t npixels)
 {
-  /* Because of this line of code, we will only be able to support a single
-   * UG device
-   */
-
-  FAR struct ug2864ambag01_dev_s *priv =
-                      (FAR struct ug2864ambag01_dev_s *)&g_oleddev;
+  FAR struct ug2864ambag01_dev_s *priv = (FAR struct ug2864ambag01_dev_s *)
+                                          dev;
   FAR uint8_t *fbptr;
   FAR uint8_t *ptr;
   uint8_t devcol;
@@ -673,6 +674,7 @@ static int ug2864ambag01_putrun(fb_coord_t row, fb_coord_t col,
  * Description:
  *   This method can be used to write a partial raster line to the LCD.
  *
+ *  dev     - The lcd device
  *  row     - Starting row to read from (range: 0 <= row < yres)
  *  col     - Starting column to read read (range: 0 <= col <= xres-npixels)
  *  buffer  - The buffer in which to return the run read from the LCD
@@ -682,15 +684,13 @@ static int ug2864ambag01_putrun(fb_coord_t row, fb_coord_t col,
  ****************************************************************************/
 
 #if defined(CONFIG_LCD_LANDSCAPE) || defined(CONFIG_LCD_RLANDSCAPE)
-static int ug2864ambag01_getrun(fb_coord_t row, fb_coord_t col,
+static int ug2864ambag01_getrun(FAR struct lcd_dev_s *dev,
+                                fb_coord_t row, fb_coord_t col,
                                 FAR uint8_t *buffer,
                                 size_t npixels)
 {
-  /* Because of this line of code, we will only be able to support a single
-   * UG device
-   */
-
-  FAR struct ug2864ambag01_dev_s *priv = &g_oleddev;
+  FAR struct ug2864ambag01_dev_s *priv = (FAR struct ug2864ambag01_dev_s *)
+                                          dev;
   FAR uint8_t *fbptr;
   uint8_t page;
   uint8_t fbmask;
@@ -867,6 +867,7 @@ static int ug2864ambag01_getplaneinfo(FAR struct lcd_dev_s *dev,
   DEBUGASSERT(pinfo && planeno == 0);
   lcdinfo("planeno: %d bpp: %d\n", planeno, g_planeinfo.bpp);
   memcpy(pinfo, &g_planeinfo, sizeof(struct lcd_planeinfo_s));
+  pinfo->dev = dev;
   return OK;
 }
 

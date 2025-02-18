@@ -1,6 +1,8 @@
 /****************************************************************************
  * drivers/i2s/i2schar.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -43,6 +45,7 @@
 #include <debug.h>
 #include <errno.h>
 
+#include <nuttx/mutex.h>
 #include <nuttx/kmalloc.h>
 #include <nuttx/fs/fs.h>
 #include <nuttx/audio/audio.h>
@@ -73,7 +76,7 @@
 struct i2schar_dev_s
 {
   FAR struct i2s_dev_s *i2s;  /* The lower half i2s driver */
-  sem_t exclsem;              /* Assures mutually exclusive access */
+  mutex_t lock;               /* Assures mutually exclusive access */
 };
 
 /****************************************************************************
@@ -103,7 +106,7 @@ static int i2schar_ioctl(FAR struct file *filep, int cmd, unsigned long arg);
  * Private Data
  ****************************************************************************/
 
-static const struct file_operations i2schar_fops =
+static const struct file_operations g_i2schar_fops =
 {
   NULL,                 /* open  */
   NULL,                 /* close */
@@ -111,7 +114,6 @@ static const struct file_operations i2schar_fops =
   i2schar_write,        /* write */
   NULL,                 /* seek  */
   i2schar_ioctl,        /* ioctl */
-  NULL,                 /* poll  */
 };
 
 /****************************************************************************
@@ -217,12 +219,11 @@ static ssize_t i2schar_read(FAR struct file *filep, FAR char *buffer,
 
   /* Get our private data structure */
 
-  DEBUGASSERT(filep != NULL && buffer != NULL);
+  DEBUGASSERT(buffer != NULL);
 
   inode = filep->f_inode;
-  DEBUGASSERT(inode != NULL);
 
-  priv = (FAR struct i2schar_dev_s *)inode->i_private;
+  priv = inode->i_private;
   DEBUGASSERT(priv != NULL);
 
   /* Verify that the buffer refers to one, correctly sized audio buffer */
@@ -239,7 +240,7 @@ static ssize_t i2schar_read(FAR struct file *filep, FAR char *buffer,
 
   /* Get exclusive access to i2c character driver */
 
-  ret = nxsem_wait(&priv->exclsem);
+  ret = nxmutex_lock(&priv->lock);
   if (ret < 0)
     {
       i2serr("ERROR: nxsem_wait returned: %d\n", ret);
@@ -260,12 +261,12 @@ static ssize_t i2schar_read(FAR struct file *filep, FAR char *buffer,
    * received
    */
 
-  nxsem_post(&priv->exclsem);
+  nxmutex_unlock(&priv->lock);
   return sizeof(struct ap_buffer_s) + nbytes;
 
 errout_with_reference:
   apb_free(apb);
-  nxsem_post(&priv->exclsem);
+  nxmutex_unlock(&priv->lock);
   return ret;
 }
 
@@ -290,12 +291,11 @@ static ssize_t i2schar_write(FAR struct file *filep, FAR const char *buffer,
 
   /* Get our private data structure */
 
-  DEBUGASSERT(filep && buffer);
+  DEBUGASSERT(buffer);
 
   inode = filep->f_inode;
-  DEBUGASSERT(inode);
 
-  priv = (FAR struct i2schar_dev_s *)inode->i_private;
+  priv = inode->i_private;
   DEBUGASSERT(priv);
 
   /* Verify that the buffer refers to one, correctly sized audio buffer */
@@ -312,7 +312,7 @@ static ssize_t i2schar_write(FAR struct file *filep, FAR const char *buffer,
 
   /* Get exclusive access to i2c character driver */
 
-  ret = nxsem_wait(&priv->exclsem);
+  ret = nxmutex_lock(&priv->lock);
   if (ret < 0)
     {
       i2serr("ERROR: nxsem_wait returned: %d\n", ret);
@@ -333,12 +333,12 @@ static ssize_t i2schar_write(FAR struct file *filep, FAR const char *buffer,
    * sent.
    */
 
-  nxsem_post(&priv->exclsem);
+  nxmutex_unlock(&priv->lock);
   return sizeof(struct ap_buffer_s) + nbytes;
 
 errout_with_reference:
   apb_free(apb);
-  nxsem_post(&priv->exclsem);
+  nxmutex_unlock(&priv->lock);
   return ret;
 }
 
@@ -358,12 +358,9 @@ static int i2schar_ioctl(FAR struct file *filep, int cmd, unsigned long arg)
 
   /* Get our private data structure */
 
-  DEBUGASSERT(filep != NULL);
-
   inode = filep->f_inode;
-  DEBUGASSERT(inode != NULL);
 
-  priv = (FAR struct i2schar_dev_s *)inode->i_private;
+  priv = inode->i_private;
   DEBUGASSERT(priv != NULL && priv->i2s && priv->i2s->ops);
 
   if (priv->i2s->ops->i2s_ioctl)
@@ -414,24 +411,25 @@ int i2schar_register(FAR struct i2s_dev_s *i2s, int minor)
   /* Allocate a I2S character device structure */
 
   size_t dev_size = sizeof(struct i2schar_dev_s);
-  priv = (FAR struct i2schar_dev_s *)kmm_zalloc(dev_size);
+  priv = kmm_zalloc(dev_size);
   if (priv)
     {
       /* Initialize the I2S character device structure */
 
       priv->i2s = i2s;
-      nxsem_init(&priv->exclsem, 0, 1);
+      nxmutex_init(&priv->lock);
 
       /* Create the character device name */
 
-      snprintf(devname, DEVNAME_FMTLEN, DEVNAME_FMT, minor);
-      ret = register_driver(devname, &i2schar_fops, 0666, priv);
+      snprintf(devname, sizeof(devname), DEVNAME_FMT, minor);
+      ret = register_driver(devname, &g_i2schar_fops, 0666, priv);
       if (ret < 0)
         {
           /* Free the device structure if we failed to create the character
            * device.
            */
 
+          nxmutex_destroy(&priv->lock);
           kmm_free(priv);
           return ret;
         }

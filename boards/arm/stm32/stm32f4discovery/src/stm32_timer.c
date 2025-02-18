@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/stm32/stm32f4discovery/src/stm32_timer.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -57,7 +59,7 @@
  *
  ****************************************************************************/
 
-int stm32_timer_driver_setup(FAR const char *devpath, int timer)
+int stm32_timer_driver_setup(const char *devpath, int timer)
 {
   return stm32_timer_initialize(devpath, timer);
 }

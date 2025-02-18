@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/armv8-m/nvic.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -18,8 +20,8 @@
  *
  ****************************************************************************/
 
-#ifndef __ARCH_ARM_SRC_COMMON_ARMV8_M_NVIC_H
-#define __ARCH_ARM_SRC_COMMON_ARMV8_M_NVIC_H
+#ifndef __ARCH_ARM_SRC_ARMV8_M_NVIC_H
+#define __ARCH_ARM_SRC_ARMV8_M_NVIC_H
 
 /****************************************************************************
  * Included Files
@@ -60,7 +62,11 @@
 /* NVIC base address ********************************************************/
 
 #define ARMV8M_NVIC_BASE                0xe000e000
-#define ARMV8M_NVIC_BASE_NS             0xe002e000
+
+/* Non-secure NVIC access */
+
+#define ARMV8M_NS_OFFSET                0x00020000
+#define ARMV8M_NVIC_BASE_NS             (ARMV8M_NVIC_BASE + ARMV8M_NS_OFFSET)
 
 /* NVIC register offsets ****************************************************/
 
@@ -668,9 +674,66 @@
 #define NVIC_SYSHCON_MEMFAULTENA        (1 << 16) /* Bit 16: MemFault enabled */
 #define NVIC_SYSHCON_BUSFAULTENA        (1 << 17) /* Bit 17: BusFault enabled */
 #define NVIC_SYSHCON_USGFAULTENA        (1 << 18) /* Bit 18: UsageFault enabled */
-#define NVIC_SYSHCON_SECUREFAULTENA     (1 << 19) /* Bit 10: SecureFault enabled */
-#define NVIC_SYSHCON_SECUREFAULTPENDED  (1 << 20) /* Bit 10: SecureFault is pended */
-#define NVIC_SYSHCON_HARDFAULTPENDED    (1 << 20) /* Bit 10: HardFault is pended */
+#define NVIC_SYSHCON_SECUREFAULTENA     (1 << 19) /* Bit 19: SecureFault enabled */
+#define NVIC_SYSHCON_SECUREFAULTPENDED  (1 << 20) /* Bit 20: SecureFault is pended */
+#define NVIC_SYSHCON_HARDFAULTPENDED    (1 << 21) /* Bit 21: HardFault is pended */
+
+/* SCB Configurable Fault Status Register Definitions */
+
+#define NVIC_CFAULTS_MEMFAULTSR_MASK    (0xff)    /* Memory Manage Fault Status Register Mask */
+#define NVIC_CFAULTS_BUSFAULTSR_MASK    (0xff << 8)
+                                                  /* Bus Fault Status Register Mask */
+#define NVIC_CFAULTS_USGFAULTSR_MASK    (0xffff << 16)
+                                                  /* Usage Fault Status Register Mask */
+
+/* MemManage Fault Status Register
+ * (part of SCB Configurable Fault Status Register)
+ */
+
+#define NVIC_CFAULTS_IACCVIOL           (1 << 0)  /* Bit 0:  IACCVIOL Mask */
+#define NVIC_CFAULTS_DACCVIOL           (1 << 1)  /* Bit 1:  DACCVIOL Mask */
+#define NVIC_CFAULTS_MUNSTKERR          (1 << 3)  /* Bit 3:  MUNSTKERR Mask */
+#define NVIC_CFAULTS_MSTKERR            (1 << 4)  /* Bit 4:  MSTKERR Mask */
+#define NVIC_CFAULTS_MLSPERR            (1 << 5)  /* Bit 5:  MLSPERR Mask */
+#define NVIC_CFAULTS_MMARVALID          (1 << 7)  /* Bit 7:  MMARVALID Mask */
+
+/* BusFault Status Register
+ * (part of SCB Configurable Fault Status Register)
+ */
+
+#define NVIC_CFAULTS_IBUSERR            (1 << 8)  /* Bit 8:  IBUSERR Mask */
+#define NVIC_CFAULTS_PRECISERR          (1 << 9)  /* Bit 9:  PRECISERR Mask */
+#define NVIC_CFAULTS_IMPRECISERR        (1 << 10) /* Bit 10: IMPRECISERR Mask */
+#define NVIC_CFAULTS_UNSTKERR           (1 << 11) /* Bit 11: UNSTKERR Mask */
+#define NVIC_CFAULTS_STKERR             (1 << 12) /* Bit 12: STKERR Mask */
+#define NVIC_CFAULTS_LSPERR             (1 << 13) /* Bit 13: LSPERR Mask */
+#define NVIC_CFAULTS_BFARVALID          (1 << 15) /* Bit 15: BFARVALID Mask */
+
+/* UsageFault Status Register
+ * (part of SCB Configurable Fault Status Register)
+ */
+
+#define NVIC_CFAULTS_UNDEFINSTR         (1 << 16) /* Bit 16: UNDEFINSTR Mask */
+#define NVIC_CFAULTS_INVSTATE           (1 << 17) /* Bit 17: INVSTATE Mask */
+#define NVIC_CFAULTS_INVPC              (1 << 18) /* Bit 18: INVPC Mask */
+#define NVIC_CFAULTS_NOCP               (1 << 19) /* Bit 19: NOCP Mask */
+#define NVIC_CFAULTS_STKOF              (1 << 20) /* Bit 20: STKOF Mask */
+#define NVIC_CFAULTS_UNALIGNED          (1 << 24) /* Bit 24: UNALIGNED Mask */
+#define NVIC_CFAULTS_DIVBYZERO          (1 << 25) /* Bit 25: DIVBYZERO Mask */
+
+/* SCB Hard Fault Status Register Definitions */
+
+#define NVIC_HFAULTS_VECTTBL            (1 << 1)  /* Bit 1:  VECTTBL Mask */
+#define NVIC_HFAULTS_FORCED             (1 << 30) /* Bit 30: FORCED Mask */
+#define NVIC_HFAULTS_DEBUGEVT           (1 << 31) /* Bit 31: DEBUGEVT Mask */
+
+/* Debug Fault Status Register */
+
+#define NVIC_DFAULTS_HALTED             (1 << 0)  /* Bit 0:  Halted Mask */
+#define NVIC_DFAULTS_BKPT               (1 << 1)  /* Bit 1:  BKPT or FPB Mask */
+#define NVIC_DFAULTS_DWTTRAP            (1 << 2)  /* Bit 2:  DWT Mask */
+#define NVIC_DFAULTS_VCATCH             (1 << 3)  /* Bit 3:  Vector catch Mask */
+#define NVIC_DFAULTS_EXTERNAL           (1 << 4)  /* Bit 4:  External debug request Mask */
 
 /* Cache Level ID register */
 
@@ -725,8 +788,8 @@
 /* Cache Size Selection Register */
 
 #define NVIC_CSSELR_IND                 (1 << 0)  /* Bit 0: Selects either instruction or data cache */
-#  define NVIC_CSSELR_IND_ICACHE        (0 << 0)  /*   0=Instruction Cache */
-#  define NVIC_CSSELR_IND_DCACHE        (1 << 0)  /*   1=Data Cache */
+#  define NVIC_CSSELR_IND_ICACHE        (1 << 0)  /*   1=Instruction Cache */
+#  define NVIC_CSSELR_IND_DCACHE        (0 << 0)  /*   0=Data Cache */
 
 #define NVIC_CSSELR_LEVEL_SHIFT         (1)       /* Bit 1-3: Selects cache level */
 #define NVIC_CSSELR_LEVEL_MASK          (7 << NVIC_CSSELR_LEVEL_SHIFT)
@@ -746,6 +809,29 @@
 #define NVIC_NSACR_CP_MASK(n)           (1 << NVIC_CPACR_CP_SHIFT(n))
 #  define NVIC_NSACR_CP_SECURE(n)       (0 << NVIC_CPACR_CP_SHIFT(n))
 #  define NVIC_NSACR_CP_FULL(n)         (1 << NVIC_CPACR_CP_SHIFT(n))
+
+/* Debug Halting Control and Status Register (DHCSR) */
+
+#define NVIC_DHCSR_C_DEBUGEN            (1 << 0)  /* Bit 0:  Enables debug. */
+#define NVIC_DHCSR_C_HALT               (1 << 1)  /* Bit 1:  Halts the core. */
+#define NVIC_DHCSR_C_STEP               (1 << 2)  /* Bit 2:  Steps the core in halted debug. */
+#define NVIC_DHCSR_C_MASKINTS           (1 << 3)  /* Bit 3:  Mask interrupts when stepping or running in halted debug. */
+#define NVIC_DHCSR_C_SNAPSTALL          (1 << 5)  /* Bit 5:  If the core is stalled on a load/store operation the stall ceases and the instruction is forced to complete. */
+#define NVIC_DHCSR_C_PMOV               (1 << 6)  /* Bit 6:  Halt on PMU overflow control. */
+#define NVIC_DHCSR_S_REGRDY             (1 << 16) /* Bit 16: Register Read/Write on the Debug Core Register Selector register is available. */
+#define NVIC_DHCSR_S_HALT               (1 << 17) /* Bit 17: The core is in debug state when S_HALT is set. */
+#define NVIC_DHCSR_S_SLEEP              (1 << 18) /* Bit 18: Indicates that the core is sleeping (WFI, WFE or SLEEP-ON-EXIT). */
+#define NVIC_DHCSR_S_LOCKUP             (1 << 19) /* Bit 19: Reads as one if the core is running (not halted) and a lockup condition is present. */
+#define NVIC_DHCSR_S_SDE                (1 << 20) /* Bit 20: Secure debug enable. */
+#define NVIC_DHCSR_S_NSUIDE             (1 << 21) /* Bit 21: Non-secure unprivileged halting debug enabled. */
+#define NVIC_DHCSR_S_SUIDE              (1 << 22) /* Bit 22: Secure unprivileged halting debug enabled. */
+#define NVIC_DHCSR_S_FPD                (1 << 23) /* Bit 23: Floating-point registers debuggable. */
+#define NVIC_DHCSR_S_RETIRE_ST          (1 << 24) /* Bit 24: Indicates that an instruction has completed since last read. */
+#define NVIC_DHCSR_S_RESET_ST           (1 << 25) /* Bit 25: Indicates that the core has been reset, or is now being reset, since the last time this bit was read. */
+#define NVIC_DHCSR_S_RESTART_ST         (1 << 26) /* Bit 26: Restart sticky status. */
+#define NVIC_DHCSR_DBGKEY_SHIFT         (16)      /* Bits 16:31: Key to prevent inadvertent writes. */
+#define NVIC_DHCSR_DBGKEY_MASK          (0xffff << NVIC_DHCSR_DBGKEY_SHIFT)
+#  define NVIC_DHCSR_DBGKEY_VALUE       (0xa05f)
 
 /* Debug Exception and Monitor Control Register (DEMCR) */
 
@@ -773,6 +859,11 @@
 #define NVIC_DSCEMCR_SET_MON_REQ        (1 << 3)  /* Bit 3:  Set monitor request */
 #define NVIC_DSCEMCR_CLR_MON_PEND       (1 << 17) /* Bit 17: Clear monitor pend */
 #define NVIC_DSCEMCR_CLR_MON_REQ        (1 << 19) /* Bit 19: Clear monitor request */
+
+/* Debug Authentication Control Register (DAUTHCTRL) */
+
+#define NVIC_DAUTHCTRL_SPIDENSEL        (1 << 0)  /* Bit 0:  Secure invasive debug enable select */
+#define NVIC_DAUTHCTRL_INTSPIDEN        (1 << 1)  /* Bit 1:  Internal Secure invasive debug enable */
 
 /*  Floating-Point Context Control Register (FPCCR) */
 
@@ -847,4 +938,4 @@
  * Public Function Prototypes
  ****************************************************************************/
 
-#endif /* __ARCH_ARM_SRC_COMMON_ARMV8_M_NVIC_H */
+#endif /* __ARCH_ARM_SRC_ARMV8_M_NVIC_H */

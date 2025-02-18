@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/tiva/tm4c123g-launchpad/include/board.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -179,5 +181,27 @@
 #define GPIO_UART1_RTS    GPIO_UART1_RTS_1
 #define GPIO_UART1_RX     GPIO_UART1_RX_1
 #define GPIO_UART1_TX     GPIO_UART1_TX_1
+
+/* CAN0 pin mux selection - defaults to port E in Kconfig */
+#ifdef CONFIG_TIVA_CAN0
+#  ifdef CONFIG_TM4C123G_LAUNCHPAD_CAN0RX_PF0
+#    define GPIO_CAN0_RX GPIO_CAN0_RX_1
+#  endif
+#  ifdef CONFIG_TM4C123G_LAUNCHPAD_CAN0RX_PB4
+#    define GPIO_CAN0_RX GPIO_CAN0_RX_2
+#  endif
+#  ifdef CONFIG_TM4C123G_LAUNCHPAD_CAN0RX_PE4
+#    define GPIO_CAN0_RX GPIO_CAN0_RX_3
+#  endif
+#  ifdef CONFIG_TM4C123G_LAUNCHPAD_CAN0TX_PF3
+#    define GPIO_CAN0_TX GPIO_CAN0_TX_1
+#  endif
+#  ifdef CONFIG_TM4C123G_LAUNCHPAD_CAN0TX_PB5
+#    define GPIO_CAN0_TX GPIO_CAN0_TX_2
+#  endif
+#  ifdef CONFIG_TM4C123G_LAUNCHPAD_CAN0TX_PE5
+#    define GPIO_CAN0_TX GPIO_CAN0_TX_3
+#  endif
+#endif
 
 #endif /* __BOARDS_ARM_TMC4C123G_LAUNCHPAD_INCLUDE_BOARD_H */

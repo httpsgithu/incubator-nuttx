@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/armv7-a/mmu.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -19,10 +21,10 @@
  ****************************************************************************/
 
 /* References:
- *  "Cortex-A5™ MPCore, Technical Reference Manual", Revision: r0p1,
- *   Copyright © 2010 ARM. All rights reserved. ARM DDI 0434B (ID101810)
- *  "ARM® Architecture Reference Manual, ARMv7-A and ARMv7-R edition",
- *   Copyright © 1996-1998, 2000, 2004-2012 ARM.
+ *  "Cortex-A5â„¢ MPCore, Technical Reference Manual", Revision: r0p1,
+ *   Copyright Â© 2010 ARM. All rights reserved. ARM DDI 0434B (ID101810)
+ *  "ARMÂ® Architecture Reference Manual, ARMv7-A and ARMv7-R edition",
+ *   Copyright Â© 1996-1998, 2000, 2004-2012 ARM.
  *   All rights reserved. ARM DDI 0406C.b (ID072512)
  */
 
@@ -34,9 +36,11 @@
  ****************************************************************************/
 
 #include <nuttx/config.h>
+#include <sys/types.h>
+#include <arch/barriers.h>
+#include "sctlr.h"
 
 #ifndef __ASSEMBLY__
-#  include <sys/types.h>
 #  include <stdint.h>
 #  include "chip.h"
 #endif /* __ASSEMBLY__ */
@@ -47,20 +51,20 @@
 
 /* Configuration ************************************************************/
 
-#if defined(CONFIG_PAGING) || defined(CONFIG_ARCH_ADDRENV)
+#if defined(CONFIG_LEGACY_PAGING) || defined(CONFIG_ARCH_ADDRENV)
 
 /* Sanity check -- we cannot be using a ROM page table and supporting on-
  * demand paging.
  */
 
 #ifdef CONFIG_ARCH_ROMPGTABLE
-#  error "Cannot support both CONFIG_PAGING/CONFIG_ARCH_ADDRENV and CONFIG_ARCH_ROMPGTABLE"
+#  error "Cannot support both CONFIG_LEGACY_PAGING/CONFIG_ARCH_ADDRENV and CONFIG_ARCH_ROMPGTABLE"
 #endif
-#endif /* CONFIG_PAGING */
+#endif /* CONFIG_LEGACY_PAGING */
 
 /* MMU CP15 Register Bit Definitions ****************************************/
 
-/* Reference: Cortex-A5™ MPCore
+/* Reference: Cortex-A5â„¢ MPCore
  * Paragraph 6.7, "MMU software accessible registers."
  */
 
@@ -91,13 +95,8 @@
 #define TTBR0_IRGN0          (1 << 6)               /* Bit 6:  Inner cacheability IRGN[0] (MP extensions) */
                                                     /* Bits 7-n: Reserved, n=7-13 */
 
-#define _TTBR0_LOWER(n)      (0xffffffff << (n))
-
-/*                                                     Bits (n+1)-31:
- *                                                   Translation table base 0
- */
-
-#define TTBR0_BASE_MASK(n)   (~_TTBR0_LOWER(n))
+#define TTBR0_BASE_SHIFT(n)  (14 - (n)) /* Bits (14-n)-31: Translation table base 0 */
+#define TTBR0_BASE_MASK(n)   (0xffffffff << TTBR0_BASE_SHIFT(n))
 
 /* Translation Table Base Register 1 (TTBR1) */
 
@@ -608,10 +607,17 @@
 #endif
 
 #define MMU_L1_DATAFLAGS      (PMD_TYPE_PTE | PMD_PTE_PXN | PMD_PTE_DOM(0))
-#define MMU_L2_UDATAFLAGS     (PTE_TYPE_SMALL | PTE_WRITE_BACK | PTE_AP_RW01)
-#define MMU_L2_KDATAFLAGS     (PTE_TYPE_SMALL | PTE_WRITE_BACK | PTE_AP_RW1)
-#define MMU_L2_UALLOCFLAGS    (PTE_TYPE_SMALL | PTE_WRITE_BACK | PTE_AP_RW01)
-#define MMU_L2_KALLOCFLAGS    (PTE_TYPE_SMALL | PTE_WRITE_BACK | PTE_AP_RW1)
+#ifndef CONFIG_SMP
+#  define MMU_L2_UDATAFLAGS   (PTE_TYPE_SMALL | PTE_WRITE_BACK | PTE_AP_RW01)
+#  define MMU_L2_KDATAFLAGS   (PTE_TYPE_SMALL | PTE_WRITE_BACK | PTE_AP_RW1)
+#  define MMU_L2_UALLOCFLAGS  (PTE_TYPE_SMALL | PTE_WRITE_BACK | PTE_AP_RW01)
+#  define MMU_L2_KALLOCFLAGS  (PTE_TYPE_SMALL | PTE_WRITE_BACK | PTE_AP_RW1)
+#else
+#  define MMU_L2_UDATAFLAGS   (PTE_TYPE_SMALL | PTE_WRITE_BACK | PTE_S | PTE_AP_RW01)
+#  define MMU_L2_KDATAFLAGS   (PTE_TYPE_SMALL | PTE_WRITE_BACK | PTE_S | PTE_AP_RW1)
+#  define MMU_L2_UALLOCFLAGS  (PTE_TYPE_SMALL | PTE_WRITE_BACK | PTE_S | PTE_AP_RW01)
+#  define MMU_L2_KALLOCFLAGS  (PTE_TYPE_SMALL | PTE_WRITE_BACK | PTE_S | PTE_AP_RW1)
+#endif
 
 #define MMU_L2_IOFLAGS        (PTE_TYPE_SMALL | PTE_DEVICE | PTE_AP_RW1)
 #define MMU_L2_STRONGLY_ORDER (PTE_TYPE_SMALL | PTE_STRONGLY_ORDER | PTE_AP_RW1)
@@ -641,11 +647,19 @@
  * require up to 16Kb of memory.
  */
 
-#define PGTABLE_SIZE       0x00004000
+#ifndef PGTABLE_SIZE
+#  define PGTABLE_SIZE       0x00004000
+#endif
+
+#ifdef CONFIG_ARCH_ADDRENV
+#  define ALL_PGTABLE_SIZE (PGTABLE_SIZE * CONFIG_SMP_NCPUS)
+#else
+#  define ALL_PGTABLE_SIZE PGTABLE_SIZE
+#endif
 
 /* Virtual Page Table Location **********************************************/
 
-#ifdef CONFIG_PAGING
+#ifdef CONFIG_LEGACY_PAGING
 /* Check if the virtual address of the page table has been defined. It
  * should not be defined:  architecture specific logic should suppress
  * defining PGTABLE_BASE_VADDR unless:  (1) it is defined in the NuttX
@@ -885,7 +899,7 @@
 #define PG_POOL_PGPADDR(ndx)    (PG_PAGED_PBASE + ((ndx) << PAGESHIFT))
 #define PG_POOL_PGVADDR(ndx)    (PG_PAGED_VBASE + ((ndx) << PAGESHIFT))
 
-#endif /* CONFIG_PAGING */
+#endif /* CONFIG_LEGACY_PAGING */
 
 /****************************************************************************
  * Public Types
@@ -904,6 +918,21 @@ struct section_mapping_s
   uint32_t virtbase;   /* Virtual address of the region to be mapped */
   uint32_t mmuflags;   /* MMU settings for the region (e.g., cache-able) */
   uint32_t nsections;  /* Number of mappings in the region */
+};
+
+struct page_entry_s
+{
+  uint32_t physbase;        /* Physical address of the region to be mapped */
+  uint32_t virtbase;        /* Virtual address of the region to be mapped */
+  uint32_t mmuflags;        /* MMU settings for the region (e.g., cache-able) */
+  uint32_t npages;          /* Number of mappings in the region */
+};
+
+struct page_mapping_s
+{
+  uint32_t l2table;                 /* Virtual address of l2 table */
+  uint32_t entrynum;                /* Page entry number */
+  const struct page_entry_s *entry; /* Page entry */
 };
 #endif
 
@@ -963,10 +992,10 @@ struct section_mapping_s
 
   .macro  cp15_invalidate_tlb_bymva, vaddr
   dsb
-#if defined(CONFIG_ARCH_CORTEXA8)
-  mcr  p15, 0, \vaddr, c8, c7, 1  /* TLBIMVA */
-#else
+#ifdef CONFIG_ARM_HAVE_MPCORE
   mcr  p15, 0, \vaddr, c8, c3, 3  /* TLBIMVAAIS */
+#else
+  mcr  p15, 0, \vaddr, c8, c7, 1  /* TLBIMVA */
 #endif
   dsb
   isb
@@ -1029,8 +1058,8 @@ struct section_mapping_s
  *
  * Description:
  *   Write several, contiguous L2 page table entries.  npages entries will be
- *   written. This macro is used when CONFIG_PAGING is enable.  This case,
- *   it is used as follows:
+ *   written. This macro is used when CONFIG_LEGACY_PAGING is enable.
+ *   This case, it is used as follows:
  *
  *  ldr  r0, =PGTABLE_L2_BASE_PADDR  <-- Address in L2 table
  *  ldr  r1, =PG_LOCKED_PBASE        <-- Physical page memory address
@@ -1059,7 +1088,7 @@ struct section_mapping_s
  *
  ****************************************************************************/
 
-#ifdef CONFIG_PAGING
+#ifdef CONFIG_LEGACY_PAGING
   .macro  pg_l2map, l2, ppage, npages, mmuflags, tmp
   b    2f
 1:
@@ -1092,7 +1121,7 @@ struct section_mapping_s
   cmp  \npages, #0
   bgt  1b
   .endm
-#endif /* CONFIG_PAGING */
+#endif /* CONFIG_LEGACY_PAGING */
 
 /****************************************************************************
  * Name: pg_l1span
@@ -1100,7 +1129,7 @@ struct section_mapping_s
  * Description:
  *   Write several, contiguous, unmapped, small L1 page table entries.
  *   As many entries will be written as  many as needed to span npages.
- *   This macro is used when CONFIG_PAGING is enable.  In this case,
+ *   This macro is used when CONFIG_LEGACY_PAGING is enable.  In this case,
  *   it is used as follows:
  *
  *  ldr  r0, =PG_L1_PGTABLE_PADDR  <-- Address in the L1 table
@@ -1135,7 +1164,7 @@ struct section_mapping_s
  *
  ****************************************************************************/
 
-#ifdef CONFIG_PAGING
+#ifdef CONFIG_LEGACY_PAGING
   .macro  pg_l1span, l1, l2, npages, ppage, mmuflags, tmp
   b    2f
 1:
@@ -1173,7 +1202,7 @@ struct section_mapping_s
   bgt  1b
   .endm
 
-#endif /* CONFIG_PAGING */
+#endif /* CONFIG_LEGACY_PAGING */
 #endif /* __ASSEMBLY__ */
 
 /****************************************************************************
@@ -1195,15 +1224,11 @@ struct section_mapping_s
 
 static inline void cp15_disable_mmu(void)
 {
-  __asm__ __volatile__
-    (
-      "\tmrc p15, 0, r0, c1, c0, 0\n"
-      "\tbic r0, r0, #1\n"
-      "\tmcr p15, 0, r0, c1, c0, 0\n"
-      :
-      :
-      : "r0", "memory"
-    );
+  uint32_t sctlr;
+
+  sctlr = CP15_GET(SCTLR);
+  sctlr &= ~SCTLR_M;
+  CP15_SET(SCTLR, sctlr);
 }
 
 /****************************************************************************
@@ -1225,13 +1250,15 @@ static inline void cp15_disable_mmu(void)
 
 static inline void cp15_invalidate_tlbs(void)
 {
-  __asm__ __volatile__
-    (
-      "\tmcr p15, 0, r0, c8, c7, 0\n" /* TLBIALL */
-      :
-      :
-      : "r0", "memory"
-    );
+  UP_DSB();
+#ifdef CONFIG_ARM_HAVE_MPCORE
+  CP15_SET(TLBIALLIS, 0);
+  CP15_SET(BPIALLIS, 0);
+#else
+  CP15_SET2(TLBIALL, c7, 0);
+  CP15_SET(BPIALL, 0);
+#endif
+  UP_MB();
 }
 
 /****************************************************************************
@@ -1247,20 +1274,15 @@ static inline void cp15_invalidate_tlbs(void)
 
 static inline void cp15_invalidate_tlb_bymva(uint32_t vaddr)
 {
-  __asm__ __volatile__
-    (
-      "\tdsb\n"
-#if defined(CONFIG_ARCH_CORTEXA8)
-      "\tmcr p15, 0, %0, c8, c7, 1\n" /* TLBIMVA */
+  UP_DSB();
+#ifdef CONFIG_ARM_HAVE_MPCORE
+  CP15_SET(TLBIMVAAIS, vaddr);
+  CP15_SET(BPIALLIS, 0);
 #else
-      "\tmcr p15, 0, %0, c8, c3, 3\n" /* TLBIMVAAIS */
+  CP15_SET2(TLBIMVA, c7, vaddr);
+  CP15_SET(BPIALL, 0);
 #endif
-      "\tdsb\n"
-      "\tisb\n"
-      :
-      : "r" (vaddr)
-      : "r1", "memory"
-    );
+  UP_MB();
 }
 
 /****************************************************************************
@@ -1276,21 +1298,15 @@ static inline void cp15_invalidate_tlb_bymva(uint32_t vaddr)
 
 static inline void cp15_wrdacr(unsigned int dacr)
 {
-  __asm__ __volatile__
-    (
-      "\tmcr p15, 0, %0, c3, c0, 0\n"
-      "\tnop\n"
-      "\tnop\n"
-      "\tnop\n"
-      "\tnop\n"
-      "\tnop\n"
-      "\tnop\n"
-      "\tnop\n"
-      "\tnop\n"
-      :
-      : "r" (dacr)
-      : "memory"
-    );
+  CP15_SET(DACR, dacr);
+  UP_NOP();
+  UP_NOP();
+  UP_NOP();
+  UP_NOP();
+  UP_NOP();
+  UP_NOP();
+  UP_NOP();
+  UP_NOP();
 }
 
 /****************************************************************************
@@ -1310,24 +1326,45 @@ static inline void cp15_wrdacr(unsigned int dacr)
 
 static inline void cp15_wrttb(unsigned int ttb)
 {
-  __asm__ __volatile__
-    (
-      "\tmcr p15, 0, %0, c2, c0, 0\n"
-      "\tnop\n"
-      "\tnop\n"
-      "\tnop\n"
-      "\tnop\n"
-      "\tnop\n"
-      "\tnop\n"
-      "\tnop\n"
-      "\tnop\n"
-      "\tmov r1, #0\n"
-      "\tmcr p15, 0, r1, c2, c0, 2\n"
-      :
-      : "r" (ttb)
-      : "r1", "memory"
-    );
+  CP15_SET(TTBR0, ttb);
+  UP_NOP();
+  UP_NOP();
+  UP_NOP();
+  UP_NOP();
+  UP_NOP();
+  UP_NOP();
+  UP_NOP();
+  UP_NOP();
+  CP15_SET(TTBCR, 0);
 }
+
+/****************************************************************************
+ * Name: mmu_l1_pgtable
+ *
+ * Description:
+ *   Return the value of the L1 page table base address.
+ *   The TTBR0 register contains the phys address for each cpu.
+ *
+ * Input Parameters:
+ *   None
+ *
+ ****************************************************************************/
+
+#ifndef CONFIG_ARCH_ROMPGTABLE
+static inline uint32_t *mmu_l1_pgtable(void)
+{
+#if defined(CONFIG_SMP) && defined(CONFIG_ARCH_ADDRENV)
+  uint32_t ttbr0;
+  uint32_t pgtable;
+
+  ttbr0 = CP15_GET(TTBR0);
+  pgtable = ttbr0 & TTBR0_BASE_MASK(0);
+  return (uint32_t *)(pgtable - PGTABLE_BASE_PADDR + PGTABLE_BASE_VADDR);
+#else
+  return (uint32_t *)PGTABLE_BASE_VADDR;
+#endif
+}
+#endif
 
 /****************************************************************************
  * Name: mmu_l1_getentry
@@ -1344,7 +1381,7 @@ static inline void cp15_wrttb(unsigned int ttb)
 #ifndef CONFIG_ARCH_ROMPGTABLE
 static inline uint32_t mmu_l1_getentry(uint32_t vaddr)
 {
-  uint32_t *l1table = (uint32_t *)PGTABLE_BASE_VADDR;
+  uint32_t *l1table = mmu_l1_pgtable();
   uint32_t  index   = vaddr >> 20;
 
   /* Return the address of the page table entry */
@@ -1511,6 +1548,74 @@ void mmu_l1_map_region(const struct section_mapping_s *mapping);
 #ifndef CONFIG_ARCH_ROMPGTABLE
 void mmu_l1_map_regions(const struct section_mapping_s *mappings,
                         size_t count);
+#endif
+
+/****************************************************************************
+ * Name: mmu_l1_map_page
+ *
+ * Description:
+ *   Set level 1 page entrie in order to map a region
+ *   array of memory.
+ *
+ * Input Parameters:
+ *   mapping - Describes the mapping to be performed.
+ *
+ ****************************************************************************/
+
+#ifndef CONFIG_ARCH_ROMPGTABLE
+void mmu_l1_map_page(const struct section_mapping_s *mapping);
+#endif
+
+/****************************************************************************
+ * Name: mmu_l1_map_pages
+ *
+ * Description:
+ *   Set multiple level 1 page entries in order to map a region
+ *   array of memory.
+ *
+ * Input Parameters:
+ *   mappings - Describes the mapping to be performed.
+ *   count    - The number of mappings to be performed.
+ *
+ ****************************************************************************/
+
+#ifndef CONFIG_ARCH_ROMPGTABLE
+void mmu_l1_map_pages(const struct section_mapping_s *mappings,
+                      size_t count);
+#endif
+
+/****************************************************************************
+ * Name: mmu_l2_map_page
+ *
+ * Description:
+ *   Set level 2 page entrie in order to map a region
+ *   array of memory.
+ *
+ * Input Parameters:
+ *   mapping - Describes the mapping to be performed.
+ *
+ ****************************************************************************/
+
+#ifndef CONFIG_ARCH_ROMPGTABLE
+void mmu_l2_map_page(const struct page_mapping_s *mapping);
+#endif
+
+/****************************************************************************
+ * Name: mmu_l2_map_pages
+ *
+ * Description:
+ *   Set multiple level 2 page entries in order to map a region
+ *   array of memory.
+ *
+ * Input Parameters:
+ *   mappings - Describes the mapping to be performed.
+ *   count    - The number of mappings to be performed.
+ *
+ ****************************************************************************/
+
+#ifndef CONFIG_ARCH_ROMPGTABLE
+void mmu_l2_map_pages(const struct page_mapping_s *mappings,
+                      size_t count);
 #endif
 
 /****************************************************************************

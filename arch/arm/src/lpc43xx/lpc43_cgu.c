@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/lpc43xx/lpc43_cgu.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -27,7 +29,7 @@
 #include <nuttx/arch.h>
 #include <errno.h>
 
-#include "arm_arch.h"
+#include "arm_internal.h"
 #include "lpc43_cgu.h"
 #include <arch/board/board.h>
 
@@ -40,9 +42,9 @@
 #define LOW_XTAL_FREQUENCY     15000000
 #define MAX_XTAL_FREQUENCY     25000000
 
-#define MAX_FCLKOUT_FREQUENCY 204000000
-#define MAX_FCLKOUT_DIRECT    156000000
-#define MAX_FCCO_FRQUENCY     320000000
+#define MAX_FCLKOUT_FREQUENCY  204000000
+#define MAX_FCLKOUT_DIRECT     156000000
+#define MAX_FCCO_FREQUENCY     320000000
 
 /* Configuration ************************************************************/
 
@@ -66,7 +68,7 @@
 #  error "BOARD_FCLKOUT_FREQUENCY exceed the maximum"
 #endif
 
-#if BOARD_FCCO_FREQUENCY > MAX_FCCO_FRQUENCY
+#if BOARD_FCCO_FREQUENCY > MAX_FCCO_FREQUENCY
 #  error "BOARD_FCCO_FREQUENCY exceed the maximum"
 #endif
 
@@ -97,13 +99,13 @@
 #    error "BOARD_XTAL_FREQUENCY value is not supported"
 #  endif
 
-#  if (2 * BOARD_XTAL_FREQUENCY) > MAX_FCCO_FRQUENCY
+#  if (2 * BOARD_XTAL_FREQUENCY) > MAX_FCCO_FREQUENCY
 #    error "Impossible value for BOARD_XTAL_FREQUENCY"
-#  elif (2 * 2 * BOARD_XTAL_FREQUENCY) > MAX_FCCO_FRQUENCY
+#  elif (2 * 2 * BOARD_XTAL_FREQUENCY) > MAX_FCCO_FREQUENCY
 #    define INIT_PSEL_VALUE PLL1_CTRL_PSEL_DIV1
-#  elif (2 * 4 * BOARD_XTAL_FREQUENCY) > MAX_FCCO_FRQUENCY
+#  elif (2 * 4 * BOARD_XTAL_FREQUENCY) > MAX_FCCO_FREQUENCY
 #    define INIT_PSEL_VALUE PLL1_CTRL_PSEL_DIV2
-#  elif (2 * 8 * BOARD_XTAL_FREQUENCY) > MAX_FCCO_FRQUENCY
+#  elif (2 * 8 * BOARD_XTAL_FREQUENCY) > MAX_FCCO_FREQUENCY
 #    define INIT_PSEL_VALUE PLL1_CTRL_PSEL_DIV4
 #  else
 #    define INIT_PSEL_VALUE PLL1_CTRL_PSEL_DIV8

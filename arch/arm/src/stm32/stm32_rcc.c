@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/stm32/stm32_rcc.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -32,8 +34,6 @@
 #include <arch/board/board.h>
 
 #include "arm_internal.h"
-#include "arm_arch.h"
-
 #include "chip.h"
 #include "stm32_gpio.h"
 #include "stm32_rcc.h"
@@ -84,11 +84,11 @@
  ****************************************************************************/
 
 #if defined(CONFIG_STM32_STM32L15XX)
-# define STM32_RCC_XXX       STM32_RCC_CSR
-# define RCC_XXX_YYYRST      RCC_CSR_RTCRST
+#  define STM32_RCC_XXX      STM32_RCC_CSR
+#  define RCC_XXX_YYYRST     RCC_CSR_RTCRST
 #else
-# define STM32_RCC_XXX       STM32_RCC_BDCR
-# define RCC_XXX_YYYRST      RCC_BDCR_BDRST
+#  define STM32_RCC_XXX      STM32_RCC_BDCR
+#  define RCC_XXX_YYYRST     RCC_BDCR_BDRST
 #endif
 
 /****************************************************************************

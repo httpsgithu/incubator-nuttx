@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/sam34/sam4l-xplained/src/sam_spi.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -169,7 +171,7 @@ void sam_spi0select(uint32_t devid, bool selected)
  *
  ****************************************************************************/
 
-uint8_t sam_spi0status(FAR struct spi_dev_s *dev, uint32_t devid)
+uint8_t sam_spi0status(struct spi_dev_s *dev, uint32_t devid)
 {
   uint8_t ret = 0;
 
@@ -217,7 +219,7 @@ uint8_t sam_spi0status(FAR struct spi_dev_s *dev, uint32_t devid)
  ****************************************************************************/
 
 #ifdef CONFIG_SPI_CMDDATA
-int sam_spic0mddata(FAR struct spi_dev_s *dev, uint32_t devid, bool cmd)
+int sam_spic0mddata(struct spi_dev_s *dev, uint32_t devid, bool cmd)
 {
 #ifdef CONFIG_SAM4L_XPLAINED_OLED1MODULE
   if (devid == SPIDEV_DISPLAY(0))

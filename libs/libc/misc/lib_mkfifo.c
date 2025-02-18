@@ -1,6 +1,8 @@
 /****************************************************************************
  * libs/libc/misc/lib_mkfifo.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -29,6 +31,8 @@
 #include <sys/stat.h>
 
 #include <nuttx/fs/fs.h>
+
+#include "libc.h"
 
 #if defined(CONFIG_PIPES) && CONFIG_DEV_FIFO_SIZE > 0
 
@@ -76,6 +80,60 @@ int mkfifo(FAR const char *pathname, mode_t mode)
       ret = ERROR;
     }
 
+  return ret;
+}
+
+/****************************************************************************
+ * Name: mkfifoat
+ *
+ * Description:
+ *   The mkfifoat() system call operates in exactly the same way as mkfifo(),
+ *   except for  the  differences described here.
+ *
+ *   If the pathname given in pathname is relative, then it is interpreted
+ *   relative to the directory referred to by the file descriptor dirfd
+ *   (rather than relative to the current working directory of the calling
+ *    process)
+ *
+ *   If pathname is relative and dirfd is the special value AT_FDCWD, then
+ *   pathname is interpreted relative to the current working directory of
+ *   the calling process (like mkfifo()).
+ *
+ *   If pathname is absolute, then dirfd is ignored.
+ *
+ * Input Parameters:
+ *   dirfd - The file descriptor of directory.
+ *   path  - a pointer to the path.
+ *   mode  - the access mode.
+ *
+ * Returned Value:
+ *   Return zero on success, or -1 if an error occurred (in which case,
+ *   errno is set appropriately).
+ *
+ ****************************************************************************/
+
+int mkfifoat(int dirfd, FAR const char *path, mode_t mode)
+{
+  FAR char *fullpath;
+  int ret;
+
+  fullpath = lib_get_pathbuffer();
+  if (fullpath == NULL)
+    {
+      set_errno(ENOMEM);
+      return ERROR;
+    }
+
+  ret = lib_getfullpath(dirfd, path, fullpath, PATH_MAX);
+  if (ret < 0)
+    {
+      lib_put_pathbuffer(fullpath);
+      set_errno(-ret);
+      return ERROR;
+    }
+
+  ret = mkfifo(fullpath, mode);
+  lib_put_pathbuffer(fullpath);
   return ret;
 }
 

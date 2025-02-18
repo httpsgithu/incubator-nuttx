@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/mips/src/pic32mz/pic32mz_freerun.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -47,13 +49,13 @@
 
 struct pic32mz_freerun_s
 {
-  uint8_t chan;                            /* The timer in use            */
-  uint8_t width;                           /* Width of timer (16- or 32)  */
-  FAR struct pic32mz_timer_dev_s *timer;   /* PIC32MZ timer driver        */
-  uint32_t freq;                           /* Timer's frequency (Hz)      */
+  uint8_t chan;                      /* The timer in use            */
+  uint8_t width;                     /* Width of timer (16- or 32)  */
+  struct pic32mz_timer_dev_s *timer; /* PIC32MZ timer driver        */
+  uint32_t freq;                     /* Timer's frequency (Hz)      */
 
 #ifndef CONFIG_CLOCK_TIMEKEEPING
-  uint32_t overflow;                       /* Timer's counter overflow    */
+  uint32_t overflow;                 /* Timer's counter overflow    */
 #endif
 
 #ifdef CONFIG_CLOCK_TIMEKEEPING

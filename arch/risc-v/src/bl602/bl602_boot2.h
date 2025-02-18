@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/risc-v/src/bl602/bl602_boot2.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -18,8 +20,8 @@
  *
  ****************************************************************************/
 
-#ifndef __ARCH_RISCV_SRC_BL602_HARDWARE_BL602_BOOT2_H
-#define __ARCH_RISCV_SRC_BL602_HARDWARE_BL602_BOOT2_H
+#ifndef __ARCH_RISCV_SRC_BL602_BL602_BOOT2_H
+#define __ARCH_RISCV_SRC_BL602_BL602_BOOT2_H
 
 /****************************************************************************
  * Included Files
@@ -103,4 +105,4 @@ struct boot2_partition_table_s
 };
 
 #endif /* __ASSEMBLY__ */
-#endif /* __ARCH_RISCV_SRC_BL602_HARDWARE_BL602_BOOT2_H */
+#endif /* __ARCH_RISCV_SRC_BL602_BL602_BOOT2_H */

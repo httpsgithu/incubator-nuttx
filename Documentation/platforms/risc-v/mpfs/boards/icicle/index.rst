@@ -1,6 +1,6 @@
-====================
-PolarFire Icicle Kit
-====================
+========================
+PolarFire SoC Icicle Kit
+========================
 
 .. list-table::
    :align: center
@@ -16,13 +16,11 @@ PolarFire SoC FPGA (MPFS250T-FCVG484EES)
 - SiFive U54 Application cores (4 x RV64GC)
 - and Secure boot
 
-
 Memory and storage
 ------------------
 - 2 GB LPDDR4 x 32
 - 1 Gb SPI flash
 - 8 GB eMMC flash & SD card slot (multiplexed)
-
 
 Programming & Debugging
 -----------------------
@@ -30,7 +28,6 @@ Onboard JTAG connector or onboard embedded FlashPro (multiplexed)
 
 - UART via micro USB
 - 52 x test points
-
 
 Interfaces
 ----------
@@ -53,8 +50,6 @@ Sensor
 ------
 - Power sensor (pac1934)
 
-
-
 Buttons and LEDs
 ================
 
@@ -63,11 +58,9 @@ Buttons
 There are 3 buttons and reset button.  The Reset button is not available
 to software by default.
 
-
 LEDs
 ----
 There is 4 user controlled on-board LEDs.
-
 
 Configurations
 ==============
@@ -77,3 +70,22 @@ nsh
 
 Basic configuration to run the NuttShell (nsh).
 
+hwtest
+---
+
+Configuration to run the NuttShell (nsh) and enabling the peripherals.
+
+The following peripherals are configured:
+- I2C0 & I2C1
+- Ethernet on MAC 1, configured to 1Gbit speed
+- USB (high speed) + CDCACM
+- SDCard
+- SPI0 & SPI1
+- UART0-4
+- CorePWM (nb. needs the FPGA IP installed to work)
+- CoreSPI (nb. needs the FPGA IP installed to work)
+
+The following applications are available:
+- TelnetD (at address 10.0.0.2)
+- tcpblaster & udpblaster
+- ostest

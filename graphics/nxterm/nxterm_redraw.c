@@ -1,6 +1,8 @@
 /****************************************************************************
  * graphics/nxterm/nxterm_redraw.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -79,7 +81,7 @@ void nxterm_redraw(NXTERM handle,
 
   do
     {
-      ret = nxterm_semwait(priv);
+      ret = nxmutex_lock(&priv->lock);
     }
   while (ret < 0);
 
@@ -100,5 +102,5 @@ void nxterm_redraw(NXTERM handle,
       nxterm_fillchar(priv, rect, &priv->bm[i]);
     }
 
-  nxterm_sempost(priv);
+  nxmutex_unlock(&priv->lock);
 }

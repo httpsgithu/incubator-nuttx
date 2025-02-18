@@ -1,7 +1,8 @@
 /****************************************************************************
  * include/nuttx/mtd/onfi.h
  *
- *   Copyright (c) 2010, Atmel Corporation
+ * SPDX-License-Identifier: BSD-3-Clause
+ * SPDX-FileCopyrightText: 2010, Atmel Corporation
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -152,7 +153,7 @@ bool onfi_embeddedecc(FAR const struct onfi_pgparam_s *onfi,
                       uintptr_t cmdaddr, uintptr_t addraddr,
                       uintptr_t dataaddr, bool enable);
 #else
-# define onfi_embeddedecc(o,c,a,d,e) (false)
+#  define onfi_embeddedecc(o,c,a,d,e) (false)
 #endif
 
 /****************************************************************************

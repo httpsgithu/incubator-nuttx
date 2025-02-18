@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/cxd56xx/spresense/include/cxd56_apds9960.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -59,7 +61,7 @@ extern "C"
  ****************************************************************************/
 
 #if defined(CONFIG_SENSORS_APDS9960) || defined(CONFIG_SENSORS_APDS9960_SCU)
-int board_apds9960_initialize(FAR const char *devpath, int bus);
+int board_apds9960_initialize(const char *devpath, int bus);
 #endif
 
 #undef EXTERN

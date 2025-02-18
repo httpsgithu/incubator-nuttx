@@ -1,6 +1,8 @@
 /****************************************************************************
  * include/nuttx/eeprom/spi_xx25xx.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -18,14 +20,16 @@
  *
  ****************************************************************************/
 
-#ifndef __INCLUDE_NUTTX_EEPROM_M25XX_H
-#define __INCLUDE_NUTTX_EEPROM_M25XX_H
+#ifndef __INCLUDE_NUTTX_EEPROM_SPI_XX25XX_H
+#define __INCLUDE_NUTTX_EEPROM_SPI_XX25XX_H
 
 /****************************************************************************
  * Public Types
  ****************************************************************************/
 
-/* DO NOT CHANGE ORDER, IT MATCHES CODE IN drivers/eeprom/spieeprom.c */
+/* DO NOT CHANGE ORDER, IT MATCHES CODE IN drivers/eeprom/spieeprom.c and
+ * drivers/mtd/at25ee.c
+ */
 
 enum eeprom_25xx_e
 {
@@ -95,4 +99,4 @@ struct spi_dev_s;
 int ee25xx_initialize(FAR struct spi_dev_s *dev, FAR char *devname,
                       int devtype, int readonly);
 
-#endif /* __INCLUDE__NUTTX_EEPROM_M25XX_H */
+#endif /* __INCLUDE_NUTTX_EEPROM_SPI_XX25XX_H */

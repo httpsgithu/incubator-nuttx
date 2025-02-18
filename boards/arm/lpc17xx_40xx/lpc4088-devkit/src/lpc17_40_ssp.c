@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/lpc17xx_40xx/lpc4088-devkit/src/lpc17_40_ssp.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -33,7 +35,7 @@
 
 #include <arch/board/board.h>
 
-#include "arm_arch.h"
+#include "arm_internal.h"
 #include "chip.h"
 #include "lpc17_40_gpio.h"
 #include "lpc17_40_ssp.h"
@@ -117,14 +119,14 @@ void weak_function lpc4088_devkit_sspdev_initialize(void)
  ****************************************************************************/
 
 #ifdef CONFIG_LPC17_40_SSP0
-void  lpc17_40_ssp0select(FAR struct spi_dev_s *dev, uint32_t devid,
+void  lpc17_40_ssp0select(struct spi_dev_s *dev, uint32_t devid,
                           bool selected)
 {
   spiinfo("devid: %d CS: %s\n", (int)devid,
           selected ? "assert" : "de-assert");
 }
 
-uint8_t lpc17_40_ssp0status(FAR struct spi_dev_s *dev, uint32_t devid)
+uint8_t lpc17_40_ssp0status(struct spi_dev_s *dev, uint32_t devid)
 {
   spiinfo("Returning nothing\n");
   return 0;
@@ -132,7 +134,7 @@ uint8_t lpc17_40_ssp0status(FAR struct spi_dev_s *dev, uint32_t devid)
 #endif
 
 #ifdef CONFIG_LPC17_40_SSP1
-void  lpc17_40_ssp1select(FAR struct spi_dev_s *dev, uint32_t devid,
+void  lpc17_40_ssp1select(struct spi_dev_s *dev, uint32_t devid,
                           bool selected)
 {
   spiinfo("devid: %d CS: %s\n", (int)devid,
@@ -147,7 +149,7 @@ void  lpc17_40_ssp1select(FAR struct spi_dev_s *dev, uint32_t devid,
     }
 }
 
-uint8_t lpc17_40_ssp1status(FAR struct spi_dev_s *dev, uint32_t devid)
+uint8_t lpc17_40_ssp1status(struct spi_dev_s *dev, uint32_t devid)
 {
   spiinfo("Returning nothing\n");
   return 0;
@@ -155,14 +157,14 @@ uint8_t lpc17_40_ssp1status(FAR struct spi_dev_s *dev, uint32_t devid)
 #endif
 
 #ifdef CONFIG_LPC17_40_SSP2
-void  lpc17_40_ssp2select(FAR struct spi_dev_s *dev, uint32_t devid,
+void  lpc17_40_ssp2select(struct spi_dev_s *dev, uint32_t devid,
                           bool selected)
 {
   spiinfo("devid: %d CS: %s\n", (int)devid,
           selected ? "assert" : "de-assert");
 }
 
-uint8_t lpc17_40_ssp2status(FAR struct spi_dev_s *dev, uint32_t devid)
+uint8_t lpc17_40_ssp2status(struct spi_dev_s *dev, uint32_t devid)
 {
   spiinfo("Returning nothing\n");
   return 0;

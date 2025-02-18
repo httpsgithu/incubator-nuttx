@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/nrf52/nrf52840-dk/src/nrf52_highpri.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -80,10 +82,10 @@
 
 struct highpri_s
 {
-  FAR struct nrf52_tim_dev_s *dev;
-  volatile uint64_t           basepri[16];
-  volatile uint64_t           handler;
-  volatile uint64_t           thread;
+  struct nrf52_tim_dev_s *dev;
+  volatile uint64_t       basepri[16];
+  volatile uint64_t       handler;
+  volatile uint64_t       thread;
 };
 
 /****************************************************************************
@@ -95,6 +97,11 @@ static struct highpri_s g_highpri;
 /****************************************************************************
  * Private Functions
  ****************************************************************************/
+
+static inline_function bool is_nesting_interrupt(void)
+{
+  return up_interrupt_context();
+}
 
 /****************************************************************************
  * Name: timer_handler
@@ -115,7 +122,7 @@ void timer_handler(void)
   ret = NRF52_TIM_CHECKINT(g_highpri.dev, NRF52_TIM_CC0);
   if (ret != 1)
     {
-      DEBUGASSERT(0);
+      DEBUGPANIC();
     }
 
   /* Increment the count associated with the current basepri */
@@ -126,7 +133,7 @@ void timer_handler(void)
 
   /* Check if we are in an interrupt handle */
 
-  if (up_interrupt_context())
+  if (is_nesting_interrupt())
     {
       g_highpri.handler++;
     }
@@ -154,7 +161,7 @@ void timer_handler(void)
 
 int highpri_main(int argc, char *argv[])
 {
-  FAR struct nrf52_tim_dev_s *tim = NULL;
+  struct nrf52_tim_dev_s *tim = NULL;
   uint64_t basepri[16];
   uint64_t handler;
   uint64_t thread;

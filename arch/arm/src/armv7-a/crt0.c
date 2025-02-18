@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/armv7-a/crt0.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -28,6 +30,8 @@
 #include <stdlib.h>
 
 #include <nuttx/addrenv.h>
+
+#include <arch/syscall.h>
 
 #ifdef CONFIG_BUILD_KERNEL
 
@@ -60,7 +64,7 @@ int main(int argc, char *argv[]);
  *
  * Returned Value:
  *   None.  This function does not return in the normal sense.  It returns
- *   via the SYS_signal_handler_return (see svcall.h)
+ *   via the SYS_signal_handler_return (see syscall.h)
  *
  ****************************************************************************/
 
@@ -77,9 +81,10 @@ static void sig_trampoline(void)
     " blx  ip\n"         /* Call the signal handler */
     " pop  {r2}\n"       /* Recover LR in R2 */
     " mov  lr, r2\n"     /* Restore LR */
-    " mov  r0, #5\n"     /* SYS_signal_handler_return */
-    " svc %0\n"          /* Return from the SYSCALL */
-    ::"i"(SYS_syscall)
+    " mov  r0, %0\n"     /* SYS_signal_handler_return */
+    " svc %1\n"          /* Return from the SYSCALL */
+    ::"i"(SYS_signal_handler_return),
+      "i"(SYS_syscall)
   );
 }
 
@@ -88,7 +93,7 @@ static void sig_trampoline(void)
  ****************************************************************************/
 
 /****************************************************************************
- * Name: _start
+ * Name: __start
  *
  * Description:
  *   This function is the low level entry point into the main thread of
@@ -107,7 +112,7 @@ static void sig_trampoline(void)
  *
  ****************************************************************************/
 
-void _start(int argc, FAR char *argv[])
+void __start(int argc, char *argv[])
 {
   int ret;
 

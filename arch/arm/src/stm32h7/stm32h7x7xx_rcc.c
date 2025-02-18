@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/stm32h7/stm32h7x7xx_rcc.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -96,6 +98,54 @@
 #if STM32_PLLCFG_PLL3CFG & (RCC_PLLCFGR_DIVP3EN | RCC_PLLCFGR_DIVQ3EN | \
                             RCC_PLLCFGR_DIVR3EN)
 #  define USE_PLL3
+#endif
+
+/* Over-drive is supported only for Voltage output scale 1 mode.
+ * It is required when SYSCLK frequency is over 400 MHz or it can be forced
+ * to a given state by adding define to the board.h configuration file:
+ *
+ *   #define STM32_VOS_OVERDRIVE 1 - force over-drive enabled,
+ *   #define STM32_VOS_OVERDRIVE 0 - force over-drive disabled,
+ *   #undef STM32_VOS_OVERDRIVE    - autoselect over-drive by logic below
+ *
+ * Boosting the core voltage can be a workaround solution to problems with
+ * poor board signal integration for high-speed digital interfaces like ULPI.
+ * Higher voltage means faster clock signal edges which may be sufficient to
+ * synchronise the high-speed clock and data.
+ */
+
+#ifndef STM32_VOS_OVERDRIVE
+#  if (STM32_PWR_VOS_SCALE == PWR_D3CR_VOS_SCALE_1) &&  \
+      (STM32_SYSCLK_FREQUENCY > 400000000)
+#    define STM32_VOS_OVERDRIVE 1
+#  else
+#    define STM32_VOS_OVERDRIVE 0
+#  endif
+#else
+#  if (STM32_VOS_OVERDRIVE == 1) &&                   \
+      (STM32_PWR_VOS_SCALE != PWR_D3CR_VOS_SCALE_1)
+#    error Over-drive can be selected only when VOS1 is configured
+#  endif
+#endif
+
+/* When the SoC supports SMPS we currently support 2 configurations:
+ * Direct SMP Supply OR LDO only supply.
+ *
+ * When the Soc does not supports SMPS we support only the LDO supply.
+ */
+
+#ifdef CONFIG_STM32H7_HAVE_SMPS
+#  define STM32_PWR_CR3_MASK  ~(STM32_PWR_CR3_BYPASS      | \
+                              STM32_PWR_CR3_LDOEN         | \
+                              STM32_PWR_CR3_SDEN          | \
+                              STM32_PWR_CR3_SMPSEXTHP     | \
+                              STM32_PWR_CR3_SMPSLEVEL_MASK)
+
+#  define STM32_PWR_CR3_SELECTION STM32_PWR_CR3_SDEN
+#else
+#  define STM32_PWR_CR3_MASK  0xffffffff
+#  define STM32_PWR_CR3_SELECTION (STM32_PWR_CR3_LDOEN | STM32_PWR_CR3_SCUEN)
+
 #endif
 
 /****************************************************************************
@@ -827,7 +877,8 @@ void stm32_stdclockconfig(void)
        */
 
       regval = getreg32(STM32_PWR_CR3);
-      regval |= STM32_PWR_CR3_LDOEN | STM32_PWR_CR3_LDOESCUEN;
+      regval &= STM32_PWR_CR3_MASK;
+      regval |= STM32_PWR_CR3_SELECTION;
       putreg32(regval, STM32_PWR_CR3);
 
       /* Set the voltage output scale */
@@ -841,36 +892,33 @@ void stm32_stdclockconfig(void)
         {
         }
 
+#ifndef CONFIG_STM32H7_PWR_IGNORE_ACTVOSRDY
       /* See Reference manual Section 5.4.1, System supply startup */
 
       while ((getreg32(STM32_PWR_CSR1) & PWR_CSR1_ACTVOSRDY) == 0)
         {
         }
+#endif
 
-      /* Over-drive is needed if
-       *  - Voltage output scale 1 mode is selected and SYSCLK frequency is
-       *    over 400 MHz.
-       */
+#if STM32_VOS_OVERDRIVE && (STM32_PWR_VOS_SCALE == PWR_D3CR_VOS_SCALE_1)
+      /* Over-drive support for VOS1 */
 
-      if ((STM32_PWR_VOS_SCALE == PWR_D3CR_VOS_SCALE_1) &&
-           STM32_SYSCLK_FREQUENCY > 400000000)
+      /* Enable System configuration controller clock to Enable ODEN */
+
+      regval = getreg32(STM32_RCC_APB4ENR);
+      regval |= RCC_APB4ENR_SYSCFGEN;
+      putreg32(regval, STM32_RCC_APB4ENR);
+
+      /* Enable Overdrive */
+
+      regval = getreg32(STM32_SYSCFG_PWRCR);
+      regval |= SYSCFG_PWRCR_ODEN;
+      putreg32(regval, STM32_SYSCFG_PWRCR);
+
+      while ((getreg32(STM32_PWR_D3CR) & STM32_PWR_D3CR_VOSRDY) == 0)
         {
-          /* Enable System configuration controller clock to Enable ODEN */
-
-          regval = getreg32(STM32_RCC_APB4ENR);
-          regval |= RCC_APB4ENR_SYSCFGEN;
-          putreg32(regval, STM32_RCC_APB4ENR);
-
-          /* Enable Overdrive to extend the clock frequency up to 480 MHz. */
-
-          regval = getreg32(STM32_SYSCFG_PWRCR);
-          regval |= SYSCFG_PWRCR_ODEN;
-          putreg32(regval, STM32_SYSCFG_PWRCR);
-
-          while ((getreg32(STM32_PWR_D3CR) & STM32_PWR_D3CR_VOSRDY) == 0)
-            {
-            }
         }
+#endif
 
       /* Configure FLASH wait states */
 
@@ -949,13 +997,30 @@ void stm32_stdclockconfig(void)
       regval |= STM32_RCC_D2CCIP2R_USBSRC;
       putreg32(regval, STM32_RCC_D2CCIP2R);
 #endif
+      /* Configure USART2, 3, 4, 5, 7, and 8 kernel clock source selection */
+
+#if defined(STM32_RCC_D2CCIP2R_USART234578_SEL)
+      regval = getreg32(STM32_RCC_D2CCIP2R);
+      regval &= ~RCC_D2CCIP2R_USART234578SEL_MASK;
+      regval |= STM32_RCC_D2CCIP2R_USART234578_SEL;
+      putreg32(regval, STM32_RCC_D2CCIP2R);
+#endif
+
+      /* Configure USART1 and 6 kernel clock source selection */
+
+#if defined(STM32_RCC_D2CCIP2R_USART16_SEL)
+      regval = getreg32(STM32_RCC_D2CCIP2R);
+      regval &= ~RCC_D2CCIP2R_USART16SEL_MASK;
+      regval |= STM32_RCC_D2CCIP2R_USART16_SEL;
+      putreg32(regval, STM32_RCC_D2CCIP2R);
+#endif
 
       /* Configure ADC source clock */
 
-#if defined(STM32_RCC_D3CCIPR_ADCSEL)
+#if defined(STM32_RCC_D3CCIPR_ADCSRC)
       regval = getreg32(STM32_RCC_D3CCIPR);
       regval &= ~RCC_D3CCIPR_ADCSEL_MASK;
-      regval |= STM32_RCC_D3CCIPR_ADCSEL;
+      regval |= STM32_RCC_D3CCIPR_ADCSRC;
       putreg32(regval, STM32_RCC_D3CCIPR);
 #endif
 

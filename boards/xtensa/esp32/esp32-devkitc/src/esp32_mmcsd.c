@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/xtensa/esp32/esp32-devkitc/src/esp32_mmcsd.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -64,7 +66,7 @@ int esp32_mmcsd_initialize(int minor)
 
   mcinfo("INFO: Initializing mmcsd card\n");
 
-  spi = esp32_spibus_initialize(2);
+  spi = esp32_spibus_initialize(CONFIG_NSH_MMCSDSPIPORTNO);
   if (spi == NULL)
     {
       mcerr("ERROR: Failed to initialize SPI port %d\n", 2);

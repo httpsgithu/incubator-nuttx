@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/stm32/common/src/stm32_dhtxx.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -45,11 +47,11 @@
  * Private Function Prototypes
  ****************************************************************************/
 
-static void dhtxx_config_data_pin(FAR struct dhtxx_config_s *state,
+static void dhtxx_config_data_pin(struct dhtxx_config_s *state,
                                   bool mode);
-static void dhtxx_set_data_pin(FAR struct dhtxx_config_s *state, bool value);
-static bool dhtxx_read_data_pin(FAR struct dhtxx_config_s *state);
-static int64_t dhtxx_get_clock(FAR struct dhtxx_config_s *state);
+static void dhtxx_set_data_pin(struct dhtxx_config_s *state, bool value);
+static bool dhtxx_read_data_pin(struct dhtxx_config_s *state);
+static int64_t dhtxx_get_clock(struct dhtxx_config_s *state);
 
 /****************************************************************************
  * Private Data
@@ -71,7 +73,7 @@ struct timespec ts;
  * Private Functions
  ****************************************************************************/
 
-static void dhtxx_config_data_pin(FAR struct dhtxx_config_s *state,
+static void dhtxx_config_data_pin(struct dhtxx_config_s *state,
                                   bool mode)
 {
   if (mode)
@@ -84,17 +86,17 @@ static void dhtxx_config_data_pin(FAR struct dhtxx_config_s *state,
     }
 }
 
-static void dhtxx_set_data_pin(FAR struct dhtxx_config_s *state, bool value)
+static void dhtxx_set_data_pin(struct dhtxx_config_s *state, bool value)
 {
   stm32_gpiowrite(BOARD_DHTXX_GPIO_OUTPUT, value);
 }
 
-static bool dhtxx_read_data_pin(FAR struct dhtxx_config_s *state)
+static bool dhtxx_read_data_pin(struct dhtxx_config_s *state)
 {
   return stm32_gpioread(BOARD_DHTXX_GPIO_INPUT);
 }
 
-static int64_t dhtxx_get_clock(FAR struct dhtxx_config_s *state)
+static int64_t dhtxx_get_clock(struct dhtxx_config_s *state)
 {
   /* Get the time from free running timer */
 
@@ -143,7 +145,7 @@ int board_dhtxx_initialize(int devno)
       return -ENODEV;
     }
 
-  snprintf(devpath, 12, "/dev/hum%d", devno);
+  snprintf(devpath, sizeof(devpath), "/dev/hum%d", devno);
   ret = dhtxx_register(devpath, &g_dhtxx_config);
   if (ret < 0)
     {

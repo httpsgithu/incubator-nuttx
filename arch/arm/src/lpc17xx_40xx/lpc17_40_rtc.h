@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/lpc17xx_40xx/lpc17_40_rtc.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -65,7 +67,7 @@ typedef void (*alarmcb_t)(void);
 
 #ifdef CONFIG_RTC_ALARM
 struct timespec;
-int lpc17_40_rtc_setalarm(FAR const struct timespec *tp, alarmcb_t callback);
+int lpc17_40_rtc_setalarm(const struct timespec *tp, alarmcb_t callback);
 #endif
 
 #endif /* __ARCH_ARM_SRC_LPC17XX_40XX_LPC17_40_RTC_H */

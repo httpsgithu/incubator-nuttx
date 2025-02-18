@@ -1,6 +1,8 @@
 /****************************************************************************
  * drivers/audio/tone.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -36,7 +38,6 @@
 #include <stdint.h>
 #include <stdlib.h>
 #include <stdbool.h>
-#include <stdlib.h>
 #include <ctype.h>
 #include <unistd.h>
 #include <string.h>
@@ -46,6 +47,7 @@
 #include <debug.h>
 
 #include <nuttx/kmalloc.h>
+#include <nuttx/mutex.h>
 #include <nuttx/fs/fs.h>
 #include <nuttx/arch.h>
 #include <nuttx/timers/pwm.h>
@@ -85,7 +87,7 @@ struct tone_upperhalf_s
   uint8_t channel;                     /* Output channel that drives the tone. */
 #endif
   volatile bool started;               /* True: pulsed output is being generated */
-  sem_t exclsem;                       /* Supports mutual exclusion */
+  mutex_t lock;                        /* Supports mutual exclusion */
   struct pwm_info_s tone;              /* Pulsed output for Audio Tone */
   struct pwm_lowerhalf_s *devtone;
   struct oneshot_lowerhalf_s *oneshot;
@@ -126,8 +128,8 @@ static const uint16_t g_notes_freq[84] =
 
 /* Global variable used by the tone generator */
 
-static const char *g_tune;
-static const char *g_next;
+static FAR const char *g_tune;
+static FAR const char *g_next;
 static uint8_t g_tempo;
 static uint8_t g_note_mode;
 static uint32_t g_note_length;
@@ -169,12 +171,6 @@ static const struct file_operations g_toneops =
   tone_close,                   /* close */
   tone_read,                    /* read */
   tone_write,                   /* write */
-  NULL,                         /* seek */
-  NULL,                         /* ioctl */
-  NULL                          /* poll */
-#ifndef CONFIG_DISABLE_PSEUDOFS_OPERATIONS
-  , NULL                        /* unlink */
-#endif
 };
 
 /****************************************************************************
@@ -772,7 +768,7 @@ static int tone_open(FAR struct file *filep)
 
   /* Get exclusive access to the device structures */
 
-  ret = nxsem_wait(&upper->exclsem);
+  ret = nxmutex_lock(&upper->lock);
   if (ret < 0)
     {
       goto errout;
@@ -789,7 +785,7 @@ static int tone_open(FAR struct file *filep)
       /* More than 255 opens; uint8_t overflows to zero */
 
       ret = -EMFILE;
-      goto errout_with_sem;
+      goto errout_with_lock;
     }
 
   /* Save the new open count on success */
@@ -797,8 +793,8 @@ static int tone_open(FAR struct file *filep)
   upper->crefs = tmp;
   ret = OK;
 
-errout_with_sem:
-  nxsem_post(&upper->exclsem);
+errout_with_lock:
+  nxmutex_unlock(&upper->lock);
 
 errout:
   return ret;
@@ -822,7 +818,7 @@ static int tone_close(FAR struct file *filep)
 
   /* Get exclusive access to the device structures */
 
-  ret = nxsem_wait(&upper->exclsem);
+  ret = nxmutex_lock(&upper->lock);
   if (ret < 0)
     {
       goto errout;
@@ -838,7 +834,7 @@ static int tone_close(FAR struct file *filep)
       upper->crefs--;
     }
 
-  nxsem_post(&upper->exclsem);
+  nxmutex_unlock(&upper->lock);
   ret = OK;
 
 errout:
@@ -944,10 +940,7 @@ int tone_register(FAR const char *path, FAR struct pwm_lowerhalf_s *tone,
 
   /* Allocate the upper-half data structure */
 
-  upper =
-    (FAR struct tone_upperhalf_s *)kmm_zalloc(
-                              sizeof(struct tone_upperhalf_s));
-
+  upper = kmm_zalloc(sizeof(struct tone_upperhalf_s));
   if (!upper)
     {
       auderr("ERROR: Allocation failed\n");
@@ -958,7 +951,7 @@ int tone_register(FAR const char *path, FAR struct pwm_lowerhalf_s *tone,
    * kmm_zalloc()).
    */
 
-  nxsem_init(&upper->exclsem, 0, 1);
+  nxmutex_init(&upper->lock);
   upper->devtone = tone;
   upper->oneshot = oneshot;
 #ifdef CONFIG_PWM_MULTICHAN

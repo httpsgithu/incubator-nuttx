@@ -1,6 +1,8 @@
 /****************************************************************************
  * drivers/sensors/lis3mdl.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -29,11 +31,12 @@
 #include <debug.h>
 #include <string.h>
 
+#include <nuttx/arch.h>
 #include <nuttx/kmalloc.h>
 #include <nuttx/wqueue.h>
 #include <nuttx/random.h>
 #include <nuttx/fs/fs.h>
-#include <nuttx/semaphore.h>
+#include <nuttx/mutex.h>
 #include <nuttx/sensors/lis3mdl.h>
 
 #if defined(CONFIG_SPI) && defined(CONFIG_SENSORS_LIS3MDL)
@@ -57,7 +60,7 @@ struct lis3mdl_dev_s
   FAR struct spi_dev_s *spi;           /* Pointer to the SPI instance */
   FAR struct lis3mdl_config_s *config; /* Pointer to the configuration
                                         * of the LIS3MDL sensor */
-  sem_t datasem;                       /* Manages exclusive access to this
+  mutex_t datalock;                    /* Manages exclusive access to this
                                         * structure */
   struct lis3mdl_sensor_data_s data;   /* The data as measured by the sensor */
   struct work_s work;                  /* The work queue is responsible for
@@ -72,28 +75,27 @@ struct lis3mdl_dev_s
 
 static void lis3mdl_read_register(FAR struct lis3mdl_dev_s *dev,
                                   uint8_t const reg_addr,
-                                  uint8_t * reg_data);
+                                  uint8_t *reg_data);
 static void lis3mdl_write_register(FAR struct lis3mdl_dev_s *dev,
                                    uint8_t const reg_addr,
                                    uint8_t const reg_data);
 static void lis3mdl_reset(FAR struct lis3mdl_dev_s *dev);
 static void lis3mdl_read_measurement_data(FAR struct lis3mdl_dev_s *dev);
 static void lis3mdl_read_magnetic_data(FAR struct lis3mdl_dev_s *dev,
-                                       uint16_t * x_mag, uint16_t * y_mag,
-                                       uint16_t * z_mag);
+                                       uint16_t *x_mag, uint16_t *y_mag,
+                                       uint16_t *z_mag);
 static void lis3mdl_read_temperature(FAR struct lis3mdl_dev_s *dev,
-                                     uint16_t * temperature);
+                                     uint16_t *temperature);
 static int lis3mdl_interrupt_handler(int irq, FAR void *context);
 static void lis3mdl_worker(FAR void *arg);
 
 static int lis3mdl_open(FAR struct file *filep);
 static int lis3mdl_close(FAR struct file *filep);
-static ssize_t lis3mdl_read(FAR struct file *, FAR char *, size_t);
+static ssize_t lis3mdl_read(FAR struct file *filep, FAR char *buffer,
+                            size_t buflen);
 static ssize_t lis3mdl_write(FAR struct file *filep,
                              FAR const char *buffer,
                              size_t buflen);
-static int lis3mdl_ioctl(FAR struct file *filep,
-                         int cmd, unsigned long arg);
 
 /****************************************************************************
  * Private Data
@@ -101,16 +103,10 @@ static int lis3mdl_ioctl(FAR struct file *filep,
 
 static const struct file_operations g_lis3mdl_fops =
 {
-  lis3mdl_open,
-  lis3mdl_close,
-  lis3mdl_read,
-  lis3mdl_write,
-  NULL,
-  lis3mdl_ioctl,
-  NULL
-#ifndef CONFIG_DISABLE_PSEUDOFS_OPERATIONS
-  , NULL
-#endif
+  lis3mdl_open,    /* open */
+  lis3mdl_close,   /* close */
+  lis3mdl_read,    /* read */
+  lis3mdl_write,   /* write */
 };
 
 /* Single linked list to store instances of drivers */
@@ -225,12 +221,12 @@ static void lis3mdl_read_measurement_data(FAR struct lis3mdl_dev_s *dev)
 
   lis3mdl_read_temperature(dev, &temperature);
 
-  /* Acquire the semaphore before the data is copied */
+  /* Acquire the mutex before the data is copied */
 
-  int ret = nxsem_wait(&dev->datasem);
+  int ret = nxmutex_lock(&dev->datalock);
   if (ret != OK)
     {
-      snerr("ERROR: Could not acquire dev->datasem: %d\n", ret);
+      snerr("ERROR: Could not acquire dev->datalock: %d\n", ret);
       return;
     }
 
@@ -241,9 +237,9 @@ static void lis3mdl_read_measurement_data(FAR struct lis3mdl_dev_s *dev)
   dev->data.z_mag = (int16_t) (z_mag);
   dev->data.temperature = (int16_t) (temperature);
 
-  /* Give back the semaphore */
+  /* Give back the mutex */
 
-  nxsem_post(&dev->datasem);
+  nxmutex_unlock(&dev->datalock);
 
   /* Feed sensor data to entropy pool */
 
@@ -503,12 +499,12 @@ static ssize_t lis3mdl_read(FAR struct file *filep, FAR char *buffer,
       return -ENOSYS;
     }
 
-  /* Acquire the semaphore before the data is copied */
+  /* Acquire the mutex before the data is copied */
 
-  ret = nxsem_wait(&priv->datasem);
+  ret = nxmutex_lock(&priv->datalock);
   if (ret < 0)
     {
-      snerr("ERROR: Could not acquire priv->datasem: %d\n", ret);
+      snerr("ERROR: Could not acquire priv->datalock: %d\n", ret);
       return ret;
     }
 
@@ -522,10 +518,9 @@ static ssize_t lis3mdl_read(FAR struct file *filep, FAR char *buffer,
   data->z_mag = priv->data.z_mag;
   data->temperature = priv->data.temperature;
 
-  /* Give back the semaphore */
+  /* Give back the mutex */
 
-  nxsem_post(&priv->datasem);
-
+  nxmutex_unlock(&priv->datalock);
   return sizeof(FAR struct lis3mdl_sensor_data_s);
 }
 
@@ -537,27 +532,6 @@ static ssize_t lis3mdl_write(FAR struct file *filep, FAR const char *buffer,
                              size_t buflen)
 {
   return -ENOSYS;
-}
-
-/****************************************************************************
- * Name: lis3mdl_ioctl
- ****************************************************************************/
-
-static int lis3mdl_ioctl(FAR struct file *filep, int cmd, unsigned long arg)
-{
-  int ret = OK;
-
-  switch (cmd)
-    {
-      /* Command was not recognized */
-
-    default:
-      snerr("ERROR: Unrecognized cmd: %d\n", cmd);
-      ret = -ENOTTY;
-      break;
-    }
-
-  return ret;
 }
 
 /****************************************************************************
@@ -608,8 +582,7 @@ int lis3mdl_register(FAR const char *devpath, FAR struct spi_dev_s *spi,
 
   priv->work.worker = NULL;
 
-  nxsem_init(&priv->datasem, 0, 1);     /* Initialize sensor data access
-                                         * semaphore */
+  nxmutex_init(&priv->datalock); /* Initialize sensor data access mutex */
 
   /* Setup SPI frequency and mode */
 
@@ -622,7 +595,9 @@ int lis3mdl_register(FAR const char *devpath, FAR struct spi_dev_s *spi,
   if (ret < 0)
     {
       snerr("ERROR: Failed to attach interrupt\n");
-      return -ENODEV;
+      nxmutex_destroy(&priv->datalock);
+      kmm_free(priv);
+      return ret;
     }
 
   /* Register the character driver */
@@ -631,9 +606,9 @@ int lis3mdl_register(FAR const char *devpath, FAR struct spi_dev_s *spi,
   if (ret < 0)
     {
       snerr("ERROR: Failed to register driver: %d\n", ret);
+      nxmutex_destroy(&priv->datalock);
       kmm_free(priv);
-      nxsem_destroy(&priv->datasem);
-      return -ENODEV;
+      return ret;
     }
 
   /* Since we support multiple LIS3MDL devices are supported, we will need to

@@ -1,8 +1,9 @@
 /****************************************************************************
  * arch/arm/src/stm32l4/stm32l4_exti_comp.c
  *
- *   Copyright (c) 2017 Gregory Nutt. All rights reserved
- *   Copyright (c) 2016 Motorola Mobility, LLC. All rights reserved.
+ * SPDX-License-Identifier: BSD-3-Clause
+ * SPDX-FileCopyrightText: 2017 Gregory Nutt. All rights reserved
+ * SPDX-FileCopyrightText: 2016 Motorola Mobility LLC. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -42,7 +43,7 @@
 #include <nuttx/irq.h>
 #include <nuttx/arch.h>
 
-#include "arm_arch.h"
+#include "arm_internal.h"
 #include "stm32l4_comp.h"
 #include "stm32l4_exti.h"
 #include "hardware/stm32l4_exti.h"
@@ -82,7 +83,7 @@ static const uint32_t g_comp_lines[STM32L4_COMP_NUM] =
  * Private Functions
  ****************************************************************************/
 
-static int stm32l4_exti_comp_isr(int irq, void *context, FAR void *arg)
+static int stm32l4_exti_comp_isr(int irq, void *context, void *arg)
 {
   uint32_t pr;
   uint32_t ln;

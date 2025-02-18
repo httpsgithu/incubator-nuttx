@@ -1,6 +1,8 @@
 /****************************************************************************
  * net/utils/net_icmpchksum.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -28,14 +30,8 @@
 #include <nuttx/net/netdev.h>
 #include <nuttx/net/icmp.h>
 
+#include "icmp/icmp.h"
 #include "utils/utils.h"
-
-/****************************************************************************
- * Pre-processor Definitions
- ****************************************************************************/
-
-#define IPv4BUF     ((FAR struct ipv4_hdr_s *)&dev->d_buf[NET_LL_HDRLEN(dev)])
-#define ICMPBUF(hl) ((FAR struct icmp_hdr_s *)&dev->d_buf[NET_LL_HDRLEN(dev) + (hl)])
 
 /****************************************************************************
  * Public Functions
@@ -49,7 +45,7 @@
  *
  ****************************************************************************/
 
-#if defined(CONFIG_NET_ICMP) && defined(CONFIG_NET_ICMP_SOCKET)
+#ifdef CONFIG_NET_ICMP
 uint16_t icmp_chksum(FAR struct net_driver_s *dev, int len)
 {
   FAR struct ipv4_hdr_s *ipv4 = IPv4BUF;
@@ -62,10 +58,26 @@ uint16_t icmp_chksum(FAR struct net_driver_s *dev, int len)
 
   /* The ICMP header immediately follows the IP header */
 
-  icmp = ICMPBUF(iphdrlen);
+  icmp = IPBUF(iphdrlen);
   return net_chksum((FAR uint16_t *)&icmp->type, len);
 }
-#endif /* CONFIG_NET_ICMP && CONFIG_NET_ICMP_SOCKET */
+#endif /* CONFIG_NET_ICMP */
+
+/****************************************************************************
+ * Name: icmp_chksum_iob
+ *
+ * Description:
+ *   Calculate the checksum of the ICMP message, the input can be an I/O
+ *   buffer chain
+ *
+ ****************************************************************************/
+
+#if defined(CONFIG_NET_ICMP) && defined(CONFIG_MM_IOB)
+uint16_t icmp_chksum_iob(FAR struct iob_s *iob)
+{
+  return net_chksum_iob(0, iob, 0);
+}
+#endif /* CONFIG_NET_ICMP */
 
 /****************************************************************************
  * Name: icmpv6_chksum

@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/stm32/stm32f429i-disco/include/board.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -28,7 +30,7 @@
 #include <nuttx/config.h>
 
 #ifndef __ASSEMBLY__
-# include <stdint.h>
+#  include <stdint.h>
 #endif
 
 /* DO NOT include STM32 internal header files here */
@@ -203,6 +205,13 @@
 #define GPIO_USART1_RX GPIO_USART1_RX_1
 #define GPIO_USART1_TX GPIO_USART1_TX_1
 
+#define GPIO_USART3_RX GPIO_USART3_RX_1
+#define GPIO_USART3_TX GPIO_USART3_TX_1
+
+/* CAN: */
+#define GPIO_CAN1_RX GPIO_CAN1_RX_2
+#define GPIO_CAN1_TX GPIO_CAN1_TX_2
+
 /* PWM
  *
  * The STM32F4 Discovery has no real on-board PWM devices, but the board can
@@ -300,11 +309,11 @@
 
 #if defined(CONFIG_STM32F429I_DISCO_ILI9341_FBIFACE_LANDSCAPE) || \
     defined(CONFIG_STM32F429I_DISCO_ILI9341_FBIFACE_RLANDSCAPE)
-# define BOARD_LTDC_WIDTH               320
-# define BOARD_LTDC_HEIGHT              240
+#  define BOARD_LTDC_WIDTH              320
+#  define BOARD_LTDC_HEIGHT             240
 #else
-# define BOARD_LTDC_WIDTH               240
-# define BOARD_LTDC_HEIGHT              320
+#  define BOARD_LTDC_WIDTH              240
+#  define BOARD_LTDC_HEIGHT             320
 #endif
 
 #define BOARD_LTDC_OUTPUT_BPP           16
@@ -372,8 +381,8 @@
 #else
 /* Custom LCD display configuration */
 
-# define BOARD_LTDC_WIDTH               ???
-# define BOARD_LTDC_HEIGHT              ???
+#  define BOARD_LTDC_WIDTH              ???
+#  define BOARD_LTDC_HEIGHT             ???
 
 #define BOARD_LTDC_HFP                  ???
 #define BOARD_LTDC_HBP                  ???

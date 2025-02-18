@@ -1,8 +1,8 @@
 /****************************************************************************
  * fs/spiffs/src/spiffs_core.h
  *
- *   Copyright (C) 2018 Gregory Nutt. All rights reserved.
- *   Author: Gregory Nutt <gnutt@nuttx.org>
+ * SPDX-License-Identifier: BSD-3-Clause
+ * SPDX-FileCopyrightText: 2018 Gregory Nutt
  *
  * This is a port of version 0.3.7 of SPIFFS by Peter Andersion.  That
  * version was originally released under the MIT license but is here re-
@@ -50,6 +50,7 @@
 
 #include <stddef.h>
 #include <stdbool.h>
+#include <sys/param.h>
 
 #include "spiffs.h"
 #include "spiffs_mtd.h"
@@ -369,14 +370,6 @@
 
 #define SPIFFS_VIS_NO_WRAP      (1<<2)
 
-#ifndef MIN
-#  define MIN(a,b) ((a) < (b) ? (a) : (b))
-#endif
-
-#ifndef MAX
-#  define MAX(a,b) ((a) > (b) ? (a) : (b))
-#endif
-
 /****************************************************************************
  * Public Types
  ****************************************************************************/
@@ -398,9 +391,9 @@ begin_packed_struct struct spiffs_page_header_s
 /* Object index header page header */
 
 #ifdef CONFIG_SPIFFS_LEADING_SLASH
-#define	SPIFFS_LEADING_SLASH_SIZE	1
+#define SPIFFS_LEADING_SLASH_SIZE   1
 #else
-#define	SPIFFS_LEADING_SLASH_SIZE	0
+#define SPIFFS_LEADING_SLASH_SIZE   0
 #endif
 
 begin_packed_struct struct spiffs_pgobj_ndxheader_s
@@ -423,14 +416,14 @@ begin_packed_struct struct spiffs_page_objndx_s
   struct spiffs_page_header_s phdr;
   uint8_t _align[4 - ((sizeof(struct spiffs_page_header_s) & 3) ==
                  0 ? 4 : (sizeof(struct spiffs_page_header_s) & 3))];
-} begin_packed_struct;
+} end_packed_struct;
 
 /* callback func for object lookup visitor */
 
-typedef int (*spiffs_callback_t)(FAR struct spiffs_s *fs, int16_t objid,
-                                 int16_t blkndx, int entry,
-                                 FAR const void *user_const,
-                                 FAR void *user_var);
+typedef CODE int (*spiffs_callback_t)(FAR struct spiffs_s *fs, int16_t objid,
+                                      int16_t blkndx, int entry,
+                                      FAR const void *user_const,
+                                      FAR void *user_var);
 
 /****************************************************************************
  * Public Function Prototypes
@@ -443,7 +436,7 @@ int     spiffs_phys_cpy(FAR struct spiffs_s *fs,
 int     spiffs_foreach_objlu(FAR struct spiffs_s *fs, int16_t starting_block,
           int starting_lu_entry, uint8_t flags, int16_t objid,
           spiffs_callback_t v, FAR const void *user_const,
-          FAR void *user_var, FAR int16_t *blkndx, int *lu_entry);
+          FAR void *user_var, FAR int16_t *blkndx, FAR int *lu_entry);
 int     spiffs_erase_block(FAR struct spiffs_s *fs, int16_t blkndx);
 int     spiffs_objlu_scan(FAR struct spiffs_s *fs);
 int     spiffs_objlu_find_free_objid(FAR struct spiffs_s *fs,

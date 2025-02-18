@@ -1,6 +1,8 @@
 /****************************************************************************
  * libs/libc/machine/arm/gnu_unwind_find_exidx.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -26,28 +28,11 @@
 #include <unwind.h>
 
 /****************************************************************************
- * Private Types
- ****************************************************************************/
-
-typedef struct __EIT_entry
-{
-  _uw fnoffset;
-  _uw content;
-} __EIT_entry;
-
-/****************************************************************************
  * Private Data
  ****************************************************************************/
 
 static __EIT_entry *__exidx_start_elf;
 static __EIT_entry *__exidx_end_elf;
-
-/****************************************************************************
- * Public Data
- ****************************************************************************/
-
-extern __EIT_entry __exidx_start;
-extern __EIT_entry __exidx_end;
 
 /****************************************************************************
  * Public Functions
@@ -95,8 +80,8 @@ _Unwind_Ptr __gnu_Unwind_Find_exidx(_Unwind_Ptr return_address, int *nrecp)
 {
   if (return_address < 0x20000000)
     {
-      *nrecp = &__exidx_end - &__exidx_start;
-      return (_Unwind_Ptr)&__exidx_start;
+      *nrecp = __exidx_end - __exidx_start;
+      return (_Unwind_Ptr)__exidx_start;
     }
   else
     {

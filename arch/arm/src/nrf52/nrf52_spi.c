@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/nrf52/nrf52_spi.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -31,17 +33,18 @@
 
 #include <nuttx/irq.h>
 #include <nuttx/arch.h>
-#include <nuttx/semaphore.h>
+#include <nuttx/mutex.h>
+#include <arch/barriers.h>
 #include <arch/board/board.h>
 #include <nuttx/power/pm.h>
 
-#include "arm_arch.h"
-#include "barriers.h"
+#include "arm_internal.h"
 
 #include "nrf52_gpio.h"
 #include "nrf52_spi.h"
 
 #include "hardware/nrf52_spi.h"
+#include "hardware/nrf52_utils.h"
 
 #ifdef CONFIG_NRF52_SPI_MASTER_WORKAROUND_1BYTE_TRANSFER
 #  include "hardware/nrf52_gpiote.h"
@@ -83,7 +86,7 @@ struct nrf52_spidev_s
   uint32_t         frequency;  /* Requested clock frequency */
   uint8_t          mode;       /* Mode 0,1,2,3 */
 
-  sem_t            exclsem;    /* Held while chip is selected for mutual
+  mutex_t          lock;       /* Held while chip is selected for mutual
                                 * exclusion
                                 */
 #ifdef CONFIG_NRF52_SPI_MASTER_INTERRUPTS
@@ -96,55 +99,55 @@ struct nrf52_spidev_s
  * Private Function Prototypes
  ****************************************************************************/
 
-static inline void nrf52_spi_putreg(FAR struct nrf52_spidev_s *priv,
+static inline void nrf52_spi_putreg(struct nrf52_spidev_s *priv,
                                     uint32_t offset,
                                     uint32_t value);
-static inline uint32_t nrf52_spi_getreg(FAR struct nrf52_spidev_s *priv,
+static inline uint32_t nrf52_spi_getreg(struct nrf52_spidev_s *priv,
                                         uint32_t offset);
 
 /* SPI methods */
 
-static int nrf52_spi_lock(FAR struct spi_dev_s *dev, bool lock);
-static uint32_t nrf52_spi_setfrequency(FAR struct spi_dev_s *dev,
+static int nrf52_spi_lock(struct spi_dev_s *dev, bool lock);
+static uint32_t nrf52_spi_setfrequency(struct spi_dev_s *dev,
                                        uint32_t frequency);
-static void nrf52_spi_setmode(FAR struct spi_dev_s *priv,
+static void nrf52_spi_setmode(struct spi_dev_s *priv,
                               enum spi_mode_e mode);
-static void nrf52_spi_setbits(FAR struct spi_dev_s *priv, int nbits);
+static void nrf52_spi_setbits(struct spi_dev_s *priv, int nbits);
 #ifdef CONFIG_SPI_HWFEATURES
-static int nrf52_spi_hwfeatures(FAR struct spi_dev_s *dev,
+static int nrf52_spi_hwfeatures(struct spi_dev_s *dev,
                                 spi_hwfeatures_t features);
 #endif
-static uint32_t nrf52_spi_send(FAR struct spi_dev_s *dev, uint32_t wd);
-static void nrf52_spi_exchange(FAR struct spi_dev_s *dev,
-                               FAR const void *txbuffer,
-                               FAR void *rxbuffer, size_t nwords);
+static uint32_t nrf52_spi_send(struct spi_dev_s *dev, uint32_t wd);
+static void nrf52_spi_exchange(struct spi_dev_s *dev,
+                               const void *txbuffer,
+                               void *rxbuffer, size_t nwords);
 #ifndef CONFIG_SPI_EXCHANGE
-static void nrf52_spi_sndblock(FAR struct spi_dev_s *dev,
-                               FAR const void *txbuffer,
+static void nrf52_spi_sndblock(struct spi_dev_s *dev,
+                               const void *txbuffer,
                                size_t nwords);
-static void nrf52_spi_recvblock(FAR struct spi_dev_s *dev,
-                                FAR void *rxbuffer,
+static void nrf52_spi_recvblock(struct spi_dev_s *dev,
+                                void *rxbuffer,
                                 size_t nwords);
 #endif
 
 #ifdef CONFIG_NRF52_SPI_MASTER_INTERRUPTS
-static int nrf52_spi_isr(int irq, FAR void *context, FAR void *arg);
+static int nrf52_spi_isr(int irq, void *context, void *arg);
 #endif
 
 /* Initialization */
 
-static int nrf52_spi_init(FAR struct nrf52_spidev_s *priv);
-static void nrf52_spi_pselinit(FAR struct nrf52_spidev_s *priv,
+static int nrf52_spi_init(struct nrf52_spidev_s *priv);
+static void nrf52_spi_pselinit(struct nrf52_spidev_s *priv,
                                uint32_t offset, nrf52_pinset_t pinset);
-static void nrf52_spi_gpioinit(FAR struct nrf52_spidev_s *priv);
+static void nrf52_spi_gpioinit(struct nrf52_spidev_s *priv);
 
 #ifdef CONFIG_PM
-static int nrf52_spi_deinit(FAR struct nrf52_spidev_s *priv);
-static void nrf52_spi_gpiodeinit(FAR struct nrf52_spidev_s *priv);
+static int nrf52_spi_deinit(struct nrf52_spidev_s *priv);
+static void nrf52_spi_gpiodeinit(struct nrf52_spidev_s *priv);
 
-static int nrf52_spi_pm_prepare(FAR struct pm_callback_s *cb, int domain,
+static int nrf52_spi_pm_prepare(struct pm_callback_s *cb, int domain,
                                 enum pm_state_e pmstate);
-static void nrf52_spi_pm_notify(FAR struct pm_callback_s *cb, int domain,
+static void nrf52_spi_pm_notify(struct pm_callback_s *cb, int domain,
                                 enum pm_state_e pmstate);
 #endif
 
@@ -198,11 +201,13 @@ static struct nrf52_spidev_s g_spi0dev =
 {
   .spidev    =
   {
-    &g_spi0ops
+    .ops     = &g_spi0ops,
   },
 
   .base      = NRF52_SPIM0_BASE,
+  .lock      = NXMUTEX_INITIALIZER,
 #ifdef CONFIG_NRF52_SPI_MASTER_INTERRUPTS
+  .sem_isr   = SEM_INITIALIZER(0),
   .irq       = NRF52_IRQ_SPI_TWI_0,
 #endif
   .sck_pin   = BOARD_SPI0_SCK_PIN,
@@ -232,7 +237,7 @@ static const struct spi_ops_s g_spi1ops =
 #  ifdef CONFIG_SPI_EXCHANGE
   .exchange          = nrf52_spi_exchange,
 #  else
-  .sndlock           = nrf52_spi_sndblock,
+  .sndblock          = nrf52_spi_sndblock,
   .recvblock         = nrf52_spi_recvblock,
 #  endif
 #ifdef CONFIG_SPI_TRIGGER
@@ -249,11 +254,13 @@ static struct nrf52_spidev_s g_spi1dev =
 {
   .spidev    =
   {
-    &g_spi1ops
+    .ops     = &g_spi1ops,
   },
 
   .base      = NRF52_SPIM1_BASE,
+  .lock      = NXMUTEX_INITIALIZER,
 #ifdef CONFIG_NRF52_SPI_MASTER_INTERRUPTS
+  .sem_isr   = SEM_INITIALIZER(0),
   .irq       = NRF52_IRQ_SPI_TWI_1,
 #endif
   .sck_pin   = BOARD_SPI1_SCK_PIN,
@@ -300,11 +307,13 @@ static struct nrf52_spidev_s g_spi2dev =
 {
   .spidev    =
   {
-    &g_spi2ops
+    .ops     = &g_spi2ops,
   },
 
   .base      = NRF52_SPIM2_BASE,
+  .lock      = NXMUTEX_INITIALIZER,
 #ifdef CONFIG_NRF52_SPI_MASTER_INTERRUPTS
+  .sem_isr   = SEM_INITIALIZER(0),
   .irq       = NRF52_IRQ_SPI2,
 #endif
   .sck_pin   = BOARD_SPI2_SCK_PIN,
@@ -351,11 +360,13 @@ static struct nrf52_spidev_s g_spi3dev =
 {
   .spidev    =
   {
-    &g_spi3ops
+    .ops     = &g_spi3ops,
   },
 
   .base      = NRF52_SPIM3_BASE,
+  .lock      = NXMUTEX_INITIALIZER,
 #ifdef CONFIG_NRF52_SPI_MASTER_INTERRUPTS
+  .sem_isr   = SEM_INITIALIZER(0),
   .irq       = NRF52_IRQ_SPI3,
 #endif
   .sck_pin   = BOARD_SPI3_SCK_PIN,
@@ -376,7 +387,7 @@ static struct nrf52_spidev_s g_spi3dev =
  *
  ****************************************************************************/
 
-static inline void nrf52_spi_putreg(FAR struct nrf52_spidev_s *priv,
+static inline void nrf52_spi_putreg(struct nrf52_spidev_s *priv,
                                     uint32_t offset,
                                     uint32_t value)
 {
@@ -391,7 +402,7 @@ static inline void nrf52_spi_putreg(FAR struct nrf52_spidev_s *priv,
  *
  ****************************************************************************/
 
-static inline uint32_t nrf52_spi_getreg(FAR struct nrf52_spidev_s *priv,
+static inline uint32_t nrf52_spi_getreg(struct nrf52_spidev_s *priv,
                                         uint32_t offset)
 {
   return getreg32(priv->base + offset);
@@ -406,9 +417,9 @@ static inline uint32_t nrf52_spi_getreg(FAR struct nrf52_spidev_s *priv,
  ****************************************************************************/
 
 #ifdef CONFIG_NRF52_SPI_MASTER_INTERRUPTS
-static int nrf52_spi_isr(int irq, FAR void *context, FAR void *arg)
+static int nrf52_spi_isr(int irq, void *context, void *arg)
 {
-  FAR struct nrf52_spidev_s *priv = (FAR struct nrf52_spidev_s *)arg;
+  struct nrf52_spidev_s *priv = (struct nrf52_spidev_s *)arg;
 
   /* Get interrupt event */
 
@@ -435,7 +446,7 @@ static int nrf52_spi_isr(int irq, FAR void *context, FAR void *arg)
  *
  ****************************************************************************/
 
-static int nrf52_spi_init(FAR struct nrf52_spidev_s *priv)
+static int nrf52_spi_init(struct nrf52_spidev_s *priv)
 {
   /* Disable SPI */
 
@@ -469,7 +480,7 @@ static int nrf52_spi_init(FAR struct nrf52_spidev_s *priv)
  *
  ****************************************************************************/
 
-static int nrf52_spi_deinit(FAR struct nrf52_spidev_s *priv)
+static int nrf52_spi_deinit(struct nrf52_spidev_s *priv)
 {
   /* Disable SPI */
 
@@ -481,8 +492,7 @@ static int nrf52_spi_deinit(FAR struct nrf52_spidev_s *priv)
    */
 
   nrf52_spi_putreg(priv, NRF52_SPIM_POWER_OFFSET, 0);
-  ARM_DSB();
-  ARM_ISB();
+  UP_MB();
   nrf52_spi_putreg(priv, NRF52_SPIM_POWER_OFFSET, 1);
 #endif
 
@@ -502,7 +512,7 @@ static int nrf52_spi_deinit(FAR struct nrf52_spidev_s *priv)
  *
  ****************************************************************************/
 
-static void nrf52_spi_pselinit(FAR struct nrf52_spidev_s *priv,
+static void nrf52_spi_pselinit(struct nrf52_spidev_s *priv,
                                uint32_t offset, nrf52_pinset_t pinset)
 {
   uint32_t regval;
@@ -522,7 +532,7 @@ static void nrf52_spi_pselinit(FAR struct nrf52_spidev_s *priv,
  *
  ****************************************************************************/
 
-static void nrf52_spi_gpioinit(FAR struct nrf52_spidev_s *priv)
+static void nrf52_spi_gpioinit(struct nrf52_spidev_s *priv)
 {
   nrf52_gpio_config(priv->sck_pin);
   nrf52_spi_pselinit(priv, NRF52_SPIM_PSELSCK_OFFSET, priv->sck_pin);
@@ -605,7 +615,7 @@ static void nrf52_spi_gpioinit(FAR struct nrf52_spidev_s *priv)
  *
  ****************************************************************************/
 
-static void nrf52_spi_gpiodeinit(FAR struct nrf52_spidev_s *priv)
+static void nrf52_spi_gpiodeinit(struct nrf52_spidev_s *priv)
 {
   nrf52_gpio_unconfig(priv->sck_pin);
 
@@ -680,18 +690,18 @@ static void nrf52_spi_gpiodeinit(FAR struct nrf52_spidev_s *priv)
  *
  ****************************************************************************/
 
-static int nrf52_spi_lock(FAR struct spi_dev_s *dev, bool lock)
+static int nrf52_spi_lock(struct spi_dev_s *dev, bool lock)
 {
-  FAR struct nrf52_spidev_s *priv = (FAR struct nrf52_spidev_s *)dev;
+  struct nrf52_spidev_s *priv = (struct nrf52_spidev_s *)dev;
   int ret = OK;
 
   if (lock)
     {
-      ret = nxsem_wait_uninterruptible(&priv->exclsem);
+      ret = nxmutex_lock(&priv->lock);
     }
   else
     {
-      ret = nxsem_post(&priv->exclsem);
+      ret = nxmutex_unlock(&priv->lock);
     }
 
   return ret;
@@ -712,10 +722,10 @@ static int nrf52_spi_lock(FAR struct spi_dev_s *dev, bool lock)
  *
  ****************************************************************************/
 
-static uint32_t nrf52_spi_setfrequency(FAR struct spi_dev_s *dev,
+static uint32_t nrf52_spi_setfrequency(struct spi_dev_s *dev,
                                        uint32_t frequency)
 {
-  FAR struct nrf52_spidev_s *priv = (FAR struct nrf52_spidev_s *)dev;
+  struct nrf52_spidev_s *priv = (struct nrf52_spidev_s *)dev;
   uint32_t regval = 0;
 
   if (priv->frequency == frequency)
@@ -807,10 +817,10 @@ errout:
  *
  ****************************************************************************/
 
-static void nrf52_spi_setmode(FAR struct spi_dev_s *dev,
+static void nrf52_spi_setmode(struct spi_dev_s *dev,
                               enum spi_mode_e mode)
 {
-  FAR struct nrf52_spidev_s *priv = (FAR struct nrf52_spidev_s *)dev;
+  struct nrf52_spidev_s *priv = (struct nrf52_spidev_s *)dev;
   uint32_t regval = 0;
 
   spiinfo("mode=%d\n", mode);
@@ -850,7 +860,7 @@ static void nrf52_spi_setmode(FAR struct spi_dev_s *dev,
 
           default:
             {
-              DEBUGASSERT(0);
+              DEBUGPANIC();
               return;
             }
         }
@@ -889,14 +899,12 @@ static void nrf52_spi_setmode(FAR struct spi_dev_s *dev,
  *
  ****************************************************************************/
 
-static void nrf52_spi_setbits(FAR struct spi_dev_s *dev, int nbits)
+static void nrf52_spi_setbits(struct spi_dev_s *dev, int nbits)
 {
   if (nbits != 8)
     {
       spierr("ERROR: nbits not supported: %d\n", nbits);
     }
-
-  return;
 }
 
 /****************************************************************************
@@ -916,11 +924,11 @@ static void nrf52_spi_setbits(FAR struct spi_dev_s *dev, int nbits)
  ****************************************************************************/
 
 #ifdef CONFIG_SPI_HWFEATURES
-static int nrf52_spi_hwfeatures(FAR struct spi_dev_s *dev,
+static int nrf52_spi_hwfeatures(struct spi_dev_s *dev,
                                 spi_hwfeatures_t features)
 {
 #ifdef CONFIG_SPI_BITORDER
-  FAR struct nrf52_spidev_s *priv = (FAR struct nrf52_spidev_s *)dev;
+  struct nrf52_spidev_s *priv = (struct nrf52_spidev_s *)dev;
   uint32_t setbits = 0;
   uint32_t clrbits = 0;
   uint32_t regval;
@@ -968,7 +976,7 @@ static int nrf52_spi_hwfeatures(FAR struct spi_dev_s *dev,
  *
  ****************************************************************************/
 
-static uint32_t nrf52_spi_send(FAR struct spi_dev_s *dev, uint32_t wd)
+static uint32_t nrf52_spi_send(struct spi_dev_s *dev, uint32_t wd)
 {
   uint32_t ret = 0;
 
@@ -996,9 +1004,9 @@ static uint32_t nrf52_spi_send(FAR struct spi_dev_s *dev, uint32_t wd)
  *
  ****************************************************************************/
 
-static void nrf52_spi_1b_workaround(FAR struct spi_dev_s *dev, bool enable)
+static void nrf52_spi_1b_workaround(struct spi_dev_s *dev, bool enable)
 {
-  FAR struct nrf52_spidev_s *priv = (FAR struct nrf52_spidev_s *)dev;
+  struct nrf52_spidev_s *priv = (struct nrf52_spidev_s *)dev;
   uint32_t pin  = 0;
   uint32_t port = 0;
 
@@ -1063,11 +1071,11 @@ static void nrf52_spi_1b_workaround(FAR struct spi_dev_s *dev, bool enable)
  *
  ****************************************************************************/
 
-static void nrf52_spi_exchange(FAR struct spi_dev_s *dev,
-                               FAR const void *txbuffer,
-                               FAR void *rxbuffer, size_t nwords)
+static void nrf52_spi_exchange(struct spi_dev_s *dev,
+                               const void *txbuffer,
+                               void *rxbuffer, size_t nwords)
 {
-  FAR struct nrf52_spidev_s *priv = (FAR struct nrf52_spidev_s *)dev;
+  struct nrf52_spidev_s *priv = (struct nrf52_spidev_s *)dev;
   uint32_t regval = 0;
   size_t nwords_left = nwords;
 
@@ -1083,6 +1091,7 @@ static void nrf52_spi_exchange(FAR struct spi_dev_s *dev,
       /* Write RXD data pointer */
 
       regval = (uint32_t)rxbuffer;
+      DEBUGASSERT(nrf52_easydma_valid(regval));
       nrf52_spi_putreg(priv, NRF52_SPIM_RXDPTR_OFFSET, regval);
     }
   else
@@ -1095,6 +1104,7 @@ static void nrf52_spi_exchange(FAR struct spi_dev_s *dev,
       /* Write TXD data pointer */
 
       regval = (uint32_t)txbuffer;
+      DEBUGASSERT(nrf52_easydma_valid(regval));
       nrf52_spi_putreg(priv, NRF52_SPIM_TXDPTR_OFFSET, regval);
     }
   else
@@ -1155,11 +1165,11 @@ static void nrf52_spi_exchange(FAR struct spi_dev_s *dev,
       nxsem_wait_uninterruptible(&priv->sem_isr);
 #endif
 
-      if (nrf52_spi_getreg(priv, NRF52_SPIM_TXDAMOUNT_OFFSET) !=
-          transfer_size)
+      regval = nrf52_spi_getreg(priv, NRF52_SPIM_TXDAMOUNT_OFFSET);
+      if (regval != transfer_size)
         {
           spierr("Incomplete transfer wrote %" PRId32 " expected %zu\n",
-                 regval, nwords);
+                 regval, transfer_size);
         }
 
       /* SPI stop */
@@ -1220,8 +1230,8 @@ static void nrf52_spi_exchange(FAR struct spi_dev_s *dev,
  *
  ****************************************************************************/
 
-static void nrf52_spi_sndblock(FAR struct spi_dev_s *dev,
-                               FAR const void *txbuffer,
+static void nrf52_spi_sndblock(struct spi_dev_s *dev,
+                               const void *txbuffer,
                                size_t nwords)
 {
   spiinfo("txbuffer=%p nwords=%zu\n", txbuffer, nwords);
@@ -1246,8 +1256,8 @@ static void nrf52_spi_sndblock(FAR struct spi_dev_s *dev,
  *
  ****************************************************************************/
 
-static void nrf52_spi_recvblock(FAR struct spi_dev_s *dev,
-                                FAR void *rxbuffer,
+static void nrf52_spi_recvblock(struct spi_dev_s *dev,
+                                void *rxbuffer,
                                 size_t nwords)
 {
   spiinfo("txbuffer=%p nwords=%zu\n", rxbuffer, nwords);
@@ -1272,7 +1282,7 @@ static void nrf52_spi_recvblock(FAR struct spi_dev_s *dev,
  ****************************************************************************/
 
 #ifdef CONFIG_SPI_TRIGGER
-static int nrf52_spi_trigger(FAR struct spi_dev_s *dev)
+static int nrf52_spi_trigger(struct spi_dev_s *dev)
 {
   return -ENOSYS;
 }
@@ -1283,7 +1293,7 @@ static int nrf52_spi_trigger(FAR struct spi_dev_s *dev)
  * Name: nrf52_spi_pm_prepare
  ****************************************************************************/
 
-static int nrf52_spi_pm_prepare(FAR struct pm_callback_s *cb, int domain,
+static int nrf52_spi_pm_prepare(struct pm_callback_s *cb, int domain,
                                 enum pm_state_e pmstate)
 {
   if (pmstate == PM_STANDBY || pmstate == PM_SLEEP)
@@ -1328,7 +1338,7 @@ static int nrf52_spi_pm_prepare(FAR struct pm_callback_s *cb, int domain,
  * Name: nrf52_spi_pm_notify
  ****************************************************************************/
 
-static void nrf52_spi_pm_notify(FAR struct pm_callback_s *cb, int domain,
+static void nrf52_spi_pm_notify(struct pm_callback_s *cb, int domain,
                                 enum pm_state_e pmstate)
 {
   if (pmstate == PM_SLEEP || pmstate == PM_STANDBY)
@@ -1416,9 +1426,9 @@ static void nrf52_spi_pm_notify(FAR struct pm_callback_s *cb, int domain,
  *
  ****************************************************************************/
 
-FAR struct spi_dev_s *nrf52_spibus_initialize(int port)
+struct spi_dev_s *nrf52_spibus_initialize(int port)
 {
-  FAR struct nrf52_spidev_s *priv = NULL;
+  struct nrf52_spidev_s *priv = NULL;
 
   /* Get SPI driver data */
 
@@ -1470,18 +1480,7 @@ FAR struct spi_dev_s *nrf52_spibus_initialize(int port)
 
   priv->initialized = true;
 
-  /* Initialize the SPI semaphore */
-
-  nxsem_init(&priv->exclsem, 0, 1);
-
 #ifdef CONFIG_NRF52_SPI_MASTER_INTERRUPTS
-  /* This semaphore is used for signaling and, hence, should not have
-   * priority inheritance enabled.
-   */
-
-  nxsem_init(&priv->sem_isr, 0, 0);
-  nxsem_set_protocol(&priv->sem_isr, SEM_PRIO_NONE);
-
   /* Attach SPI interrupt */
 
   irq_attach(priv->irq, nrf52_spi_isr, priv);
@@ -1489,5 +1488,5 @@ FAR struct spi_dev_s *nrf52_spibus_initialize(int port)
 #endif
 
 errout:
-  return (FAR struct spi_dev_s *)priv;
+  return (struct spi_dev_s *)priv;
 }

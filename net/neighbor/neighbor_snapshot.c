@@ -1,6 +1,8 @@
 /****************************************************************************
  * net/neighbor/neighbor_snapshot.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -47,7 +49,7 @@
  * Input Parameters:
  *   snapshot  - Location to return the Neighbor table copy
  *   nentries  - The size of the user provided 'dest' in entries, each of
- *               size sizeof(struct arp_entry_s)
+ *               size sizeof(struct neighbor_entry_s)
  *
  * Returned Value:
  *   On success, the number of entries actually copied is returned.  Unused

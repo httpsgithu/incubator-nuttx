@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/str71x/str71x_head.S
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -470,7 +472,7 @@ __flashstart:
 
 	/* Setup the initial processor mode */
 
-	mov		r0, #(PSR_MODE_SVC | PSR_I_BIT | PSR_F_BIT )
+	mov		r0, #(PSR_MODE_SYS | PSR_I_BIT | PSR_F_BIT )
 	msr		cpsr, r0
 
 	/* Initialize the external memory interface (EMI) */

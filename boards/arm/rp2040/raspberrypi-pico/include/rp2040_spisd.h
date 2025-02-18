@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/rp2040/raspberrypi-pico/include/rp2040_spisd.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -71,7 +73,7 @@ int board_spisd_initialize(int minor, int bus);
  ****************************************************************************/
 
 #ifdef CONFIG_RP2040_SPISD
-uint8_t board_spisd_status(FAR struct spi_dev_s *dev, uint32_t devid);
+uint8_t board_spisd_status(struct spi_dev_s *dev, uint32_t devid);
 #endif
 
 #undef EXTERN

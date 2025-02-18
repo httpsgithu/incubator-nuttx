@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/imxrt/hardware/rt105x/imxrt105x_pinmux.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -18,8 +20,8 @@
  *
  ****************************************************************************/
 
-#ifndef __ARCH_ARM_SRC_IMXRT_HARDWARE_IMXRT105X_PINMUX_H
-#define __ARCH_ARM_SRC_IMXRT_HARDWARE_IMXRT105X_PINMUX_H
+#ifndef __ARCH_ARM_SRC_IMXRT_HARDWARE_RT105X_IMXRT105X_PINMUX_H
+#define __ARCH_ARM_SRC_IMXRT_HARDWARE_RT105X_IMXRT105X_PINMUX_H
 
 /****************************************************************************
  * Included Files
@@ -1039,4 +1041,4 @@
 #define GPIO_XBAR1_INOUT19_4           (GPIO_PERIPH | GPIO_ALT6 | GPIO_PADMUX(IMXRT_PADMUX_GPIO_AD_B0_07_INDEX))
 #define GPIO_XBAR1_XBAR_IN02_1         (GPIO_PERIPH | GPIO_ALT3 | GPIO_PADMUX(IMXRT_PADMUX_GPIO_EMC_00_INDEX))
 
-#endif /* __ARCH_ARM_SRC_IMXRT_HARDWARE_IMXRT105X_PINMUX_H */
+#endif /* __ARCH_ARM_SRC_IMXRT_HARDWARE_RT105X_IMXRT105X_PINMUX_H */

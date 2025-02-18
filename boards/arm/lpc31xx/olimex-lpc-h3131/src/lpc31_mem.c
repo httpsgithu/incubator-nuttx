@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/lpc31xx/olimex-lpc-h3131/src/lpc31_mem.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -36,8 +38,7 @@
 #include <arch/board/board.h>
 
 #include "chip.h"
-#include "arm_arch.h"
-
+#include "arm_internal.h"
 #include "lpc31_syscreg.h"
 #include "lpc31_cgudrvr.h"
 #include "lpc31_mpmc.h"
@@ -130,10 +131,10 @@ static inline void lpc31_sdraminitialize(void)
    */
 
 #ifdef CONFIG_LPC31_SDRAMHCLK
-# define HCLK CONFIG_LPC31_SDRAMHCLK
+#  define HCLK CONFIG_LPC31_SDRAMHCLK
 #else
   uint32_t hclk = lpc31_clkfreq(CLKID_MPMCCFGCLK2, DOMAINID_SYS);
-# define HCLK hclk
+#  define HCLK hclk
 #endif
 
   /* Check RTL for divide by 2 possible.
@@ -147,9 +148,9 @@ static inline void lpc31_sdraminitialize(void)
     {
       hclk2 >>= 1;
     }
-# define HCLK2 hclk2
+#  define HCLK2 hclk2
 #else
-# define HCLK2 hclk
+#  define HCLK2 hclk
 #endif
   up_udelay(100);
 

@@ -1,6 +1,8 @@
 /****************************************************************************
  * include/semaphore.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -30,6 +32,7 @@
 #include <stdint.h>
 #include <limits.h>
 #include <time.h>
+#include <nuttx/queue.h>
 
 /****************************************************************************
  * Pre-processor Definitions
@@ -40,15 +43,17 @@
 #define SEM_PRIO_NONE             0
 #define SEM_PRIO_INHERIT          1
 #define SEM_PRIO_PROTECT          2
+#define SEM_PRIO_MASK             3
+
+#define SEM_TYPE_MUTEX            4
 
 /* Value returned by sem_open() in the event of a failure. */
 
-#define SEM_FAILED ((FAR sem_t *)NULL)
+#define SEM_FAILED                NULL
 
-/* Bit definitions for the struct sem_s flags field */
-
-#define PRIOINHERIT_FLAGS_DISABLE (1 << 0)  /* Bit 0: Priority inheritance
-                                             * is disabled for this semaphore. */
+#ifndef CONFIG_SEM_PREALLOCHOLDERS
+#  define CONFIG_SEM_PREALLOCHOLDERS 0
+#endif
 
 /****************************************************************************
  * Public Type Declarations
@@ -58,40 +63,68 @@
 
 #ifdef CONFIG_PRIORITY_INHERITANCE
 struct tcb_s; /* Forward reference */
+struct sem_s;
+
 struct semholder_s
 {
 #if CONFIG_SEM_PREALLOCHOLDERS > 0
-  struct semholder_s *flink;     /* Implements singly linked list */
+  FAR struct semholder_s *flink;  /* List of semaphore's holder            */
 #endif
-  FAR struct tcb_s *htcb;        /* Holder TCB */
-  int16_t counts;                /* Number of counts owned by this holder */
+  FAR struct semholder_s *tlink;  /* List of task held semaphores          */
+  FAR struct sem_s *sem;          /* Ths corresponding semaphore           */
+  FAR struct tcb_s *htcb;         /* Ths corresponding TCB                 */
+  int32_t counts;                 /* Number of counts owned by this holder */
 };
 
 #if CONFIG_SEM_PREALLOCHOLDERS > 0
-#  define SEMHOLDER_INITIALIZER {NULL, NULL, 0}
+#  define SEMHOLDER_INITIALIZER   {NULL, NULL, NULL, NULL, 0}
+#  define INITIALIZE_SEMHOLDER(h) \
+    do { \
+      (h)->flink  = NULL; \
+      (h)->tlink  = NULL; \
+      (h)->sem    = NULL; \
+      (h)->htcb   = NULL; \
+      (h)->counts = 0; \
+    } while (0)
 #else
-#  define SEMHOLDER_INITIALIZER {NULL, 0}
+#  define SEMHOLDER_INITIALIZER   {NULL, NULL, NULL, 0}
+#  define INITIALIZE_SEMHOLDER(h) \
+    do { \
+      (h)->tlink  = NULL; \
+      (h)->sem    = NULL; \
+      (h)->htcb   = NULL; \
+      (h)->counts = 0; \
+    } while (0)
 #endif
 #endif /* CONFIG_PRIORITY_INHERITANCE */
+
+#define SEM_WAITLIST_INITIALIZER {NULL, NULL}
 
 /* This is the generic semaphore structure. */
 
 struct sem_s
 {
-  volatile int16_t semcount;     /* >0 -> Num counts available */
+  volatile int32_t semcount;     /* >0 -> Num counts available */
                                  /* <0 -> Num tasks waiting for semaphore */
 
   /* If priority inheritance is enabled, then we have to keep track of which
    * tasks hold references to the semaphore.
    */
 
+  uint8_t flags;                 /* See SEM_PRIO_* definitions */
+
+  dq_queue_t waitlist;
+
 #ifdef CONFIG_PRIORITY_INHERITANCE
-  uint8_t flags;                 /* See PRIOINHERIT_FLAGS_* definitions */
-# if CONFIG_SEM_PREALLOCHOLDERS > 0
+#  if CONFIG_SEM_PREALLOCHOLDERS > 0
   FAR struct semholder_s *hhead; /* List of holders of semaphore counts */
-# else
-  struct semholder_s holder[2];  /* Slot for old and new holder */
-# endif
+#  else
+  struct semholder_s holder;     /* Slot for old and new holder */
+#  endif
+#endif
+#ifdef CONFIG_PRIORITY_PROTECT
+  uint8_t ceiling;               /* The priority ceiling owned by mutex  */
+  uint8_t saved;                 /* The saved priority of thread before boost */
 #endif
 };
 
@@ -100,17 +133,25 @@ typedef struct sem_s sem_t;
 /* Initializers */
 
 #ifdef CONFIG_PRIORITY_INHERITANCE
-# if CONFIG_SEM_PREALLOCHOLDERS > 0
-#  define SEM_INITIALIZER(c) \
-    {(c), 0, NULL}               /* semcount, flags, hhead */
-# else
-#  define SEM_INITIALIZER(c) \
-    {(c), 0, {SEMHOLDER_INITIALIZER, SEMHOLDER_INITIALIZER}} /* semcount, flags, holder[2] */
-# endif
+#  if CONFIG_SEM_PREALLOCHOLDERS > 0
+/* semcount, flags, waitlist, hhead */
+
+#    define SEM_INITIALIZER(c) \
+       {(c), 0, SEM_WAITLIST_INITIALIZER, NULL}
+#  else
+/* semcount, flags, waitlist, holder[2] */
+
+#    define SEM_INITIALIZER(c) \
+       {(c), 0, SEM_WAITLIST_INITIALIZER, SEMHOLDER_INITIALIZER}
+#  endif
 #else
+/* semcount, flags, waitlist */
+
 #  define SEM_INITIALIZER(c) \
-    {(c)}                        /* semcount */
+     {(c), 0, SEM_WAITLIST_INITIALIZER}
 #endif
+
+#define SEM_WAITLIST(sem)       (&((sem)->waitlist))
 
 /****************************************************************************
  * Public Data

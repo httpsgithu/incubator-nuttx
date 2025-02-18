@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/lc823450/lc823450_testset.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -27,7 +29,7 @@
 #include <nuttx/arch.h>
 #include <nuttx/spinlock.h>
 
-#include "arm_arch.h"
+#include "arm_internal.h"
 
 /****************************************************************************
  * Pre-processor Definitions
@@ -63,7 +65,7 @@
  *
  ****************************************************************************/
 
-spinlock_t up_testset(volatile FAR spinlock_t *lock)
+spinlock_t up_testset(volatile spinlock_t *lock)
 {
   uint32_t val;
   spinlock_t ret;
@@ -71,7 +73,7 @@ spinlock_t up_testset(volatile FAR spinlock_t *lock)
 
   flags = up_irq_save();
 
-  val = (up_cpu_index() << 16) | 0x1;
+  val = (this_cpu() << 16) | 0x1;
 
   do
     {
@@ -79,7 +81,7 @@ spinlock_t up_testset(volatile FAR spinlock_t *lock)
     }
   while (getreg32(MUTEX_REG_MUTEX0) != val);
 
-  SP_DMB();
+  UP_DMB();
 
   ret = *lock;
 
@@ -88,9 +90,9 @@ spinlock_t up_testset(volatile FAR spinlock_t *lock)
       *lock = SP_LOCKED;
     }
 
-  SP_DMB();
+  UP_DMB();
 
-  val = (up_cpu_index() << 16) | 0x0;
+  val = (this_cpu() << 16) | 0x0;
   putreg32(val, MUTEX_REG_MUTEX0);
 
   up_irq_restore(flags);

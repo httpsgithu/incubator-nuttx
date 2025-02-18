@@ -1,6 +1,8 @@
 /****************************************************************************
  * libs/libc/pthread/pthread_barrierwait.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -24,9 +26,9 @@
 
 #include <nuttx/config.h>
 
+#include <nuttx/irq.h>
+#include <nuttx/semaphore.h>
 #include <pthread.h>
-#include <semaphore.h>
-#include <sched.h>
 #include <errno.h>
 #include <debug.h>
 
@@ -80,70 +82,46 @@
 
 int pthread_barrier_wait(FAR pthread_barrier_t *barrier)
 {
-  int semcount;
-  int ret = OK;
-
-  if (!barrier)
+  if (barrier == NULL)
     {
       return EINVAL;
     }
 
-  /* Disable pre-emption throughout the following */
-
-  sched_lock();
-
-  /* Find out how many threads are already waiting at the barrier */
-
-  ret = sem_getvalue(&barrier->sem, &semcount);
-  if (ret != OK)
-    {
-      sched_unlock();
-      return get_errno();
-    }
-
   /* If the number of waiters would be equal to the count, then we are done */
 
-  if ((1 - semcount) >= (int)barrier->count)
+  nxmutex_lock(&barrier->mutex);
+
+  if ((barrier->wait_count + 1) >= barrier->count)
     {
       /* Free all of the waiting threads */
 
-      while (semcount < 0)
+      while (barrier->wait_count > 0)
         {
-          sem_post(&barrier->sem);
-          sem_getvalue(&barrier->sem, &semcount);
+          barrier->wait_count--;
+          nxsem_post(&barrier->sem);
         }
 
       /* Then return PTHREAD_BARRIER_SERIAL_THREAD to the final thread */
 
-      sched_unlock();
+      nxmutex_unlock(&barrier->mutex);
+
       return PTHREAD_BARRIER_SERIAL_THREAD;
     }
-  else
+
+  barrier->wait_count++;
+
+  nxmutex_unlock(&barrier->mutex);
+
+  while (sem_wait(&barrier->sem) != OK)
     {
-      /* Otherwise, this thread must wait as well */
+      /* If the thread is awakened by a signal, just continue to wait */
 
-      while (sem_wait(&barrier->sem) != OK)
+      int errornumber = get_errno();
+      if (errornumber != EINTR)
         {
-          /* If the thread is awakened by a signal, just continue to wait */
-
-          int errornumber = get_errno();
-          if (errornumber != EINTR)
-            {
-              /* If it is awakened by some other error, then there is a
-               * problem
-               */
-
-              sched_unlock();
-              return errornumber;
-            }
+          return errornumber;
         }
-
-      /* We will only get here when we are one of the N-1 threads that were
-       * waiting for the final thread at the barrier.  We just need to return
-       * zero.
-       */
-
-      sched_unlock();
-      return 0;
     }
+
+  return OK;
 }

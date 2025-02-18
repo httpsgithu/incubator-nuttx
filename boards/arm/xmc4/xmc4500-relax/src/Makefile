@@ -1,6 +1,8 @@
 ############################################################################
 # boards/arm/xmc4/xmc4500-relax/src/Makefile
 #
+# SPDX-License-Identifier: Apache-2.0
+#
 # Licensed to the Apache Software Foundation (ASF) under one or more
 # contributor license agreements.  See the NOTICE file distributed with
 # this work for additional information regarding copyright ownership.  The
@@ -42,10 +44,6 @@ endif
 
 ifeq ($(CONFIG_BOARDCTL),y)
 CSRCS += xmc4_appinit.c
-endif
-
-ifeq ($(CONFIG_TESTING_OSTEST),y)
-CSRCS += xmc4_ostest.c
 endif
 
 include $(TOPDIR)/boards/Board.mk

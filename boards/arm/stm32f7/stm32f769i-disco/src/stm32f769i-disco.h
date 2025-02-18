@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/stm32f7/stm32f769i-disco/src/stm32f769i-disco.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -18,8 +20,8 @@
  *
  ****************************************************************************/
 
-#ifndef __BOARDS_ARM_STM32F7_STM32F769I_DISCO_SRC_STM32F769I_DISCO__H
-#define __BOARDS_ARM_STM32F7_STM32F769I_DISCO_SRC_STM32F769I_DISCO__H
+#ifndef __BOARDS_ARM_STM32F7_STM32F769I_DISCO_SRC_STM32F769I_DISCO_H
+#define __BOARDS_ARM_STM32F7_STM32F769I_DISCO_SRC_STM32F769I_DISCO_H
 
 /****************************************************************************
  * Included Files

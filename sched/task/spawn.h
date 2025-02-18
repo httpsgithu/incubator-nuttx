@@ -1,6 +1,8 @@
 /****************************************************************************
  * sched/task/spawn.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -26,77 +28,12 @@
  ****************************************************************************/
 
 #include <nuttx/config.h>
+#include <nuttx/mutex.h>
 #include <spawn.h>
-
-/****************************************************************************
- * Pre-processor Definitions
- ****************************************************************************/
-
-#ifndef CONFIG_POSIX_SPAWN_PROXY_STACKSIZE
-#  define CONFIG_POSIX_SPAWN_PROXY_STACKSIZE 1024
-#endif
-
-/****************************************************************************
- * Public Type Definitions
- ****************************************************************************/
-
-struct spawn_parms_s
-{
-  /* Common parameters */
-
-  int result;
-  FAR pid_t *pid;
-  FAR const posix_spawn_file_actions_t *file_actions;
-  FAR const posix_spawnattr_t *attr;
-  FAR char * const *argv;
-
-  /* Parameters that differ for posix_spawn[p] and task_spawn */
-
-  union
-  {
-    struct
-    {
-      FAR const char *path;
-    } posix;
-    struct
-    {
-      FAR const char *name;
-      main_t entry;
-    } task;
-  } u;
-};
-
-/****************************************************************************
- * Public Data
- ****************************************************************************/
-
-extern sem_t g_spawn_parmsem;
-#ifndef CONFIG_SCHED_WAITPID
-extern sem_t g_spawn_execsem;
-#endif
-extern struct spawn_parms_s g_spawn_parms;
 
 /****************************************************************************
  * Public Function Prototypes
  ****************************************************************************/
-
-/****************************************************************************
- * Name: spawn_semtake and spawn_semgive
- *
- * Description:
- *   Give and take semaphores
- *
- * Input Parameters:
- *
- *   sem - The semaphore to act on.
- *
- * Returned Value:
- *   None
- *
- ****************************************************************************/
-
-int spawn_semtake(FAR sem_t *sem);
-#define spawn_semgive(sem) nxsem_post(sem)
 
 /****************************************************************************
  * Name: spawn_execattrs
@@ -122,26 +59,5 @@ int spawn_semtake(FAR sem_t *sem);
  ****************************************************************************/
 
 int spawn_execattrs(pid_t pid, FAR const posix_spawnattr_t *attr);
-
-/****************************************************************************
- * Name: spawn_proxyattrs
- *
- * Description:
- *   Set attributes of the proxy task before it has started the new child
- *   task.
- *
- * Input Parameters:
- *
- *   pid - The pid of the new task.
- *   attr - The attributes to use
- *   file_actions - The attributes to use
- *
- * Returned Value:
- *   0 (OK) on success; A negated errno value is returned on failure.
- *
- ****************************************************************************/
-
-int spawn_proxyattrs(FAR const posix_spawnattr_t *attr,
-                     FAR const posix_spawn_file_actions_t *file_actions);
 
 #endif /* __SCHED_TASK_SPAWN_H */

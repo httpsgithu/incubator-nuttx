@@ -1,6 +1,8 @@
 /****************************************************************************
  * libs/libc/libgen/lib_basename.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -60,7 +62,7 @@
 FAR char *basename(FAR char *path)
 {
   FAR char *p;
-  int       len;
+  size_t    len;
 
   /* Handle some corner cases */
 
@@ -83,12 +85,12 @@ FAR char *basename(FAR char *path)
         }
       else
         {
-          return "/";
+          return path;
         }
     }
 
   /* Get the address of the last '/' which is not at the end of the path and,
-   * therefor, must be just before the beginning of the filename component.
+   * therefore, must be just before the beginning of the filename component.
    */
 
   p = strrchr(path, '/');

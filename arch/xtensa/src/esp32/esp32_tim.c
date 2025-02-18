@@ -550,7 +550,7 @@ static int esp32_tim_setisr(struct esp32_tim_dev_s *dev, xcpt_t handler,
 
       /* Set up to receive peripheral interrupts on the current CPU */
 
-      tim->core = up_cpu_index();
+      tim->core = this_cpu();
       tim->cpuint = esp32_setup_irq(tim->core, tim->periph,
                                     tim->priority, ESP32_CPUINT_LEVEL);
       if (tim->cpuint < 0)
@@ -767,7 +767,7 @@ struct esp32_tim_dev_s *esp32_tim_init(int timer)
       default:
         {
           tmrerr("ERROR: unsupported TIMER %d\n", timer);
-          goto errout;
+          return NULL;
         }
     }
 
@@ -780,10 +780,9 @@ struct esp32_tim_dev_s *esp32_tim_init(int timer)
   else
     {
       tmrerr("ERROR: TIMER %d is already in use\n", timer);
-      tim = NULL;
+      return NULL;
     }
 
-  errout:
   return (struct esp32_tim_dev_s *)tim;
 }
 

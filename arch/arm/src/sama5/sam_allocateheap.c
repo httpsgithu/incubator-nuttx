@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/sama5/sam_allocateheap.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -36,7 +38,6 @@
 #include <arch/board/board.h>
 
 #include "chip.h"
-#include "arm_arch.h"
 #include "arm_internal.h"
 #include "mmu.h"
 
@@ -132,7 +133,7 @@
 #    error CONFIG_SAMA5_DDRCS_HEAP_END is beyond CONFIG_RAM_VEND
 #  elif CONFIG_SAMA5_DDRCS_HEAP_END < CONFIG_RAM_VSTART
 #    error CONFIG_SAMA5_DDRCS_HEAP_END is before CONFIG_RAM_VSTART
-# endif
+#  endif
 
 #  define SAMA5_PRIMARY_HEAP_END CONFIG_SAMA5_DDRCS_HEAP_END
 #else
@@ -237,9 +238,9 @@
  ****************************************************************************/
 
 #if defined(CONFIG_BUILD_KERNEL)
-void up_allocate_kheap(FAR void **heap_start, size_t *heap_size)
+void up_allocate_kheap(void **heap_start, size_t *heap_size)
 #else
-void up_allocate_heap(FAR void **heap_start, size_t *heap_size)
+void up_allocate_heap(void **heap_start, size_t *heap_size)
 #endif
 {
 #if defined(CONFIG_BOOT_SDRAM_DATA)
@@ -248,8 +249,8 @@ void up_allocate_heap(FAR void **heap_start, size_t *heap_size)
    */
 
   board_autoled_on(LED_HEAPALLOCATE);
-  *heap_start = (FAR void *)&_ebss;
-  *heap_size  = SAMA5_PRIMARY_HEAP_END - (size_t)&_ebss;
+  *heap_start = _ebss;
+  *heap_size  = SAMA5_PRIMARY_HEAP_END - (size_t)_ebss;
 
 #else
   /* Both data and the heap are in ISRAM.  The heap is then from the end of
@@ -257,7 +258,7 @@ void up_allocate_heap(FAR void **heap_start, size_t *heap_size)
    */
 
   board_autoled_on(LED_HEAPALLOCATE);
-  *heap_start = (FAR void *)g_idle_topstack;
+  *heap_start = (void *)g_idle_topstack;
   *heap_size  = SAMA5_PRIMARY_HEAP_END - g_idle_topstack;
 #endif
 }

@@ -24,12 +24,11 @@ The following configurations must be enabled.
 - ``CONFIG_SCHED_INSTRUMENTATION_FILTER`` : Enables the filter logic of the notes.
 - ``CONFIG_SCHED_INSTRUMENTATION_SYSCALL`` : Enable system call instrumentation.
 - ``CONFIG_SCHED_INSTRUMENTATION_IRQHANDLER`` : Enables IRQ instrumentation.
-- ``CONFIG_DRIVER_NOTE`` : Enables note driver support.
-- ``CONFIG_DRIVER_NOTERAM`` : Enables ``/dev/note`` in-memory buffering driver.
-- ``CONFIG_DRIVER_NOTECTL`` : Enables ``/dev/notectl`` filter control driver.
+- ``CONFIG_DRIVERS_NOTE`` : Enables note driver support.
+- ``CONFIG_DRIVERS_NOTERAM`` : Enables ``/dev/note`` in-memory buffering driver.
+- ``CONFIG_DRIVERS_NOTECTL`` : Enables ``/dev/notectl`` filter control driver.
 - ``CONFIG_SYSTEM_TRACE`` : Enables "``trace``" command
 - ``CONFIG_SYSTEM_SYSTEM`` : Enables "``system``" command (required by :ref:`trace_cmd`)
-
 
 The following configurations are configurable parameters for trace.
 
@@ -43,26 +42,27 @@ The following configurations are configurable parameters for trace.
     - Bit 2 = Enable IRQ instrumentation
     - Bit 3 = Enable collecting syscall arguments
 
-- ``CONFIG_SCHED_INSTRUMENTATION_HIRES``
-
-  - If enabled, use higher resolution system timer for instrumentation.
-
-- ``CONFIG_DRIVER_NOTERAM_BUFSIZE``
-
-  - Specify the note buffer size in bytes.
-    Higher value can hold more note records, but consumes more kernel memory.
-
-- ``CONFIG_DRIVER_NOTERAM_TASKNAME_BUFSIZE``
+- ``CONFIG_DRIVERS_NOTE_TASKNAME_BUFSIZE``
 
   - Specify the task name buffer size in bytes.
     The buffer is used to hold the name of the task during instrumentation.
     Trace dump can find and show a task name corresponding to given pid in the instrumentation data by using this buffer.
     If 0 is specified, this feature is disabled and trace dump shows only the name of the newly created task.
 
-- ``CONFIG_DRIVER_NOTERAM_DEFAULT_NOOVERWRITE``
+- ``CONFIG_DRIVERS_NOTERAM_BUFSIZE``
+
+  - Specify the note buffer size in bytes.
+    Higher value can hold more note records, but consumes more kernel memory.
+
+- ``CONFIG_DRIVERS_NOTERAM_DEFAULT_NOOVERWRITE``
 
   - If enabled, stop overwriting old notes in the circular buffer when the buffer is full by default.
     This is useful to keep instrumentation data of the beginning of a system boot.
+
+- ``CONFIG_DRIVERS_NOTERAM_CRASH_DUMP``
+
+  - If enabled, it will dump the data in the noteram buffer after a system crash.
+    This function can help to view the behavior of the system before the crash
 
 After the configuration, rebuild the NuttX kernel and application.
 
@@ -81,7 +81,6 @@ Getting the trace
 
 Trace is started by the following command.
 
-
 .. code-block::
 
   nsh> trace start
@@ -97,7 +96,6 @@ If you want to get the trace while executing some command, the following command
 .. code-block::
 
   nsh> trace cmd <command> [<args>...]
-
 
 Displaying the trace result
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -130,7 +128,6 @@ This will get the trace results like the following:
   <noname>-0   [0]   7.650000000: irq_handler_entry: irq=15
       :
 
-
 By using the logging function of your terminal software, the trace result can be saved into the host environment and it can be used as the input for `"Trace Compass" <https://www.eclipse.org/tracecompass/>`_.
 
 If the target has a storage, the trace result can be stored into the file by using the following command.
@@ -140,11 +137,9 @@ It also can be used as the input for "Trace Compass" by transferring the file in
 
   nsh> trace dump <file name>
 
-
 To display the trace result by `"Trace Compass" <https://www.eclipse.org/tracecompass/>`_, choose ``File`` -> ``Open Trace`` menu to specify the trace data file name.
 
 .. image:: image/trace-compass-screenshot.png
-
 
 Trace command description
 =========================
@@ -197,7 +192,6 @@ To use this command, ``CONFIG_SYSTEM_SYSTEM`` needs to be enabled.
 
   trace cmd [-c] <command> [<args>...]
 
-
 - ``-c`` : Continue the previous trace.
   The trace data is not cleared before starting new trace.
 
@@ -230,7 +224,6 @@ If the task trace is running, it is stopped before the output.
 
 - ``<filename>`` : Specify the filename to save the trace result.
   If not specified, the trace result is displayed to console.
-
 
 .. _trace_mode:
 

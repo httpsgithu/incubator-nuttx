@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/risc-v/src/rv32m1/rv32m1_start.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -29,7 +31,7 @@
 #include <nuttx/init.h>
 #include <arch/board/board.h>
 
-#include "riscv_arch.h"
+#include "riscv_internal.h"
 #include "rv32m1_clockconfig.h"
 #include "rv32m1.h"
 #include "rv32m1_gpio.h"
@@ -49,18 +51,6 @@
 /****************************************************************************
  * Public Data
  ****************************************************************************/
-
-/* g_idle_topstack: _sbss is the start of the BSS region as defined by the
- * linker script. _ebss lies at the end of the BSS region. The idle task
- * stack starts at the end of BSS and is of size CONFIG_IDLETHREAD_STACKSIZE.
- * The IDLE thread is the thread that the system boots on and, eventually,
- * becomes the IDLE, do nothing task that runs only when there is nothing
- * else to run.  The heap continues from there until the end of memory.
- * g_idle_topstack is a read-only variable the provides this computed
- * address.
- */
-
-uint32_t g_idle_topstack = RV32M1_IDLESTACK_TOP;
 
 /****************************************************************************
  * Public Functions
@@ -89,14 +79,14 @@ void __rv32m1_start(void)
 
 #ifdef CONFIG_RV32M1_ITCM
 
-  src = &_slitcm;
-  dest = &_svitcm;
+  src = (uint32_t *)_slitcm;
+  dest = (uint32_t *)_svitcm;
 
   if (src != dest)
     {
       /* Copy codes from Flash LMA Region to ITCM VMA Region */
 
-      for (; dest < &_evitcm; )
+      for (; dest < (uint32_t *)_evitcm; )
         {
           *dest++ = *src++;
         }
@@ -108,7 +98,7 @@ void __rv32m1_start(void)
    * certain that there are no issues with the state of global variables.
    */
 
-  for (dest = &_sbss; dest < &_ebss; )
+  for (dest = (uint32_t *)_sbss; dest < (uint32_t *)_ebss; )
     {
       *dest++ = 0;
     }
@@ -119,7 +109,9 @@ void __rv32m1_start(void)
    * end of all of the other read-only data (.text, .rodata) at _eronly.
    */
 
-  for (src = &_eronly, dest = &_sdata; dest < &_edata; )
+  for (src = (const uint32_t *)_eronly,
+       dest = (uint32_t *)_sdata; dest < (uint32_t *)_edata;
+      )
     {
       *dest++ = *src++;
     }

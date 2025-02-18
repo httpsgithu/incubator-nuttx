@@ -1,6 +1,8 @@
 /****************************************************************************
  * sched/sched/sched_roundrobin.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -27,6 +29,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <sched.h>
+#include <sys/param.h>
 #include <assert.h>
 
 #include <nuttx/sched.h>
@@ -36,16 +39,56 @@
 
 #if CONFIG_RR_INTERVAL > 0
 
+#ifdef CONFIG_SMP
+
 /****************************************************************************
- * Pre-processor Definitions
+ * Private Data
  ****************************************************************************/
 
-#ifndef MIN
-#  define MIN(a,b) (((a) < (b)) ? (a) : (b))
+#ifdef CONFIG_SMP
+static struct smp_call_data_s g_call_data;
 #endif
 
-#ifndef MAX
-#  define MAX(a,b) (((a) > (b)) ? (a) : (b))
+/****************************************************************************
+ * Private Type Declarations
+ ****************************************************************************/
+
+struct roundrobin_arg_s
+{
+  pid_t pid;
+};
+
+/****************************************************************************
+ * Private Functions
+ ****************************************************************************/
+
+static int nxsched_roundrobin_handler(FAR void *cookie)
+{
+  pid_t pid = (uintptr_t)cookie;
+  FAR struct tcb_s *tcb;
+  irqstate_t flags;
+
+  flags = enter_critical_section();
+  tcb = nxsched_get_tcb(pid);
+
+  if (!tcb || tcb->task_state == TSTATE_TASK_INVALID ||
+      (tcb->flags & TCB_FLAG_EXIT_PROCESSING) != 0)
+    {
+      /* There is no TCB with this pid or, if there is, it is not a task. */
+
+      leave_critical_section(flags);
+      return OK;
+    }
+
+  if (tcb->task_state == TSTATE_TASK_RUNNING && tcb->cpu == this_cpu() &&
+      nxsched_reprioritize_rtr(tcb, tcb->sched_priority))
+    {
+      up_switch_context(this_task(), tcb);
+    }
+
+  leave_critical_section(flags);
+  return OK;
+}
 #endif
 
 /****************************************************************************
@@ -140,12 +183,28 @@ uint32_t nxsched_process_roundrobin(FAR struct tcb_s *tcb, uint32_t ticks,
           if (tcb->flink &&
               tcb->flink->sched_priority >= tcb->sched_priority)
             {
+              FAR struct tcb_s *rtcb = this_task();
+
               /* Just resetting the task priority to its current value.
                * This will cause the task to be rescheduled behind any
                * other tasks at the same priority.
                */
 
-              up_reprioritize_rtr(tcb, tcb->sched_priority);
+#ifdef CONFIG_SMP
+              if (tcb->task_state == TSTATE_TASK_RUNNING &&
+                  tcb->cpu != this_cpu())
+                {
+                  nxsched_smp_call_init(&g_call_data,
+                                        nxsched_roundrobin_handler,
+                                        (FAR void *)(uintptr_t)tcb->pid);
+                  nxsched_smp_call_single_async(tcb->cpu, &g_call_data);
+                }
+              else
+#endif
+              if (nxsched_reprioritize_rtr(tcb, tcb->sched_priority))
+                {
+                  up_switch_context(this_task(), rtcb);
+                }
             }
         }
     }

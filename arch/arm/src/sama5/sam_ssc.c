@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/sama5/sam_ssc.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -32,7 +34,6 @@
 #include <string.h>
 #include <errno.h>
 #include <assert.h>
-#include <queue.h>
 #include <debug.h>
 
 #include <arch/board/board.h>
@@ -40,15 +41,15 @@
 #include <nuttx/irq.h>
 #include <nuttx/arch.h>
 #include <nuttx/kmalloc.h>
+#include <nuttx/queue.h>
 #include <nuttx/wdog.h>
 #include <nuttx/wqueue.h>
 #include <nuttx/audio/audio.h>
 #include <nuttx/audio/i2s.h>
+#include <nuttx/mutex.h>
 #include <nuttx/semaphore.h>
 
 #include "arm_internal.h"
-#include "arm_arch.h"
-
 #include "chip.h"
 #include "sam_pio.h"
 #include "sam_dmac.h"
@@ -443,7 +444,7 @@ struct sam_ssc_s
 {
   struct i2s_dev_s dev;        /* Externally visible I2S interface */
   uintptr_t base;              /* SSC controller register base address */
-  sem_t exclsem;               /* Assures mutually exclusive access to SSC */
+  mutex_t lock;                /* Assures mutually exclusive access to SSC */
   uint8_t datalen;             /* Data width (8, 16, or 32) */
   uint8_t align;               /* Log2 of data width (0, 1, or 3) */
   uint8_t pid;                 /* Peripheral ID */
@@ -497,7 +498,7 @@ struct sam_ssc_s
 static bool     ssc_checkreg(struct sam_ssc_s *priv, bool wr,
                   uint32_t regval, uint32_t regaddr);
 #else
-# define        ssc_checkreg(priv,wr,regval,regaddr) (false)
+#  define       ssc_checkreg(priv,wr,regval,regaddr) (false)
 #endif
 
 static inline uint32_t ssc_getreg(struct sam_ssc_s *priv,
@@ -530,14 +531,6 @@ static void     ssc_dump_queues(struct sam_transport_s *xpt,
 #  define       ssc_init_buffer(b,s)
 #  define       ssc_dump_buffer(m,b,s)
 #endif
-
-/* Semaphore helpers */
-
-static int      ssc_exclsem_take(struct sam_ssc_s *priv);
-#define         ssc_exclsem_give(priv) nxsem_post(&priv->exclsem)
-
-static int      ssc_bufsem_take(struct sam_ssc_s *priv);
-#define         ssc_bufsem_give(priv) nxsem_post(&priv->bufsem)
 
 /* Buffer container helpers */
 
@@ -864,46 +857,6 @@ static void ssc_dump_queues(struct sam_transport_s *xpt, const char *msg)
 #endif
 
 /****************************************************************************
- * Name: ssc_exclsem_take
- *
- * Description:
- *   Take the exclusive access semaphore handling any exceptional conditions
- *
- * Input Parameters:
- *   priv - A reference to the SSC peripheral state
- *
- * Returned Value:
- *   Normally OK, but may return -ECANCELED in the rare event that the task
- *   has been canceled.
- *
- ****************************************************************************/
-
-static int ssc_exclsem_take(struct sam_ssc_s *priv)
-{
-  return nxsem_wait_uninterruptible(&priv->exclsem);
-}
-
-/****************************************************************************
- * Name: ssc_bufsem_take
- *
- * Description:
- *   Take the buffer semaphore handling any exceptional conditions
- *
- * Input Parameters:
- *   priv - A reference to the SSC peripheral state
- *
- * Returned Value:
- *   Normally OK, but may return -ECANCELED in the rare event that the task
- *   has been canceled.
- *
- ****************************************************************************/
-
-static int ssc_bufsem_take(struct sam_ssc_s *priv)
-{
-  return nxsem_wait_uninterruptible(&priv->bufsem);
-}
-
-/****************************************************************************
  * Name: ssc_buf_allocate
  *
  * Description:
@@ -933,7 +886,7 @@ static struct sam_buffer_s *ssc_buf_allocate(struct sam_ssc_s *priv)
    * have at least one free buffer container.
    */
 
-  ret = ssc_bufsem_take(priv);
+  ret = nxsem_wait_uninterruptible(&priv->bufsem);
   if (ret < 0)
     {
       return NULL;
@@ -984,7 +937,7 @@ static void ssc_buf_free(struct sam_ssc_s *priv,
 
   /* Wake up any threads waiting for a buffer container */
 
-  ssc_bufsem_give(priv);
+  nxsem_post(&priv->bufsem);
 }
 
 /****************************************************************************
@@ -2201,7 +2154,7 @@ static int ssc_receive(struct i2s_dev_s *dev, struct ap_buffer_s *apb,
 
   /* Get exclusive access to the SSC driver data */
 
-  ret = ssc_exclsem_take(priv);
+  ret = nxmutex_lock(&priv->lock);
   if (ret < 0)
     {
       goto errout_with_buf;
@@ -2213,7 +2166,7 @@ static int ssc_receive(struct i2s_dev_s *dev, struct ap_buffer_s *apb,
     {
       i2serr("ERROR: SSC%d has no receiver\n", priv->sscno);
       ret = -EAGAIN;
-      goto errout_with_exclsem;
+      goto errout_with_lock;
     }
 
   /* Add a reference to the audio buffer */
@@ -2241,11 +2194,11 @@ static int ssc_receive(struct i2s_dev_s *dev, struct ap_buffer_s *apb,
   ret = ssc_rxdma_setup(priv);
   DEBUGASSERT(ret == OK);
   leave_critical_section(flags);
-  ssc_exclsem_give(priv);
+  nxmutex_unlock(&priv->lock);
   return OK;
 
-errout_with_exclsem:
-  ssc_exclsem_give(priv);
+errout_with_lock:
+  nxmutex_unlock(&priv->lock);
 
 errout_with_buf:
   ssc_buf_free(priv, bfcontainer);
@@ -2424,7 +2377,7 @@ static int ssc_send(struct i2s_dev_s *dev, struct ap_buffer_s *apb,
 
   /* Get exclusive access to the SSC driver data */
 
-  ret = ssc_exclsem_take(priv);
+  ret = nxmutex_lock(&priv->lock);
   if (ret < 0)
     {
       goto errout_with_buf;
@@ -2436,7 +2389,7 @@ static int ssc_send(struct i2s_dev_s *dev, struct ap_buffer_s *apb,
     {
       i2serr("ERROR: SSC%d has no transmitter\n", priv->sscno);
       ret = -EAGAIN;
-      goto errout_with_exclsem;
+      goto errout_with_lock;
     }
 
   /* Add a reference to the audio buffer */
@@ -2464,11 +2417,11 @@ static int ssc_send(struct i2s_dev_s *dev, struct ap_buffer_s *apb,
   ret = ssc_txdma_setup(priv);
   DEBUGASSERT(ret == OK);
   leave_critical_section(flags);
-  ssc_exclsem_give(priv);
+  nxmutex_unlock(&priv->lock);
   return OK;
 
-errout_with_exclsem:
-  ssc_exclsem_give(priv);
+errout_with_lock:
+  nxmutex_unlock(&priv->lock);
 
 errout_with_buf:
   ssc_buf_free(priv, bfcontainer);
@@ -3385,7 +3338,7 @@ struct i2s_dev_s *sam_ssc_initialize(int port)
    * chip select structures.
    */
 
-  priv = (struct sam_ssc_s *)kmm_zalloc(sizeof(struct sam_ssc_s));
+  priv = kmm_zalloc(sizeof(struct sam_ssc_s));
   if (!priv)
     {
       i2serr("ERROR: Failed to allocate a chip select structure\n");
@@ -3398,7 +3351,7 @@ struct i2s_dev_s *sam_ssc_initialize(int port)
 
   /* Initialize the common parts for the SSC device structure  */
 
-  nxsem_init(&priv->exclsem, 0, 1);
+  nxmutex_init(&priv->lock);
   priv->dev.ops = &g_sscops;
   priv->sscno   = port;
 
@@ -3470,7 +3423,8 @@ errout_with_clocking:
   ssc_dma_free(priv);
 
 errout_with_alloc:
-  nxsem_destroy(&priv->exclsem);
+  nxmutex_destroy(&priv->lock);
+  nxsem_destroy(&priv->bufsem);
   kmm_free(priv);
   return NULL;
 }

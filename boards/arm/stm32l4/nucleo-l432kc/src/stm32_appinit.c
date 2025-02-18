@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/stm32l4/nucleo-l432kc/src/stm32_appinit.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -106,13 +108,13 @@ void arm_netinitialize(void)
 int board_app_initialize(uintptr_t arg)
 {
 #ifdef HAVE_RTC_DRIVER
-  FAR struct rtc_lowerhalf_s *rtclower;
+  struct rtc_lowerhalf_s *rtclower;
 #endif
 #ifdef CONFIG_STM32L4_I2C1
-  FAR struct i2c_master_s *i2c1;
+  struct i2c_master_s *i2c1;
 #endif
 #ifdef CONFIG_STM32L4_I2C3
-  FAR struct i2c_master_s *i2c3;
+  struct i2c_master_s *i2c3;
 #endif
 #ifdef CONFIG_SENSORS_QENCODER
   int index;
@@ -128,8 +130,7 @@ int board_app_initialize(uintptr_t arg)
   ret = nx_mount(NULL, CONFIG_NSH_PROC_MOUNTPOINT, "procfs", 0, NULL);
   if (ret < 0)
     {
-      syslog(LOG_ERR,
-             "ERROR: Failed to mount the PROC filesystem: %d\n",
+      syslog(LOG_ERR, "ERROR: Failed to mount the PROC filesystem: %d\n",
              ret);
       return ret;
     }
@@ -218,6 +219,14 @@ int board_app_initialize(uintptr_t arg)
     }
 #endif
 
+#ifdef CONFIG_SPI_DRIVER
+  stm32l4_spiregister();
+  /* driver registering must be processed in appinit.
+   * If called it during board_init,
+   * registering failed due to heap doesn't be initialized yet.
+   */
+#endif
+
 #ifdef HAVE_AT45DB
   /* Initialize and register the ATDB FLASH file system. */
 
@@ -247,6 +256,16 @@ int board_app_initialize(uintptr_t arg)
   if (ret < 0)
     {
       syslog(LOG_ERR, "ERROR: stm32l4_adc_setup failed: %d\n", ret);
+    }
+#endif
+
+#ifdef CONFIG_STM32L4_DAC
+  /* Initialize DAC and register the DAC driver. */
+
+  ret = stm32l4_dac_setup();
+  if (ret < 0)
+    {
+      syslog(LOG_ERR, "ERROR: stm32l4_dac_setup failed: %d\n", ret);
     }
 #endif
 
@@ -297,8 +316,7 @@ int board_app_initialize(uintptr_t arg)
   ret = board_timer_driver_initialize("/dev/timer0", 2);
   if (ret != OK)
     {
-      syslog(LOG_ERR,
-             "ERROR: Failed to register the timer driver: %d\n",
+      syslog(LOG_ERR, "ERROR: Failed to register the timer driver: %d\n",
              ret);
       return ret;
     }
@@ -310,72 +328,66 @@ int board_app_initialize(uintptr_t arg)
   index = 0;
 
 #ifdef CONFIG_STM32L4_TIM1_QE
-  sprintf(buf, "/dev/qe%d", index++);
+  snprintf(buf, sizeof(buf), "/dev/qe%d", index++);
   ret = stm32l4_qencoder_initialize(buf, 1);
   if (ret != OK)
     {
-      syslog(LOG_ERR,
-             "ERROR: Failed to register the qencoder: %d\n",
+      syslog(LOG_ERR, "ERROR: Failed to register the qencoder: %d\n",
              ret);
       return ret;
     }
 #endif
 
 #ifdef CONFIG_STM32L4_TIM2_QE
-  sprintf(buf, "/dev/qe%d", index++);
+  snprintf(buf, sizeof(buf), "/dev/qe%d", index++);
   ret = stm32l4_qencoder_initialize(buf, 2);
   if (ret != OK)
     {
-      syslog(LOG_ERR,
-             "ERROR: Failed to register the qencoder: %d\n",
+      syslog(LOG_ERR, "ERROR: Failed to register the qencoder: %d\n",
              ret);
       return ret;
     }
 #endif
 
 #ifdef CONFIG_STM32L4_TIM3_QE
-  sprintf(buf, "/dev/qe%d", index++);
+  snprintf(buf, sizeof(buf), "/dev/qe%d", index++);
   ret = stm32l4_qencoder_initialize(buf, 3);
   if (ret != OK)
     {
-      syslog(LOG_ERR,
-             "ERROR: Failed to register the qencoder: %d\n",
+      syslog(LOG_ERR, "ERROR: Failed to register the qencoder: %d\n",
              ret);
       return ret;
     }
 #endif
 
 #ifdef CONFIG_STM32L4_TIM4_QE
-  sprintf(buf, "/dev/qe%d", index++);
+  snprintf(buf, sizeof(buf), "/dev/qe%d", index++);
   ret = stm32l4_qencoder_initialize(buf, 4);
   if (ret != OK)
     {
-      syslog(LOG_ERR,
-             "ERROR: Failed to register the qencoder: %d\n",
+      syslog(LOG_ERR, "ERROR: Failed to register the qencoder: %d\n",
              ret);
       return ret;
     }
 #endif
 
 #ifdef CONFIG_STM32L4_TIM5_QE
-  sprintf(buf, "/dev/qe%d", index++);
+  snprintf(buf, sizeof(buf), "/dev/qe%d", index++);
   ret = stm32l4_qencoder_initialize(buf, 5);
   if (ret != OK)
     {
-      syslog(LOG_ERR,
-             "ERROR: Failed to register the qencoder: %d\n",
+      syslog(LOG_ERR, "ERROR: Failed to register the qencoder: %d\n",
              ret);
       return ret;
     }
 #endif
 
 #ifdef CONFIG_STM32L4_TIM8_QE
-  sprintf(buf, "/dev/qe%d", index++);
+  snprintf(buf, sizeof(buf), "/dev/qe%d", index++);
   ret = stm32l4_qencoder_initialize(buf, 8);
   if (ret != OK)
     {
-      syslog(LOG_ERR,
-             "ERROR: Failed to register the qencoder: %d\n",
+      syslog(LOG_ERR, "ERROR: Failed to register the qencoder: %d\n",
              ret);
       return ret;
     }
@@ -396,7 +408,7 @@ int board_ioctl(unsigned int cmd, uintptr_t arg)
 #if defined(CONFIG_BOARDCTL_UNIQUEID)
 int board_uniqueid(uint8_t *uniqueid)
 {
-  if (uniqueid == 0)
+  if (uniqueid == NULL)
     {
       return -EINVAL;
     }

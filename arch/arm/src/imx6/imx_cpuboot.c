@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/imx6/imx_cpuboot.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -28,25 +30,19 @@
 #include <assert.h>
 
 #include <nuttx/arch.h>
+#include <nuttx/sched.h>
+#include <arch/barriers.h>
 #include <arch/irq.h>
 
-#include "arm_arch.h"
 #include "arm_internal.h"
-
 #include "hardware/imx_src.h"
 #include "sctlr.h"
 #include "smp.h"
 #include "scu.h"
-#include "fpu.h"
 #include "gic.h"
+#include "mmu.h"
 
 #ifdef CONFIG_SMP
-
-/****************************************************************************
- * Private Types
- ****************************************************************************/
-
-typedef CODE void (*cpu_start_t)(void);
 
 /****************************************************************************
  * Private Data
@@ -96,7 +92,7 @@ static const uintptr_t g_cpu_gpr[CONFIG_SMP_NCPUS] =
 #endif
 };
 
-static const cpu_start_t g_cpu_boot[CONFIG_SMP_NCPUS] =
+static const start_t g_cpu_boot[CONFIG_SMP_NCPUS] =
 {
   0,
 #if CONFIG_SMP_NCPUS > 1
@@ -116,7 +112,7 @@ static const cpu_start_t g_cpu_boot[CONFIG_SMP_NCPUS] =
 
 /* Symbols defined via the linker script */
 
-extern uint32_t _vector_start; /* Beginning of vector block */
+extern uint8_t _vector_start[]; /* Beginning of vector block */
 
 /****************************************************************************
  * Public Functions
@@ -201,13 +197,21 @@ void imx_cpu_disable(void)
 
 void imx_cpu_enable(void)
 {
-  cpu_start_t bootaddr;
+  start_t bootaddr;
   uintptr_t regaddr;
   uint32_t regval;
   int cpu;
 
   for (cpu = 1; cpu < CONFIG_SMP_NCPUS; cpu++)
     {
+#ifdef CONFIG_ARCH_ADDRENV
+      /* Copy cpu0 page table to each cpu. */
+
+      memcpy((uint32_t *)(PGTABLE_BASE_VADDR + PGTABLE_SIZE * cpu),
+             (uint32_t *)PGTABLE_BASE_VADDR, PGTABLE_SIZE);
+      UP_DSB();
+#endif
+
       /* Set the start up address */
 
       regaddr  = g_cpu_gpr[cpu];
@@ -236,7 +240,7 @@ void imx_cpu_enable(void)
  *
  * Input Parameters:
  *   cpu - The CPU index.  This is the same value that would be obtained by
- *      calling up_cpu_index();
+ *      calling this_cpu();
  *
  * Returned Value:
  *   Does not return.
@@ -249,11 +253,9 @@ void arm_cpu_boot(int cpu)
 
   arm_enable_smp(cpu);
 
-#ifdef CONFIG_ARCH_FPU
   /* Initialize the FPU */
 
   arm_fpuconfig();
-#endif
 
   /* Initialize the Generic Interrupt Controller (GIC) for CPUn (n != 0) */
 
@@ -276,8 +278,8 @@ void arm_cpu_boot(int cpu)
 
   /* Set the VBAR register to the address of the vector table */
 
-  DEBUGASSERT((((uintptr_t)&_vector_start) & ~VBAR_MASK) == 0);
-  cp15_wrvbar((uint32_t)&_vector_start);
+  DEBUGASSERT((((uintptr_t)_vector_start) & ~VBAR_MASK) == 0);
+  cp15_wrvbar((uint32_t)_vector_start);
 #endif /* CONFIG_ARCH_LOWVECTORS */
 
 #ifndef CONFIG_SUPPRESS_INTERRUPTS

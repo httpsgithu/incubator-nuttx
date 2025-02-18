@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/nrf52/nrf52832-dk/include/board.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -18,8 +20,8 @@
  *
  ****************************************************************************/
 
-#ifndef __BOARDS_ARM_NRF52_NRF52_FEATHER_INCLUDE_BOARD_H
-#define __BOARDS_ARM_NRF52_NRF52_FEATHER_INCLUDE_BOARD_H
+#ifndef __BOARDS_ARM_NRF52_NRF52832_DK_INCLUDE_BOARD_H
+#define __BOARDS_ARM_NRF52_NRF52832_DK_INCLUDE_BOARD_H
 
 /****************************************************************************
  * Included Files
@@ -107,4 +109,16 @@
 #define BOARD_UART0_RX_PIN  (GPIO_INPUT  | GPIO_PORT0 | GPIO_PIN(8))
 #define BOARD_UART0_TX_PIN  (GPIO_OUTPUT | GPIO_VALUE_ONE | GPIO_PORT0 | GPIO_PIN(6))
 
-#endif /* __BOARDS_ARM_NRF52_NRF52_FEATHER_INCLUDE_BOARD_H */
+/* SPI Pins *****************************************************************/
+
+/* SPI0 - Arduino PINs
+ *   SPI0_SCK  - P0.25 (P13)
+ *   SPI0_MISO - P0.24 (D12)
+ *   SPI0_MOSI - P0.23 (D11)
+ */
+
+#define BOARD_SPI0_SCK_PIN  (GPIO_OUTPUT | GPIO_VALUE_ONE | GPIO_PORT0 | GPIO_PIN(25))
+#define BOARD_SPI0_MISO_PIN (GPIO_INPUT  | GPIO_PORT0 | GPIO_PIN(24))
+#define BOARD_SPI0_MOSI_PIN (GPIO_OUTPUT | GPIO_PORT0 | GPIO_PIN(23))
+
+#endif /* __BOARDS_ARM_NRF52_NRF52832_DK_INCLUDE_BOARD_H */

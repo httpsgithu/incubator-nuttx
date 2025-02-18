@@ -1,6 +1,8 @@
 /****************************************************************************
  * net/usrsock/usrsock_ioctl.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -31,10 +33,13 @@
 #include <errno.h>
 #include <debug.h>
 
+#include <sys/ioctl.h>
 #include <sys/socket.h>
 #include <nuttx/net/net.h>
 #include <nuttx/net/usrsock.h>
-
+#ifdef CONFIG_NETDEV_WIRELESS_IOCTL
+#  include <nuttx/wireless/wireless.h>
+#endif
 #include "socket/socket.h"
 #include "usrsock/usrsock.h"
 
@@ -43,11 +48,10 @@
  ****************************************************************************/
 
 static uint16_t ioctl_event(FAR struct net_driver_s *dev,
-                                  FAR void *pvconn,
-                                  FAR void *pvpriv, uint16_t flags)
+                            FAR void *pvpriv, uint16_t flags)
 {
   FAR struct usrsock_data_reqstate_s *pstate = pvpriv;
-  FAR struct usrsock_conn_s *conn = pvconn;
+  FAR struct usrsock_conn_s *conn = pstate->reqstate.conn;
 
   if (flags & USRSOCK_EVENT_ABORT)
     {
@@ -58,9 +62,9 @@ static uint16_t ioctl_event(FAR struct net_driver_s *dev,
 
       /* Stop further callbacks */
 
-      pstate->reqstate.cb->flags   = 0;
-      pstate->reqstate.cb->priv    = NULL;
-      pstate->reqstate.cb->event   = NULL;
+      pstate->reqstate.cb->flags = 0;
+      pstate->reqstate.cb->priv  = NULL;
+      pstate->reqstate.cb->event = NULL;
 
       /* Wake up the waiting thread */
 
@@ -84,9 +88,9 @@ static uint16_t ioctl_event(FAR struct net_driver_s *dev,
 
       /* Stop further callbacks */
 
-      pstate->reqstate.cb->flags   = 0;
-      pstate->reqstate.cb->priv    = NULL;
-      pstate->reqstate.cb->event   = NULL;
+      pstate->reqstate.cb->flags = 0;
+      pstate->reqstate.cb->priv  = NULL;
+      pstate->reqstate.cb->event = NULL;
 
       /* Wake up the waiting thread */
 
@@ -101,13 +105,15 @@ static uint16_t ioctl_event(FAR struct net_driver_s *dev,
  ****************************************************************************/
 
 static int do_ioctl_request(FAR struct usrsock_conn_s *conn, int cmd,
-                                 FAR void *arg, size_t arglen)
+                            FAR void *arg, size_t arglen)
 {
   struct usrsock_request_ioctl_s req =
   {
   };
 
-  struct iovec bufs[2];
+  struct iovec bufs[3] =
+  {
+  };
 
   if (arglen > UINT16_MAX)
     {
@@ -121,12 +127,21 @@ static int do_ioctl_request(FAR struct usrsock_conn_s *conn, int cmd,
   req.cmd = cmd;
   req.arglen = arglen;
 
-  bufs[0].iov_base = (FAR void *)&req;
+  bufs[0].iov_base = &req;
   bufs[0].iov_len = sizeof(req);
-  bufs[1].iov_base = (FAR void *)arg;
+  bufs[1].iov_base = arg;
   bufs[1].iov_len = req.arglen;
 
-  return usrsockdev_do_request(conn, bufs, ARRAY_SIZE(bufs));
+#ifdef CONFIG_NETDEV_WIRELESS_IOCTL
+  if (WL_IS80211POINTERCMD(cmd))
+    {
+      FAR struct iwreq *wlreq = arg;
+      bufs[2].iov_base = wlreq->u.data.pointer;
+      bufs[2].iov_len = wlreq->u.data.length;
+    }
+#endif
+
+  return usrsock_do_request(conn, bufs, nitems(bufs));
 }
 
 /****************************************************************************
@@ -143,20 +158,38 @@ static int do_ioctl_request(FAR struct usrsock_conn_s *conn, int cmd,
  *   psock    A reference to the socket structure of the socket
  *   cmd      The ioctl command
  *   arg      The argument of the ioctl cmd
- *   arglen   The length of 'arg'
  *
  ****************************************************************************/
 
-int usrsock_ioctl(FAR struct socket *psock, int cmd, FAR void *arg,
-                  size_t arglen)
+int usrsock_ioctl(FAR struct socket *psock, int cmd, unsigned long arg_)
 {
   FAR struct usrsock_conn_s *conn = psock->s_conn;
   struct usrsock_data_reqstate_s state =
   {
   };
 
-  struct iovec inbufs[1];
+  struct iovec inbufs[2] =
+  {
+  };
+
+  FAR void *arg = (FAR void *)(uintptr_t)arg_;
+  ssize_t arglen;
   int ret;
+
+  /* Bypass FIONBIO to socket level,
+   * since the usrsock server always put the socket in nonblocking mode.
+   */
+
+  if (cmd == FIONBIO)
+    {
+      return -ENOTTY;
+    }
+
+  arglen = net_ioctl_arglen(psock->s_domain, cmd);
+  if (arglen < 0)
+    {
+      return arglen;
+    }
 
   net_lock();
 
@@ -186,7 +219,17 @@ int usrsock_ioctl(FAR struct socket *psock, int cmd, FAR void *arg,
 
   inbufs[0].iov_base = arg;
   inbufs[0].iov_len = arglen;
-  usrsock_setup_datain(conn, inbufs, ARRAY_SIZE(inbufs));
+
+#ifdef CONFIG_NETDEV_WIRELESS_IOCTL
+  if (WL_IS80211POINTERCMD(cmd))
+    {
+      FAR struct iwreq *wlreq = arg;
+      inbufs[1].iov_base = wlreq->u.data.pointer;
+      inbufs[1].iov_len = wlreq->u.data.length;
+    }
+#endif
+
+  usrsock_setup_datain(conn, inbufs, nitems(inbufs));
 
   /* Request user-space daemon to handle ioctl. */
 
@@ -195,7 +238,7 @@ int usrsock_ioctl(FAR struct socket *psock, int cmd, FAR void *arg,
     {
       /* Wait for completion of request. */
 
-      net_lockedwait_uninterruptible(&state.reqstate.recvsem);
+      net_sem_wait_uninterruptible(&state.reqstate.recvsem);
       ret = state.reqstate.result;
 
       DEBUGASSERT(state.valuelen <= arglen);
@@ -207,7 +250,6 @@ int usrsock_ioctl(FAR struct socket *psock, int cmd, FAR void *arg,
 
 errout_unlock:
   net_unlock();
-
   return ret;
 }
 

@@ -1,6 +1,8 @@
 /****************************************************************************
  * net/igmp/igmp_mcastmac.c
  *
+ * SPDX-License-Identifier: BSD-3-Clause
+ *
  *   Copyright (C) 2010 Gregory Nutt. All rights reserved.
  *   Author: Gregory Nutt <gnutt@nuttx.org>
  *
@@ -70,7 +72,7 @@
  *
  ****************************************************************************/
 
-static void igmp_mcastmac(in_addr_t *ip, FAR uint8_t *mac)
+static void igmp_mcastmac(FAR const in_addr_t *ip, FAR uint8_t *mac)
 {
   /* This mapping is from the IETF IN RFC 1700 */
 
@@ -97,7 +99,7 @@ static void igmp_mcastmac(in_addr_t *ip, FAR uint8_t *mac)
  *
  ****************************************************************************/
 
-void igmp_addmcastmac(FAR struct net_driver_s *dev, FAR in_addr_t *ip)
+void igmp_addmcastmac(FAR struct net_driver_s *dev, FAR const in_addr_t *ip)
 {
   uint8_t mcastmac[6];
 
@@ -117,7 +119,8 @@ void igmp_addmcastmac(FAR struct net_driver_s *dev, FAR in_addr_t *ip)
  *
  ****************************************************************************/
 
-void igmp_removemcastmac(FAR struct net_driver_s *dev, FAR in_addr_t *ip)
+void igmp_removemcastmac(FAR struct net_driver_s *dev,
+                         FAR const in_addr_t *ip)
 {
   uint8_t mcastmac[6];
 

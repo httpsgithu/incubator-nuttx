@@ -1,6 +1,8 @@
 /****************************************************************************
  * libs/libc/unistd/lib_access.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -24,8 +26,11 @@
 
 #include <nuttx/config.h>
 
+#include <errno.h>
 #include <sys/stat.h>
 #include <unistd.h>
+
+#include "libc.h"
 
 /****************************************************************************
  * Pre-processor Definitions
@@ -98,4 +103,59 @@ int access(FAR const char *path, int amode)
     }
 
   return 0;
+}
+
+/****************************************************************************
+ * Name: faccessat
+ *
+ * Description:
+ *   The faccessat() system call operates in exactly the same way as
+ *   access(), except for  the  differences described here.
+ *
+ *   If the pathname given in pathname is relative, then it is interpreted
+ *   relative to the directory referred to by the file descriptor dirfd
+ *   (rather than relative to the current working directory of the calling
+ *    process)
+ *
+ *   If pathname is relative and dirfd is the special value AT_FDCWD, then
+ *   pathname is interpreted relative to the current working directory of
+ *   the calling process (like access()).
+ *
+ *   If pathname is absolute, then dirfd is ignored.
+ *
+ * Input Parameters:
+ *   dirfd - The file descriptor of directory.
+ *   path  - A pointer to the path.
+ *   amode - The access mode.
+ *   flags - Ignored.
+ *
+ * Returned Value:
+ *   Return zero on success, or -1 if an error occurred (in which case,
+ *   errno is set appropriately).
+ *
+ ****************************************************************************/
+
+int faccessat(int dirfd, FAR const char *path, int amode, int flags)
+{
+  FAR char *fullpath;
+  int ret;
+
+  fullpath = lib_get_pathbuffer();
+  if (fullpath == NULL)
+    {
+      set_errno(ENOMEM);
+      return ERROR;
+    }
+
+  ret = lib_getfullpath(dirfd, path, fullpath, PATH_MAX);
+  if (ret < 0)
+    {
+      lib_put_pathbuffer(fullpath);
+      set_errno(-ret);
+      return ERROR;
+    }
+
+  ret = access(fullpath, amode);
+  lib_put_pathbuffer(fullpath);
+  return ret;
 }

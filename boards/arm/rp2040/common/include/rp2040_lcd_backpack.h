@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/rp2040/common/include/rp2040_lcd_backpack.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -18,8 +20,8 @@
  *
  ****************************************************************************/
 
-#ifndef __RP2040_LCD_BACKPACK_H
-#define __RP2040_LCD_BACKPACK_H
+#ifndef __BOARDS_ARM_RP2040_COMMON_INCLUDE_RP2040_LCD_BACKPACK_H
+#define __BOARDS_ARM_RP2040_COMMON_INCLUDE_RP2040_LCD_BACKPACK_H
 
 /****************************************************************************
  * Included Files
@@ -80,4 +82,4 @@ int board_lcd_backpack_init(int devno, int busno, int rows, int cols);
 }
 #endif
 
-#endif /* __RP2040_LCD_BACKPACK_H */
+#endif /* __BOARDS_ARM_RP2040_COMMON_INCLUDE_RP2040_LCD_BACKPACK_H */

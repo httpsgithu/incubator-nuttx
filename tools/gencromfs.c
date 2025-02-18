@@ -1,6 +1,8 @@
 /****************************************************************************
  * tools/gencromfs.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -1112,7 +1114,11 @@ static int dir_notempty(const char *dirpath, const char *name,
   int ret;
 
   ret = asprintf(&path, "%s/%s", dirpath, name);
-  UNUSED(ret);
+  if (ret < 0)
+    {
+      fprintf(stderr, "ERROR: asprintf() failed\n");
+      exit(1);
+    }
 
   /* stat() should not fail for any reason */
 
@@ -1142,7 +1148,11 @@ static int process_direntry(const char *dirpath, const char *name,
   int ret;
 
   ret = asprintf(&path, "%s/%s", dirpath, name);
-  UNUSED(ret);
+  if (ret < 0)
+    {
+      fprintf(stderr, "ERROR: asprintf() failed\n");
+      exit(1);
+    }
 
   ret = stat(path, &buf);
   if (ret < 0)
@@ -1302,7 +1312,7 @@ int main(int argc, char **argv, char **envp)
   /* Now append the volume header to output file */
 
   fprintf(g_outstream, "/* CROMFS image */\n\n");
-  fprintf(g_outstream, "const uint8_t g_cromfs_image[] =\n");
+  fprintf(g_outstream, "const uint8_t aligned_data(4) g_cromfs_image[] =\n");
   fprintf(g_outstream, "{\n");
   fprintf(g_outstream, "  /* Offset %6lu:  Volume header */\n\n", 0ul);
 

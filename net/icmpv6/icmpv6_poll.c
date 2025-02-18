@@ -1,6 +1,8 @@
 /****************************************************************************
  * net/icmpv6/icmpv6_poll.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -67,14 +69,13 @@ void icmpv6_poll(FAR struct net_driver_s *dev,
 
   /* Setup for the application callback */
 
-  dev->d_appdata = &dev->d_buf[NET_LL_HDRLEN(dev) + IPICMPv6_HDRLEN];
-  dev->d_len     = 0;
-  dev->d_sndlen  = 0;
+  dev->d_len    = 0;
+  dev->d_sndlen = 0;
 
   /* Perform the application callback */
 
-  devif_conn_event(dev, conn, ICMPv6_POLL,
-                   conn ? conn->list : dev->d_conncb);
+  devif_conn_event(dev, ICMPv6_POLL,
+                   conn ? conn->sconn.list : dev->d_conncb);
 }
 
 #endif /* CONFIG_NET_ICMPv6_SOCKET || CONFIG_NET_ICMPv6_NEIGHBOR */

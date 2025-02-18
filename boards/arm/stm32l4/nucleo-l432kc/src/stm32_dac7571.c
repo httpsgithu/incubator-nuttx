@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/stm32l4/nucleo-l432kc/src/stm32_dac7571.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -71,9 +73,9 @@ static struct dac_dev_s *g_dac;
  *
  ****************************************************************************/
 
-int stm32_dac7571initialize(FAR const char *devpath)
+int stm32_dac7571initialize(const char *devpath)
 {
-  FAR struct i2c_master_s *i2c;
+  struct i2c_master_s *i2c;
   int ret;
 
   /* Configure D4(PA5) and D5(PA6) as input floating */

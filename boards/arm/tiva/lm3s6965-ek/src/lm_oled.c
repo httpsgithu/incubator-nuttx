@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/tiva/lm3s6965-ek/src/lm_oled.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -74,10 +76,10 @@
  *
  ****************************************************************************/
 
-FAR struct lcd_dev_s *board_graphics_setup(unsigned int devno)
+struct lcd_dev_s *board_graphics_setup(unsigned int devno)
 {
-  FAR struct spi_dev_s *spi;
-  FAR struct lcd_dev_s *dev;
+  struct spi_dev_s *spi;
+  struct lcd_dev_s *dev;
 
   /* Configure the OLED GPIOs */
 
@@ -142,7 +144,7 @@ FAR struct lcd_dev_s *board_graphics_setup(unsigned int devno)
  *
  ****************************************************************************/
 
-int tiva_ssicmddata(FAR struct spi_dev_s *dev, uint32_t devid, bool cmd)
+int tiva_ssicmddata(struct spi_dev_s *dev, uint32_t devid, bool cmd)
 {
   if (devid == SPIDEV_DISPLAY(0))
     {

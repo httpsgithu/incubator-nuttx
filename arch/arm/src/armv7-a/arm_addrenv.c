@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/armv7-a/arm_addrenv.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -22,7 +24,7 @@
  * Address Environment Interfaces
  *
  * Low-level interfaces used in binfmt/ to instantiate tasks with address
- * environments.  These interfaces all operate on type group_addrenv_t which
+ * environments.  These interfaces all operate on type arch_addrenv_t which
  * is an abstract representation of a task group's address environment and
  * must be defined in arch/arch.h if CONFIG_ARCH_ADDRENV is defined.
  *
@@ -34,7 +36,6 @@
  *                         address environment
  *   up_addrenv_heapsize - Returns the size of the initial heap allocation.
  *   up_addrenv_select   - Instantiate an address environment
- *   up_addrenv_restore  - Restore an address environment
  *   up_addrenv_clone    - Copy an address environment from one location to
  *                         another.
  *
@@ -98,8 +99,6 @@
 #include <assert.h>
 #include <debug.h>
 
-#include <nuttx/addrenv.h>
-
 #include <nuttx/arch.h>
 #include <nuttx/pgalloc.h>
 #include <nuttx/irq.h>
@@ -147,28 +146,17 @@
 static int up_addrenv_initdata(uintptr_t l2table)
 {
   irqstate_t flags;
-  FAR uint32_t *virtptr;
+  uint32_t *virtptr;
   uintptr_t paddr;
-#ifndef CONFIG_ARCH_PGPOOL_MAPPING
-  uint32_t l1save;
-#endif
 
   DEBUGASSERT(l2table);
   flags = enter_critical_section();
 
-#ifdef CONFIG_ARCH_PGPOOL_MAPPING
   /* Get the virtual address corresponding to the physical page table
    * address
    */
 
-  virtptr = (FAR uint32_t *)arm_pgvaddr(l2table);
-#else
-  /* Temporarily map the page into the virtual address space */
-
-  l1save = mmu_l1_getentry(ARCH_SCRATCH_VBASE);
-  mmu_l1_setentry(l2table & ~SECTION_MASK, ARCH_SCRATCH_VBASE, MMU_MEMFLAGS);
-  virtptr = (FAR uint32_t *)(ARCH_SCRATCH_VBASE | (l2table & SECTION_MASK));
-#endif
+  virtptr = (uint32_t *)arm_pgvaddr(l2table);
 
   /* Invalidate D-Cache so that we read from the physical memory */
 
@@ -180,21 +168,16 @@ static int up_addrenv_initdata(uintptr_t l2table)
   paddr = (uintptr_t)(*virtptr) & PTE_SMALL_PADDR_MASK;
   DEBUGASSERT(paddr);
 
-#ifdef CONFIG_ARCH_PGPOOL_MAPPING
   /* Get the virtual address corresponding to the physical page address */
 
-  virtptr = (FAR uint32_t *)arm_pgvaddr(paddr);
-#else
-  /* Temporarily map the page into the virtual address space */
-
-  mmu_l1_setentry(paddr & ~SECTION_MASK, ARCH_SCRATCH_VBASE, MMU_MEMFLAGS);
-  virtptr = (FAR uint32_t *)(ARCH_SCRATCH_VBASE | (paddr & SECTION_MASK));
-#endif
+  virtptr = (uint32_t *)arm_pgvaddr(paddr);
 
   /* Finally, after of all of that, we can initialize the tiny region at
    * the beginning of .bss/.data by setting it to zero.
    */
 
+  binfo("*** clear .bss/data (virtptr=%p, size=%d)\n",
+        virtptr, ARCH_DATA_RESERVE_SIZE);
   memset(virtptr, 0, ARCH_DATA_RESERVE_SIZE);
 
   /* Make sure that the initialized data is flushed to physical memory. */
@@ -202,11 +185,6 @@ static int up_addrenv_initdata(uintptr_t l2table)
   up_flush_dcache((uintptr_t)virtptr,
                   (uintptr_t)virtptr + ARCH_DATA_RESERVE_SIZE);
 
-#ifndef CONFIG_ARCH_PGPOOL_MAPPING
-  /* Restore the scratch section L1 page table entry */
-
-  mmu_l1_restore(ARCH_SCRATCH_VBASE, l1save);
-#endif
   leave_critical_section(flags);
   return OK;
 }
@@ -244,18 +222,21 @@ static int up_addrenv_initdata(uintptr_t l2table)
  ****************************************************************************/
 
 int up_addrenv_create(size_t textsize, size_t datasize, size_t heapsize,
-                      FAR group_addrenv_t *addrenv)
+                      arch_addrenv_t *addrenv)
 {
   int ret;
 
-  binfo("addrenv=%p textsize=%lu datasize=%lu\n",
-        addrenv, (unsigned long)textsize, (unsigned long)datasize);
+  binfo("addrenv=%p textsize=%lu datasize=%lu heapsize=%lu\n",
+        addrenv,
+        (unsigned long)textsize,
+        (unsigned long)datasize,
+        (unsigned long)heapsize);
 
   DEBUGASSERT(addrenv);
 
   /* Initialize the address environment structure to all zeroes */
 
-  memset(addrenv, 0, sizeof(group_addrenv_t));
+  memset(addrenv, 0, sizeof(arch_addrenv_t));
 
   /* Back the allocation up with physical pages and set up the level 2
    * mapping (which of course does nothing until the L2 page table is hooked
@@ -319,6 +300,7 @@ int up_addrenv_create(size_t textsize, size_t datasize, size_t heapsize,
    */
 
   addrenv->heapsize = (size_t)ret << MM_PGSHIFT;
+  binfo("addrenv->heapsize=%d\n", addrenv->heapsize);
 #endif
   return OK;
 
@@ -343,7 +325,7 @@ errout:
  *
  ****************************************************************************/
 
-int up_addrenv_destroy(FAR group_addrenv_t *addrenv)
+int up_addrenv_destroy(arch_addrenv_t *addrenv)
 {
   binfo("addrenv=%p\n", addrenv);
   DEBUGASSERT(addrenv);
@@ -363,7 +345,7 @@ int up_addrenv_destroy(FAR group_addrenv_t *addrenv)
 
   arm_addrenv_destroy_region(addrenv->heap, ARCH_HEAP_NSECTS,
                              CONFIG_ARCH_HEAP_VBASE, false);
-#ifdef CONFIG_MM_SHM
+#ifdef CONFIG_ARCH_VMA_MAPPING
   /* Destroy the shared memory region (without freeing the physical page
    * data).
    */
@@ -373,7 +355,7 @@ int up_addrenv_destroy(FAR group_addrenv_t *addrenv)
 #endif
 #endif
 
-  memset(addrenv, 0, sizeof(group_addrenv_t));
+  memset(addrenv, 0, sizeof(arch_addrenv_t));
   return OK;
 }
 
@@ -395,14 +377,14 @@ int up_addrenv_destroy(FAR group_addrenv_t *addrenv)
  *
  ****************************************************************************/
 
-int up_addrenv_vtext(FAR group_addrenv_t *addrenv, FAR void **vtext)
+int up_addrenv_vtext(arch_addrenv_t *addrenv, void **vtext)
 {
-  binfo("return=%p\n", (FAR void *)CONFIG_ARCH_TEXT_VBASE);
+  binfo("return=%p\n", (void *)CONFIG_ARCH_TEXT_VBASE);
 
   /* Not much to do in this case */
 
   DEBUGASSERT(addrenv && vtext);
-  *vtext = (FAR void *)CONFIG_ARCH_TEXT_VBASE;
+  *vtext = (void *)CONFIG_ARCH_TEXT_VBASE;
   return OK;
 }
 
@@ -428,18 +410,45 @@ int up_addrenv_vtext(FAR group_addrenv_t *addrenv, FAR void **vtext)
  *
  ****************************************************************************/
 
-int up_addrenv_vdata(FAR group_addrenv_t *addrenv, uintptr_t textsize,
-                     FAR void **vdata)
+int up_addrenv_vdata(arch_addrenv_t *addrenv, uintptr_t textsize,
+                     void **vdata)
 {
   binfo("return=%p\n",
-        (FAR void *)(CONFIG_ARCH_DATA_VBASE + ARCH_DATA_RESERVE_SIZE));
+        (void *)(CONFIG_ARCH_DATA_VBASE + ARCH_DATA_RESERVE_SIZE));
 
   /* Not much to do in this case */
 
   DEBUGASSERT(addrenv && vdata);
-  *vdata = (FAR void *)(CONFIG_ARCH_DATA_VBASE + ARCH_DATA_RESERVE_SIZE);
+  *vdata = (void *)(CONFIG_ARCH_DATA_VBASE + ARCH_DATA_RESERVE_SIZE);
   return OK;
 }
+
+/****************************************************************************
+ * Name: up_addrenv_vheap
+ *
+ * Description:
+ *   Return the heap virtual address associated with the newly created
+ *   address environment.  This function is used by the binary loaders in
+ *   order get an address that can be used to initialize the new task.
+ *
+ * Input Parameters:
+ *   addrenv - The representation of the task address environment previously
+ *      returned by up_addrenv_create.
+ *   vheap - The location to return the virtual address.
+ *
+ * Returned Value:
+ *   Zero (OK) on success; a negated errno value on failure.
+ *
+ ****************************************************************************/
+
+#ifdef CONFIG_BUILD_KERNEL
+int up_addrenv_vheap(const arch_addrenv_t *addrenv, void **vheap)
+{
+  DEBUGASSERT(addrenv && vheap);
+  *vheap = (void *)CONFIG_ARCH_HEAP_VBASE;
+  return OK;
+}
+#endif
 
 /****************************************************************************
  * Name: up_addrenv_heapsize
@@ -461,7 +470,7 @@ int up_addrenv_vdata(FAR group_addrenv_t *addrenv, uintptr_t textsize,
  ****************************************************************************/
 
 #ifdef CONFIG_BUILD_KERNEL
-ssize_t up_addrenv_heapsize(FAR const group_addrenv_t *addrenv)
+ssize_t up_addrenv_heapsize(const arch_addrenv_t *addrenv)
 {
   DEBUGASSERT(addrenv);
   return (ssize_t)addrenv->heapsize;
@@ -481,47 +490,36 @@ ssize_t up_addrenv_heapsize(FAR const group_addrenv_t *addrenv)
  * Input Parameters:
  *   addrenv - The representation of the task address environment previously
  *     returned by up_addrenv_create.
- *   oldenv
- *     The address environment that was in place before up_addrenv_select().
- *     This may be used with up_addrenv_restore() to restore the original
- *     address environment that was in place before up_addrenv_select() was
- *     called.  Note that this may be a task agnostic, platform-specific
- *     representation that may or may not be different from group_addrenv_t.
  *
  * Returned Value:
  *   Zero (OK) on success; a negated errno value on failure.
  *
  ****************************************************************************/
 
-int up_addrenv_select(FAR const group_addrenv_t *addrenv,
-                      FAR save_addrenv_t *oldenv)
+int up_addrenv_select(const arch_addrenv_t *addrenv)
 {
   uintptr_t vaddr;
   uintptr_t paddr;
   int i;
 
+  binfo("addrenv=%p\n", addrenv);
   DEBUGASSERT(addrenv);
 
   for (vaddr = CONFIG_ARCH_TEXT_VBASE, i = 0;
        i < ARCH_TEXT_NSECTS;
        vaddr += SECTION_SIZE, i++)
     {
-      /* Save the old L1 page table entry */
-
-      if (oldenv)
-        {
-          oldenv->text[i] = mmu_l1_getentry(vaddr);
-        }
-
       /* Set (or clear) the new page table entry */
 
       paddr = (uintptr_t)addrenv->text[i];
       if (paddr)
         {
+          binfo("text: set l1 entry (paddr=%x vaddr=%x)\n", paddr, vaddr);
           mmu_l1_setentry(paddr, vaddr, MMU_L1_PGTABFLAGS);
         }
       else
         {
+          binfo("text: clear l1 (vaddr=%x)\n", vaddr);
           mmu_l1_clrentry(vaddr);
         }
     }
@@ -530,22 +528,17 @@ int up_addrenv_select(FAR const group_addrenv_t *addrenv,
        i < ARCH_DATA_NSECTS;
        vaddr += SECTION_SIZE, i++)
     {
-      /* Save the old L1 page table entry */
-
-      if (oldenv)
-        {
-          oldenv->data[i] = mmu_l1_getentry(vaddr);
-        }
-
       /* Set (or clear) the new page table entry */
 
       paddr = (uintptr_t)addrenv->data[i];
       if (paddr)
         {
+          binfo("data: set l1 entry (paddr=%x vaddr=%x)\n", paddr, vaddr);
           mmu_l1_setentry(paddr, vaddr, MMU_L1_PGTABFLAGS);
         }
       else
         {
+          binfo("data: clear l1 (vaddr=%x)\n", vaddr);
           mmu_l1_clrentry(vaddr);
         }
     }
@@ -555,38 +548,26 @@ int up_addrenv_select(FAR const group_addrenv_t *addrenv,
        i < ARCH_HEAP_NSECTS;
        vaddr += SECTION_SIZE, i++)
     {
-      /* Save the old L1 page table entry */
-
-      if (oldenv)
-        {
-          oldenv->heap[i] = mmu_l1_getentry(vaddr);
-        }
-
       /* Set (or clear) the new page table entry */
 
       paddr = (uintptr_t)addrenv->heap[i];
       if (paddr)
         {
+          binfo("heap: set l1 entry (paddr=%x vaddr=%x)\n", paddr, vaddr);
           mmu_l1_setentry(paddr, vaddr, MMU_L1_PGTABFLAGS);
         }
       else
         {
+          binfo("heap: clear l1 (vaddr=%x)\n", vaddr);
           mmu_l1_clrentry(vaddr);
         }
     }
 
-#ifdef CONFIG_MM_SHM
+#ifdef CONFIG_ARCH_VMA_MAPPING
   for (vaddr = CONFIG_ARCH_SHM_VBASE, i = 0;
        i < ARCH_SHM_NSECTS;
        vaddr += SECTION_SIZE, i++)
     {
-      /* Save the old L1 page table entry */
-
-      if (oldenv)
-        {
-          oldenv->shm[i] = mmu_l1_getentry(vaddr);
-        }
-
       /* Set (or clear) the new page table entry */
 
       paddr = (uintptr_t)addrenv->shm[i];
@@ -598,75 +579,6 @@ int up_addrenv_select(FAR const group_addrenv_t *addrenv,
         {
           mmu_l1_clrentry(vaddr);
         }
-    }
-
-#endif
-#endif
-
-  return OK;
-}
-
-/****************************************************************************
- * Name: up_addrenv_restore
- *
- * Description:
- *   After an address environment has been temporarily instantiated by
- *   up_addrenv_select(), this function may be called to restore the
- *   original address environment.
- *
- * Input Parameters:
- *   oldenv - The platform-specific representation of the address environment
- *     previously returned by up_addrenv_select.
- *
- * Returned Value:
- *   Zero (OK) on success; a negated errno value on failure.
- *
- ****************************************************************************/
-
-int up_addrenv_restore(FAR const save_addrenv_t *oldenv)
-{
-  uintptr_t vaddr;
-  int i;
-
-  binfo("oldenv=%p\n", oldenv);
-  DEBUGASSERT(oldenv);
-
-  for (vaddr = CONFIG_ARCH_TEXT_VBASE, i = 0;
-       i < ARCH_TEXT_NSECTS;
-       vaddr += SECTION_SIZE, i++)
-    {
-      /* Restore the L1 page table entry */
-
-      mmu_l1_restore(vaddr, oldenv->text[i]);
-    }
-
-  for (vaddr = CONFIG_ARCH_DATA_VBASE, i = 0;
-       i < ARCH_DATA_NSECTS;
-       vaddr += SECTION_SIZE, i++)
-    {
-      /* Restore the L1 page table entry */
-
-      mmu_l1_restore(vaddr, oldenv->data[i]);
-    }
-
-#ifdef CONFIG_BUILD_KERNEL
-  for (vaddr = CONFIG_ARCH_HEAP_VBASE, i = 0;
-       i < ARCH_HEAP_NSECTS;
-       vaddr += SECTION_SIZE, i++)
-    {
-      /* Restore the L1 page table entry */
-
-      mmu_l1_restore(vaddr, oldenv->heap[i]);
-    }
-
-#ifdef CONFIG_MM_SHM
-  for (vaddr = CONFIG_ARCH_SHM_VBASE, i = 0;
-       i < ARCH_SHM_NSECTS;
-       vaddr += SECTION_SIZE, i++)
-    {
-      /* Restore the L1 page table entry */
-
-      mmu_l1_restore(vaddr, oldenv->shm[i]);
     }
 
 #endif
@@ -691,13 +603,13 @@ int up_addrenv_restore(FAR const save_addrenv_t *oldenv)
  *
  ****************************************************************************/
 
-int up_addrenv_coherent(FAR const group_addrenv_t *addrenv)
+int up_addrenv_coherent(const arch_addrenv_t *addrenv)
 {
   DEBUGASSERT(addrenv);
 
   /* Invalidate I-Cache */
 
-  cp15_invalidate_icache();
+  up_invalidate_icache_all();
 
   /* Clean D-Cache in each region.
    * REVISIT:  Cause crashes when trying to clean unmapped memory.  In order
@@ -741,15 +653,15 @@ int up_addrenv_coherent(FAR const group_addrenv_t *addrenv)
  *
  ****************************************************************************/
 
-int up_addrenv_clone(FAR const group_addrenv_t *src,
-                     FAR group_addrenv_t *dest)
+int up_addrenv_clone(const arch_addrenv_t *src,
+                     arch_addrenv_t *dest)
 {
   binfo("src=%p dest=%p\n", src, dest);
   DEBUGASSERT(src && dest);
 
   /* Just copy the address environment from the source to the destination */
 
-  memcpy(dest, src, sizeof(group_addrenv_t));
+  memcpy(dest, src, sizeof(arch_addrenv_t));
   return OK;
 }
 
@@ -761,22 +673,18 @@ int up_addrenv_clone(FAR const group_addrenv_t *src,
  *   is created that needs to share the address environment of its task
  *   group.
  *
- *   NOTE: In some platforms, nothing will need to be done in this case.
- *   Simply being a member of the group that has the address environment
- *   may be sufficient.
- *
  * Input Parameters:
- *   group - The task group to which the new thread belongs.
- *   tcb   - The TCB of the thread needing the address environment.
+ *   ptcb  - The tcb of the parent task.
+ *   tcb   - The tcb of the thread needing the address environment.
  *
  * Returned Value:
  *   Zero (OK) on success; a negated errno value on failure.
  *
  ****************************************************************************/
 
-int up_addrenv_attach(FAR struct task_group_s *group, FAR struct tcb_s *tcb)
+int up_addrenv_attach(struct tcb_s *ptcb, struct tcb_s *tcb)
 {
-  binfo("group=%p tcb=%p\n", group, tcb);
+  binfo("parent=%p tcb=%p\n", ptcb, tcb);
 
   /* Nothing needs to be done in this implementation */
 
@@ -793,12 +701,7 @@ int up_addrenv_attach(FAR struct task_group_s *group, FAR struct tcb_s *tcb)
  *   task group is itself destroyed.  Any resources unique to this thread
  *   may be destroyed now.
  *
- *   NOTE: In some platforms, nothing will need to be done in this case.
- *   Simply being a member of the group that has the address environment
- *   may be sufficient.
- *
  * Input Parameters:
- *   group - The group to which the thread belonged.
  *   tcb - The TCB of the task or thread whose the address environment will
  *     be released.
  *
@@ -807,9 +710,9 @@ int up_addrenv_attach(FAR struct task_group_s *group, FAR struct tcb_s *tcb)
  *
  ****************************************************************************/
 
-int up_addrenv_detach(FAR struct task_group_s *group, FAR struct tcb_s *tcb)
+int up_addrenv_detach(struct tcb_s *tcb)
 {
-  binfo("group=%p tcb=%p\n", group, tcb);
+  binfo("tcb=%p\n", tcb);
 
   /* Nothing needs to be done in this implementation */
 

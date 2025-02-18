@@ -1,14 +1,10 @@
 /****************************************************************************
  * arch/xtensa/src/common/xtensa_cpuint.S
  *
- * Adapted from use in NuttX by:
- *
- *   Copyright (C) 2016 Gregory Nutt. All rights reserved.
- *   Author: Gregory Nutt <gnutt@nuttx.org>
- *
- * Derives from logic originally provided by Cadence Design Systems Inc.
- *
- *   Copyright (c) 2006-2015 Cadence Design Systems Inc.
+ * SPDX-License-Identifier: MIT
+ * SPDX-FileCopyrightText: 2016 Gregory Nutt. All rights reserved.
+ * SPDX-FileCopyrightText: 2006-2015 Cadence Design Systems Inc.
+ * SPDX-FileContributor: Gregory Nutt <gnutt@nuttx.org>
  *
  * Permission is hereby granted, free of charge, to any person obtaining
  * a copy of this software and associated documentation files (the
@@ -82,6 +78,7 @@ xtensa_enable_cpuint:
 	s32i	a5, a2, 0			  /* shadow |= mask */
 
 	wsr		a5, INTENABLE		/* Set CPU INTENABLE to shadow */
+	rsync
 	mov		a3, a4			   	/* Return previous shadow content */
 	RET(16)
 
@@ -122,6 +119,7 @@ xtensa_disable_cpuint:
 	s32i	a5, a2, 0			  /* shadow &= ~mask */
 
 	wsr		a5, INTENABLE		/* Set CPU INTENABLE to shadow */
+	rsync
 	mov		a3, a4				  /* Return previous shadow content */
 	RET(16)
 

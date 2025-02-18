@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/tms570/tms570_lowputc.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -98,7 +100,7 @@ void tms570_lowsetup(void);
  ****************************************************************************/
 
 int tms570_sci_configure(uint32_t base,
-                         FAR const struct sci_config_s *config);
+                         const struct sci_config_s *config);
 
 #undef EXTERN
 #if defined(__cplusplus)

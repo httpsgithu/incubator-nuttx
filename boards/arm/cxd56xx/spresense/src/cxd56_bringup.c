@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/cxd56xx/spresense/src/cxd56_bringup.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -168,8 +170,6 @@ static void timer_initialize(void)
       snprintf(devname, sizeof(devname), "/dev/timer%d", i);
       cxd56_timer_initialize(devname, i);
     }
-
-  return;
 }
 #endif
 
@@ -248,6 +248,12 @@ int cxd56_bringup(void)
 #endif
 
 #ifndef CONFIG_CXD56_SUBCORE
+  /* Set the special pins for the host interface to GPIO mode because
+   * their mode is automatically changed by latching the SYSTEM0/1 pins.
+   */
+
+  CXD56_PIN_CONFIGS(PINCONFS_SPI2A_GPIO);
+
   /* Initialize CPU clock to max frequency */
 
   board_clock_initialize();
@@ -336,7 +342,7 @@ int cxd56_bringup(void)
   ret = board_pwm_setup();
   if (ret < 0)
     {
-      _err("ERROR: Failed to initialize pwm. \n");
+      _err("ERROR: Failed to initialize pwm.\n");
     }
 #endif
 
@@ -344,7 +350,7 @@ int cxd56_bringup(void)
   ret = cxd56_adcinitialize();
   if (ret < 0)
     {
-      _err("ERROR: Failed to initialize adc. \n");
+      _err("ERROR: Failed to initialize adc.\n");
     }
 #endif
 
@@ -352,7 +358,7 @@ int cxd56_bringup(void)
   ret = userled_lower_initialize("/dev/userleds");
   if (ret < 0)
     {
-      _err("ERROR: Failed to initialize led. \n");
+      _err("ERROR: Failed to initialize led.\n");
     }
 #endif
 
@@ -372,8 +378,17 @@ int cxd56_bringup(void)
     }
 #endif
 
+#ifndef CONFIG_CXD56_CAMERA_LATE_INITIALIZE
+#ifdef CONFIG_VIDEO_ISX019
+  ret = isx019_initialize();
+  if (ret < 0)
+    {
+      _err("ERROR: Failed to initialize ISX019 board. %d\n", errno);
+    }
+#endif /* CONFIG_VIDEO_ISX019 */
+
 #ifdef CONFIG_VIDEO_ISX012
-  ret = board_isx012_initialize(IMAGER_I2C);
+  ret = isx012_initialize();
   if (ret < 0)
     {
       _err("ERROR: Failed to initialize ISX012 board. %d\n", errno);
@@ -388,6 +403,7 @@ int cxd56_bringup(void)
       ret = ERROR;
     }
 #endif /* CONFIG_CXD56_CISIF */
+#endif /* CONFIG_CXD56_CAMERA_LATE_INITIALIZE */
 
 #if defined(CONFIG_CXD56_SDIO)
   /* In order to prevent Hi-Z from being input to the SD Card controller,
@@ -405,7 +421,7 @@ int cxd56_bringup(void)
   ret = board_sdcard_initialize();
   if (ret < 0)
     {
-      _err("ERROR: Failed to initialize sdhci. \n");
+      _err("ERROR: Failed to initialize sdhci.\n");
     }
 #endif
 
@@ -420,6 +436,22 @@ int cxd56_bringup(void)
     }
 #endif
 
+#ifdef CONFIG_CXD56_SDCARD_AUTOMOUNT
+  /* Initialize the auto-mounter */
+
+  board_automount_initialize();
+#endif
+
+#if defined(CONFIG_CXD56_EMMC) && !defined(CONFIG_CXD56_EMMC_LATE_INITIALIZE)
+  /* Mount the eMMC block driver */
+
+  ret = board_emmc_initialize();
+  if (ret < 0)
+    {
+      _err("ERROR: Failed to initialize eMMC: %d\n", ret);
+    }
+#endif
+
 #ifdef CONFIG_CPUFREQ_RELEASE_LOCK
   /* Enable dynamic clock control and CPU clock down for power saving */
 
@@ -428,7 +460,7 @@ int cxd56_bringup(void)
 
   up_pm_release_wakelock(&wlock);
 
-#if defined(CONFIG_RNDIS)
+#if defined(CONFIG_RNDIS) && !defined(CONFIG_RNDIS_COMPOSITE)
   uint8_t mac[6];
   mac[0] = 0xa0; /* TODO */
   mac[1] = (CONFIG_NETINIT_MACADDR_2 >> (8 * 0)) & 0xff;
@@ -443,7 +475,15 @@ int cxd56_bringup(void)
   ret = board_gs2200m_initialize("/dev/gs2200m", 5);
   if (ret < 0)
     {
-      _err("ERROR: Failed to initialize GS2200M. \n");
+      _err("ERROR: Failed to initialize GS2200M.\n");
+    }
+#endif
+
+#if defined(CONFIG_MODEM_ALT1250) && !defined(CONFIG_CXD56_LTE_LATE_INITIALIZE)
+  ret = board_alt1250_initialize("/dev/alt1250");
+  if (ret < 0)
+    {
+      _err("ERROR: Failed to initialize ALT1250.\n");
     }
 #endif
 
@@ -451,7 +491,15 @@ int cxd56_bringup(void)
   ret = cxd56_gnssinitialize("/dev/gps");
   if (ret < 0)
     {
-      _err("ERROR: Failed to initialize gnss. \n");
+      _err("ERROR: Failed to initialize gnss.\n");
+    }
+#endif
+
+#if defined(CONFIG_CXD56_GNSS_ADDON) && !defined(CONFIG_CXD56_GNSS_ADDON_LATE_INITIALIZE)
+  ret = board_gnss_addon_initialize("/dev/gps2", 0);
+  if (ret < 0)
+    {
+      _err("ERROR: Failed to initialize gnss addon.\n");
     }
 #endif
 
@@ -459,7 +507,7 @@ int cxd56_bringup(void)
   ret = cxd56_geofenceinitialize("/dev/geofence");
   if (ret < 0)
     {
-      _err("ERROR: Failed to initialize geofence. \n");
+      _err("ERROR: Failed to initialize geofence.\n");
     }
 #endif
 

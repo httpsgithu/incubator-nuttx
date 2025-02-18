@@ -1,6 +1,8 @@
 /****************************************************************************
  * drivers/i2c/i2c_driver.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -35,9 +37,7 @@
 #include <nuttx/kmalloc.h>
 #include <nuttx/fs/fs.h>
 #include <nuttx/i2c/i2c_master.h>
-#include <nuttx/semaphore.h>
-
-#ifdef CONFIG_I2C_DRIVER
+#include <nuttx/mutex.h>
 
 /****************************************************************************
  * Pre-processor Definitions
@@ -58,7 +58,7 @@ struct i2c_driver_s
 {
   FAR struct i2c_master_s *i2c;  /* Contained I2C lower half driver */
 #ifndef CONFIG_DISABLE_PSEUDOFS_OPERATIONS
-  sem_t exclsem;                 /* Mutual exclusion */
+  mutex_t lock;                  /* Mutual exclusion */
   int16_t crefs;                 /* Number of open references */
   bool unlinked;                 /* True, driver has been unlinked */
 #endif
@@ -86,7 +86,7 @@ static int     i2cdrvr_unlink(FAR struct inode *inode);
  * Private Data
  ****************************************************************************/
 
-static const struct file_operations i2cdrvr_fops =
+static const struct file_operations g_i2cdrvr_fops =
 {
 #ifndef CONFIG_DISABLE_PSEUDOFS_OPERATIONS
   i2cdrvr_open,    /* open */
@@ -99,7 +99,11 @@ static const struct file_operations i2cdrvr_fops =
   i2cdrvr_write,   /* write */
   NULL,            /* seek */
   i2cdrvr_ioctl,   /* ioctl */
-  NULL             /* poll */
+  NULL,            /* mmap */
+  NULL,            /* truncate */
+  NULL,            /* poll */
+  NULL,            /* readv */
+  NULL             /* writev */
 #ifndef CONFIG_DISABLE_PSEUDOFS_OPERATIONS
   , i2cdrvr_unlink /* unlink */
 #endif
@@ -116,24 +120,34 @@ static const struct file_operations i2cdrvr_fops =
 #ifndef CONFIG_DISABLE_PSEUDOFS_OPERATIONS
 static int i2cdrvr_open(FAR struct file *filep)
 {
-  FAR struct inode *inode;
   FAR struct i2c_driver_s *priv;
   int ret;
 
+  /* Sanity check */
+
+  DEBUGASSERT(filep->f_inode->i_private != NULL);
+
   /* Get our private data structure */
 
-  DEBUGASSERT(filep != NULL && filep->f_inode != NULL);
-  inode = filep->f_inode;
-
-  priv = (FAR struct i2c_driver_s *)inode->i_private;
-  DEBUGASSERT(priv);
+  priv = filep->f_inode->i_private;
 
   /* Get exclusive access to the I2C driver state structure */
 
-  ret = nxsem_wait(&priv->exclsem);
+  ret = nxmutex_lock(&priv->lock);
   if (ret < 0)
     {
       return ret;
+    }
+
+  /* I2c master initialize */
+
+  if (priv->i2c->ops->setup != NULL && priv->crefs == 0)
+    {
+      ret = I2C_SETUP(priv->i2c);
+      if (ret < 0)
+        {
+          goto out;
+        }
     }
 
   /* Increment the count of open references on the driver */
@@ -141,8 +155,9 @@ static int i2cdrvr_open(FAR struct file *filep)
   priv->crefs++;
   DEBUGASSERT(priv->crefs > 0);
 
-  nxsem_post(&priv->exclsem);
-  return OK;
+out:
+  nxmutex_unlock(&priv->lock);
+  return ret;
 }
 #endif
 
@@ -153,24 +168,34 @@ static int i2cdrvr_open(FAR struct file *filep)
 #ifndef CONFIG_DISABLE_PSEUDOFS_OPERATIONS
 static int i2cdrvr_close(FAR struct file *filep)
 {
-  FAR struct inode *inode;
   FAR struct i2c_driver_s *priv;
   int ret;
 
+  /* Sanity check */
+
+  DEBUGASSERT(filep->f_inode->i_private != NULL);
+
   /* Get our private data structure */
 
-  DEBUGASSERT(filep != NULL && filep->f_inode != NULL);
-  inode = filep->f_inode;
-
-  priv = (FAR struct i2c_driver_s *)inode->i_private;
-  DEBUGASSERT(priv);
+  priv = filep->f_inode->i_private;
 
   /* Get exclusive access to the I2C driver state structure */
 
-  ret = nxsem_wait(&priv->exclsem);
+  ret = nxmutex_lock(&priv->lock);
   if (ret < 0)
     {
       return ret;
+    }
+
+  /* I2c master uninitialize */
+
+  if (priv->i2c->ops->shutdown != NULL && priv->crefs == 1)
+    {
+      ret = I2C_SHUTDOWN(priv->i2c);
+      if (ret < 0)
+        {
+          goto out;
+        }
     }
 
   /* Decrement the count of open references on the driver */
@@ -184,13 +209,15 @@ static int i2cdrvr_close(FAR struct file *filep)
 
   if (priv->crefs <= 0 && priv->unlinked)
     {
-      nxsem_destroy(&priv->exclsem);
+      nxmutex_destroy(&priv->lock);
       kmm_free(priv);
+      filep->f_inode->i_private = NULL;
       return OK;
     }
 
-  nxsem_post(&priv->exclsem);
-  return OK;
+out:
+  nxmutex_unlock(&priv->lock);
+  return ret;
 }
 #endif
 
@@ -220,25 +247,23 @@ static ssize_t i2cdrvr_write(FAR struct file *filep, FAR const char *buffer,
 
 static int i2cdrvr_ioctl(FAR struct file *filep, int cmd, unsigned long arg)
 {
-  FAR struct inode *inode;
   FAR struct i2c_driver_s *priv;
   FAR struct i2c_transfer_s *transfer;
   int ret;
 
+  /* Sanity check */
+
+  DEBUGASSERT(filep->f_inode->i_private != NULL);
   i2cinfo("cmd=%x arg=%08lx\n", cmd, arg);
 
   /* Get our private data structure */
 
-  DEBUGASSERT(filep != NULL && filep->f_inode != NULL);
-  inode = filep->f_inode;
-
-  priv = (FAR struct i2c_driver_s *)inode->i_private;
-  DEBUGASSERT(priv);
+  priv = filep->f_inode->i_private;
 
 #ifndef CONFIG_DISABLE_PSEUDOFS_OPERATIONS
   /* Get exclusive access to the I2C driver state structure */
 
-  ret = nxsem_wait(&priv->exclsem);
+  ret = nxmutex_lock(&priv->lock);
   if (ret < 0)
     {
       return ret;
@@ -289,7 +314,7 @@ static int i2cdrvr_ioctl(FAR struct file *filep, int cmd, unsigned long arg)
     }
 
 #ifndef CONFIG_DISABLE_PSEUDOFS_OPERATIONS
-  nxsem_post(&priv->exclsem);
+  nxmutex_unlock(&priv->lock);
 #endif
   return ret;
 }
@@ -304,14 +329,17 @@ static int i2cdrvr_unlink(FAR struct inode *inode)
   FAR struct i2c_driver_s *priv;
   int ret;
 
+  /* Sanity check */
+
+  DEBUGASSERT(inode->i_private != NULL);
+
   /* Get our private data structure */
 
-  DEBUGASSERT(inode != NULL && inode->i_private != NULL);
-  priv = (FAR struct i2c_driver_s *)inode->i_private;
+  priv = inode->i_private;
 
   /* Get exclusive access to the I2C driver state structure */
 
-  ret = nxsem_wait(&priv->exclsem);
+  ret = nxmutex_lock(&priv->lock);
   if (ret < 0)
     {
       return ret;
@@ -321,8 +349,9 @@ static int i2cdrvr_unlink(FAR struct inode *inode)
 
   if (priv->crefs <= 0)
     {
-      nxsem_destroy(&priv->exclsem);
+      nxmutex_destroy(&priv->lock);
       kmm_free(priv);
+      inode->i_private = NULL;
       return OK;
     }
 
@@ -331,7 +360,7 @@ static int i2cdrvr_unlink(FAR struct inode *inode)
    */
 
   priv->unlinked = true;
-  nxsem_post(&priv->exclsem);
+  nxmutex_unlock(&priv->lock);
   return ret;
 }
 #endif
@@ -374,26 +403,29 @@ int i2c_register(FAR struct i2c_master_s *i2c, int bus)
 
   /* Allocate a I2C character device structure */
 
-  priv = (FAR struct i2c_driver_s *)kmm_zalloc(sizeof(struct i2c_driver_s));
+  priv = kmm_zalloc(sizeof(struct i2c_driver_s));
   if (priv)
     {
       /* Initialize the I2C character device structure */
 
       priv->i2c = i2c;
 #ifndef CONFIG_DISABLE_PSEUDOFS_OPERATIONS
-      nxsem_init(&priv->exclsem, 0, 1);
+      nxmutex_init(&priv->lock);
 #endif
 
       /* Create the character device name */
 
-      snprintf(devname, DEVNAME_FMTLEN, DEVNAME_FMT, bus);
-      ret = register_driver(devname, &i2cdrvr_fops, 0666, priv);
+      snprintf(devname, sizeof(devname), DEVNAME_FMT, bus);
+      ret = register_driver(devname, &g_i2cdrvr_fops, 0666, priv);
       if (ret < 0)
         {
           /* Free the device structure if we failed to create the character
            * device.
            */
 
+#ifndef CONFIG_DISABLE_PSEUDOFS_OPERATIONS
+          nxmutex_destroy(&priv->lock);
+#endif
           kmm_free(priv);
           return ret;
         }
@@ -406,4 +438,3 @@ int i2c_register(FAR struct i2c_master_s *i2c, int bus)
   return -ENOMEM;
 }
 
-#endif /* CONFIG_I2C_DRIVER */

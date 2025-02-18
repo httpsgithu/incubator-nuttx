@@ -1,6 +1,8 @@
 ############################################################################
 # tools/FlatLibs.mk
 #
+# SPDX-License-Identifier: Apache-2.0
+#
 # Licensed to the Apache Software Foundation (ASF) under one or more
 # contributor license agreements.  See the NOTICE file distributed with
 # this work for additional information regarding copyright ownership.  The
@@ -44,8 +46,21 @@ NUTTXLIBS += staging$(DELIM)libboards$(LIBEXT)
 
 # Add libraries for syscall support.
 
-NUTTXLIBS += staging$(DELIM)libc$(LIBEXT) staging$(DELIM)libmm$(LIBEXT)
+NUTTXLIBS += staging$(DELIM)libc$(LIBEXT)
+NUTTXLIBS += staging$(DELIM)libmm$(LIBEXT)
 NUTTXLIBS += staging$(DELIM)libarch$(LIBEXT)
+
+# Add toolchain library support
+
+ifeq ($(CONFIG_LIB_BUILTIN),y)
+NUTTXLIBS += staging$(DELIM)libbuiltin$(LIBEXT)
+endif
+
+# Add libraries for math support.
+
+ifeq ($(CONFIG_LIBM_TOOLCHAIN)$(CONFIG_LIBM_NONE),)
+NUTTXLIBS += staging$(DELIM)libm$(LIBEXT)
+endif
 
 ifeq ($(CONFIG_LIB_SYSCALL),y)
 NUTTXLIBS += staging$(DELIM)libstubs$(LIBEXT)
@@ -130,6 +145,12 @@ endif
 
 ifeq ($(CONFIG_OPENAMP),y)
 NUTTXLIBS += staging$(DELIM)libopenamp$(LIBEXT)
+endif
+
+# Add libraries for board common support
+
+ifeq ($(CONFIG_ARCH_BOARD_COMMON),y)
+NUTTXLIBS += staging$(DELIM)libboard$(LIBEXT)
 endif
 
 # Export all libraries

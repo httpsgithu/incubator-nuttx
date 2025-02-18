@@ -1,6 +1,8 @@
 /****************************************************************************
  * libs/libc/syslog/syslog.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -18,8 +20,8 @@
  *
  ****************************************************************************/
 
-#ifndef __LIBC_SYSLOG_SYSLOG_H
-#define __LIBC_SYSLOG_SYSLOG_H
+#ifndef __LIBS_LIBC_SYSLOG_SYSLOG_H
+#define __LIBS_LIBC_SYSLOG_SYSLOG_H
 
 /****************************************************************************
  * Included Files
@@ -53,4 +55,4 @@ EXTERN uint8_t g_syslog_mask;
 }
 #endif
 
-#endif /* __LIBC_SYSLOG_SYSLOG_H */
+#endif /* __LIBS_LIBC_SYSLOG_SYSLOG_H */

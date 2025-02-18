@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/avr/src/at90usb/at90usb_serial.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -40,8 +42,7 @@
 
 #include <arch/board/board.h>
 
-#include "up_arch.h"
-#include "up_internal.h"
+#include "avr_internal.h"
 #include "at90usb.h"
 
 /****************************************************************************
@@ -233,7 +234,7 @@ static int usart1_attach(struct uart_dev_s *dev)
   irq_attach(AT90USB_IRQ_U1RX, usart1_rxinterrupt, NULL);
   irq_attach(AT90USB_IRQ_U1DRE, usart1_txinterrupt, NULL);
 
-  /* (void)irq_attach(AT90USB_IRQ_U1TX, usart1_txinterrupt, NULL); */
+  /* irq_attach(AT90USB_IRQ_U1TX, usart1_txinterrupt, NULL); */
 
   return OK;
 }
@@ -259,7 +260,7 @@ static void usart1_detach(struct uart_dev_s *dev)
   irq_detach(AT90USB_IRQ_U1RX);
   irq_detach(AT90USB_IRQ_U1DRE);
 
-  /* (void)irq_detach(AT90USB_IRQ_U1TX); */
+  /* irq_detach(AT90USB_IRQ_U1TX); */
 }
 
 /****************************************************************************
@@ -267,7 +268,7 @@ static void usart1_detach(struct uart_dev_s *dev)
  *
  * Description:
  *   This is the USART RX interrupt handler.  It will be invoked when an
- *   RX interrupt received.  It will call uart_receivechar to perform the RX
+ *   RX interrupt received.  It will call uart_recvchars to perform the RX
  *   data transfers.
  *
  ****************************************************************************/
@@ -508,16 +509,16 @@ static bool usart1_txempty(struct uart_dev_s *dev)
 #ifdef USE_EARLYSERIALINIT
 
 /****************************************************************************
- * Name: up_earlyserialinit
+ * Name: avr_earlyserialinit
  *
  * Description:
  *   Performs the low level USART initialization early in debug so that the
  *   serial console will be available during bootup.  This must be called
- *   before up_serialinit.
+ *   before avr_serialinit.
  *
  ****************************************************************************/
 
-void up_earlyserialinit(void)
+void avr_earlyserialinit(void)
 {
   /* Disable all USARTS */
 
@@ -533,15 +534,15 @@ void up_earlyserialinit(void)
 #endif
 
 /****************************************************************************
- * Name: up_serialinit
+ * Name: avr_serialinit
  *
  * Description:
  *   Register serial console and serial ports.  This assumes
- *   that up_earlyserialinit was called previously.
+ *   that avr_earlyserialinit was called previously.
  *
  ****************************************************************************/
 
-void up_serialinit(void)
+void avr_serialinit(void)
 {
   /* Register the console */
 
@@ -562,26 +563,15 @@ void up_serialinit(void)
  *
  ****************************************************************************/
 
-int up_putc(int ch)
+void up_putc(int ch)
 {
 #ifdef HAVE_SERIAL_CONSOLE
   uint8_t imr;
 
   usart1_disableusartint(&imr);
-
-  /* Check for LF */
-
-  if (ch == '\n')
-    {
-      /* Add CR */
-
-      up_lowputc('\r');
-    }
-
-  up_lowputc(ch);
+  avr_lowputc(ch);
   usart1_restoreusartint(imr);
 #endif
-  return ch;
 }
 
 #else /* USE_SERIALDRIVER */
@@ -594,21 +584,11 @@ int up_putc(int ch)
  *
  ****************************************************************************/
 
-int up_putc(int ch)
+void up_putc(int ch)
 {
 #ifdef HAVE_SERIAL_CONSOLE
-  /* Check for LF */
-
-  if (ch == '\n')
-    {
-      /* Add CR */
-
-      up_lowputc('\r');
-    }
-
-  up_lowputc(ch);
+  avr_lowputc(ch);
 #endif
-  return ch;
 }
 
 #endif /* USE_SERIALDRIVER */

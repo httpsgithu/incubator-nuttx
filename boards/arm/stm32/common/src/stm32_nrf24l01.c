@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/stm32/common/src/stm32_nrf24l01.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -35,7 +37,7 @@
 #include <nuttx/wireless/nrf24l01.h>
 #include <arch/board/board.h>
 
-#include "arm_arch.h"
+#include "arm_internal.h"
 #include "chip.h"
 #include "stm32.h"
 #include "stm32_nrf24l01.h"
@@ -52,21 +54,21 @@
  * Private Function Prototypes
  ****************************************************************************/
 
-static int nrf24l01_irq_attach(xcpt_t isr, FAR void *arg);
+static int nrf24l01_irq_attach(xcpt_t isr, void *arg);
 static void nrf24l01_chip_enable(bool enable);
 
 /****************************************************************************
  * Private Data
  ****************************************************************************/
 
-static FAR struct nrf24l01_config_s nrf_cfg =
+static struct nrf24l01_config_s nrf_cfg =
 {
   .irqattach  = nrf24l01_irq_attach,
   .chipenable = nrf24l01_chip_enable,
 };
 
 static xcpt_t g_isr;
-static FAR void *g_arg;
+static void *g_arg;
 
 /****************************************************************************
  * Public Data
@@ -76,7 +78,7 @@ static FAR void *g_arg;
  * Private Functions
  ****************************************************************************/
 
-static int nrf24l01_irq_attach(xcpt_t isr, FAR void *arg)
+static int nrf24l01_irq_attach(xcpt_t isr, void *arg)
 {
   wlinfo("Attach IRQ\n");
   g_isr = isr;
@@ -112,7 +114,7 @@ static void nrf24l01_chip_enable(bool enable)
 
 int board_nrf24l01_initialize(int busno)
 {
-  FAR struct spi_dev_s *spidev;
+  struct spi_dev_s *spidev;
   int result;
 
   /* Setup CE & IRQ line IOs */

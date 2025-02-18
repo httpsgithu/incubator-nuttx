@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/renesas/src/rx65n/rx65n_irq.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -28,20 +30,7 @@
 #include <nuttx/arch.h>
 #include <nuttx/irq.h>
 #include "arch/rx65n/iodefine.h"
-
-#include "up_internal.h"
-
-/****************************************************************************
- * Public Data
- ****************************************************************************/
-
-/* This holds a references to the current interrupt level register storage
- * structure.  If is non-NULL only during interrupt processing.
- */
-
-/* Actually a pointer to the beginning of a uint8_t array */
-
-volatile uint32_t *g_current_regs;
+#include "renesas_internal.h"
 
 /****************************************************************************
  * Public Functions
@@ -53,10 +42,6 @@ volatile uint32_t *g_current_regs;
 
 void up_irqinitialize(void)
 {
-  /* Currents_regs is non-NULL only while processing an interrupt */
-
-  g_current_regs = NULL;
-
   /* Enable interrupts */
 
 #ifndef CONFIG_SUPPRESS_INTERRUPTS

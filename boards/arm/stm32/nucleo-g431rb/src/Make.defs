@@ -1,6 +1,8 @@
 ############################################################################
 # boards/arm/stm32/nucleo-g431rb/src/Make.defs
 #
+# SPDX-License-Identifier: Apache-2.0
+#
 # Licensed to the Apache Software Foundation (ASF) under one or more
 # contributor license agreements.  See the NOTICE file distributed with
 # this work for additional information regarding copyright ownership.  The
@@ -55,6 +57,15 @@ ifeq ($(CONFIG_MATH_CORDIC),y)
 CSRCS += stm32_cordic.c
 endif
 
+ifeq ($(CONFIG_STM32_FDCAN),y)
+ifeq ($(CONFIG_STM32_FDCAN_CHARDRIVER),y)
+CSRCS += stm32_can.c
+endif
+ifeq ($(CONFIG_STM32_FDCAN_SOCKET),y)
+CSRCS += stm32_cansock.c
+endif
+endif
+
 DEPPATH += --dep-path board
 VPATH += :board
-CFLAGS += $(shell $(INCDIR) "$(CC)" $(TOPDIR)$(DELIM)arch$(DELIM)$(CONFIG_ARCH)$(DELIM)src$(DELIM)board$(DELIM)board)
+CFLAGS += ${INCDIR_PREFIX}$(TOPDIR)$(DELIM)arch$(DELIM)$(CONFIG_ARCH)$(DELIM)src$(DELIM)board$(DELIM)board

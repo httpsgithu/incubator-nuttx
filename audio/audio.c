@@ -1,6 +1,8 @@
 /****************************************************************************
  * audio/audio.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -41,7 +43,7 @@
 #include <nuttx/arch.h>
 #include <nuttx/fs/fs.h>
 #include <nuttx/audio/audio.h>
-#include <nuttx/semaphore.h>
+#include <nuttx/mutex.h>
 
 #include <arch/irq.h>
 
@@ -73,7 +75,7 @@ struct audio_upperhalf_s
 {
   uint8_t           crefs;            /* The number of times the device has been opened */
   volatile bool     started;          /* True: playback is active */
-  sem_t             exclsem;          /* Supports mutual exclusion */
+  mutex_t           lock;             /* Supports mutual exclusion */
   FAR struct audio_lowerhalf_s *dev;  /* lower-half state */
   struct file      *usermq;           /* User mode app's message queue */
 };
@@ -121,7 +123,6 @@ static const struct file_operations g_audioops =
   audio_write, /* write */
   NULL,        /* seek */
   audio_ioctl, /* ioctl */
-  NULL         /* poll */
 };
 
 /****************************************************************************
@@ -147,10 +148,9 @@ static int audio_open(FAR struct file *filep)
 
   /* Get exclusive access to the device structures */
 
-  ret = nxsem_wait(&upper->exclsem);
+  ret = nxmutex_lock(&upper->lock);
   if (ret < 0)
     {
-      ret = -errno;
       goto errout;
     }
 
@@ -165,7 +165,7 @@ static int audio_open(FAR struct file *filep)
       /* More than 255 opens; uint8_t overflows to zero */
 
       ret = -EMFILE;
-      goto errout_with_sem;
+      goto errout_with_lock;
     }
 
   /* Save the new open count on success */
@@ -173,8 +173,8 @@ static int audio_open(FAR struct file *filep)
   upper->crefs = tmp;
   ret = OK;
 
-errout_with_sem:
-  nxsem_post(&upper->exclsem);
+errout_with_lock:
+  nxmutex_unlock(&upper->lock);
 
 errout:
   return ret;
@@ -198,10 +198,9 @@ static int audio_close(FAR struct file *filep)
 
   /* Get exclusive access to the device structures */
 
-  ret = nxsem_wait(&upper->exclsem);
+  ret = nxmutex_lock(&upper->lock);
   if (ret < 0)
     {
-      ret = -errno;
       goto errout;
     }
 
@@ -231,8 +230,7 @@ static int audio_close(FAR struct file *filep)
     }
 
   ret = OK;
-
-  nxsem_post(&upper->exclsem);
+  nxmutex_unlock(&upper->lock);
 
 errout:
   return ret;
@@ -364,7 +362,7 @@ static int audio_ioctl(FAR struct file *filep, int cmd, unsigned long arg)
 
   /* Get exclusive access to the device structures */
 
-  ret = nxsem_wait(&upper->exclsem);
+  ret = nxmutex_lock(&upper->lock);
   if (ret < 0)
     {
       return ret;
@@ -605,6 +603,7 @@ static int audio_ioctl(FAR struct file *filep, int cmd, unsigned long arg)
         {
           audinfo("AUDIOIOC_UNREGISTERMQ\n");
 
+          fs_putfilep(upper->usermq);
           upper->usermq = NULL;
           ret = OK;
         }
@@ -663,7 +662,7 @@ static int audio_ioctl(FAR struct file *filep, int cmd, unsigned long arg)
         break;
     }
 
-  nxsem_post(&upper->exclsem);
+  nxmutex_unlock(&upper->lock);
   return ret;
 }
 
@@ -752,7 +751,6 @@ static inline void audio_complete(FAR struct audio_upperhalf_s *upper,
 
   /* Send a dequeue message to the user if a message queue is registered */
 
-  upper->started = false;
   if (upper->usermq != NULL)
     {
       msg.msg_id = AUDIO_MSG_COMPLETE;
@@ -794,6 +792,80 @@ static inline void audio_message(FAR struct audio_upperhalf_s *upper,
       msg->session = session;
 #endif
       file_mq_send(upper->usermq, (FAR const char *)msg, sizeof(*msg),
+                   CONFIG_AUDIO_BUFFER_DEQUEUE_PRIO);
+    }
+}
+
+/****************************************************************************
+ * Name: audio_ioerr
+ *
+ * Description:
+ *   Send an AUDIO_MSG_IOERR message to the client to indicate that
+ *   audio dirver have io error.  The lower-half driver initiates this
+ *   call via its callback pointer to our upper-half driver.
+ *
+ ****************************************************************************/
+
+#ifdef CONFIG_AUDIO_MULTI_SESSION
+static inline void audio_ioerr(FAR struct audio_upperhalf_s *upper,
+                    FAR struct ap_buffer_s *apb, uint16_t status,
+                    FAR void *session)
+#else
+static inline void audio_ioerr(FAR struct audio_upperhalf_s *upper,
+                    FAR struct ap_buffer_s *apb, uint16_t status)
+#endif
+{
+  struct audio_msg_s msg;
+
+  audinfo("Entry\n");
+
+  /* Send io error message to the user if a message queue is registered */
+
+  if (upper->usermq != NULL)
+    {
+      msg.msg_id = AUDIO_MSG_IOERR;
+      msg.u.data = status;
+#ifdef CONFIG_AUDIO_MULTI_SESSION
+      msg.session = session;
+#endif
+      file_mq_send(upper->usermq, (FAR const char *)&msg, sizeof(msg),
+                   CONFIG_AUDIO_BUFFER_DEQUEUE_PRIO);
+    }
+}
+
+/****************************************************************************
+ * Name: audio_underrun
+ *
+ * Description:
+ *   Send an AUDIO_MSG_UNDERRUN message to the client to indicate that the
+ *   active playback is underrun.  The lower-half driver initiates this
+ *   call via its callback pointer to our upper-half driver.
+ *
+ ****************************************************************************/
+
+#ifdef CONFIG_AUDIO_MULTI_SESSION
+static inline void audio_underrun(FAR struct audio_upperhalf_s *upper,
+                    FAR struct ap_buffer_s *apb, uint16_t status,
+                    FAR void *session)
+#else
+static inline void audio_underrun(FAR struct audio_upperhalf_s *upper,
+                    FAR struct ap_buffer_s *apb, uint16_t status)
+#endif
+{
+  struct audio_msg_s    msg;
+
+  audinfo("Entry\n");
+
+  /* Send a dequeue message to the user if a message queue is registered */
+
+  if (upper->usermq != NULL)
+    {
+      msg.msg_id = AUDIO_MSG_UNDERRUN;
+      msg.u.ptr = NULL;
+#ifdef CONFIG_AUDIO_MULTI_SESSION
+      msg.session = session;
+#endif
+      file_mq_send(upper->usermq, (FAR const char *)&msg, sizeof(msg),
                    CONFIG_AUDIO_BUFFER_DEQUEUE_PRIO);
     }
 }
@@ -853,6 +925,11 @@ static void audio_callback(FAR void *handle, uint16_t reason,
 
       case AUDIO_CALLBACK_IOERR:
         {
+#ifdef CONFIG_AUDIO_MULTI_SESSION
+          audio_ioerr(upper, apb, status, session);
+#else
+          audio_ioerr(upper, apb, status);
+#endif
         }
         break;
 
@@ -878,6 +955,17 @@ static void audio_callback(FAR void *handle, uint16_t reason,
           audio_message(upper, apb, status, session);
 #else
           audio_message(upper, apb, status);
+#endif
+        }
+        break;
+
+      case AUDIO_CALLBACK_UNDERRUN:
+        {
+          /* send underrun status */
+#ifdef CONFIG_AUDIO_MULTI_SESSION
+          audio_underrun(upper, apb, status, session);
+#else
+          audio_underrun(upper, apb, status);
 #endif
         }
         break;
@@ -934,8 +1022,7 @@ int audio_register(FAR const char *name, FAR struct audio_lowerhalf_s *dev)
 
   /* Allocate the upper-half data structure */
 
-  upper = (FAR struct audio_upperhalf_s *)kmm_zalloc(
-                                           sizeof(struct audio_upperhalf_s));
+  upper = kmm_zalloc(sizeof(struct audio_upperhalf_s));
   if (!upper)
     {
       auderr("ERROR: Allocation failed\n");
@@ -946,7 +1033,7 @@ int audio_register(FAR const char *name, FAR struct audio_lowerhalf_s *dev)
    * (it was already zeroed by kmm_zalloc())
    */
 
-  nxsem_init(&upper->exclsem, 0, 1);
+  nxmutex_init(&upper->lock);
   upper->dev = dev;
 
 #ifdef CONFIG_AUDIO_CUSTOM_DEV_PATH
@@ -955,8 +1042,8 @@ int audio_register(FAR const char *name, FAR struct audio_lowerhalf_s *dev)
 
   /* This is the simple case ... No need to make a directory */
 
-  strcpy(path, "/dev/");
-  strcat(path, name);
+  strlcpy(path, "/dev/", sizeof(path));
+  strlcat(path, name, sizeof(path));
 
 #else
   /* Ensure the path begins with "/dev" as we don't support placing device
@@ -977,7 +1064,7 @@ int audio_register(FAR const char *name, FAR struct audio_lowerhalf_s *dev)
           ptr++;
         }
 
-      strcpy(path, "/dev/");
+      strlcpy(path, "/dev/", sizeof(path));
       pathptr = &path[5];
 
       /* Do mkdir for each segment of the path */
@@ -1013,13 +1100,13 @@ int audio_register(FAR const char *name, FAR struct audio_lowerhalf_s *dev)
 
   /* Now build the path for registration */
 
-  strcpy(path, devname);
+  strlcpy(path, devname, sizeof(path));
   if (devname[sizeof(devname)-1] != '/')
     {
-      strcat(path, "/");
+      strlcat(path, "/", sizeof(path));
     }
 
-  strcat(path, name);
+  strlcat(path, name, sizeof(path));
 
 #endif /* CONFIG_AUDIO_DEV_PATH=="/dev" */
 
@@ -1040,10 +1127,9 @@ int audio_register(FAR const char *name, FAR struct audio_lowerhalf_s *dev)
 
   /* Register the Audio device */
 
-  memset(path, 0, AUDIO_MAX_DEVICE_PATH);
-  strcpy(path, devname);
-  strcat(path, "/");
-  strncat(path, name, AUDIO_MAX_DEVICE_PATH - 11);
+  strlcpy(path, devname, sizeof(path));
+  strlcat(path, "/", sizeof(path));
+  strlcat(path, name, sizeof(path));
 #endif
 
   /* Give the lower-half a context to the upper half */

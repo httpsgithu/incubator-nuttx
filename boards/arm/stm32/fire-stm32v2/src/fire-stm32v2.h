@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/stm32/fire-stm32v2/src/fire-stm32v2.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -18,8 +20,8 @@
  *
  ****************************************************************************/
 
-#ifndef __BOARDS_ARM_STM32_FIRE_STM32V2_SRC_FIRE_H
-#define __BOARDS_ARM_STM32_FIRE_STM32V2_SRC_FIRE_H
+#ifndef __BOARDS_ARM_STM32_FIRE_STM32V2_SRC_FIRE_STM32V2_H
+#define __BOARDS_ARM_STM32_FIRE_STM32V2_SRC_FIRE_STM32V2_H
 
 /****************************************************************************
  * Included Files
@@ -330,4 +332,4 @@ int stm32_w25initialize(int minor);
 #endif
 
 #endif /* __ASSEMBLY__ */
-#endif /* __BOARDS_ARM_STM32_FIRE_STM32V2_SRC_FIRE_H */
+#endif /* __BOARDS_ARM_STM32_FIRE_STM32V2_SRC_FIRE_STM32V2_H */

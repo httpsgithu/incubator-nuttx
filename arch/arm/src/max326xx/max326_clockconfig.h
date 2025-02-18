@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/max326xx/max326_clockconfig.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -87,7 +89,7 @@ EXTERN const struct clock_setup_s g_initial_clock_setup;
  *
  ****************************************************************************/
 
-void max326_clockconfig(FAR const struct clock_setup_s *clksetup);
+void max326_clockconfig(const struct clock_setup_s *clksetup);
 
 /****************************************************************************
  * Name: max326_hfio_frequency

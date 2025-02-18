@@ -1,6 +1,8 @@
 /****************************************************************************
  * libs/libc/unistd/unistd.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -18,19 +20,18 @@
  *
  ****************************************************************************/
 
-#ifndef __LIBC_UNISTD_UNISTD_H
-#define __LIBC_UNISTD_UNISTD_H
+#ifndef __LIBS_LIBC_UNISTD_UNISTD_H
+#define __LIBS_LIBC_UNISTD_UNISTD_H
 
 /****************************************************************************
  * Included Files
  ****************************************************************************/
 
 #include <nuttx/config.h>
+#include <nuttx/tls.h>
 
 #include <stdbool.h>
 #include <getopt.h>
-
-#include <nuttx/lib/getopt.h>
 
 /****************************************************************************
  * Public Data
@@ -106,4 +107,4 @@ int getopt_common(int argc, FAR char * const argv[],
 }
 #endif
 
-#endif /* __LIBC_UNISTD_UNISTD_H */
+#endif /* __LIBS_LIBC_UNISTD_UNISTD_H */

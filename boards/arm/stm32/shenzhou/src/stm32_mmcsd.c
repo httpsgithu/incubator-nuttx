@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/stm32/shenzhou/src/stm32_mmcsd.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -77,7 +79,7 @@
 int stm32_sdinitialize(int minor)
 {
 #ifdef HAVE_MMCSD
-  FAR struct spi_dev_s *spi;
+  struct spi_dev_s *spi;
   int ret;
 
   /* Get the SPI port */

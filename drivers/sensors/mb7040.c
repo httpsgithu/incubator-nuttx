@@ -1,6 +1,8 @@
 /****************************************************************************
  * drivers/sensors/mb7040.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -68,8 +70,6 @@ static int mb7040_changeaddr(FAR struct mb7040_dev_s *priv, uint8_t addr);
 
 /* Character Driver Methods */
 
-static int     mb7040_open(FAR struct file *filep);
-static int     mb7040_close(FAR struct file *filep);
 static ssize_t mb7040_read(FAR struct file *filep, FAR char *buffer,
                            size_t buflen);
 static ssize_t mb7040_write(FAR struct file *filep, FAR const char *buffer,
@@ -83,16 +83,12 @@ static int     mb7040_ioctl(FAR struct file *filep, int cmd,
 
 static const struct file_operations g_fops =
 {
-  mb7040_open,
-  mb7040_close,
-  mb7040_read,
-  mb7040_write,
-  NULL,
-  mb7040_ioctl,
-  NULL
-#ifndef CONFIG_DISABLE_PSEUDOFS_OPERATIONS
-  , NULL
-#endif
+  NULL,            /* open */
+  NULL,            /* close */
+  mb7040_read,     /* read */
+  mb7040_write,    /* write */
+  NULL,            /* seek */
+  mb7040_ioctl,    /* ioctl */
 };
 
 /****************************************************************************
@@ -216,32 +212,6 @@ static int mb7040_changeaddr(FAR struct mb7040_dev_s *priv, uint8_t addr)
 }
 
 /****************************************************************************
- * Name: mb7040_open
- *
- * Description:
- *   This method is called when the device is opened.
- *
- ****************************************************************************/
-
-static int mb7040_open(FAR struct file *filep)
-{
-  return OK;
-}
-
-/****************************************************************************
- * Name: mb7040_close
- *
- * Description:
- *   This method is called when the device is closed.
- *
- ****************************************************************************/
-
-static int mb7040_close(FAR struct file *filep)
-{
-  return OK;
-}
-
-/****************************************************************************
  * Name: mb7040_read
  *
  * Description:
@@ -319,7 +289,7 @@ static int mb7040_ioctl(FAR struct file *filep, int cmd, unsigned long arg)
 
       case SNIOC_CHANGEADDR:
         ret = mb7040_changeaddr(priv, (uint8_t)arg);
-        sninfo("new addr: %02x ret: %d\n", *(uint8_t *)arg, ret);
+        sninfo("new addr: %02x ret: %d\n", *(FAR uint8_t *)arg, ret);
         break;
 
       /* Unrecognized commands */
@@ -365,7 +335,7 @@ int mb7040_register(FAR const char *devpath, FAR struct i2c_master_s *i2c,
 
   /* Initialize the device's structure */
 
-  priv = (FAR struct mb7040_dev_s *)kmm_malloc(sizeof(*priv));
+  priv = kmm_malloc(sizeof(*priv));
   if (priv == NULL)
     {
       snerr("ERROR: Failed to allocate instance\n");

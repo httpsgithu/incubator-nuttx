@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/stm32/hymini-stm32v/src/stm32_usbmsc.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -80,7 +82,7 @@ int board_usbmsc_initialize(int port)
    */
 
 #ifndef CONFIG_NSH_BUILTIN_APPS
-  FAR struct sdio_dev_s *sdio;
+  struct sdio_dev_s *sdio;
   int ret;
 
   /* First, get an instance of the SDIO interface */

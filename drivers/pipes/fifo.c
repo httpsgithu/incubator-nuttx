@@ -1,6 +1,8 @@
 /****************************************************************************
  * drivers/pipes/fifo.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -39,17 +41,21 @@
  * Private Data
  ****************************************************************************/
 
-static const struct file_operations fifo_fops =
+static const struct file_operations g_fifo_fops =
 {
-  pipecommon_open,  /* open */
-  pipecommon_close, /* close */
-  pipecommon_read,  /* read */
-  pipecommon_write, /* write */
-  0,                /* seek */
-  pipecommon_ioctl, /* ioctl */
-  pipecommon_poll,  /* poll */
+  pipecommon_open,     /* open */
+  pipecommon_close,    /* close */
+  pipecommon_read,     /* read */
+  pipecommon_write,    /* write */
+  NULL,                /* seek */
+  pipecommon_ioctl,    /* ioctl */
+  NULL,                /* mmap */
+  NULL,                /* truncate */
+  pipecommon_poll,     /* poll */
+  NULL,                /* readv */
+  NULL                 /* writev */
 #ifndef CONFIG_DISABLE_PSEUDOFS_OPERATIONS
-  pipecommon_unlink /* unlink */
+  , pipecommon_unlink  /* unlink */
 #endif
 };
 
@@ -61,7 +67,7 @@ static const struct file_operations fifo_fops =
  * Name: nx_mkfifo
  *
  * Description:
- *   nx_mkfifo() makes a FIFO device driver file with name 'pathname.' Unlike
+ *   nx_mkfifo() makes a FIFO device driver file with name 'pathname'. Unlike
  *   Linux, a NuttX FIFO is not a special file type but simply a device
  *   driver instance.  'mode' specifies the FIFO's permissions.
  *
@@ -70,7 +76,7 @@ static const struct file_operations fifo_fops =
  *   must have been opened from both reading and writing before input or
  *   output can be performed.  This FIFO implementation will block all
  *   attempts to open a FIFO read-only until at least one thread has opened
- *   the FIFO for  writing.
+ *   the FIFO for writing.
  *
  *   If all threads that write to the FIFO have closed, subsequent calls to
  *   read() on the FIFO will return 0 (end-of-file).
@@ -104,7 +110,7 @@ int nx_mkfifo(FAR const char *pathname, mode_t mode, size_t bufsize)
       return -ENOMEM;
     }
 
-  ret = register_driver(pathname, &fifo_fops, mode, (FAR void *)dev);
+  ret = register_pipedriver(pathname, &g_fifo_fops, mode, (FAR void *)dev);
   if (ret != 0)
     {
       pipecommon_freedev(dev);

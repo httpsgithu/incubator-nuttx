@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/risc-v/src/mpfs/mpfs_spi.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -35,15 +37,16 @@
 
 #include <nuttx/arch.h>
 #include <nuttx/irq.h>
-#include <nuttx/semaphore.h>
+#include <nuttx/mutex.h>
 #include <nuttx/spi/spi.h>
 
 #include <arch/board/board.h>
 
+#include "mpfs_gpio.h"
 #include "mpfs_spi.h"
 #include "hardware/mpfs_spi.h"
 #include "hardware/mpfs_sysreg.h"
-#include "riscv_arch.h"
+#include "riscv_internal.h"
 
 /****************************************************************************
  * Pre-processor Definitions
@@ -119,7 +122,7 @@ struct mpfs_spi_priv_s
   const int                      id;        /* SPI0 or SPI1 id */
   uint32_t                       devid;     /* SPI CS device 0..7 */
 
-  sem_t                          sem_excl;  /* Bus usage semaphore */
+  mutex_t                        lock;      /* Bus usage mutex */
   sem_t                          sem_isr;   /* Interrupt wait semaphore */
 
   uint32_t                       frequency; /* Requested clock frequency */
@@ -147,8 +150,10 @@ struct mpfs_spi_priv_s
 
 static int mpfs_spi_lock(struct spi_dev_s *dev, bool lock);
 
+#ifdef CONFIG_SPI_CS_CONTROL
 static void mpfs_spi_select(struct spi_dev_s *dev, uint32_t devid,
                             bool selected);
+#endif
 
 static uint32_t mpfs_spi_setfrequency(struct spi_dev_s *dev,
                                       uint32_t frequency);
@@ -188,10 +193,11 @@ static const struct mpfs_spi_config_s mpfs_spi_config =
     .use_irq  = true,
 };
 
-static const struct spi_ops_s mpfs_spi_ops =
+#ifdef CONFIG_MPFS_SPI0
+static const struct spi_ops_s mpfs_spi0_ops =
 {
     .lock             = mpfs_spi_lock,
-    .select           = mpfs_spi_select,
+    .select           = mpfs_spi0_select,
     .setfrequency     = mpfs_spi_setfrequency,
 #ifdef CONFIG_SPI_DELAY_CONTROL
     .setdelay         = mpfs_spi_setdelay,
@@ -218,32 +224,65 @@ static const struct spi_ops_s mpfs_spi_ops =
     .registercallback = NULL,
 };
 
-#ifdef CONFIG_MPFS_SPI0
 static struct mpfs_spi_priv_s g_mpfs_spi0_priv =
 {
   .spi_dev =
-              {
-                .ops = &mpfs_spi_ops
-              },
+  {
+    .ops             = &mpfs_spi0_ops
+  },
   .config            = &mpfs_spi_config,
   .hw_base           = MPFS_SPI0_LO_BASE,
   .plic_irq          = MPFS_IRQ_SPI0,
   .id                = 0,
-  .devid             = 0
+  .devid             = 0,
+  .lock              = NXMUTEX_INITIALIZER,
+  .sem_isr           = SEM_INITIALIZER(0),
 };
 #endif /* CONFIG_MPFS_SPI0 */
+
 #ifdef CONFIG_MPFS_SPI1
+static const struct spi_ops_s mpfs_spi1_ops =
+{
+    .lock             = mpfs_spi_lock,
+    .select           = mpfs_spi1_select,
+    .setfrequency     = mpfs_spi_setfrequency,
+#ifdef CONFIG_SPI_CS_DELAY_CONTROL
+    .setdelay         = mpfs_spi_setdelay,
+#endif
+    .setmode          = mpfs_spi_setmode,
+    .setbits          = mpfs_spi_setbits,
+#ifdef CONFIG_SPI_HWFEATURES
+    .hwfeatures       = mpfs_spi_hwfeatures,
+#endif
+    .status           = mpfs_spi_status,
+#ifdef CONFIG_SPI_CMDDATA
+    .cmddata          = mpfs_spi_cmddata,
+#endif
+    .send             = mpfs_spi_send,
+#ifdef CONFIG_SPI_EXCHANGE
+    .exchange         = mpfs_spi_exchange,
+#else
+    .sndblock         = mpfs_spi_sndblock,
+    .recvblock        = mpfs_spi_recvblock,
+#endif
+#ifdef CONFIG_SPI_TRIGGER
+    .trigger          = mpfs_spi_trigger,
+#endif
+    .registercallback = NULL,
+};
 static struct mpfs_spi_priv_s g_mpfs_spi1_priv =
 {
   .spi_dev =
-              {
-                .ops = &mpfs_spi_ops
-              },
+  {
+    .ops             = &mpfs_spi1_ops
+  },
   .config            = &mpfs_spi_config,
   .hw_base           = MPFS_SPI1_LO_BASE,
   .plic_irq          = MPFS_IRQ_SPI1,
   .id                = 1,
-  .devid             = 1
+  .devid             = 1,
+  .lock              = NXMUTEX_INITIALIZER,
+  .sem_isr           = SEM_INITIALIZER(0),
 };
 
 #endif /* CONFIG_MPFS_SPI1 */
@@ -280,7 +319,7 @@ static void mpfs_spi_rxoverflow_recover(struct mpfs_spi_priv_s *priv)
 
   control_reg  = getreg32(MPFS_SPI_CONTROL);
   clk_gen      = getreg32(MPFS_SPI_CLK_GEN);
-  frame_size   = getreg32(MPFS_SPI_FRAMESIZE);
+  frame_size   = getreg32(MPFS_SPI_FSIZE);
   control2     = getreg32(MPFS_SPI_CONTROL2);
   packet_size  = getreg32(MPFS_SPI_PKTSIZE);
   cmd_size     = getreg32(MPFS_SPI_CMD_SIZE);
@@ -297,7 +336,7 @@ static void mpfs_spi_rxoverflow_recover(struct mpfs_spi_priv_s *priv)
 
   putreg32(control_reg, MPFS_SPI_CONTROL);
   putreg32(clk_gen, MPFS_SPI_CLK_GEN);
-  putreg32(frame_size, MPFS_SPI_FRAMESIZE);
+  putreg32(frame_size, MPFS_SPI_FSIZE);
 
   mpfs_spi_enable(priv, 1);
 
@@ -329,11 +368,11 @@ static int mpfs_spi_lock(struct spi_dev_s *dev, bool lock)
 
   if (lock)
     {
-      ret = nxsem_wait_uninterruptible(&priv->sem_excl);
+      ret = nxmutex_lock(&priv->lock);
     }
   else
     {
-      ret = nxsem_post(&priv->sem_excl);
+      ret = nxmutex_unlock(&priv->lock);
     }
 
   return ret;
@@ -355,6 +394,7 @@ static int mpfs_spi_lock(struct spi_dev_s *dev, bool lock)
  *
  ****************************************************************************/
 
+#ifdef CONFIG_SPI_CS_CONTROL
 static void mpfs_spi_select(struct spi_dev_s *dev, uint32_t devid,
                             bool selected)
 {
@@ -373,6 +413,47 @@ static void mpfs_spi_select(struct spi_dev_s *dev, uint32_t devid,
 
   spiinfo("devid: %u, CS: %s\n", devid, selected ? "select" : "free");
 }
+#endif
+
+/****************************************************************************
+ * Name:  mpfs_spi0/1_select
+ *
+ * Description:
+ *   The external function, mpfs_spi0/1_select.
+ *
+ * Input Parameters:
+ *   dev -       Device-specific state data
+ *   devid - The SPI CS or device number
+ *   selected - true: assert CS, false de-assert CS
+ *
+ * Returned Value:
+ *   None
+ *
+ ****************************************************************************/
+
+#ifdef CONFIG_MPFS_SPI0
+void weak_function mpfs_spi0_select(struct spi_dev_s *dev,
+                                    uint32_t devid, bool selected)
+{
+#ifdef CONFIG_SPI_CS_CONTROL
+  mpfs_spi_select(dev, devid, selected);
+#else
+# warning "Missing logic"
+#endif
+}
+#endif /* CONFIG_MPFS_SPI0 */
+
+#ifdef CONFIG_MPFS_SPI1
+void weak_function mpfs_spi1_select(struct spi_dev_s *dev,
+                                    uint32_t devid, bool selected)
+{
+#ifdef CONFIG_SPI_CS_CONTROL
+  mpfs_spi_select(dev, devid, selected);
+#else
+# warning "Missing logic"
+#endif
+}
+#endif /* CONFIG_MPFS_SPI1 */
 
 /****************************************************************************
  * Name: mpfs_spi_setfrequency
@@ -607,17 +688,7 @@ static int mpfs_spi_hwfeatures(struct spi_dev_s *dev,
 
 static int mpfs_spi_sem_waitdone(struct mpfs_spi_priv_s *priv)
 {
-  struct timespec abstime;
-  int ret;
-
-  clock_gettime(CLOCK_REALTIME, &abstime);
-
-  abstime.tv_sec += 10;
-  abstime.tv_nsec += 0;
-
-  ret = nxsem_timedwait_uninterruptible(&priv->sem_isr, &abstime);
-
-  return ret;
+  return nxsem_tickwait_uninterruptible(&priv->sem_isr, SEC2TICK(10));
 }
 
 /****************************************************************************
@@ -794,6 +865,13 @@ static void mpfs_spi_irq_exchange(struct mpfs_spi_priv_s *priv,
 
   putreg32(0, MPFS_SPI_FRAMESUP);
 
+  /* Clear the interrupts before writing FIFO */
+
+  putreg32(MPFS_SPI_TXCHUNDRUN |
+           MPFS_SPI_RXCHOVRFLW |
+           MPFS_SPI_RXRDONECLR |
+           MPFS_SPI_TXDONECLR, MPFS_SPI_INT_CLEAR);
+
   if (nwords > priv->fifosize)
     {
       modifyreg32(MPFS_SPI_CONTROL, MPFS_SPI_FRAMECNT,
@@ -808,11 +886,6 @@ static void mpfs_spi_irq_exchange(struct mpfs_spi_priv_s *priv,
     }
 
   /* Enable TX, RX, underrun and overflow interrupts */
-
-  putreg32(MPFS_SPI_INT_CLEAR, MPFS_SPI_TXCHUNDRUN |
-                               MPFS_SPI_RXCHOVRFLW |
-                               MPFS_SPI_RXRDONECLR |
-                               MPFS_SPI_TXDONECLR);
 
   modifyreg32(MPFS_SPI_CONTROL, 0, MPFS_SPI_INTTXTURUN |
                                    MPFS_SPI_INTRXOVRFLOW |
@@ -831,10 +904,10 @@ static void mpfs_spi_irq_exchange(struct mpfs_spi_priv_s *priv,
                                 MPFS_SPI_INTTXDATA,
                                 0);
 
-  putreg32(MPFS_SPI_INT_CLEAR, MPFS_SPI_TXCHUNDRUN |
-                               MPFS_SPI_RXCHOVRFLW |
-                               MPFS_SPI_RXRDONECLR |
-                               MPFS_SPI_TXDONECLR);
+  putreg32(MPFS_SPI_TXCHUNDRUN |
+           MPFS_SPI_RXCHOVRFLW |
+           MPFS_SPI_RXRDONECLR |
+           MPFS_SPI_TXDONECLR, MPFS_SPI_INT_CLEAR);
 }
 
 /****************************************************************************
@@ -1210,6 +1283,7 @@ static int mpfs_spi_irq(int cpuint, void *context, void *arg)
   if (status & MPFS_SPI_TXDONEMSKINT)
     {
       remaining = priv->txwords - priv->tx_pos;
+      putreg32(MPFS_SPI_TXDONECLR, MPFS_SPI_INT_CLEAR);
 
       if (remaining == 0)
         {
@@ -1232,8 +1306,6 @@ static int mpfs_spi_irq(int cpuint, void *context, void *arg)
               mpfs_spi_load_tx_fifo(priv, priv->txbuf, priv->fifolevel);
             }
         }
-
-      putreg32(MPFS_SPI_TXDONECLR, MPFS_SPI_INT_CLEAR);
     }
 
   if (status & MPFS_SPI_RXCHOVRFMSKINT)
@@ -1318,13 +1390,6 @@ static void mpfs_spi_init(struct spi_dev_s *dev)
 {
   struct mpfs_spi_priv_s *priv = (struct mpfs_spi_priv_s *)dev;
   const struct mpfs_spi_config_s *config = priv->config;
-
-  /* Initialize the SPI semaphore for mutually exclusive access */
-
-  nxsem_init(&priv->sem_excl, 0, 1);
-
-  nxsem_init(&priv->sem_isr, 0, 0);
-  nxsem_set_protocol(&priv->sem_isr, SEM_PRIO_NONE);
 
   up_disable_irq(priv->plic_irq);
 
@@ -1427,7 +1492,6 @@ struct spi_dev_s *mpfs_spibus_initialize(int port)
 {
   struct spi_dev_s *spi_dev;
   struct mpfs_spi_priv_s *priv;
-  irqstate_t flags;
   int ret;
 
   switch (port)
@@ -1448,11 +1512,11 @@ struct spi_dev_s *mpfs_spibus_initialize(int port)
 
   spi_dev = (struct spi_dev_s *)priv;
 
-  flags = enter_critical_section();
-
+  nxmutex_lock(&priv->lock);
   if (priv->refs != 0)
     {
-      leave_critical_section(flags);
+      priv->refs++;
+      nxmutex_unlock(&priv->lock);
 
       return spi_dev;
     }
@@ -1460,16 +1524,14 @@ struct spi_dev_s *mpfs_spibus_initialize(int port)
   ret = irq_attach(priv->plic_irq, mpfs_spi_irq, priv);
   if (ret != OK)
     {
-      leave_critical_section(flags);
+      nxmutex_unlock(&priv->lock);
       return NULL;
     }
 
   mpfs_spi_init(spi_dev);
-
   priv->refs++;
 
-  leave_critical_section(flags);
-
+  nxmutex_unlock(&priv->lock);
   return spi_dev;
 }
 
@@ -1484,7 +1546,6 @@ struct spi_dev_s *mpfs_spibus_initialize(int port)
 int mpfs_spibus_uninitialize(struct spi_dev_s *dev)
 {
   struct mpfs_spi_priv_s *priv = (struct mpfs_spi_priv_s *)dev;
-  irqstate_t flags;
 
   DEBUGASSERT(dev);
 
@@ -1493,20 +1554,15 @@ int mpfs_spibus_uninitialize(struct spi_dev_s *dev)
       return ERROR;
     }
 
-  flags = enter_critical_section();
-
+  nxmutex_lock(&priv->lock);
   if (--priv->refs)
     {
-      leave_critical_section(flags);
+      nxmutex_unlock(&priv->lock);
       return OK;
     }
 
-  leave_critical_section(flags);
-
   mpfs_spi_deinit(dev);
-
-  nxsem_destroy(&priv->sem_excl);
-  nxsem_destroy(&priv->sem_isr);
+  nxmutex_unlock(&priv->lock);
 
   return OK;
 }

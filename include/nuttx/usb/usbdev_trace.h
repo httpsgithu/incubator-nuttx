@@ -1,6 +1,8 @@
 /****************************************************************************
  * include/nuttx/usb/usbdev_trace.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -187,6 +189,7 @@
 #define USBSER_TRACECLASSAPI_TXREADY                 0x000b
 #define USBSER_TRACECLASSAPI_TXEMPTY                 0x000c
 #define USBSER_TRACECLASSAPI_FLOWCONTROL             0x000d
+#define USBSER_TRACECLASSAPI_RELEASE                 0x000e
 
 /* Values of the class error ID used by the USB serial driver */
 
@@ -419,7 +422,7 @@ typedef uint16_t usbtrace_idset_t;
 
 /* Print routine to use for usbdev_trprint() output */
 
-typedef CODE int (*trprintf_t)(const char *fmt, ...);
+typedef CODE int (*trprintf_t)(FAR const char *fmt, ...) printf_like(1, 2);
 
 /****************************************************************************
  * Public Data
@@ -427,11 +430,11 @@ typedef CODE int (*trprintf_t)(const char *fmt, ...);
 
 #undef EXTERN
 #if defined(__cplusplus)
-# define EXTERN extern "C"
+#  define EXTERN extern "C"
 extern "C"
 {
 #else
-# define EXTERN extern
+#  define EXTERN extern
 #endif
 
 /* If CONFIG_USBDEV_TRACE_STRINGS is defined, then the USB class driver and
@@ -507,7 +510,7 @@ void usbtrace(uint16_t event, uint16_t value);
 #ifdef CONFIG_USBDEV_TRACE
 int usbtrace_enumerate(trace_callback_t callback, void *arg);
 #else
-#  define usbtrace_enumerate(event)
+#  define usbtrace_enumerate(callback, arg) (0)
 #endif
 
 /****************************************************************************

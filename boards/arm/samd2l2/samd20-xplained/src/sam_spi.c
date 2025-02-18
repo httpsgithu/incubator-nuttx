@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/samd2l2/samd20-xplained/src/sam_spi.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -134,7 +136,7 @@ void weak_function sam_spidev_initialize(void)
  ****************************************************************************/
 
 #ifdef SAMD2L2_HAVE_SPI0
-void sam_spi0select(FAR struct spi_dev_s *dev, uint32_t devid,
+void sam_spi0select(struct spi_dev_s *dev, uint32_t devid,
                     bool selected)
 {
 #ifdef CONFIG_SAMD20_XPLAINED_IOMODULE_EXT1
@@ -162,7 +164,7 @@ void sam_spi0select(FAR struct spi_dev_s *dev, uint32_t devid,
 #endif
 
 #ifdef SAMD2L2_HAVE_SPI1
-void sam_spi1select(FAR struct spi_dev_s *dev, uint32_t devid,
+void sam_spi1select(struct spi_dev_s *dev, uint32_t devid,
                     bool selected)
 {
 #ifdef CONFIG_SAMD20_XPLAINED_IOMODULE_EXT2
@@ -190,28 +192,28 @@ void sam_spi1select(FAR struct spi_dev_s *dev, uint32_t devid,
 #endif
 
 #ifdef SAMD2L2_HAVE_SPI2
-void sam_spi2select(FAR struct spi_dev_s *dev, uint32_t devid,
+void sam_spi2select(struct spi_dev_s *dev, uint32_t devid,
                     bool selected)
 {
 }
 #endif
 
 #ifdef SAMD2L2_HAVE_SPI3
-void sam_spi3select(FAR struct spi_dev_s *dev, uint32_t devid,
+void sam_spi3select(struct spi_dev_s *dev, uint32_t devid,
                     bool selected)
 {
 }
 #endif
 
 #ifdef SAMD2L2_HAVE_SPI4
-void sam_spi4select(FAR struct spi_dev_s *dev, uint32_t devid,
+void sam_spi4select(struct spi_dev_s *dev, uint32_t devid,
                     bool selected)
 {
 }
 #endif
 
 #ifdef SAMD2L2_HAVE_SPI5
-void sam_spi5select(FAR struct spi_dev_s *dev, uint32_t devid,
+void sam_spi5select(struct spi_dev_s *dev, uint32_t devid,
                     bool selected)
 {
 }
@@ -233,7 +235,7 @@ void sam_spi5select(FAR struct spi_dev_s *dev, uint32_t devid,
  ****************************************************************************/
 
 #ifdef SAMD2L2_HAVE_SPI0
-uint8_t sam_spi0status(FAR struct spi_dev_s *dev, uint32_t devid)
+uint8_t sam_spi0status(struct spi_dev_s *dev, uint32_t devid)
 {
   uint8_t ret = 0;
 
@@ -256,7 +258,7 @@ uint8_t sam_spi0status(FAR struct spi_dev_s *dev, uint32_t devid)
 #endif
 
 #ifdef SAMD2L2_HAVE_SPI1
-uint8_t sam_spi1status(FAR struct spi_dev_s *dev, uint32_t devid)
+uint8_t sam_spi1status(struct spi_dev_s *dev, uint32_t devid)
 {
   uint8_t ret = 0;
 
@@ -279,28 +281,28 @@ uint8_t sam_spi1status(FAR struct spi_dev_s *dev, uint32_t devid)
 #endif
 
 #ifdef SAMD2L2_HAVE_SPI2
-uint8_t sam_spi2status(FAR struct spi_dev_s *dev, uint32_t devid)
+uint8_t sam_spi2status(struct spi_dev_s *dev, uint32_t devid)
 {
   return 0;
 }
 #endif
 
 #ifdef SAMD2L2_HAVE_SPI3
-uint8_t sam_spi3status(FAR struct spi_dev_s *dev, uint32_t devid)
+uint8_t sam_spi3status(struct spi_dev_s *dev, uint32_t devid)
 {
   return 0;
 }
 #endif
 
 #ifdef SAMD2L2_HAVE_SPI4
-uint8_t sam_spi4status(FAR struct spi_dev_s *dev, uint32_t devid)
+uint8_t sam_spi4status(struct spi_dev_s *dev, uint32_t devid)
 {
   return 0;
 }
 #endif
 
 #ifdef SAMD2L2_HAVE_SPI5
-uint8_t sam_spi5status(FAR struct spi_dev_s *dev, uint32_t devid)
+uint8_t sam_spi5status(struct spi_dev_s *dev, uint32_t devid)
 {
   uint8_t ret = 0;
   return ret;
@@ -333,7 +335,7 @@ uint8_t sam_spi5status(FAR struct spi_dev_s *dev, uint32_t devid)
 
 #ifdef CONFIG_SPI_CMDDATA
 #ifdef SAMD2L2_HAVE_SPI0
-int sam_spi0cmddata(FAR struct spi_dev_s *dev, uint32_t devid, bool cmd)
+int sam_spi0cmddata(struct spi_dev_s *dev, uint32_t devid, bool cmd)
 {
 #ifdef CONFIG_SAMD20_XPLAINED_OLED1MODULE_EXT1
   if (devid == SPIDEV_DISPLAY(0))
@@ -354,7 +356,7 @@ int sam_spi0cmddata(FAR struct spi_dev_s *dev, uint32_t devid, bool cmd)
 #endif
 
 #ifdef SAMD2L2_HAVE_SPI1
-int sam_spi1cmddata(FAR struct spi_dev_s *dev, uint32_t devid, bool cmd)
+int sam_spi1cmddata(struct spi_dev_s *dev, uint32_t devid, bool cmd)
 {
 #ifdef CONFIG_SAMD20_XPLAINED_OLED1MODULE_EXT2
   if (devid == SPIDEV_DISPLAY(0))
@@ -375,28 +377,28 @@ int sam_spi1cmddata(FAR struct spi_dev_s *dev, uint32_t devid, bool cmd)
 #endif
 
 #ifdef SAMD2L2_HAVE_SPI2
-int sam_spi2cmddata(FAR struct spi_dev_s *dev, uint32_t devid, bool cmd)
+int sam_spi2cmddata(struct spi_dev_s *dev, uint32_t devid, bool cmd)
 {
   return OK;
 }
 #endif
 
 #ifdef SAMD2L2_HAVE_SPI3
-int sam_spi3cmddata(FAR struct spi_dev_s *dev, uint32_t devid, bool cmd)
+int sam_spi3cmddata(struct spi_dev_s *dev, uint32_t devid, bool cmd)
 {
   return OK;
 }
 #endif
 
 #ifdef SAMD2L2_HAVE_SPI4
-int sam_spi4cmddata(FAR struct spi_dev_s *dev, uint32_t devid, bool cmd)
+int sam_spi4cmddata(struct spi_dev_s *dev, uint32_t devid, bool cmd)
 {
   return OK;
 }
 #endif
 
 #ifdef SAMD2L2_HAVE_SPI5
-int sam_spi5cmddata(FAR struct spi_dev_s *dev, uint32_t devid, bool cmd)
+int sam_spi5cmddata(struct spi_dev_s *dev, uint32_t devid, bool cmd)
 {
   return OK;
 }

@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/imxrt/imxrt_enet.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -55,30 +57,6 @@ extern "C"
 #endif
 
 /****************************************************************************
- * Function: arm_netinitialize
- *
- * Description:
- *   Initialize the first network interface.  If there are more than one
- *   interface in the chip, then board-specific logic will have to provide
- *   this function to determine which, if any, Ethernet controllers should
- *   be initialized.  Also prototyped in arm_internal.h.
- *
- * Input Parameters:
- *   None
- *
- * Returned Value:
- *   OK on success; Negated errno on failure.
- *
- * Assumptions:
- *   Called very early in the initialization sequence.
- *
- ****************************************************************************/
-
-#if !defined(CONFIG_NETDEV_LATEINIT)
-void arm_netinitialize(void);
-#else
-
-/****************************************************************************
  * Function: imxrt_netinitialize
  *
  * Description:
@@ -95,6 +73,7 @@ void arm_netinitialize(void);
  *
  ****************************************************************************/
 
+#ifdef CONFIG_NETDEV_LATEINIT
 int imxrt_netinitialize(int intf);
 #endif
 

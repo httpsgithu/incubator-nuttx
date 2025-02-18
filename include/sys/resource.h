@@ -1,6 +1,8 @@
 /****************************************************************************
  * include/sys/resource.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -57,8 +59,15 @@
 #define RLIMIT_NOFILE   5           /* Limit on number of open files */
 #define RLIMIT_STACK    6           /* Limit on stack size */
 #define RLIMIT_AS       7           /* Limit on address space size */
+#define RLIMIT_MEMLOCK  8           /* Limit on memory use */
+#define RLIMIT_NICE     10          /* Limit on nice level */
 
-#if defined(CONFIG_FS_LARGEFILE) && defined(CONFIG_HAVE_LONG_LONG)
+/* Below are not implemented yet: */
+
+#define RLIMIT_RTPRIO   14          /* Limit on RT tasks priority */
+#define RLIMIT_RTTIME   15          /* Limit on timeout for RT tasks (us) */
+
+#if defined(CONFIG_FS_LARGEFILE)
 #  define RLIM_INFINITY    UINT64_MAX /* No limit */
 #  define RLIM_SAVED_MAX   UINT64_MAX /* Unrepresentable saved hard limit */
 #  define RLIM_SAVED_CUR   UINT64_MAX /* Unrepresentable saved soft limit */
@@ -95,7 +104,7 @@
  * It must be an unsigned integral type.
  */
 
-#if defined(CONFIG_FS_LARGEFILE) && defined(CONFIG_HAVE_LONG_LONG)
+#if defined(CONFIG_FS_LARGEFILE)
 typedef uint64_t rlim_t;
 #else
 typedef uint32_t rlim_t;
@@ -115,6 +124,7 @@ struct rusage
 {
   struct timeval ru_utime;  /* User time used */
   struct timeval ru_stime;  /* System time used */
+  long           ru_maxrss; /* maximum resident set size */
 };
 
 /****************************************************************************

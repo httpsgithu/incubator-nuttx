@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/mips/src/pic32mz/pic32mz_head.S
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -147,7 +149,7 @@
 
 	.macro	showprogress, code
 #ifdef CONFIG_DEBUG_FEATURES
-  la   t0, up_lowputc
+  la   t0, mips_lowputc
   la   a0, \code
 	jalr ra, t0
 	nop
@@ -187,7 +189,7 @@
 
 #ifdef CONFIG_DEBUG_FEATURES
   .global pic32mz_consoleinit
-  .global up_lowputc
+  .global mips_lowputc
 #endif
 
 	/* This file contains 32-bit assembly code */

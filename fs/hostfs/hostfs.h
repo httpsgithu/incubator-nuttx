@@ -1,6 +1,8 @@
 /****************************************************************************
  * fs/hostfs/hostfs.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -31,8 +33,6 @@
 #include <stdint.h>
 #include <stdbool.h>
 
-#include <nuttx/semaphore.h>
-
 /****************************************************************************
  * Pre-processor Definitions
  ****************************************************************************/
@@ -49,10 +49,11 @@
 
 struct hostfs_ofile_s
 {
-  struct hostfs_ofile_s    *fnext;      /* Supports a singly linked list */
-  int16_t                   crefs;      /* Reference count */
-  mode_t                    oflags;     /* Open mode */
+  struct hostfs_ofile_s    *fnext;   /* Supports a singly linked list */
+  int16_t                   crefs;   /* Reference count */
+  mode_t                    oflags;  /* Open mode */
   int                       fd;
+  char                      relpath[1];
 };
 
 /* This structure represents the overall mountpoint state.  An instance of
@@ -62,19 +63,13 @@ struct hostfs_ofile_s
 
 struct hostfs_mountpt_s
 {
-  sem_t                      *fs_sem;       /* Used to assure thread-safe access */
-  FAR struct hostfs_ofile_s  *fs_head;      /* A singly-linked list of open files */
-  char                        fs_root[HOSTFS_MAX_PATH];
+  FAR struct hostfs_ofile_s *fs_head;      /* A singly-linked list of open files */
+  char                       fs_root[HOSTFS_MAX_PATH];
 };
 
 /****************************************************************************
  * Internal function prototypes
  ****************************************************************************/
-
-/* Semaphore access for internal use */
-
-int  hostfs_semtake(struct hostfs_mountpt_s *fs);
-void hostfs_semgive(struct hostfs_mountpt_s *fs);
 
 /* Forward references for utility functions */
 

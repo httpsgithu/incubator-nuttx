@@ -1,6 +1,8 @@
 /****************************************************************************
  * libs/libc/signal/sig_wait.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -61,7 +63,7 @@
  *
  * Input Parameters:
  *   set  - The set of pending signals to wait for
- *   sig  - The location in which to return the pending signal number.
+ *   sig  - The location in which to store the pending signal number.
  *
  * Returned Value:
  *   Upon successful completion, sigwait() stores the signal number of the

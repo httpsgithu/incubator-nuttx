@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/lpc17xx_40xx/lpc17_40_can.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -66,7 +68,7 @@ extern "C"
 
 #if defined(CONFIG_CAN) && (defined(CONFIG_LPC17_40_CAN1) || defined(CONFIG_LPC17_40_CAN2))
 struct can_dev_s;
-FAR struct can_dev_s *lpc17_40_caninitialize(int port);
+struct can_dev_s *lpc17_40_caninitialize(int port);
 #endif
 
 #ifdef __cplusplus

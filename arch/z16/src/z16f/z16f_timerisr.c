@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/z16/src/z16f/z16f_timerisr.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -112,8 +114,8 @@ void up_timer_initialize(void)
 
   /* Calculate timer reload value (continuous mode)
    *
-   *   timer_period    = reload_value * divisor / system_clock_freqency
-   *   timer_frequency = system_clock_freqency / divisor / reload_value
+   *   timer_period    = reload_value * divisor / system_clock_frequency
+   *   timer_frequency = system_clock_frequency / divisor / reload_value
    * or
    *   reload_value = (system_clock_frequency / timer_frequency / divisor
    *

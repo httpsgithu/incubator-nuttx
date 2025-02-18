@@ -1,6 +1,8 @@
 /****************************************************************************
  * include/nuttx/serial/uart_rpmsg.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -43,7 +45,7 @@ extern "C"
 #define EXTERN extern
 #endif
 
-int uart_rpmsg_init(FAR const char *cpu_name, FAR const char *dev_name,
+int uart_rpmsg_init(FAR const char *cpuname, FAR const char *devname,
                     int buf_size, bool isconsole);
 
 #undef EXTERN

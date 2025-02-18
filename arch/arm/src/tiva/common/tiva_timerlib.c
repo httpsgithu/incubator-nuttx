@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/tiva/common/tiva_timerlib.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -35,7 +37,7 @@
 
 #include <arch/board/board.h>
 
-#include "arm_arch.h"
+#include "arm_internal.h"
 #include "hardware/tiva_sysctrl.h"
 #include "hardware/tiva_timer.h"
 
@@ -114,28 +116,28 @@ static void tiva_putreg(struct tiva_gptmstate_s *priv, unsigned int offset,
 #ifdef CONFIG_TIVA_TIMER_32BIT
 static int  tiva_timer32_interrupt(struct tiva_gptmstate_s *priv);
 #  ifdef CONFIG_TIVA_TIMER0
-static int  tiva_gptm0_interrupt(int irq, FAR void *context, FAR void *arg);
+static int  tiva_gptm0_interrupt(int irq, void *context, void *arg);
 #  endif
 #  ifdef CONFIG_TIVA_TIMER1
-static int  tiva_gptm1_interrupt(int irq, FAR void *context, FAR void *arg);
+static int  tiva_gptm1_interrupt(int irq, void *context, void *arg);
 #  endif
 #  ifdef CONFIG_TIVA_TIMER2
-static int  tiva_gptm2_interrupt(int irq, FAR void *context, FAR void *arg);
+static int  tiva_gptm2_interrupt(int irq, void *context, void *arg);
 #  endif
 #  ifdef CONFIG_TIVA_TIMER3
-static int  tiva_gptm3_interrupt(int irq, FAR void *context, FAR void *arg);
+static int  tiva_gptm3_interrupt(int irq, void *context, void *arg);
 #  endif
 #  ifdef CONFIG_TIVA_TIMER4
-static int  tiva_gptm4_interrupt(int irq, FAR void *context, FAR void *arg);
+static int  tiva_gptm4_interrupt(int irq, void *context, void *arg);
 #  endif
 #  ifdef CONFIG_TIVA_TIMER5
-static int  tiva_gptm5_interrupt(int irq, FAR void *context, FAR void *arg);
+static int  tiva_gptm5_interrupt(int irq, void *context, void *arg);
 #  endif
 #  ifdef CONFIG_TIVA_TIMER6
-static int  tiva_gptm6_interrupt(int irq, FAR void *context, FAR void *arg);
+static int  tiva_gptm6_interrupt(int irq, void *context, void *arg);
 #  endif
 #  ifdef CONFIG_TIVA_TIMER7
-static int  tiva_gptm7_interrupt(int irq, FAR void *context, FAR void *arg);
+static int  tiva_gptm7_interrupt(int irq, void *context, void *arg);
 #endif
 #endif /* CONFIG_TIVA_TIMER_32BIT */
 
@@ -143,52 +145,52 @@ static int  tiva_gptm7_interrupt(int irq, FAR void *context, FAR void *arg);
 static int  tiva_timer16_interrupt(struct tiva_gptmstate_s *priv,
               int tmndx);
 #ifdef CONFIG_TIVA_TIMER0
-static int  tiva_timer0a_interrupt(int irq, FAR void *context,
-                                   FAR void *arg);
-static int  tiva_timer0b_interrupt(int irq, FAR void *context,
-                                   FAR void *arg);
+static int  tiva_timer0a_interrupt(int irq, void *context,
+                                   void *arg);
+static int  tiva_timer0b_interrupt(int irq, void *context,
+                                   void *arg);
 #endif
 #ifdef CONFIG_TIVA_TIMER1
-static int  tiva_timer1a_interrupt(int irq, FAR void *context,
-                                   FAR void *arg);
-static int  tiva_timer1b_interrupt(int irq, FAR void *context,
-                                   FAR void *arg);
+static int  tiva_timer1a_interrupt(int irq, void *context,
+                                   void *arg);
+static int  tiva_timer1b_interrupt(int irq, void *context,
+                                   void *arg);
 #endif
 #ifdef CONFIG_TIVA_TIMER2
-static int  tiva_timer2a_interrupt(int irq, FAR void *context,
-                                   FAR void *arg);
-static int  tiva_timer2b_interrupt(int irq, FAR void *context,
-                                   FAR void *arg);
+static int  tiva_timer2a_interrupt(int irq, void *context,
+                                   void *arg);
+static int  tiva_timer2b_interrupt(int irq, void *context,
+                                   void *arg);
 #endif
 #ifdef CONFIG_TIVA_TIMER3
-static int  tiva_timer3a_interrupt(int irq, FAR void *context,
-                                   FAR void *arg);
-static int  tiva_timer3b_interrupt(int irq, FAR void *context,
-                                   FAR void *arg);
+static int  tiva_timer3a_interrupt(int irq, void *context,
+                                   void *arg);
+static int  tiva_timer3b_interrupt(int irq, void *context,
+                                   void *arg);
 #endif
 #ifdef CONFIG_TIVA_TIMER4
-static int  tiva_timer4a_interrupt(int irq, FAR void *context,
-                                   FAR void *arg);
-static int  tiva_timer4b_interrupt(int irq, FAR void *context,
-                                   FAR void *arg);
+static int  tiva_timer4a_interrupt(int irq, void *context,
+                                   void *arg);
+static int  tiva_timer4b_interrupt(int irq, void *context,
+                                   void *arg);
 #endif
 #ifdef CONFIG_TIVA_TIMER5
-static int  tiva_timer5a_interrupt(int irq, FAR void *context,
-                                   FAR void *arg);
-static int  tiva_timer5b_interrupt(int irq, FAR void *context,
-                                   FAR void *arg);
+static int  tiva_timer5a_interrupt(int irq, void *context,
+                                   void *arg);
+static int  tiva_timer5b_interrupt(int irq, void *context,
+                                   void *arg);
 #endif
 #ifdef CONFIG_TIVA_TIMER6
-static int  tiva_timer6a_interrupt(int irq, FAR void *context,
-                                   FAR void *arg);
-static int  tiva_timer6b_interrupt(int irq, FAR void *context,
-                                   FAR void *arg);
+static int  tiva_timer6a_interrupt(int irq, void *context,
+                                   void *arg);
+static int  tiva_timer6b_interrupt(int irq, void *context,
+                                   void *arg);
 #endif
 #ifdef CONFIG_TIVA_TIMER7
-static int  tiva_timer7a_interrupt(int irq, FAR void *context,
-                                   FAR void *arg);
-static int  tiva_timer7b_interrupt(int irq, FAR void *context,
-                                   FAR void *arg);
+static int  tiva_timer7a_interrupt(int irq, void *context,
+                                   void *arg);
+static int  tiva_timer7b_interrupt(int irq, void *context,
+                                   void *arg);
 #endif
 #endif /* CONFIG_TIVA_TIMER_16BIT */
 
@@ -619,56 +621,56 @@ static int tiva_timer32_interrupt(struct tiva_gptmstate_s *priv)
 
 #ifdef CONFIG_TIVA_TIMER_32BIT
 #ifdef CONFIG_TIVA_TIMER0
-static int tiva_gptm0_interrupt(int irq, FAR void *context, FAR void *arg)
+static int tiva_gptm0_interrupt(int irq, void *context, void *arg)
 {
   return tiva_timer32_interrupt(&g_gptm0_state);
 }
 #endif
 
 #ifdef CONFIG_TIVA_TIMER1
-static int tiva_gptm1_interrupt(int irq, FAR void *context, FAR void *arg)
+static int tiva_gptm1_interrupt(int irq, void *context, void *arg)
 {
   return tiva_timer32_interrupt(&g_gptm1_state);
 }
 #endif
 
 #ifdef CONFIG_TIVA_TIMER2
-static int tiva_gptm2_interrupt(int irq, FAR void *context, FAR void *arg)
+static int tiva_gptm2_interrupt(int irq, void *context, void *arg)
 {
   return tiva_timer32_interrupt(&g_gptm2_state);
 }
 #endif
 
 #ifdef CONFIG_TIVA_TIMER3
-static int tiva_gptm3_interrupt(int irq, FAR void *context, FAR void *arg)
+static int tiva_gptm3_interrupt(int irq, void *context, void *arg)
 {
   return tiva_timer32_interrupt(&g_gptm3_state);
 }
 #endif
 
 #ifdef CONFIG_TIVA_TIMER4
-static int tiva_gptm4_interrupt(int irq, FAR void *context, FAR void *arg)
+static int tiva_gptm4_interrupt(int irq, void *context, void *arg)
 {
   return tiva_timer32_interrupt(&g_gptm4_state);
 }
 #endif
 
 #ifdef CONFIG_TIVA_TIMER5
-static int tiva_gptm5_interrupt(int irq, FAR void *context, FAR void *arg)
+static int tiva_gptm5_interrupt(int irq, void *context, void *arg)
 {
   return tiva_timer32_interrupt(&g_gptm5_state);
 }
 #endif
 
 #ifdef CONFIG_TIVA_TIMER6
-static int tiva_gptm6_interrupt(int irq, FAR void *context, FAR void *arg)
+static int tiva_gptm6_interrupt(int irq, void *context, void *arg)
 {
   return tiva_timer32_interrupt(&g_gptm6_state);
 }
 #endif
 
 #ifdef CONFIG_TIVA_TIMER7
-static int tiva_gptm7_interrupt(int irq, FAR void *context, FAR void *arg)
+static int tiva_gptm7_interrupt(int irq, void *context, void *arg)
 {
   return tiva_timer32_interrupt(&g_gptm7_state);
 }
@@ -747,96 +749,96 @@ static int tiva_timer16_interrupt(struct tiva_gptmstate_s *priv, int tmndx)
 
 #ifdef CONFIG_TIVA_TIMER_16BIT
 #ifdef CONFIG_TIVA_TIMER0
-static int tiva_timer0a_interrupt(int irq, FAR void *context, FAR void *arg)
+static int tiva_timer0a_interrupt(int irq, void *context, void *arg)
 {
   return tiva_timer16_interrupt(&g_gptm0_state, TIMER16A);
 }
 
-static int tiva_timer0b_interrupt(int irq, FAR void *context, FAR void *arg)
+static int tiva_timer0b_interrupt(int irq, void *context, void *arg)
 {
   return tiva_timer16_interrupt(&g_gptm0_state, TIMER16B);
 }
 #endif
 
 #ifdef CONFIG_TIVA_TIMER1
-static int tiva_timer1a_interrupt(int irq, FAR void *context, FAR void *arg)
+static int tiva_timer1a_interrupt(int irq, void *context, void *arg)
 {
   return tiva_timer16_interrupt(&g_gptm1_state, TIMER16A);
 }
 
-static int tiva_timer1b_interrupt(int irq, FAR void *context, FAR void *arg)
+static int tiva_timer1b_interrupt(int irq, void *context, void *arg)
 {
   return tiva_timer16_interrupt(&g_gptm1_state, TIMER16B);
 }
 #endif
 
 #ifdef CONFIG_TIVA_TIMER2
-static int tiva_timer2a_interrupt(int irq, FAR void *context, FAR void *arg)
+static int tiva_timer2a_interrupt(int irq, void *context, void *arg)
 {
   return tiva_timer16_interrupt(&g_gptm2_state, TIMER16A);
 }
 
-static int tiva_timer2b_interrupt(int irq, FAR void *context, FAR void *arg)
+static int tiva_timer2b_interrupt(int irq, void *context, void *arg)
 {
   return tiva_timer16_interrupt(&g_gptm2_state, TIMER16B);
 }
 #endif
 
 #ifdef CONFIG_TIVA_TIMER3
-static int tiva_timer3a_interrupt(int irq, FAR void *context, FAR void *arg)
+static int tiva_timer3a_interrupt(int irq, void *context, void *arg)
 {
   return tiva_timer16_interrupt(&g_gptm3_state, TIMER16A);
 }
 
-static int tiva_timer3b_interrupt(int irq, FAR void *context, FAR void *arg)
+static int tiva_timer3b_interrupt(int irq, void *context, void *arg)
 {
   return tiva_timer16_interrupt(&g_gptm3_state, TIMER16B);
 }
 #endif
 
 #ifdef CONFIG_TIVA_TIMER4
-static int tiva_timer4a_interrupt(int irq, FAR void *context, FAR void *arg)
+static int tiva_timer4a_interrupt(int irq, void *context, void *arg)
 {
   return tiva_timer16_interrupt(&g_gptm4_state, TIMER16A);
 }
 
-static int tiva_timer4b_interrupt(int irq, FAR void *context, FAR void *arg)
+static int tiva_timer4b_interrupt(int irq, void *context, void *arg)
 {
   return tiva_timer16_interrupt(&g_gptm4_state, TIMER16B);
 }
 #endif
 
 #ifdef CONFIG_TIVA_TIMER5
-static int tiva_timer5a_interrupt(int irq, FAR void *context, FAR void *arg)
+static int tiva_timer5a_interrupt(int irq, void *context, void *arg)
 {
   return tiva_timer16_interrupt(&g_gptm5_state, TIMER16A);
 }
 
-static int tiva_timer5b_interrupt(int irq, FAR void *context, FAR void *arg)
+static int tiva_timer5b_interrupt(int irq, void *context, void *arg)
 {
   return tiva_timer16_interrupt(&g_gptm5_state, TIMER16B);
 }
 #endif
 
 #ifdef CONFIG_TIVA_TIMER6
-static int tiva_timer6a_interrupt(int irq, FAR void *context, FAR void *arg)
+static int tiva_timer6a_interrupt(int irq, void *context, void *arg)
 {
   return tiva_timer16_interrupt(&g_gptm6_state, TIMER16A);
 }
 
-static int tiva_timer6b_interrupt(int irq, FAR void *context, FAR void *arg)
+static int tiva_timer6b_interrupt(int irq, void *context, void *arg)
 {
   return tiva_timer16_interrupt(&g_gptm6_state, TIMER16B);
 }
 #endif
 
 #ifdef CONFIG_TIVA_TIMER7
-static int tiva_timer7a_interrupt(int irq, FAR void *context, FAR void *arg)
+static int tiva_timer7a_interrupt(int irq, void *context, void *arg)
 {
   return tiva_timer16_interrupt(&g_gptm7_state, TIMER16A);
 }
 
-static int tiva_timer7b_interrupt(int irq, FAR void *context, FAR void *arg)
+static int tiva_timer7b_interrupt(int irq, void *context, void *arg)
 {
   return tiva_timer16_interrupt(&g_gptm7_state, TIMER16B);
 }
@@ -1909,7 +1911,7 @@ TIMER_HANDLE tiva_gptm_configure(const struct tiva_gptmconfig_s *config)
 #endif
 
     default:
-      return (TIMER_HANDLE)NULL;
+      return NULL;
     }
 
   /* Initialize the state structure */
@@ -1989,7 +1991,7 @@ TIMER_HANDLE tiva_gptm_configure(const struct tiva_gptmconfig_s *config)
 #else
       tmrinfo("tiva_gptm_configure:");
       tmrinfo(" Error: alternate clock only available on TM4C129 devices\n");
-      return (TIMER_HANDLE)NULL;
+      return NULL;
 #endif /* CONFIG_ARCH_CHIP_TM4C129 */
     }
   else
@@ -2019,7 +2021,7 @@ TIMER_HANDLE tiva_gptm_configure(const struct tiva_gptmconfig_s *config)
           ret = tiva_timer32_configure(priv, &config32->config);
         }
 #else
-       return (TIMER_HANDLE)NULL;
+       return NULL;
 #endif
     }
   else
@@ -2061,13 +2063,13 @@ TIMER_HANDLE tiva_gptm_configure(const struct tiva_gptmconfig_s *config)
                                        TIMER16B);
         }
 #else
-       return (TIMER_HANDLE)NULL;
+       return NULL;
 #endif
     }
 
   /* Return the timer handler if successfully configured */
 
-  return ret < 0 ? (TIMER_HANDLE)NULL : (TIMER_HANDLE)priv;
+  return ret < 0 ? NULL : (TIMER_HANDLE)priv;
 }
 
 /****************************************************************************

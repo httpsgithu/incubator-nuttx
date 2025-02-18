@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/stm32/nucleo-f302r8/src/nucleo-f302r8.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -43,7 +45,7 @@
  *
  * And one can be controlled by software:
  *
- * User LD2: green LED is a user LED connected to the I/O PA5 of the
+ * User LD2: green LED is a user LED connected to the I/O PB13 of the
  *           STM32F302R8T6.
  *
  * If CONFIG_ARCH_LEDS is not defined, then the user can control the LED in
@@ -51,7 +53,7 @@
  */
 
 #define GPIO_LED1      (GPIO_OUTPUT|GPIO_PUSHPULL|GPIO_SPEED_50MHz|\
-                        GPIO_OUTPUT_CLEAR|GPIO_PORTA|GPIO_PIN5)
+                        GPIO_OUTPUT_CLEAR|GPIO_PORTB|GPIO_PIN13)
 
 #define LED_DRIVER_PATH "/dev/userleds"
 
@@ -76,6 +78,17 @@
 /* PWM */
 
 #define NUCLEOF302R8_PWMTIMER   1
+
+#ifdef CONFIG_SENSORS_HALL3PHASE
+/* GPIO pins used by the 3-phase Hall effect sensor */
+
+#  define GPIO_HALL_PHA (GPIO_INPUT | GPIO_SPEED_2MHz | \
+                         GPIO_PORTA | GPIO_PIN15)
+#  define GPIO_HALL_PHB (GPIO_INPUT | GPIO_SPEED_2MHz | \
+                         GPIO_PORTB | GPIO_PIN3)
+#  define GPIO_HALL_PHC (GPIO_INPUT | GPIO_SPEED_2MHz | \
+                         GPIO_PORTB | GPIO_PIN10)
+#endif
 
 /****************************************************************************
  * Public Data
@@ -139,6 +152,30 @@ int stm32_foc_setup(void);
 
 #ifdef CONFIG_ADC
 int stm32_adc_setup(void);
+#endif
+
+/****************************************************************************
+ * Name: stm32_can_setup
+ *
+ * Description:
+ *  Initialize CAN and register the CAN device
+ *
+ ****************************************************************************/
+
+#ifdef CONFIG_STM32_CAN_CHARDRIVER
+int stm32_can_setup(void);
+#endif
+
+/****************************************************************************
+ * Name: stm32_cansock_setup
+ *
+ * Description:
+ *  Initialize CAN socket interface
+ *
+ ****************************************************************************/
+
+#ifdef CONFIG_STM32_CAN_SOCKET
+int stm32_cansock_setup(void);
 #endif
 
 #endif /* __BOARDS_ARM_STM32_NUCLEO_F302R8_SRC_NUCLEO_F302R8_H */

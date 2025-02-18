@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/stm32h7/stm32_ethernet.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -31,20 +33,23 @@
 #include <string.h>
 #include <assert.h>
 #include <debug.h>
-#include <queue.h>
 #include <errno.h>
 
+#include <sys/param.h>
+
+#include <arch/barriers.h>
 #include <arpa/inet.h>
 
 #include <nuttx/arch.h>
 #include <nuttx/irq.h>
+#include <nuttx/queue.h>
 #include <nuttx/wdog.h>
 #include <nuttx/wqueue.h>
 #include <nuttx/signal.h>
 #include <nuttx/net/mii.h>
-#include <nuttx/net/arp.h>
+#include <nuttx/net/ip.h>
 #include <nuttx/net/netdev.h>
-#include <crc64.h>
+#include <nuttx/crc64.h>
 
 #if defined(CONFIG_NET_PKT)
 #  include <nuttx/net/pkt.h>
@@ -52,7 +57,6 @@
 
 #include <nuttx/cache.h>
 #include "arm_internal.h"
-#include "barriers.h"
 
 #include "hardware/stm32_syscfg.h"
 #include "hardware/stm32_pinmap.h"
@@ -73,10 +77,6 @@
 /****************************************************************************
  * Pre-processor Definitions
  ****************************************************************************/
-
-/* Memory synchronization */
-
-#define MEMORY_SYNC() do { ARM_DSB(); ARM_ISB(); } while (0)
 
 /* Configuration ************************************************************/
 
@@ -105,6 +105,64 @@
 #  else
 #    define ETHWORK LPWORK
 #  endif
+#endif
+
+#if defined(CONFIG_ETH0_PHY_AM79C874)
+#  define STM32H7_PHYID1       MII_PHYID1_AM79C874
+#  define STM32H7_PHYID2       MII_PHYID2_AM79C874
+#elif defined(CONFIG_ETH0_PHY_AR8031)
+#  define STM32H7_PHYID1       MII_PHYID1_AR8031
+#  define STM32H7_PHYID2       MII_PHYID2_AR8031
+#elif defined(CONFIG_ETH0_PHY_KS8721)
+#  define STM32H7_PHYID1       MII_PHYID1_KS8721
+#  define STM32H7_PHYID2       MII_PHYID2_KS8721
+#elif defined(CONFIG_ETH0_PHY_KSZ8041)
+#  define STM32H7_PHYID1       MII_PHYID1_KSZ8041
+#  define STM32H7_PHYID2       MII_PHYID2_KSZ8041
+#elif defined(CONFIG_ETH0_PHY_KSZ8051)
+#  define STM32H7_PHYID1       MII_PHYID1_KSZ8051
+#  define STM32H7_PHYID2       MII_PHYID2_KSZ8051
+#elif defined(CONFIG_ETH0_PHY_KSZ8061)
+#  define STM32H7_PHYID1       MII_PHYID1_KSZ8061
+#  define STM32H7_PHYID2       MII_PHYID2_KSZ8061
+#elif defined(CONFIG_ETH0_PHY_KSZ8081)
+#  define STM32H7_PHYID1       MII_PHYID1_KSZ8081
+#  define STM32H7_PHYID2       MII_PHYID2_KSZ8081
+#elif defined(CONFIG_ETH0_PHY_DP83848C)
+#  define STM32H7_PHYID1       MII_PHYID1_DP83848C
+#  define STM32H7_PHYID2       MII_PHYID2_DP83848C
+#elif defined(CONFIG_ETH0_PHY_DP83825I)
+#  define STM32H7_PHYID1       MII_PHYID1_DP83825I
+#  define STM32H7_PHYID2       MII_PHYID2_DP83825I
+#elif defined(CONFIG_ETH0_PHY_TJA1100)
+#  define STM32H7_PHYID1       MII_PHYID1_TJA1100
+#  define STM32H7_PHYID2       MII_PHYID2_TJA1100
+#elif defined(CONFIG_ETH0_PHY_TJA1101)
+#  define STM32H7_PHYID1       MII_PHYID1_TJA1101
+#  define STM32H7_PHYID2       MII_PHYID2_TJA1101
+#elif defined(CONFIG_ETH0_PHY_TJA1103)
+#  define STM32H7_PHYID1       MII_PHYID1_TJA1103
+#  define STM32H7_PHYID2       MII_PHYID2_TJA1103
+#elif defined(CONFIG_ETH0_PHY_LAN8720)
+#  define STM32H7_PHYID1       MII_PHYID1_LAN8720
+#  define STM32H7_PHYID2       MII_PHYID2_LAN8720
+#elif defined(CONFIG_ETH0_PHY_LAN8740)
+#  define STM32H7_PHYID1       MII_PHYID1_LAN8740
+#  define STM32H7_PHYID2       MII_PHYID2_LAN8740
+#elif defined(CONFIG_ETH0_PHY_LAN8740A)
+#  define STM32H7_PHYID1       MII_PHYID1_LAN8740A
+#  define STM32H7_PHYID2       MII_PHYID2_LAN8740A
+#elif defined(CONFIG_ETH0_PHY_LAN8742A)
+#  define STM32H7_PHYID1       MII_PHYID1_LAN8742A
+#  define STM32H7_PHYID2       MII_PHYID2_LAN8742A
+#elif defined(CONFIG_ETH0_PHY_DM9161)
+#  define STM32H7_PHYID1       MII_PHYID1_DM9161
+#  define STM32H7_PHYID2       MII_PHYID2_DM9161
+#elif defined(CONFIG_ETH0_PHY_YT8512)
+#  define STM32H7_PHYID1       MII_PHYID1_YT8512
+#  define STM32H7_PHYID2       MII_PHYID2_YT8512
+#else
+#  warning "No PHY specified!"
 #endif
 
 #ifndef CONFIG_STM32H7_PHYADDR
@@ -214,10 +272,6 @@
 #  define CONFIG_STM32H7_ETH_NTXDESC 4
 #endif
 
-#ifndef min
-#  define min(a,b) ((a) < (b) ? (a) : (b))
-#endif
-
 /* We need at least one more free buffer than transmit buffers */
 
 #define STM32_ETH_NFREEBUFFERS (CONFIG_STM32H7_ETH_NTXDESC+1)
@@ -276,12 +330,6 @@
 #endif
 
 /* Timing *******************************************************************/
-
-/* TX poll delay = 1 seconds.
- * CLK_TCK is the number of clock ticks per second
- */
-
-#define STM32_WDDELAY     (1*CLK_TCK)
 
 /* TX timeout = 1 minute */
 
@@ -587,11 +635,7 @@
 #define ETH_DMAINT_XMIT_ENABLE    (ETH_DMACIER_NIE | ETH_DMACIER_TIE)
 #define ETH_DMAINT_XMIT_DISABLE   (ETH_DMACIER_TIE)
 
-#ifdef CONFIG_DEBUG_NET
-#  define ETH_DMAINT_ERROR_ENABLE (ETH_DMACIER_AIE | ETH_DMAINT_ABNORMAL)
-#else
-#  define ETH_DMAINT_ERROR_ENABLE (0)
-#endif
+#define ETH_DMAINT_ERROR_ENABLE (ETH_DMACIER_AIE | ETH_DMAINT_ABNORMAL)
 
 /* Helpers ******************************************************************/
 
@@ -625,7 +669,6 @@ struct stm32_ethmac_s
   uint8_t              mbps100 : 1; /* 100MBps operation (vs 10 MBps) */
   uint8_t              fduplex : 1; /* Full (vs. half) duplex */
   uint8_t              intf;        /* Ethernet interface number */
-  struct wdog_s        txpoll;      /* TX poll timer */
   struct wdog_s        txtimeout;   /* TX timeout timer */
   struct work_s        irqwork;     /* For deferring interrupt work to the work queue */
   struct work_s        pollwork;    /* For deferring poll work to the work queue */
@@ -694,9 +737,9 @@ static uint32_t stm32_getreg(uint32_t addr);
 static void stm32_putreg(uint32_t val, uint32_t addr);
 static void stm32_checksetup(void);
 #else
-# define stm32_getreg(addr)      getreg32(addr)
-# define stm32_putreg(val,addr)  putreg32(val,addr)
-# define stm32_checksetup()
+#  define stm32_getreg(addr)     getreg32(addr)
+#  define stm32_putreg(val,addr) putreg32(val,addr)
+#  define stm32_checksetup()
 #endif
 
 /* Free buffer management */
@@ -727,15 +770,12 @@ static void stm32_freeframe(struct stm32_ethmac_s *priv);
 static void stm32_txdone(struct stm32_ethmac_s *priv);
 
 static void stm32_interrupt_work(void *arg);
-static int  stm32_interrupt(int irq, void *context, FAR void *arg);
+static int  stm32_interrupt(int irq, void *context, void *arg);
 
 /* Watchdog timer expirations */
 
 static void stm32_txtimeout_work(void *arg);
 static void stm32_txtimeout_expiry(wdparm_t arg);
-
-static void stm32_poll_work(void *arg);
-static void stm32_poll_expiry(wdparm_t arg);
 
 /* NuttX callback functions */
 
@@ -764,7 +804,7 @@ static void stm32_rxdescinit(struct stm32_ethmac_s *priv,
                              union stm32_desc_u *rxtable, uint8_t *rxbuffer);
 
 /* PHY Initialization */
-
+#ifndef CONFIG_STM32H7_NO_PHY
 #if defined(CONFIG_NETDEV_PHY_IOCTL) && defined(CONFIG_ARCH_PHY_INTERRUPT)
 static int  stm32_phyintenable(struct stm32_ethmac_s *priv);
 #endif
@@ -779,6 +819,7 @@ static int  stm32_phyinit(struct stm32_ethmac_s *priv);
 #ifdef CONFIG_STM32H7_ETHMAC_REGDEBUG
 static void  stm32_phyregdump(void);
 #endif
+#endif
 
 /* MAC/DMA Initialization */
 
@@ -792,9 +833,6 @@ static inline void stm32_ethgpioconfig(struct stm32_ethmac_s *priv);
 static void stm32_ethreset(struct stm32_ethmac_s *priv);
 static int  stm32_macconfig(struct stm32_ethmac_s *priv);
 static void stm32_macaddress(struct stm32_ethmac_s *priv);
-#ifdef CONFIG_NET_ICMPv6
-static void stm32_ipv6multicast(struct stm32_ethmac_s *priv);
-#endif
 static int  stm32_macenable(struct stm32_ethmac_s *priv);
 static int  stm32_ethconfig(struct stm32_ethmac_s *priv);
 
@@ -1284,7 +1322,7 @@ static int stm32_transmit(struct stm32_ethmac_s *priv)
       stm32_disableint(priv, ETH_DMACIER_RIE);
     }
 
-  MEMORY_SYNC();
+  UP_MB();
 
   /* Enable TX interrupts */
 
@@ -1333,77 +1371,48 @@ static int stm32_txpoll(struct net_driver_s *dev)
 
   DEBUGASSERT(priv->dev.d_buf != NULL);
 
-  /* If the polling resulted in data that should be sent out on the network,
-   * the field d_len is set to a value > 0.
+  /* Send the packet */
+
+  stm32_transmit(priv);
+  DEBUGASSERT(dev->d_len == 0 && dev->d_buf == NULL);
+
+  /* Check if the next TX descriptor is owned by the Ethernet DMA or
+   * CPU.  We cannot perform the TX poll if we are unable to accept
+   * another packet for transmission.
+   *
+   * In a race condition, ETH_TDES3_OWN may be cleared BUT still
+   * not available because stm32_freeframe() has not yet run. If
+   * stm32_freeframe() has run, the buffer1 pointer (tdes2) will be
+   * nullified (and inflight should be < CONFIG_STM32H7_ETH_NTXDESC).
    */
 
-  if (priv->dev.d_len > 0)
+  if ((priv->txhead->des3 & ETH_TDES3_RD_OWN) != 0 ||
+      priv->txhead->des0 != 0)
     {
-      /* Look up the destination MAC address and add it to the Ethernet
-       * header.
+      /* We have to terminate the poll if we have no more descriptors
+       * available for another transfer.
        */
 
-#ifdef CONFIG_NET_IPv4
-#ifdef CONFIG_NET_IPv6
-      if (IFF_IS_IPv4(priv->dev.d_flags))
-#endif
-        {
-          arp_out(&priv->dev);
-        }
-#endif /* CONFIG_NET_IPv4 */
+      nerr("No tx descriptors available");
 
-#ifdef CONFIG_NET_IPv6
-#ifdef CONFIG_NET_IPv4
-      else
-#endif
-        {
-          neighbor_out(&priv->dev);
-        }
-#endif /* CONFIG_NET_IPv6 */
+      return -EBUSY;
+    }
 
-      /* Send the packet */
+  /* We have the descriptor, we can continue the poll. Allocate a new
+   * buffer for the poll.
+   */
 
-      stm32_transmit(priv);
-      DEBUGASSERT(dev->d_len == 0 && dev->d_buf == NULL);
+  dev->d_buf = stm32_allocbuffer(priv);
 
-      /* Check if the next TX descriptor is owned by the Ethernet DMA or
-       * CPU.  We cannot perform the TX poll if we are unable to accept
-       * another packet for transmission.
-       *
-       * In a race condition, ETH_TDES3_OWN may be cleared BUT still
-       * not available because stm32_freeframe() has not yet run. If
-       * stm32_freeframe() has run, the buffer1 pointer (tdes2) will be
-       * nullified (and inflight should be < CONFIG_STM32H7_ETH_NTXDESC).
-       */
+  /* We can't continue the poll if we have no buffers */
 
-      if ((priv->txhead->des3 & ETH_TDES3_RD_OWN) != 0 ||
-          priv->txhead->des0 != 0)
-        {
-          /* We have to terminate the poll if we have no more descriptors
-           * available for another transfer.
-           */
+  if (dev->d_buf == NULL)
+    {
+      /* Terminate the poll. */
 
-          nerr("No tx descriptors available");
+      nerr("No tx buffer available");
 
-          return -EBUSY;
-        }
-
-      /* We have the descriptor, we can continue the poll. Allocate a new
-       * buffer for the poll.
-       */
-
-      dev->d_buf = stm32_allocbuffer(priv);
-
-      /* We can't continue the poll if we have no buffers */
-
-      if (dev->d_buf == NULL)
-        {
-          /* Terminate the poll. */
-
-          nerr("No tx buffer available");
-
-          return -ENOMEM;
-        }
+      return -ENOMEM;
     }
 
   /* If zero is returned, the polling will continue until all connections
@@ -1464,7 +1473,7 @@ static void stm32_dopoll(struct stm32_ethmac_s *priv)
 
       if (dev->d_buf)
         {
-          devif_timer(dev, 0, stm32_txpoll);
+          devif_poll(dev, stm32_txpoll);
 
           /* We will, most likely end up with a buffer to be freed.  But it
            * might not be the same one that we allocated above.
@@ -1835,7 +1844,7 @@ static int stm32_recvframe(struct stm32_ethmac_s *priv)
 
                       up_invalidate_dcache((uintptr_t)dev->d_buf,
                                            (uintptr_t)dev->d_buf +
-                                           min(dev->d_len, ALIGNED_BUFSIZE));
+                                           MIN(dev->d_len, ALIGNED_BUFSIZE));
 
                       ninfo("rxhead: %p d_buf: %p d_len: %d\n",
                             priv->rxhead, dev->d_buf, dev->d_len);
@@ -1952,11 +1961,8 @@ static void stm32_receive(struct stm32_ethmac_s *priv)
         {
           ninfo("IPv4 frame\n");
 
-          /* Handle ARP on input then give the IPv4 packet to the network
-           * layer
-           */
+          /* Receive an IPv4 packet from the network device */
 
-          arp_ipin(&priv->dev);
           ipv4_input(&priv->dev);
 
           /* If the above function invocation resulted in data that should
@@ -1966,21 +1972,6 @@ static void stm32_receive(struct stm32_ethmac_s *priv)
 
           if (priv->dev.d_len > 0)
             {
-              /* Update the Ethernet header with the correct MAC address */
-
-#ifdef CONFIG_NET_IPv6
-              if (IFF_IS_IPv4(priv->dev.d_flags))
-#endif
-                {
-                  arp_out(&priv->dev);
-                }
-#ifdef CONFIG_NET_IPv6
-              else
-                {
-                  neighbor_out(&priv->dev);
-                }
-#endif
-
               /* And send the packet */
 
               stm32_transmit(priv);
@@ -2004,21 +1995,6 @@ static void stm32_receive(struct stm32_ethmac_s *priv)
 
           if (priv->dev.d_len > 0)
             {
-              /* Update the Ethernet header with the correct MAC address */
-
-#ifdef CONFIG_NET_IPv4
-              if (IFF_IS_IPv4(priv->dev.d_flags))
-                {
-                  arp_out(&priv->dev);
-                }
-              else
-#endif
-#ifdef CONFIG_NET_IPv6
-                {
-                  neighbor_out(&priv->dev);
-                }
-#endif
-
               /* And send the packet */
 
               stm32_transmit(priv);
@@ -2027,13 +2003,13 @@ static void stm32_receive(struct stm32_ethmac_s *priv)
       else
 #endif
 #ifdef CONFIG_NET_ARP
-      if (BUF->type == htons(ETHTYPE_ARP))
+      if (BUF->type == HTONS(ETHTYPE_ARP))
         {
           ninfo("ARP frame\n");
 
           /* Handle ARP packet */
 
-          arp_arpin(&priv->dev);
+          arp_input(&priv->dev);
 
           /* If the above function invocation resulted in data that should
            * be sent out on the network, the field  d_len will set to a
@@ -2089,7 +2065,6 @@ static void stm32_freeframe(struct stm32_ethmac_s *priv)
 {
   struct eth_desc_s *txdesc;
   uint32_t des3_tmp;
-  int i;
 
   ninfo("txhead: %p txtail: %p inflight: %d\n",
         priv->txhead, priv->txtail, priv->inflight);
@@ -2106,7 +2081,7 @@ static void stm32_freeframe(struct stm32_ethmac_s *priv)
       up_invalidate_dcache((uintptr_t)txdesc,
                            (uintptr_t)txdesc + sizeof(struct eth_desc_s));
 
-      for (i = 0; (txdesc->des3 & ETH_TDES3_RD_OWN) == 0; i++)
+      while ((txdesc->des3 & ETH_TDES3_RD_OWN) == 0)
         {
           /* There should be a buffer assigned to all in-flight
            * TX descriptors.
@@ -2305,16 +2280,13 @@ static void stm32_interrupt_work(void *arg)
       stm32_putreg(ETH_DMACSR_NIS, STM32_ETH_DMACSR);
     }
 
-  /* Handle error interrupt only if CONFIG_DEBUG_NET is eanbled */
-
-#ifdef CONFIG_DEBUG_NET
   /* Check if there are pending "abnormal" interrupts */
 
   if ((dmasr & ETH_DMACSR_AIS) != 0)
     {
       /* Just let the user know what happened */
 
-      nerr("ERROR: Abormal event(s): %08x\n", dmasr);
+      nerr("ERROR: Abnormal event(s): %08" PRIx32 "\n", dmasr);
 
       /* Clear all pending abnormal events */
 
@@ -2323,8 +2295,29 @@ static void stm32_interrupt_work(void *arg)
       /* Clear the pending abnormal summary interrupt */
 
       stm32_putreg(ETH_DMACSR_AIS, STM32_ETH_DMACSR);
+
+      /* In case of any error that stops the DMA, reset the MAC. */
+
+      if (dmasr & (ETH_DMACIER_CDEE | ETH_DMACSR_FBE |
+          ETH_DMACSR_RPS | ETH_DMACSR_TPS))
+        {
+          /* As per the datasheet's recommendation, the MAC
+           * needs to be reset for all fatal errors. The
+           * scheduled job will take the interface down and
+           * up again.
+           */
+
+          work_queue(ETHWORK, &priv->irqwork, stm32_txtimeout_work, priv, 0);
+
+          /* Interrupts need to remain disabled, no other
+           * processing will take place. After reset
+           * everything will be restored.
+           */
+
+          net_unlock();
+          return;
+        }
     }
-#endif
 
   net_unlock();
 
@@ -2350,7 +2343,7 @@ static void stm32_interrupt_work(void *arg)
  *
  ****************************************************************************/
 
-static int stm32_interrupt(int irq, void *context, FAR void *arg)
+static int stm32_interrupt(int irq, void *context, void *arg)
 {
   struct stm32_ethmac_s *priv = &g_stm32ethmac[0];
   uint32_t dmasr;
@@ -2463,115 +2456,6 @@ static void stm32_txtimeout_expiry(wdparm_t arg)
 }
 
 /****************************************************************************
- * Function: stm32_poll_work
- *
- * Description:
- *   Perform periodic polling from the worker thread
- *
- * Parameters:
- *   arg - The argument passed when work_queue() as called.
- *
- * Returned Value:
- *   OK on success
- *
- * Assumptions:
- *   Ethernet interrupts are disabled
- *
- ****************************************************************************/
-
-static void stm32_poll_work(void *arg)
-{
-  struct stm32_ethmac_s *priv = (struct stm32_ethmac_s *)arg;
-  struct net_driver_s *dev  = &priv->dev;
-
-  /* Check if the next TX descriptor is owned by the Ethernet DMA or
-   * CPU. We cannot perform the timer poll if we are unable to accept
-   * another packet for transmission.  Hmmm.. might be bug here.
-   * Does this mean if there is a transmit in progress, we will miss
-   * TCP time state updates?
-   *
-   * In a race condition, ETH_TDES3_OWN may be cleared BUT still
-   * not available because stm32_freeframe() has not yet run. If
-   * stm32_freeframe() has run, the buffer1 pointer (des2) will be
-   * nullified (and inflight should be < CONFIG_STM32H7_ETH_NTXDESC).
-   */
-
-  net_lock();
-  if ((priv->txhead->des3 & ETH_TDES3_RD_OWN) == 0 &&
-      priv->txhead->des0 == 0)
-    {
-      /* If we have the descriptor, then perform the timer poll.  Allocate a
-       * buffer for the poll.
-       */
-
-      DEBUGASSERT(dev->d_len == 0 && dev->d_buf == NULL);
-      dev->d_buf = stm32_allocbuffer(priv);
-
-      /* We can't poll if we have no buffers */
-
-      if (dev->d_buf)
-        {
-          /* Update TCP timing states and poll the network for new XMIT
-           * data.
-           */
-
-          devif_timer(dev, STM32_WDDELAY, stm32_txpoll);
-
-          /* We will, most likely end up with a buffer to be freed.  But it
-           * might not be the same one that we allocated above.
-           */
-
-          if (dev->d_buf)
-            {
-              DEBUGASSERT(dev->d_len == 0);
-              stm32_freebuffer(priv, dev->d_buf);
-              dev->d_buf = NULL;
-            }
-        }
-    }
-
-  /* Setup the watchdog poll timer again */
-
-  wd_start(&priv->txpoll, STM32_WDDELAY,
-           stm32_poll_expiry, (wdparm_t)priv);
-  net_unlock();
-}
-
-/****************************************************************************
- * Function: stm32_poll_expiry
- *
- * Description:
- *   Periodic timer handler.  Called from the timer interrupt handler.
- *
- * Parameters:
- *   arg  - The argument
- *
- * Returned Value:
- *   None
- *
- * Assumptions:
- *   Global interrupts are disabled by the watchdog logic.
- *
- ****************************************************************************/
-
-static void stm32_poll_expiry(wdparm_t arg)
-{
-  struct stm32_ethmac_s *priv = (struct stm32_ethmac_s *)arg;
-
-  /* Schedule to perform the interrupt processing on the worker thread. */
-
-  if (work_available(&priv->pollwork))
-    {
-      work_queue(ETHWORK, &priv->pollwork, stm32_poll_work, priv, 0);
-    }
-  else
-    {
-      wd_start(&priv->txpoll, STM32_WDDELAY,
-               stm32_poll_expiry, (wdparm_t)priv);
-    }
-}
-
-/****************************************************************************
  * Function: stm32_ifup
  *
  * Description:
@@ -2594,9 +2478,9 @@ static int stm32_ifup(struct net_driver_s *dev)
   int ret;
 
 #ifdef CONFIG_NET_IPv4
-  ninfo("Bringing up: %d.%d.%d.%d\n",
-        (int)(dev->d_ipaddr & 0xff), (int)((dev->d_ipaddr >> 8) & 0xff),
-        (int)((dev->d_ipaddr >> 16) & 0xff), (int)(dev->d_ipaddr >> 24));
+  ninfo("Bringing up: %u.%u.%u.%u\n",
+        ip4_addr1(dev->d_ipaddr), ip4_addr2(dev->d_ipaddr),
+        ip4_addr3(dev->d_ipaddr), ip4_addr4(dev->d_ipaddr));
 #endif
 #ifdef CONFIG_NET_IPv6
   ninfo("Bringing up: %04x:%04x:%04x:%04x:%04x:%04x:%04x:%04x\n",
@@ -2612,11 +2496,6 @@ static int stm32_ifup(struct net_driver_s *dev)
     {
       return ret;
     }
-
-  /* Set and activate a timer process */
-
-  wd_start(&priv->txpoll, STM32_WDDELAY,
-           stm32_poll_expiry, (wdparm_t)priv);
 
   /* Enable the Ethernet interrupt */
 
@@ -2655,9 +2534,8 @@ static int stm32_ifdown(struct net_driver_s *dev)
   flags = enter_critical_section();
   up_disable_irq(STM32_IRQ_ETH);
 
-  /* Cancel the TX poll timer and TX timeout timers */
+  /* Cancel the TX timeout timers */
 
-  wd_cancel(&priv->txpoll);
   wd_cancel(&priv->txtimeout);
 
   /* Put the EMAC in its reset, non-operational state.  This should be
@@ -3121,6 +2999,7 @@ static void stm32_rxdescinit(struct stm32_ethmac_s *priv,
 #ifdef CONFIG_NETDEV_PHY_IOCTL
 static int stm32_ioctl(struct net_driver_s *dev, int cmd, unsigned long arg)
 {
+#ifndef CONFIG_STM32H7_NO_PHY
 #ifdef CONFIG_ARCH_PHY_INTERRUPT
   struct stm32_ethmac_s *priv = (struct stm32_ethmac_s *)dev->d_private;
 #endif
@@ -3178,9 +3057,13 @@ static int stm32_ioctl(struct net_driver_s *dev, int cmd, unsigned long arg)
     }
 
   return ret;
+#else
+  return -EIO;
+#endif
 }
 #endif /* CONFIG_NETDEV_PHY_IOCTL */
 
+#ifndef CONFIG_STM32H7_NO_PHY
 /****************************************************************************
  * Function: stm32_phyintenable
  *
@@ -3509,7 +3392,10 @@ static int stm32_phyinit(struct stm32_ethmac_s *priv)
     {
       up_mdelay(10);
       to -= 10;
+      phyval = 0xffff;
       ret = stm32_phyread(CONFIG_STM32H7_PHYADDR, MII_MCR, &phyval);
+
+      ninfo("MII_MCR: phyval: %u ret: %d\n", phyval, ret);
     }
   while (phyval & MII_MCR_RESET && to > 0);
 
@@ -3522,6 +3408,40 @@ static int stm32_phyinit(struct stm32_ethmac_s *priv)
     {
       ninfo("Phy reset in %d ms\n", PHY_RESET_DELAY - to);
     }
+
+  ret = stm32_phyread(CONFIG_STM32H7_PHYADDR, MII_PHYID1, &phyval);
+
+  if (ret < 0)
+    {
+      nerr("ERROR: Failed to read PHYID1: %d\n", ret);
+      return ret;
+    }
+
+  if (phyval != STM32H7_PHYID1)
+    {
+      nerr("ERROR: Incorrect PHYID1: %u expected: %u\n",
+            phyval, STM32H7_PHYID1);
+      return -ENXIO;
+    }
+
+  ninfo("MII_PHYID1: phyval: %u ret: %d\n", phyval, ret);
+
+  ret = stm32_phyread(CONFIG_STM32H7_PHYADDR, MII_PHYID2, &phyval);
+
+  if (ret < 0)
+    {
+      nerr("ERROR: Failed to read PHYID2: %d\n", ret);
+      return ret;
+    }
+
+  if ((phyval & 0xfff0) != (STM32H7_PHYID2 & 0xfff0))
+    {
+      nerr("ERROR: Incorrect PHYID2: %u expected: %u\n",
+            phyval, STM32H7_PHYID2);
+      return -ENXIO;
+    }
+
+  ninfo("MII_PHYID2: phyval: %u ret: %d\n", phyval, ret);
 
 #ifdef CONFIG_STM32H7_ETHMAC_REGDEBUG
   stm32_phyregdump();
@@ -3552,6 +3472,7 @@ static int stm32_phyinit(struct stm32_ethmac_s *priv)
         }
       else if ((phyval & MII_MSR_LINKSTATUS) != 0)
         {
+          ninfo("MII_MSR: phyval: %u ret: %d \n", phyval, ret);
           break;
         }
 
@@ -3701,6 +3622,8 @@ static int stm32_phyinit(struct stm32_ethmac_s *priv)
   return OK;
 }
 
+#endif
+
 /****************************************************************************
  * Name: stm32_selectmii
  *
@@ -3741,6 +3664,7 @@ static inline void stm32_selectmii(void)
  *
  ****************************************************************************/
 
+#ifdef CONFIG_STM32H7_RMII
 static inline void stm32_selectrmii(void)
 {
   uint32_t regval;
@@ -3750,6 +3674,7 @@ static inline void stm32_selectrmii(void)
   regval |= SYSCFG_PMC_EPIS_RMII;
   putreg32(regval, STM32_SYSCFG_PMC);
 }
+#endif
 
 /****************************************************************************
  * Function: stm32_ethgpioconfig
@@ -4133,79 +4058,6 @@ static void stm32_macaddress(struct stm32_ethmac_s *priv)
 }
 
 /****************************************************************************
- * Function: stm32_ipv6multicast
- *
- * Description:
- *   Configure the IPv6 multicast MAC address.
- *
- * Parameters:
- *   priv - A reference to the private driver state structure
- *
- * Returned Value:
- *   OK on success; Negated errno on failure.
- *
- * Assumptions:
- *
- ****************************************************************************/
-
-#ifdef CONFIG_NET_ICMPv6
-static void stm32_ipv6multicast(struct stm32_ethmac_s *priv)
-{
-  struct net_driver_s *dev;
-  uint16_t tmp16;
-  uint8_t mac[6];
-
-  /* For ICMPv6, we need to add the IPv6 multicast address
-   *
-   * For IPv6 multicast addresses, the Ethernet MAC is derived by
-   * the four low-order octets OR'ed with the MAC 33:33:00:00:00:00,
-   * so for example the IPv6 address FF02:DEAD:BEEF::1:3 would map
-   * to the Ethernet MAC address 33:33:00:01:00:03.
-   *
-   * NOTES:  This appears correct for the ICMPv6 Router Solicitation
-   * Message, but the ICMPv6 Neighbor Solicitation message seems to
-   * use 33:33:ff:01:00:03.
-   */
-
-  mac[0] = 0x33;
-  mac[1] = 0x33;
-
-  dev    = &priv->dev;
-  tmp16  = dev->d_ipv6addr[6];
-  mac[2] = 0xff;
-  mac[3] = tmp16 >> 8;
-
-  tmp16  = dev->d_ipv6addr[7];
-  mac[4] = tmp16 & 0xff;
-  mac[5] = tmp16 >> 8;
-
-  ninfo("IPv6 Multicast: %02x:%02x:%02x:%02x:%02x:%02x\n",
-        mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
-
-  stm32_addmac(dev, mac);
-
-#ifdef CONFIG_NET_ICMPv6_AUTOCONF
-  /* Add the IPv6 all link-local nodes Ethernet address.  This is the
-   * address that we expect to receive ICMPv6 Router Advertisement
-   * packets.
-   */
-
-  stm32_addmac(dev, g_ipv6_ethallnodes.ether_addr_octet);
-
-#endif /* CONFIG_NET_ICMPv6_AUTOCONF */
-#ifdef CONFIG_NET_ICMPv6_ROUTER
-  /* Add the IPv6 all link-local routers Ethernet address.  This is the
-   * address that we expect to receive ICMPv6 Router Solicitation
-   * packets.
-   */
-
-  stm32_addmac(dev, g_ipv6_ethallrouters.ether_addr_octet);
-
-#endif /* CONFIG_NET_ICMPv6_ROUTER */
-}
-#endif /* CONFIG_NET_ICMPv6 */
-
-/****************************************************************************
  * Function: stm32_macenable
  *
  * Description:
@@ -4228,12 +4080,6 @@ static int stm32_macenable(struct stm32_ethmac_s *priv)
   /* Set the MAC address */
 
   stm32_macaddress(priv);
-
-#ifdef CONFIG_NET_ICMPv6
-  /* Set up the IPv6 multicast address */
-
-  stm32_ipv6multicast(priv);
-#endif
 
   /* Enable transmit state machine of the MAC for transmission on the MII */
 
@@ -4347,6 +4193,19 @@ static int stm32_ethconfig(struct stm32_ethmac_s *priv)
 
   /* Initialize the PHY */
 
+#ifdef CONFIG_STM32H7_NO_PHY
+  ninfo("MAC without PHY\n");
+#ifdef CONFIG_STM32H7_ETHFD
+  priv->fduplex = 1;
+#else
+  priv->fduplex = 0;
+#endif
+#ifdef CONFIG_STM32H7_ETH100MBPS
+  priv->mbps100 = 1;
+#else
+  priv->mbps100 = 0;
+#endif
+#else
   ninfo("Initialize the PHY\n");
   ret = stm32_phyinit(priv);
   if (ret < 0)
@@ -4354,6 +4213,7 @@ static int stm32_ethconfig(struct stm32_ethmac_s *priv)
       return ret;
     }
 
+#endif
   /* Initialize the MAC and DMA */
 
   ninfo("Initialize the MAC and DMA\n");

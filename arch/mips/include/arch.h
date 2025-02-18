@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/mips/include/arch.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -34,25 +36,6 @@
 /****************************************************************************
  * Pre-processor Definitions
  ****************************************************************************/
-
-/****************************************************************************
- * Inline functions
- ****************************************************************************/
-
-/****************************************************************************
- * Name: up_getsp
- ****************************************************************************/
-
-static inline uint32_t up_getsp(void)
-{
-  register uint32_t sp;
-  __asm__
-  (
-    "\tadd  %0, $0, $29\n"
-    : "=r"(sp)
-  );
-  return sp;
-}
 
 /****************************************************************************
  * Public Types

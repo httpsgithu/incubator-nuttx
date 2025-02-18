@@ -1,6 +1,8 @@
 /****************************************************************************
  * net/tcp/tcp_setsockopt.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -72,16 +74,10 @@
 int tcp_setsockopt(FAR struct socket *psock, int option,
                    FAR const void *value, socklen_t value_len)
 {
-#ifdef CONFIG_NET_TCP_KEEPALIVE
-  /* Keep alive options are the only TCP protocol socket option currently
-   * supported.
-   */
-
   FAR struct tcp_conn_s *conn;
-  int ret;
+  int ret = OK;
 
-  DEBUGASSERT(psock != NULL && value != NULL && psock->s_conn != NULL);
-  conn = (FAR struct tcp_conn_s *)psock->s_conn;
+  conn = psock->s_conn;
 
   /* All of the TCP protocol options apply only TCP sockets.  The sockets
    * do not have to be connected.. that might occur later with the KeepAlive
@@ -107,8 +103,9 @@ int tcp_setsockopt(FAR struct socket *psock, int option,
        * all of the clones that may use the underlying connection.
        */
 
-      case SO_KEEPALIVE:  /* Verifies TCP connections active by enabling the
-                           * periodic transmission of probes */
+#ifdef CONFIG_NET_TCP_KEEPALIVE
+      case SO_KEEPALIVE: /* Verifies TCP connections active by enabling the
+                          * periodic transmission of probes */
         if (value_len != sizeof(int))
           {
             ret = -EDOM;
@@ -125,30 +122,12 @@ int tcp_setsockopt(FAR struct socket *psock, int option,
               }
             else
               {
-                conn->keepalive = (bool)keepalive;
-                conn->keeptime  = clock_systime_ticks();   /* Reset start time */
-                ret = OK;
-              }
-          }
-        break;
+                conn->keepalive = keepalive;
 
-      case TCP_NODELAY: /* Avoid coalescing of small segments. */
-        if (value_len != sizeof(int))
-          {
-            ret = -EDOM;
-          }
-        else
-          {
-            int nodelay = *(FAR int *)value;
+                /* Reset timer */
 
-            if (nodelay)
-              {
-                ret = OK;
-              }
-            else
-              {
-                nerr("ERROR: TCP_NODELAY not supported\n");
-                ret = -ENOSYS;
+                tcp_update_keeptimer(conn, keepalive ? conn->keepidle : 0);
+                conn->keepretries = 0;
               }
           }
         break;
@@ -170,7 +149,7 @@ int tcp_setsockopt(FAR struct socket *psock, int option,
                * be forced to the next larger, whole decisecond value.
                */
 
-              dsecs = (socktimeo_t)net_timeval2dsec(tv, TV2DS_CEIL);
+              dsecs = net_timeval2dsec(tv, TV2DS_CEIL);
             }
           else if (value_len == sizeof(int))
             {
@@ -189,20 +168,24 @@ int tcp_setsockopt(FAR struct socket *psock, int option,
 
           if (option == TCP_KEEPIDLE)
             {
-              conn->keepidle = (uint16_t)dsecs;
+              conn->keepidle = dsecs;
             }
           else
             {
-              conn->keepintvl = (uint16_t)dsecs;
+              conn->keepintvl = dsecs;
             }
 
-          conn->keeptime  = clock_systime_ticks();   /* Reset start time */
+           /* Reset timer */
 
-          ret = OK;
+          if (conn->keepalive)
+            {
+              tcp_update_keeptimer(conn, conn->keepidle);
+              conn->keepretries = 0;
+            }
         }
         break;
 
-      case TCP_KEEPCNT:   /* Number of keepalives before death */
+      case TCP_KEEPCNT: /* Number of keepalives before death */
         if (value_len != sizeof(int))
           {
             ret = -EDOM;
@@ -218,9 +201,61 @@ int tcp_setsockopt(FAR struct socket *psock, int option,
               }
             else
               {
-                conn->keepcnt  = (uint8_t)keepcnt;
-                conn->keeptime = clock_systime_ticks();   /* Reset start time */
-                ret = OK;
+                conn->keepcnt = keepcnt;
+
+                /* Reset time */
+
+                if (conn->keepalive)
+                  {
+                    tcp_update_keeptimer(conn, conn->keepidle);
+                    conn->keepretries = 0;
+                  }
+              }
+          }
+        break;
+#endif /* CONFIG_NET_TCP_KEEPALIVE */
+
+      case TCP_NODELAY: /* Avoid coalescing of small segments. */
+        if (value_len != sizeof(int))
+          {
+            ret = -EDOM;
+          }
+        else
+          {
+            int nodelay = *(FAR int *)value;
+
+            if (!nodelay)
+              {
+                nerr("ERROR: TCP_NODELAY not supported\n");
+                ret = -ENOSYS;
+              }
+          }
+        break;
+
+      case TCP_MAXSEG: /* The maximum segment size */
+        if (value_len != sizeof(int))
+          {
+            ret = -EFAULT;
+          }
+        else
+          {
+            int mss = *(FAR int *)value;
+
+            if (conn->tcpstateflags != TCP_ALLOCATED)
+              {
+                /* Set TCP_MAXSEG in the wrong state, direct return success */
+
+                return OK;
+              }
+
+            if (mss < TCP_MIN_MSS || mss > UINT16_MAX)
+              {
+                nerr("ERROR: TCP_MAXSEG value out of range: %d\n", mss);
+                return -EINVAL;
+              }
+            else
+              {
+                conn->user_mss = mss;
               }
           }
         break;
@@ -232,9 +267,6 @@ int tcp_setsockopt(FAR struct socket *psock, int option,
     }
 
   return ret;
-#else
-  return -ENOPROTOOPT;
-#endif /* CONFIG_NET_TCP_KEEPALIVE */
 }
 
 #endif /* CONFIG_NET_TCPPROTO_OPTIONS */

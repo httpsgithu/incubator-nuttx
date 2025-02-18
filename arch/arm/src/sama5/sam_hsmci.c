@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/sama5/sam_hsmci.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -28,6 +30,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <string.h>
+#include <sys/param.h>
 #include <assert.h>
 #include <debug.h>
 #include <errno.h>
@@ -44,8 +47,7 @@
 #include <arch/board/board.h>
 
 #include "chip.h"
-#include "arm_arch.h"
-
+#include "arm_internal.h"
 #include "sam_pio.h"
 #include "sam_dmac.h"
 #include "sam_periphclks.h"
@@ -339,11 +341,6 @@
 #  define DEBUG_NCMDSAMPLES         2
 #endif
 
-/* Some semi-standard definitions */
-
-#define MAX(a,b) (((a) > (b)) ? (a) : (b))
-#define MIN(a,b) (((a) < (b)) ? (a) : (b))
-
 /****************************************************************************
  * Private Types
  ****************************************************************************/
@@ -459,14 +456,11 @@ struct sam_dev_s
 
 /* Low-level helpers ********************************************************/
 
-static int  sam_takesem(struct sam_dev_s *priv);
-#define     sam_givesem(priv) (nxsem_post(&priv->waitsem))
-
 #ifdef CONFIG_SAMA5_HSMCI_REGDEBUG
 static bool sam_checkreg(struct sam_dev_s *priv, bool wr,
               uint32_t value, uint32_t address);
 #else
-# define    sam_checkreg(priv,wr,value,address) (false)
+#  define   sam_checkreg(priv,wr,value,address) (false)
 #endif
 
 static inline uint32_t sam_getreg(struct sam_dev_s *priv,
@@ -542,53 +536,53 @@ static int  sam_hsmci_interrupt(int irq, void *context, void *arg);
 
 /* Initialization/setup */
 
-static void sam_reset(FAR struct sdio_dev_s *dev);
-static sdio_capset_t sam_capabilities(FAR struct sdio_dev_s *dev);
-static sdio_statset_t sam_status(FAR struct sdio_dev_s *dev);
-static void sam_widebus(FAR struct sdio_dev_s *dev, bool enable);
-static void sam_clock(FAR struct sdio_dev_s *dev,
+static void sam_reset(struct sdio_dev_s *dev);
+static sdio_capset_t sam_capabilities(struct sdio_dev_s *dev);
+static sdio_statset_t sam_status(struct sdio_dev_s *dev);
+static void sam_widebus(struct sdio_dev_s *dev, bool enable);
+static void sam_clock(struct sdio_dev_s *dev,
               enum sdio_clock_e rate);
-static int  sam_attach(FAR struct sdio_dev_s *dev);
+static int  sam_attach(struct sdio_dev_s *dev);
 
 /* Command/Status/Data Transfer */
 
-static int  sam_sendcmd(FAR struct sdio_dev_s *dev, uint32_t cmd,
+static int  sam_sendcmd(struct sdio_dev_s *dev, uint32_t cmd,
               uint32_t arg);
-static void sam_blocksetup(FAR struct sdio_dev_s *dev, unsigned int blocklen,
+static void sam_blocksetup(struct sdio_dev_s *dev, unsigned int blocklen,
               unsigned int nblocks);
-static int  sam_recvsetup(FAR struct sdio_dev_s *dev, FAR uint8_t *buffer,
+static int  sam_recvsetup(struct sdio_dev_s *dev, uint8_t *buffer,
               size_t nbytes);
-static int  sam_sendsetup(FAR struct sdio_dev_s *dev,
-              FAR const uint8_t *buffer, size_t nbytes);
-static int  sam_cancel(FAR struct sdio_dev_s *dev);
-static int  sam_waitresponse(FAR struct sdio_dev_s *dev, uint32_t cmd);
-static int  sam_recvshort(FAR struct sdio_dev_s *dev, uint32_t cmd,
+static int  sam_sendsetup(struct sdio_dev_s *dev,
+              const uint8_t *buffer, size_t nbytes);
+static int  sam_cancel(struct sdio_dev_s *dev);
+static int  sam_waitresponse(struct sdio_dev_s *dev, uint32_t cmd);
+static int  sam_recvshort(struct sdio_dev_s *dev, uint32_t cmd,
               uint32_t *rshort);
-static int  sam_recvlong(FAR struct sdio_dev_s *dev, uint32_t cmd,
+static int  sam_recvlong(struct sdio_dev_s *dev, uint32_t cmd,
               uint32_t rlong[4]);
-static int  sam_recvnotimpl(FAR struct sdio_dev_s *dev, uint32_t cmd,
+static int  sam_recvnotimpl(struct sdio_dev_s *dev, uint32_t cmd,
               uint32_t *rnotimpl);
 
 /* EVENT handler */
 
-static void sam_waitenable(FAR struct sdio_dev_s *dev,
+static void sam_waitenable(struct sdio_dev_s *dev,
               sdio_eventset_t eventset, uint32_t timeout);
-static sdio_eventset_t sam_eventwait(FAR struct sdio_dev_s *dev);
-static void sam_callbackenable(FAR struct sdio_dev_s *dev,
+static sdio_eventset_t sam_eventwait(struct sdio_dev_s *dev);
+static void sam_callbackenable(struct sdio_dev_s *dev,
               sdio_eventset_t eventset);
-static int  sam_registercallback(FAR struct sdio_dev_s *dev,
+static int  sam_registercallback(struct sdio_dev_s *dev,
               worker_t callback, void *arg);
 
 /* DMA */
 
 #ifdef CONFIG_SAMA5_HSMCI_DMA
 #ifndef HSCMI_NORXDMA
-static int  sam_dmarecvsetup(FAR struct sdio_dev_s *dev,
-              FAR uint8_t *buffer, size_t buflen);
+static int  sam_dmarecvsetup(struct sdio_dev_s *dev,
+              uint8_t *buffer, size_t buflen);
 #endif
 #ifndef HSCMI_NOTXDMA
-static int  sam_dmasendsetup(FAR struct sdio_dev_s *dev,
-              FAR const uint8_t *buffer, size_t buflen);
+static int  sam_dmasendsetup(struct sdio_dev_s *dev,
+              const uint8_t *buffer, size_t buflen);
 #endif
 #endif
 
@@ -600,83 +594,150 @@ static void sam_callback(void *arg);
  * Private Data
  ****************************************************************************/
 
-/* Callbacks */
-
-static const struct sdio_dev_s g_callbacks =
-{
-  .reset            = sam_reset,
-  .capabilities     = sam_capabilities,
-  .status           = sam_status,
-  .widebus          = sam_widebus,
-  .clock            = sam_clock,
-  .attach           = sam_attach,
-  .sendcmd          = sam_sendcmd,
-  .blocksetup       = sam_blocksetup,
-  .recvsetup        = sam_recvsetup,
-  .sendsetup        = sam_sendsetup,
-  .cancel           = sam_cancel,
-  .waitresponse     = sam_waitresponse,
-  .recv_r1          = sam_recvshort,
-  .recv_r2          = sam_recvlong,
-  .recv_r3          = sam_recvshort,
-  .recv_r4          = sam_recvnotimpl,
-  .recv_r5          = sam_recvnotimpl,
-  .recv_r6          = sam_recvshort,
-  .recv_r7          = sam_recvshort,
-  .waitenable       = sam_waitenable,
-  .eventwait        = sam_eventwait,
-  .callbackenable   = sam_callbackenable,
-  .registercallback = sam_registercallback,
-#ifdef CONFIG_SDIO_DMA
-#ifndef HSCMI_NORXDMA
-  .dmarecvsetup     = sam_dmarecvsetup,
-#else
-  .dmarecvsetup     = sam_recvsetup,
-#endif
-#ifndef HSCMI_NOTXDMA
-  .dmasendsetup     = sam_dmasendsetup,
-#else
-  .dmasendsetup     = sam_sendsetup,
-#endif
-#endif
-};
-
 /* Pre-allocate memory for each HSMCI device */
 
 #ifdef CONFIG_SAMA5_HSMCI0
-static struct sam_dev_s g_hsmci0;
+static struct sam_dev_s g_hsmci0 =
+{
+  .dev                =
+  {
+    .reset            = sam_reset,
+    .capabilities     = sam_capabilities,
+    .status           = sam_status,
+    .widebus          = sam_widebus,
+    .clock            = sam_clock,
+    .attach           = sam_attach,
+    .sendcmd          = sam_sendcmd,
+    .blocksetup       = sam_blocksetup,
+    .recvsetup        = sam_recvsetup,
+    .sendsetup        = sam_sendsetup,
+    .cancel           = sam_cancel,
+    .waitresponse     = sam_waitresponse,
+    .recv_r1          = sam_recvshort,
+    .recv_r2          = sam_recvlong,
+    .recv_r3          = sam_recvshort,
+    .recv_r4          = sam_recvnotimpl,
+    .recv_r5          = sam_recvnotimpl,
+    .recv_r6          = sam_recvshort,
+    .recv_r7          = sam_recvshort,
+    .waitenable       = sam_waitenable,
+    .eventwait        = sam_eventwait,
+    .callbackenable   = sam_callbackenable,
+    .registercallback = sam_registercallback,
+#ifdef CONFIG_SDIO_DMA
+#ifndef HSCMI_NORXDMA
+    .dmarecvsetup     = sam_dmarecvsetup,
+#else
+    .dmarecvsetup     = sam_recvsetup,
+#endif
+#ifndef HSCMI_NOTXDMA
+    .dmasendsetup     = sam_dmasendsetup,
+#else
+    .dmasendsetup     = sam_sendsetup,
+#endif
+#endif
+  },
+  .waitsem            = SEM_INITIALIZER(0),
+  .base               = SAM_HSMCI0_VBASE,
+  .hsmci              = 0,
+};
 #endif
 #ifdef CONFIG_SAMA5_HSMCI1
-static struct sam_dev_s g_hsmci1;
+static struct sam_dev_s g_hsmci1 =
+{
+  .dev                =
+  {
+    .reset            = sam_reset,
+    .capabilities     = sam_capabilities,
+    .status           = sam_status,
+    .widebus          = sam_widebus,
+    .clock            = sam_clock,
+    .attach           = sam_attach,
+    .sendcmd          = sam_sendcmd,
+    .blocksetup       = sam_blocksetup,
+    .recvsetup        = sam_recvsetup,
+    .sendsetup        = sam_sendsetup,
+    .cancel           = sam_cancel,
+    .waitresponse     = sam_waitresponse,
+    .recv_r1          = sam_recvshort,
+    .recv_r2          = sam_recvlong,
+    .recv_r3          = sam_recvshort,
+    .recv_r4          = sam_recvnotimpl,
+    .recv_r5          = sam_recvnotimpl,
+    .recv_r6          = sam_recvshort,
+    .recv_r7          = sam_recvshort,
+    .waitenable       = sam_waitenable,
+    .eventwait        = sam_eventwait,
+    .callbackenable   = sam_callbackenable,
+    .registercallback = sam_registercallback,
+#ifdef CONFIG_SDIO_DMA
+#ifndef HSCMI_NORXDMA
+    .dmarecvsetup     = sam_dmarecvsetup,
+#else
+    .dmarecvsetup     = sam_recvsetup,
+#endif
+#ifndef HSCMI_NOTXDMA
+    .dmasendsetup     = sam_dmasendsetup,
+#else
+    .dmasendsetup     = sam_sendsetup,
+#endif
+#endif
+  },
+  .waitsem            = SEM_INITIALIZER(0),
+  .base               = SAM_HSMCI0_VBASE,
+  .hsmci              = 0,
+};
 #endif
 #ifdef CONFIG_SAMA5_HSMCI2
-static struct sam_dev_s g_hsmci2;
+static struct sam_dev_s g_hsmci2 =
+{
+  .dev                =
+  {
+    .reset            = sam_reset,
+    .capabilities     = sam_capabilities,
+    .status           = sam_status,
+    .widebus          = sam_widebus,
+    .clock            = sam_clock,
+    .attach           = sam_attach,
+    .sendcmd          = sam_sendcmd,
+    .blocksetup       = sam_blocksetup,
+    .recvsetup        = sam_recvsetup,
+    .sendsetup        = sam_sendsetup,
+    .cancel           = sam_cancel,
+    .waitresponse     = sam_waitresponse,
+    .recv_r1          = sam_recvshort,
+    .recv_r2          = sam_recvlong,
+    .recv_r3          = sam_recvshort,
+    .recv_r4          = sam_recvnotimpl,
+    .recv_r5          = sam_recvnotimpl,
+    .recv_r6          = sam_recvshort,
+    .recv_r7          = sam_recvshort,
+    .waitenable       = sam_waitenable,
+    .eventwait        = sam_eventwait,
+    .callbackenable   = sam_callbackenable,
+    .registercallback = sam_registercallback,
+#ifdef CONFIG_SDIO_DMA
+#ifndef HSCMI_NORXDMA
+    .dmarecvsetup     = sam_dmarecvsetup,
+#else
+    .dmarecvsetup     = sam_recvsetup,
+#endif
+#ifndef HSCMI_NOTXDMA
+    .dmasendsetup     = sam_dmasendsetup,
+#else
+    .dmasendsetup     = sam_sendsetup,
+#endif
+#endif
+  },
+  .waitsem            = SEM_INITIALIZER(0),
+  .base               = SAM_HSMCI0_VBASE,
+  .hsmci              = 0,
+};
 #endif
 
 /****************************************************************************
  * Private Functions
  ****************************************************************************/
-
-/****************************************************************************
- * Name: sam_takesem
- *
- * Description:
- *   Take the wait semaphore (handling false alarm wakeups due to the receipt
- *   of signals).
- *
- * Input Parameters:
- *   dev - Instance of the SDIO device driver state structure.
- *
- * Returned Value:
- *   Normally OK, but may return -ECANCELED in the rare event that the task
- *   has been canceled.
- *
- ****************************************************************************/
-
-static int sam_takesem(struct sam_dev_s *priv)
-{
-  return nxsem_wait_uninterruptible(&priv->waitsem);
-}
 
 /****************************************************************************
  * Name: sam_checkreg
@@ -1373,7 +1434,7 @@ static void sam_endwait(struct sam_dev_s *priv, sdio_eventset_t wkupevent)
 
   /* Wake up the waiting thread */
 
-  sam_givesem(priv);
+  nxsem_post(&priv->waitsem);
 }
 
 /****************************************************************************
@@ -1673,9 +1734,9 @@ static int sam_hsmci_interrupt(int irq, void *context, void *arg)
  *
  ****************************************************************************/
 
-static void sam_reset(FAR struct sdio_dev_s *dev)
+static void sam_reset(struct sdio_dev_s *dev)
 {
-  FAR struct sam_dev_s *priv = (FAR struct sam_dev_s *)dev;
+  struct sam_dev_s *priv = (struct sam_dev_s *)dev;
   irqstate_t flags;
 
   /* Reset the MCI */
@@ -1753,7 +1814,7 @@ static void sam_reset(FAR struct sdio_dev_s *dev)
  *
  ****************************************************************************/
 
-static sdio_capset_t sam_capabilities(FAR struct sdio_dev_s *dev)
+static sdio_capset_t sam_capabilities(struct sdio_dev_s *dev)
 {
   sdio_capset_t caps = 0;
 
@@ -1778,7 +1839,7 @@ static sdio_capset_t sam_capabilities(FAR struct sdio_dev_s *dev)
  *
  ****************************************************************************/
 
-static sdio_statset_t sam_status(FAR struct sdio_dev_s *dev)
+static sdio_statset_t sam_status(struct sdio_dev_s *dev)
 {
   struct sam_dev_s *priv = (struct sam_dev_s *)dev;
   return priv->cdstatus;
@@ -1801,7 +1862,7 @@ static sdio_statset_t sam_status(FAR struct sdio_dev_s *dev)
  *
  ****************************************************************************/
 
-static void sam_widebus(FAR struct sdio_dev_s *dev, bool wide)
+static void sam_widebus(struct sdio_dev_s *dev, bool wide)
 {
   struct sam_dev_s *priv = (struct sam_dev_s *)dev;
   uint32_t regval;
@@ -1835,7 +1896,7 @@ static void sam_widebus(FAR struct sdio_dev_s *dev, bool wide)
  *
  ****************************************************************************/
 
-static void sam_clock(FAR struct sdio_dev_s *dev, enum sdio_clock_e rate)
+static void sam_clock(struct sdio_dev_s *dev, enum sdio_clock_e rate)
 {
   struct sam_dev_s *priv = (struct sam_dev_s *)dev;
   uint32_t regval;
@@ -1907,7 +1968,7 @@ static void sam_clock(FAR struct sdio_dev_s *dev, enum sdio_clock_e rate)
  *
  ****************************************************************************/
 
-static int sam_attach(FAR struct sdio_dev_s *dev)
+static int sam_attach(struct sdio_dev_s *dev)
 {
   struct sam_dev_s *priv = (struct sam_dev_s *)dev;
   int irq;
@@ -1979,7 +2040,7 @@ static int sam_attach(FAR struct sdio_dev_s *dev)
  *
  ****************************************************************************/
 
-static int sam_sendcmd(FAR struct sdio_dev_s *dev,
+static int sam_sendcmd(struct sdio_dev_s *dev,
                        uint32_t cmd, uint32_t arg)
 {
   struct sam_dev_s *priv = (struct sam_dev_s *)dev;
@@ -2110,7 +2171,7 @@ static int sam_sendcmd(FAR struct sdio_dev_s *dev,
  *
  ****************************************************************************/
 
-static void sam_blocksetup(FAR struct sdio_dev_s *dev, unsigned int blocklen,
+static void sam_blocksetup(struct sdio_dev_s *dev, unsigned int blocklen,
                            unsigned int nblocks)
 {
   struct sam_dev_s *priv = (struct sam_dev_s *)dev;
@@ -2157,7 +2218,7 @@ static void sam_blocksetup(FAR struct sdio_dev_s *dev, unsigned int blocklen,
  *
  ****************************************************************************/
 
-static int sam_recvsetup(FAR struct sdio_dev_s *dev, FAR uint8_t *buffer,
+static int sam_recvsetup(struct sdio_dev_s *dev, uint8_t *buffer,
                          size_t buflen)
 {
   struct sam_dev_s *priv = (struct sam_dev_s *)dev;
@@ -2213,8 +2274,8 @@ static int sam_recvsetup(FAR struct sdio_dev_s *dev, FAR uint8_t *buffer,
  *
  ****************************************************************************/
 
-static int sam_sendsetup(FAR struct sdio_dev_s *dev,
-                         FAR const uint8_t *buffer, size_t buflen)
+static int sam_sendsetup(struct sdio_dev_s *dev,
+                         const uint8_t *buffer, size_t buflen)
 {
   struct sam_dev_s *priv = (struct sam_dev_s *)dev;
   unsigned int nwords;
@@ -2244,7 +2305,6 @@ static int sam_sendsetup(FAR struct sdio_dev_s *dev,
    * in order to avoid a TX data underrun.
    */
 
-  sched_lock();
   flags = enter_critical_section();
 
   nwords = (buflen + 3) >> 2;
@@ -2260,6 +2320,7 @@ static int sam_sendsetup(FAR struct sdio_dev_s *dev,
           /* Some fatal error has occurred */
 
           lcderr("ERROR: sr %08" PRIx32 "\n", sr);
+          leave_critical_section(flags);
           return -EIO;
         }
       else if ((sr & HSMCI_INT_TXRDY) != 0)
@@ -2272,7 +2333,6 @@ static int sam_sendsetup(FAR struct sdio_dev_s *dev,
     }
 
   leave_critical_section(flags);
-  sched_unlock();
   return OK;
 }
 
@@ -2293,7 +2353,7 @@ static int sam_sendsetup(FAR struct sdio_dev_s *dev,
  *
  ****************************************************************************/
 
-static int sam_cancel(FAR struct sdio_dev_s *dev)
+static int sam_cancel(struct sdio_dev_s *dev)
 {
   struct sam_dev_s *priv = (struct sam_dev_s *)dev;
 
@@ -2348,7 +2408,7 @@ static int sam_cancel(FAR struct sdio_dev_s *dev)
  *
  ****************************************************************************/
 
-static int sam_waitresponse(FAR struct sdio_dev_s *dev, uint32_t cmd)
+static int sam_waitresponse(struct sdio_dev_s *dev, uint32_t cmd)
 {
   struct sam_dev_s *priv = (struct sam_dev_s *)dev;
   uint32_t sr;
@@ -2382,7 +2442,7 @@ static int sam_waitresponse(FAR struct sdio_dev_s *dev, uint32_t cmd)
 
   for (; ; )
     {
-      /* Did a Command-Response sequence termination evernt occur? */
+      /* Did a Command-Response sequence termination event occur? */
 
       sr      = sam_getreg(priv, SAM_HSMCI_SR_OFFSET);
       pending = sr & priv->cmdrmask;
@@ -2463,7 +2523,7 @@ static int sam_waitresponse(FAR struct sdio_dev_s *dev, uint32_t cmd)
  *
  ****************************************************************************/
 
-static int sam_recvshort(FAR struct sdio_dev_s *dev,
+static int sam_recvshort(struct sdio_dev_s *dev,
                          uint32_t cmd, uint32_t *rshort)
 {
   struct sam_dev_s *priv = (struct sam_dev_s *)dev;
@@ -2550,7 +2610,7 @@ static int sam_recvshort(FAR struct sdio_dev_s *dev,
   return ret;
 }
 
-static int sam_recvlong(FAR struct sdio_dev_s *dev, uint32_t cmd,
+static int sam_recvlong(struct sdio_dev_s *dev, uint32_t cmd,
                         uint32_t rlong[4])
 {
   struct sam_dev_s *priv = (struct sam_dev_s *)dev;
@@ -2606,7 +2666,7 @@ static int sam_recvlong(FAR struct sdio_dev_s *dev, uint32_t cmd,
 
 /* MMC responses not supported */
 
-static int sam_recvnotimpl(FAR struct sdio_dev_s *dev,
+static int sam_recvnotimpl(struct sdio_dev_s *dev,
                            uint32_t cmd, uint32_t *rnotimpl)
 {
   struct sam_dev_s *priv = (struct sam_dev_s *)dev;
@@ -2649,7 +2709,7 @@ static int sam_recvnotimpl(FAR struct sdio_dev_s *dev,
  *
  ****************************************************************************/
 
-static void sam_waitenable(FAR struct sdio_dev_s *dev,
+static void sam_waitenable(struct sdio_dev_s *dev,
                            sdio_eventset_t eventset, uint32_t timeout)
 {
   struct sam_dev_s *priv = (struct sam_dev_s *)dev;
@@ -2743,7 +2803,7 @@ static void sam_waitenable(FAR struct sdio_dev_s *dev,
  *
  ****************************************************************************/
 
-static sdio_eventset_t sam_eventwait(FAR struct sdio_dev_s *dev)
+static sdio_eventset_t sam_eventwait(struct sdio_dev_s *dev)
 {
   struct sam_dev_s *priv = (struct sam_dev_s *)dev;
   sdio_eventset_t wkupevent = 0;
@@ -2774,7 +2834,7 @@ static sdio_eventset_t sam_eventwait(FAR struct sdio_dev_s *dev)
        * incremented and there will be no wait.
        */
 
-      ret = sam_takesem(priv);
+      ret = nxsem_wait_uninterruptible(&priv->waitsem);
       if (ret < 0)
         {
           /* Task canceled.  Cancel the wdog (assuming it was started),
@@ -2830,7 +2890,7 @@ static sdio_eventset_t sam_eventwait(FAR struct sdio_dev_s *dev)
  *
  ****************************************************************************/
 
-static void sam_callbackenable(FAR struct sdio_dev_s *dev,
+static void sam_callbackenable(struct sdio_dev_s *dev,
                                sdio_eventset_t eventset)
 {
   struct sam_dev_s *priv = (struct sam_dev_s *)dev;
@@ -2864,7 +2924,7 @@ static void sam_callbackenable(FAR struct sdio_dev_s *dev,
  *
  ****************************************************************************/
 
-static int sam_registercallback(FAR struct sdio_dev_s *dev,
+static int sam_registercallback(struct sdio_dev_s *dev,
                                 worker_t callback, void *arg)
 {
   struct sam_dev_s *priv = (struct sam_dev_s *)dev;
@@ -2900,7 +2960,7 @@ static int sam_registercallback(FAR struct sdio_dev_s *dev,
  ****************************************************************************/
 
 #ifndef HSCMI_NORXDMA
-static int sam_dmarecvsetup(FAR struct sdio_dev_s *dev, FAR uint8_t *buffer,
+static int sam_dmarecvsetup(struct sdio_dev_s *dev, uint8_t *buffer,
                             size_t buflen)
 {
   struct sam_dev_s *priv = (struct sam_dev_s *)dev;
@@ -2999,8 +3059,8 @@ static int sam_dmarecvsetup(FAR struct sdio_dev_s *dev, FAR uint8_t *buffer,
  ****************************************************************************/
 
 #ifndef HSCMI_NOTXDMA
-static int sam_dmasendsetup(FAR struct sdio_dev_s *dev,
-                            FAR const uint8_t *buffer, size_t buflen)
+static int sam_dmasendsetup(struct sdio_dev_s *dev,
+                            const uint8_t *buffer, size_t buflen)
 {
   struct sam_dev_s *priv = (struct sam_dev_s *)dev;
   uint32_t paddr;
@@ -3116,6 +3176,7 @@ static void sam_callback(void *arg)
             {
               /* No... return without performing the callback */
 
+              leave_critical_section(flags);
               return;
             }
         }
@@ -3127,6 +3188,7 @@ static void sam_callback(void *arg)
             {
               /* No... return without performing the callback */
 
+              leave_critical_section(flags);
               return;
             }
         }
@@ -3153,18 +3215,14 @@ static void sam_callback(void *arg)
       ret = work_cancel(LPWORK, &priv->cbwork);
       if (ret < 0)
         {
-          /* NOTE: Currently, work_cancel only returns success */
-
           lcderr("ERROR: Failed to cancel work: %d\n", ret);
         }
 
       mcinfo("Queuing callback to %p(%p)\n", priv->callback, priv->cbarg);
-      ret = work_queue(LPWORK, &priv->cbwork, (worker_t)priv->callback,
+      ret = work_queue(LPWORK, &priv->cbwork, priv->callback,
                        priv->cbarg, 0);
       if (ret < 0)
         {
-          /* NOTE: Currently, work_queue only returns success */
-
           lcderr("ERROR: Failed to schedule work: %d\n", ret);
         }
     }
@@ -3191,7 +3249,7 @@ static void sam_callback(void *arg)
  *
  ****************************************************************************/
 
-FAR struct sdio_dev_s *sdio_initialize(int slotno)
+struct sdio_dev_s *sdio_initialize(int slotno)
 {
   struct sam_dev_s *priv;
   uint32_t pid;
@@ -3213,11 +3271,6 @@ FAR struct sdio_dev_s *sdio_initialize(int slotno)
       /* Select HSMCI0 */
 
       priv = &g_hsmci0;
-
-      /* HSMCI0 Initialization */
-
-      priv->base  = SAM_HSMCI0_VBASE;
-      priv->hsmci = 0;
 
       /* Configure PIOs for 4-bit, wide-bus operation.  NOTE: (1) the chip
        * is capable of 8-bit wide bus operation but D4-D7 are not configured,
@@ -3253,11 +3306,6 @@ FAR struct sdio_dev_s *sdio_initialize(int slotno)
 
       priv = &g_hsmci1;
 
-      /* HSMCI1 Initialization */
-
-      priv->base  = SAM_HSMCI1_VBASE;
-      priv->hsmci = 1;
-
       /* Configure PIOs for 4-bit, wide-bus operation.  NOTE: (1) the chip
        * is capable of 8-bit wide bus operation but D4-D7 are not configured,
        * (2) any card detection PIOs must be set up in board-specific logic.
@@ -3291,11 +3339,6 @@ FAR struct sdio_dev_s *sdio_initialize(int slotno)
       /* Select HSMCI2 */
 
       priv = &g_hsmci2;
-
-      /* HSMCI2 Initialization */
-
-      priv->base  = SAM_HSMCI2_VBASE;
-      priv->hsmci = 2;
 
       /* Configure PIOs for 4-bit, wide-bus operation.  NOTE: (1) the chip
        * is capable of 8-bit wide bus operation but D4-D7 are not configured,
@@ -3333,22 +3376,6 @@ FAR struct sdio_dev_s *sdio_initialize(int slotno)
          " hsmci: %d dmac: %d pid: %" PRId32 "\n",
          priv, priv->base, priv->hsmci, dmac, pid);
 
-  /* Initialize the HSMCI slot structure */
-
-  /* Initialize semaphores */
-
-  nxsem_init(&priv->waitsem, 0, 0);
-
-  /* The waitsem semaphore is used for signaling and, hence, should not have
-   * priority inheritance enabled.
-   */
-
-  nxsem_set_protocol(&priv->waitsem, SEM_PRIO_NONE);
-
-  /* Initialize the callbacks */
-
-  memcpy(&priv->dev, &g_callbacks, sizeof(struct sdio_dev_s));
-
   /* Allocate a DMA channel */
 
   priv->dma = sam_dmachannel(dmac, DMA_FLAGS(pid));
@@ -3384,7 +3411,7 @@ FAR struct sdio_dev_s *sdio_initialize(int slotno)
  *
  ****************************************************************************/
 
-void sdio_mediachange(FAR struct sdio_dev_s *dev, bool cardinslot)
+void sdio_mediachange(struct sdio_dev_s *dev, bool cardinslot)
 {
   struct sam_dev_s *priv = (struct sam_dev_s *)dev;
   sdio_statset_t cdstatus;
@@ -3434,7 +3461,7 @@ void sdio_mediachange(FAR struct sdio_dev_s *dev, bool cardinslot)
  *
  ****************************************************************************/
 
-void sdio_wrprotect(FAR struct sdio_dev_s *dev, bool wrprotect)
+void sdio_wrprotect(struct sdio_dev_s *dev, bool wrprotect)
 {
   struct sam_dev_s *priv = (struct sam_dev_s *)dev;
   irqstate_t flags;

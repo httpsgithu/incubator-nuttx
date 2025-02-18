@@ -1,8 +1,8 @@
 /****************************************************************************
  * arch/arm/src/stm32l4/stm32l4_comp.h
  *
- * Copyright (c) 2016 Motorola Mobility, LLC.
- * All rights reserved.
+ * SPDX-License-Identifier: BSD-3-Clause
+ * SPDX-FileCopyrightText: 2016 Motorola Mobility LLC. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -146,9 +146,9 @@ struct stm32l4_comp_config_s
 {
   struct
   {
-    FAR const struct comp_callback_s *cb;
-    bool                              rising;
-    bool                              falling;
+    const struct comp_callback_s *cb;
+    bool                          rising;
+    bool                          falling;
   } interrupt;
 
   uint8_t  inp;                 /* Plus input pin (see enum stm32l4_comp_inp_e) */
@@ -191,9 +191,9 @@ extern "C"
  *
  ****************************************************************************/
 
-FAR struct
+struct
 comp_dev_s *stm32l4_compinitialize(int intf,
-                               FAR const struct stm32l4_comp_config_s *cfg);
+                                   const struct stm32l4_comp_config_s *cfg);
 
 #undef EXTERN
 #ifdef __cplusplus

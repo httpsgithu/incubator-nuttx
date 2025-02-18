@@ -1,6 +1,8 @@
 /****************************************************************************
  * libs/libc/pthread/pthread_create.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -87,5 +89,5 @@ int pthread_create(FAR pthread_t *thread, FAR const pthread_attr_t *attr,
                    pthread_startroutine_t pthread_entry, pthread_addr_t arg)
 {
   return nx_pthread_create(pthread_startup, thread, attr, pthread_entry,
-                           arg, pthread_exit);
+                           arg);
 }

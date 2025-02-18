@@ -1,6 +1,8 @@
 /****************************************************************************
  * include/nuttx/lcd/st7735.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -18,8 +20,8 @@
  *
  ****************************************************************************/
 
-#ifndef __INCLUDE_NUTTX_ST7735_H
-#define __INCLUDE_NUTTX_ST7735_H
+#ifndef __INCLUDE_NUTTX_LCD_ST7735_H
+#define __INCLUDE_NUTTX_LCD_ST7735_H
 
 /****************************************************************************
  * Included Files
@@ -69,4 +71,4 @@ FAR struct lcd_dev_s *st7735_lcdinitialize(FAR struct spi_dev_s *spi);
 }
 #endif
 
-#endif /* __INCLUDE_NUTTX_ST7735_H */
+#endif /* __INCLUDE_NUTTX_LCD_ST7735_H */

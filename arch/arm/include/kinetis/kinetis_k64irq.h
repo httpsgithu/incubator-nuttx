@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/include/kinetis/kinetis_k64irq.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -22,8 +24,8 @@
  * only indirectly through nuttx/irq.h
  */
 
-#ifndef __ARCH_ARM_INCLUDE_KINETIS_KINETIS_64KIRQ_H
-#define __ARCH_ARM_INCLUDE_KINETIS_KINETIS_64KIRQ_H
+#ifndef __ARCH_ARM_INCLUDE_KINETIS_KINETIS_K64IRQ_H
+#define __ARCH_ARM_INCLUDE_KINETIS_KINETIS_K64IRQ_H
 
 /****************************************************************************
  * Included Files
@@ -172,4 +174,4 @@ extern "C"
 #endif
 #endif
 
-#endif /* __ARCH_ARM_INCLUDE_KINETIS_KINETIS_64KIRQ_H */
+#endif /* __ARCH_ARM_INCLUDE_KINETIS_KINETIS_K64IRQ_H */

@@ -1,6 +1,8 @@
 /****************************************************************************
  * fs/procfs/fs_procfsiobinfo.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -41,6 +43,8 @@
 #include <nuttx/mm/iob.h>
 #include <nuttx/fs/fs.h>
 #include <nuttx/fs/procfs.h>
+
+#include "fs_heap.h"
 
 #if !defined(CONFIG_DISABLE_MOUNTPOINT) && defined(CONFIG_FS_PROCFS) && \
     defined(CONFIG_MM_IOB) && !defined(CONFIG_FS_PROCFS_EXCLUDE_IOBINFO)
@@ -84,82 +88,6 @@ static int     iobinfo_dup(FAR const struct file *oldp,
 static int     iobinfo_stat(FAR const char *relpath, FAR struct stat *buf);
 
 /****************************************************************************
- * Private Data
- ****************************************************************************/
-
-/* CAUTION: The order of these entries and the preprocessor logic must match
- * logic found in the enum iob_user_e declaration found in iob.h
- */
-
-static FAR const char *g_iob_user_names[] =
-{
-#ifdef CONFIG_SYSLOG_BUFFER
-  "syslog",
-#endif
-#ifdef CONFIG_IOB_UNITTEST
-  "unittest",
-#endif
-#ifdef CONFIG_NET_6LOWPAN
-  "sixlowpan",
-#endif
-#ifdef CONFIG_NET_ICMP_SOCKET
-  "icmp_sock",
-#endif
-#ifdef CONFIG_NET_ICMPv6_SOCKET
-  "icmpv6_sock",
-#endif
-#ifdef CONFIG_NET_UDP
-  "udp_sock",
-#endif
-#ifdef CONFIG_NET_TCP
-  "tcp_sock",
-#endif
-#ifdef CONFIG_NET_IEEE802154
-  "ieee802154_sock",
-#endif
-#ifdef CONFIG_NET_BLUETOOTH
-  "bluetooth_sock",
-#endif
-#if defined(CONFIG_NET_UDP) && !defined(NET_UDP_NO_STACK)
-  "udp_readahead",
-#endif
-#ifdef CONFIG_NET_UDP_WRITE_BUFFERS
-  "udp_writebuffer",
-#endif
-#if defined(CONFIG_NET_TCP) && !defined(NET_TCP_NO_STACK)
-  "tcp_readahead",
-#endif
-#ifdef CONFIG_NET_TCP_WRITE_BUFFERS
-  "tcp_writebuffer",
-#endif
-#ifdef CONFIG_NET_IPFORWARD
-  "ipforward",
-#endif
-#ifdef CONFIG_WIRELESS_IEEE802154
-  "rad802154",
-#endif
-#ifdef CONFIG_IEEE802154_MAC
-  "mac802154",
-#endif
-#ifdef CONFIG_IEEE802154_MACDEV
-  "mac802154_macdev",
-#endif
-#ifdef CONFIG_IEEE802154_NETDEV
-  "mac802154_netdev",
-#endif
- #ifdef CONFIG_WL_SPIRIT
-  "packetradio",
-#endif
-#ifdef CONFIG_WIRELESS_BLUETOOTH
-  "bluetooth",
-#endif
-#ifdef CONFIG_NET_CAN
-  "can",
-#endif
-  "global",
-};
-
-/****************************************************************************
  * Public Data
  ****************************************************************************/
 
@@ -168,12 +96,13 @@ static FAR const char *g_iob_user_names[] =
  * with any compiler.
  */
 
-const struct procfs_operations iobinfo_operations =
+const struct procfs_operations g_iobinfo_operations =
 {
   iobinfo_open,   /* open */
   iobinfo_close,  /* close */
   iobinfo_read,   /* read */
   NULL,           /* write */
+  NULL,           /* poll */
   iobinfo_dup,    /* dup */
   NULL,           /* opendir */
   NULL,           /* closedir */
@@ -209,18 +138,10 @@ static int iobinfo_open(FAR struct file *filep, FAR const char *relpath,
       return -EACCES;
     }
 
-  /* "iobinfo" is the only acceptable value for the relpath */
-
-  if (strcmp(relpath, "iobinfo") != 0)
-    {
-      ferr("ERROR: relpath is '%s'\n", relpath);
-      return -ENOENT;
-    }
-
   /* Allocate a container to hold the file attributes */
 
   procfile = (FAR struct iobinfo_file_s *)
-    kmm_zalloc(sizeof(struct iobinfo_file_s));
+    fs_heap_zalloc(sizeof(struct iobinfo_file_s));
   if (!procfile)
     {
       ferr("ERROR: Failed to allocate file attributes\n");
@@ -248,7 +169,7 @@ static int iobinfo_close(FAR struct file *filep)
 
   /* Release the file attributes structure */
 
-  kmm_free(procfile);
+  fs_heap_free(procfile);
   filep->f_priv = NULL;
   return OK;
 }
@@ -261,16 +182,15 @@ static ssize_t iobinfo_read(FAR struct file *filep, FAR char *buffer,
                             size_t buflen)
 {
   FAR struct iobinfo_file_s *iobfile;
-  FAR struct iob_userstats_s *userstats;
+  FAR struct iob_stats_s stats;
   size_t linesize;
   size_t copysize;
   size_t totalsize;
   off_t offset;
-  int i;
 
   finfo("buffer=%p buflen=%d\n", buffer, (int)buflen);
 
-  DEBUGASSERT(filep != NULL && buffer != NULL && buflen > 0);
+  DEBUGASSERT(buffer != NULL && buflen > 0);
   offset = filep->f_pos;
 
   /* Recover our private data from the struct file instance */
@@ -281,64 +201,27 @@ static ssize_t iobinfo_read(FAR struct file *filep, FAR char *buffer,
   /* The first line is the headers */
 
   linesize  = procfs_snprintf(iobfile->line, IOBINFO_LINELEN,
-                       "                           TOTAL           TOTAL\n");
+                              "%10s%10s%10s%10s\n",
+                              "ntotal", "nfree", "nwait", "nthrottle");
 
   copysize  = procfs_memcpy(iobfile->line, linesize, buffer, buflen,
                             &offset);
   totalsize = copysize;
 
-  if (totalsize < buflen)
-    {
-      buffer    += copysize;
-      buflen    -= copysize;
+  buffer   += copysize;
+  buflen   -= copysize;
 
-      linesize  = procfs_snprintf(iobfile->line, IOBINFO_LINELEN,
-                           "        USER            CONSUMED        "
-                           "PRODUCED\n");
+  /* The second line is the usage statistics */
 
-      copysize  = procfs_memcpy(iobfile->line, linesize, buffer, buflen,
-                                &offset);
-      totalsize += copysize;
-    }
+  iob_getstats(&stats);
+  linesize   = procfs_snprintf(iobfile->line, IOBINFO_LINELEN,
+                               "%10d%10d%10d%10d\n",
+                               stats.ntotal, stats.nfree,
+                               stats.nwait, stats.nthrottle);
 
-  /* Loop through each IOB user printing the usage statistics */
-
-  for (i = 0; i < IOBUSER_GLOBAL; i++)
-    {
-      if (totalsize < buflen)
-        {
-          buffer    += copysize;
-          buflen    -= copysize;
-
-          userstats  = iob_getuserstats(i);
-          linesize   = procfs_snprintf(iobfile->line, IOBINFO_LINELEN,
-                                    "%-16s%16lu%16lu\n",
-                                    g_iob_user_names[i],
-                                    (unsigned long)userstats->totalconsumed,
-                                    (unsigned long)userstats->totalproduced);
-
-          copysize   = procfs_memcpy(iobfile->line, linesize, buffer, buflen,
-                                     &offset);
-          totalsize += copysize;
-        }
-    }
-
-  if (totalsize < buflen)
-    {
-      buffer    += copysize;
-      buflen    -= copysize;
-
-      userstats  = iob_getuserstats(IOBUSER_GLOBAL);
-      linesize   = procfs_snprintf(iobfile->line, IOBINFO_LINELEN,
-                                   "\n%-16s%16lu%16lu\n",
-                                   g_iob_user_names[IOBUSER_GLOBAL],
-                                   (unsigned long)userstats->totalconsumed,
-                                   (unsigned long)userstats->totalproduced);
-
-      copysize   = procfs_memcpy(iobfile->line, linesize, buffer, buflen,
-                                 &offset);
-      totalsize += copysize;
-    }
+  copysize   = procfs_memcpy(iobfile->line, linesize, buffer, buflen,
+                             &offset);
+  totalsize += copysize;
 
   /* Update the file offset */
 
@@ -369,7 +252,7 @@ static int iobinfo_dup(FAR const struct file *oldp, FAR struct file *newp)
   /* Allocate a new container to hold the task and attribute selection */
 
   newattr = (FAR struct iobinfo_file_s *)
-    kmm_malloc(sizeof(struct iobinfo_file_s));
+    fs_heap_malloc(sizeof(struct iobinfo_file_s));
   if (!newattr)
     {
       ferr("ERROR: Failed to allocate file attributes\n");
@@ -395,14 +278,6 @@ static int iobinfo_dup(FAR const struct file *oldp, FAR struct file *newp)
 
 static int iobinfo_stat(FAR const char *relpath, FAR struct stat *buf)
 {
-  /* "iobinfo" is the only acceptable value for the relpath */
-
-  if (strcmp(relpath, "iobinfo") != 0)
-    {
-      ferr("ERROR: relpath is '%s'\n", relpath);
-      return -ENOENT;
-    }
-
   /* "iobinfo" is the name for a read-only file */
 
   memset(buf, 0, sizeof(struct stat));

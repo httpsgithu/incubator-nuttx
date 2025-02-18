@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/cxd56xx/common/src/cxd56_bm1383glv_scu.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -40,10 +42,10 @@
  ****************************************************************************/
 
 #ifdef CONFIG_SENSORS_BM1383GLV_SCU
-int board_bm1383glv_initialize(FAR const char *devpath, int bus)
+int board_bm1383glv_initialize(const char *devpath, int bus)
 {
   int ret;
-  FAR struct i2c_master_s *i2c;
+  struct i2c_master_s *i2c;
 
   sninfo("Initializing BM1383GLV...\n");
 

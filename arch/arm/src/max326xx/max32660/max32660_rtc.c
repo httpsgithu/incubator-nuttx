@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/max326xx/max32660/max32660_rtc.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -38,8 +40,7 @@
 #include <nuttx/clock.h>
 #include <nuttx/timers/rtc.h>
 
-#include "arm_arch.h"
-
+#include "arm_internal.h"
 #include "hardware/max326_rtc.h"
 #include "max326_rtc.h"
 
@@ -76,8 +77,10 @@
 /* Callback to use when the alarm expires */
 
 static alm_callback_t g_alarmcb;
-static FAR void *g_alarmarg;
+static void *g_alarmarg;
 #endif
+
+static spinlock_t g_rtc_lock = SP_UNLOCKED;
 
 /****************************************************************************
  * Public Data
@@ -190,7 +193,7 @@ static void max326_rtc_wrenable(bool enable)
  *
  ****************************************************************************/
 
-static b32_t max326_rtc_tm2b32(FAR const struct timespec *tp)
+static b32_t max326_rtc_tm2b32(const struct timespec *tp)
 {
   b32_t intpart;
   b32_t fracpart;
@@ -242,7 +245,7 @@ static b32_t max326_rtc_tm2b32(FAR const struct timespec *tp)
  ****************************************************************************/
 
 #ifdef CONFIG_RTC_ALARM
-static int max326_rtc_interrupt(int irq, void *context, FAR void *arg)
+static int max326_rtc_interrupt(int irq, void *context, void *arg)
 {
   uint32_t regval;
 
@@ -398,12 +401,15 @@ time_t up_rtc_time(void)
  ****************************************************************************/
 
 #ifdef CONFIG_RTC_HIRES
-int up_rtc_gettime(FAR struct timespec *tp)
+int up_rtc_gettime(struct timespec *tp)
 {
+  irqstate_t flags;
   uint64_t tmp;
   uint32_t sec;
   uint32_t ssec;
   uint32_t verify;
+
+  flags = spin_lock_irqsave(&g_rtc_lock);
 
   /* Read the time handling rollover to full seconds */
 
@@ -414,6 +420,8 @@ int up_rtc_gettime(FAR struct timespec *tp)
       verify = getreg32(MAX326_RTC_SEC);
     }
   while (verify != sec);
+
+  spin_unlock_irqrestore(&g_rtc_lock, flags);
 
   /* Format as a tm */
 
@@ -442,7 +450,7 @@ int up_rtc_gettime(FAR struct timespec *tp)
  *
  ****************************************************************************/
 
-int up_rtc_settime(FAR const struct timespec *tp)
+int up_rtc_settime(const struct timespec *tp)
 {
   irqstate_t flags;
   b32_t ftime;
@@ -458,7 +466,7 @@ int up_rtc_settime(FAR const struct timespec *tp)
 
   /* Enable write access to RTC configuration registers */
 
-  flags = spin_lock_irqsave(NULL);
+  flags = spin_lock_irqsave(&g_rtc_lock);
   max326_rtc_wrenable(true);
 
   /* We need to disable the RTC in order to write to the SEC and SSEC
@@ -482,7 +490,7 @@ int up_rtc_settime(FAR const struct timespec *tp)
   max326_rtc_enable(true);
   max326_rtc_wrenable(false);
 
-  spin_unlock_irqrestore(NULL, flags);
+  spin_unlock_irqrestore(&g_rtc_lock, flags);
   return OK;
 }
 
@@ -503,8 +511,8 @@ int up_rtc_settime(FAR const struct timespec *tp)
  ****************************************************************************/
 
 #ifdef CONFIG_RTC_ALARM
-int max326_rtc_setalarm(FAR struct timespec *ts,
-                        alm_callback_t cb, FAR void *arg)
+int max326_rtc_setalarm(struct timespec *ts,
+                        alm_callback_t cb, void *arg)
 {
   irqstate_t flags;
   b32_t b32now;
@@ -521,7 +529,7 @@ int max326_rtc_setalarm(FAR struct timespec *ts,
 
   /* Is there already something waiting on the ALARM? */
 
-  flags = spin_lock_irqsave(NULL);
+  flags = spin_lock_irqsave(&g_rtc_lock);
   if (g_alarmcb == NULL)
     {
       /* Get the time as a fixed precision number.
@@ -616,7 +624,7 @@ int max326_rtc_setalarm(FAR struct timespec *ts,
     }
 
 errout_with_lock:
-  spin_unlock_irqrestore(NULL, flags);
+  spin_unlock_irqrestore(&g_rtc_lock, flags);
   return ret;
 }
 #endif
@@ -636,7 +644,7 @@ errout_with_lock:
  ****************************************************************************/
 
 #ifdef CONFIG_RTC_ALARM
-int max326_rtc_rdalarm(FAR b32_t *ftime)
+int max326_rtc_rdalarm(b32_t *ftime)
 {
   b32_t b32now;
   b32_t b32delay;
@@ -716,7 +724,7 @@ int max326_rtc_cancelalarm(void)
   uint32_t regval;
   int ret = -ENODATA;
 
-  flags = spin_lock_irqsave(NULL);
+  flags = spin_lock_irqsave(&g_rtc_lock);
 
   if (g_alarmcb != NULL)
     {
@@ -744,7 +752,7 @@ int max326_rtc_cancelalarm(void)
       ret = OK;
     }
 
-  spin_unlock_irqrestore(NULL, flags);
+  spin_unlock_irqrestore(&g_rtc_lock, flags);
   return ret;
 }
 #endif

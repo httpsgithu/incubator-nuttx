@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/imxrt/imxrt_irq.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -37,7 +39,6 @@
 
 #include "nvic.h"
 #include "ram_vectors.h"
-#include "arm_arch.h"
 #include "arm_internal.h"
 
 #ifdef CONFIG_IMXRT_GPIO_IRQ
@@ -62,28 +63,6 @@
 
 #define NVIC_ENA_OFFSET    (0)
 #define NVIC_CLRENA_OFFSET (NVIC_IRQ0_31_CLEAR - NVIC_IRQ0_31_ENABLE)
-
-/****************************************************************************
- * Public Data
- ****************************************************************************/
-
-/* g_current_regs[] holds a references to the current interrupt level
- * register storage structure.  If is non-NULL only during interrupt
- * processing.  Access to g_current_regs[] must be through the macro
- * CURRENT_REGS for portability.
- */
-
-volatile uint32_t *g_current_regs[1];
-
-/* This is the address of the  exception vector table (determined by the
- * linker script).
- */
-
-extern uint32_t _vectors[];
-
-/****************************************************************************
- * Private Data
- ****************************************************************************/
 
 /****************************************************************************
  * Private Functions
@@ -200,6 +179,33 @@ static void imxrt_dumpnvic(const char *msg, int irq)
           getreg32(NVIC_IRQ156_159_PRIORITY));
 #endif
 #if IMXRT_IRQ_NEXTINT > 160
+  irqinfo("              %08x %08x %08x %08x\n",
+          getreg32(NVIC_IRQ160_163_PRIORITY),
+          getreg32(NVIC_IRQ164_167_PRIORITY),
+          getreg32(NVIC_IRQ168_171_PRIORITY),
+          getreg32(NVIC_IRQ172_175_PRIORITY));
+#endif
+#if IMXRT_IRQ_NEXTINT > 176
+  irqinfo("              %08x %08x %08x %08x\n",
+          getreg32(NVIC_IRQ176_179_PRIORITY),
+          getreg32(NVIC_IRQ180_183_PRIORITY),
+          getreg32(NVIC_IRQ184_187_PRIORITY),
+          getreg32(NVIC_IRQ188_191_PRIORITY));
+#endif
+#if IMXRT_IRQ_NEXTINT > 192
+  irqinfo("              %08x %08x %08x %08x\n",
+          getreg32(NVIC_IRQ192_195_PRIORITY),
+          getreg32(NVIC_IRQ196_199_PRIORITY),
+          getreg32(NVIC_IRQ200_203_PRIORITY),
+          getreg32(NVIC_IRQ204_207_PRIORITY));
+#endif
+#if IMXRT_IRQ_NEXTINT > 208
+  irqinfo("              %08x %08x %08x\n",
+          getreg32(NVIC_IRQ208_211_PRIORITY),
+          getreg32(NVIC_IRQ212_215_PRIORITY),
+          getreg32(NVIC_IRQ216_219_PRIORITY));
+#endif
+#if IMXRT_IRQ_NEXTINT > 218
 #  warning Missing logic
 #endif
 
@@ -210,8 +216,7 @@ static void imxrt_dumpnvic(const char *msg, int irq)
 #endif
 
 /****************************************************************************
- * Name: imxrt_nmi, imxrt_busfault, imxrt_usagefault, imxrt_pendsv,
- *       imxrt_dbgmonitor, imxrt_pendsv, imxrt_reserved
+ * Name: imxrt_nmi, imxrt_pendsv, imxrt_pendsv, imxrt_reserved
  *
  * Description:
  *   Handlers for various exceptions.  None are handled and all are fatal
@@ -221,7 +226,7 @@ static void imxrt_dumpnvic(const char *msg, int irq)
  ****************************************************************************/
 
 #ifdef CONFIG_DEBUG_FEATURES
-static int imxrt_nmi(int irq, FAR void *context, FAR void *arg)
+static int imxrt_nmi(int irq, void *context, void *arg)
 {
   up_irq_save();
   _err("PANIC!!! NMI received\n");
@@ -229,25 +234,7 @@ static int imxrt_nmi(int irq, FAR void *context, FAR void *arg)
   return 0;
 }
 
-static int imxrt_busfault(int irq, FAR void *context, FAR void *arg)
-{
-  up_irq_save();
-  _err("PANIC!!! Bus fault received: %08" PRIx32 "\n",
-       getreg32(NVIC_CFAULTS));
-  PANIC();
-  return 0;
-}
-
-static int imxrt_usagefault(int irq, FAR void *context, FAR void *arg)
-{
-  up_irq_save();
-  _err("PANIC!!! Usage fault received: %08" PRIx32 "\n",
-       getreg32(NVIC_CFAULTS));
-  PANIC();
-  return 0;
-}
-
-static int imxrt_pendsv(int irq, FAR void *context, FAR void *arg)
+static int imxrt_pendsv(int irq, void *context, void *arg)
 {
   up_irq_save();
   _err("PANIC!!! PendSV received\n");
@@ -255,15 +242,7 @@ static int imxrt_pendsv(int irq, FAR void *context, FAR void *arg)
   return 0;
 }
 
-static int imxrt_dbgmonitor(int irq, FAR void *context, FAR void *arg)
-{
-  up_irq_save();
-  _err("PANIC!!! Debug Monitor received\n");
-  PANIC();
-  return 0;
-}
-
-static int imxrt_reserved(int irq, FAR void *context, FAR void *arg)
+static int imxrt_reserved(int irq, void *context, void *arg)
 {
   up_irq_save();
   _err("PANIC!!! Reserved interrupt\n");
@@ -281,7 +260,6 @@ static int imxrt_reserved(int irq, FAR void *context, FAR void *arg)
  *
  ****************************************************************************/
 
-#ifdef CONFIG_ARMV7M_USEBASEPRI
 static inline void imxrt_prioritize_syscall(int priority)
 {
   uint32_t regval;
@@ -293,7 +271,6 @@ static inline void imxrt_prioritize_syscall(int priority)
   regval |= (priority << NVIC_SYSH_PRIORITY_PR11_SHIFT);
   putreg32(regval, NVIC_SYSH8_11_PRIORITY);
 }
-#endif
 
 /****************************************************************************
  * Name: imxrt_irqinfo
@@ -354,6 +331,22 @@ static int imxrt_irqinfo(int irq, uintptr_t *regaddr, uint32_t *bit,
       else
 #endif
 #if IMXRT_IRQ_NEXTINT > 160
+      if (extint < 192)
+        {
+           *regaddr = (NVIC_IRQ160_191_ENABLE + offset);
+           *bit     = 1 << (extint - 160);
+        }
+      else
+#endif
+#if IMXRT_IRQ_NEXTINT > 192
+      if (extint < 219)
+        {
+           *regaddr = (NVIC_IRQ192_223_ENABLE + offset);
+           *bit     = 1 << (extint - 192);
+        }
+      else
+#endif
+#if IMXRT_IRQ_NEXTINT > 218
 #  error Missing logic
 #endif
         {
@@ -403,9 +396,6 @@ static int imxrt_irqinfo(int irq, uintptr_t *regaddr, uint32_t *bit,
 void up_irqinitialize(void)
 {
   uintptr_t regaddr;
-#if defined(CONFIG_DEBUG_SYMBOLS) && !defined(CONFIG_ARMV7M_USEBASEPRI)
-  uint32_t regval;
-#endif
   int nintlines;
   int i;
 
@@ -466,10 +456,6 @@ void up_irqinitialize(void)
       putreg32(DEFPRIORITY32, regaddr);
     }
 
-  /* currents_regs is non-NULL only while processing an interrupt */
-
-  CURRENT_REGS = NULL;
-
   /* Attach the SVCall and Hard Fault exception handlers.  The SVCall
    * exception is used for performing context switches; The Hard Fault
    * must also be caught because a SVCall may show up as a Hard Fault
@@ -484,9 +470,8 @@ void up_irqinitialize(void)
 #ifdef CONFIG_ARCH_IRQPRIO
   /* up_prioritize_irq(IMXRT_IRQ_PENDSV, NVIC_SYSH_PRIORITY_MIN); */
 #endif
-#ifdef CONFIG_ARMV7M_USEBASEPRI
+
   imxrt_prioritize_syscall(NVIC_SYSH_SVCALL_PRIORITY);
-#endif
 
   /* If the MPU is enabled, then attach and enable the Memory Management
    * Fault handler.
@@ -504,25 +489,15 @@ void up_irqinitialize(void)
 #ifndef CONFIG_ARM_MPU
   irq_attach(IMXRT_IRQ_MEMFAULT, arm_memfault, NULL);
 #endif
-  irq_attach(IMXRT_IRQ_BUSFAULT, imxrt_busfault, NULL);
-  irq_attach(IMXRT_IRQ_USAGEFAULT, imxrt_usagefault, NULL);
+  irq_attach(IMXRT_IRQ_BUSFAULT, arm_busfault, NULL);
+  irq_attach(IMXRT_IRQ_USAGEFAULT, arm_usagefault, NULL);
   irq_attach(IMXRT_IRQ_PENDSV, imxrt_pendsv, NULL);
-  irq_attach(IMXRT_IRQ_DBGMONITOR, imxrt_dbgmonitor, NULL);
+  arm_enable_dbgmonitor();
+  irq_attach(IMXRT_IRQ_DBGMONITOR, arm_dbgmonitor, NULL);
   irq_attach(IMXRT_IRQ_RESERVED, imxrt_reserved, NULL);
 #endif
 
   imxrt_dumpnvic("initial", NR_IRQS);
-
-  /* If a debugger is connected, try to prevent it from catching hardfaults.
-   * If CONFIG_ARMV7M_USEBASEPRI, no hardfaults are expected in normal
-   * operation.
-   */
-
-#if defined(CONFIG_DEBUG_SYMBOLS) && !defined(CONFIG_ARMV7M_USEBASEPRI)
-  regval  = getreg32(NVIC_DEMCR);
-  regval &= ~NVIC_DEMCR_VCHARDERR;
-  putreg32(regval, NVIC_DEMCR);
-#endif
 
 #ifndef CONFIG_SUPPRESS_INTERRUPTS
   /* Initialize logic to support a second level of interrupt decoding for

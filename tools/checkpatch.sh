@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 # tools/checkpatch.sh
 #
+# SPDX-License-Identifier: Apache-2.0
+#
 # Licensed to the Apache Software Foundation (ASF) under one or more
 # contributor license agreements.  See the NOTICE file distributed with
 # this work for additional information regarding copyright ownership.
@@ -23,15 +25,20 @@ check=check_patch
 fail=0
 range=0
 spell=0
+encoding=0
+message=0
+cmake_warning_once=0
 
 usage() {
   echo "USAGE: ${0} [options] [list|-]"
   echo ""
   echo "Options:"
   echo "-h"
-  echo "-c spell check with codespell(install with: pip install codespell)"
+  echo "-c spell check with codespell (install with: pip install codespell)"
+  echo "-u encoding check with cvt2utf (install with: pip install cvt2utf)"
   echo "-r range check only (coupled with -p or -g)"
   echo "-p <patch file names> (default)"
+  echo "-m Change-Id check in commit message (coupled with -g)"
   echo "-g <commit list>"
   echo "-f <file list>"
   echo "-  read standard input mainly used by git pre-commit hook as below:"
@@ -42,13 +49,87 @@ usage() {
   exit $@
 }
 
+is_rust_file() {
+  file_ext=${@##*.}
+  file_ext_r=${file_ext/R/r}
+  file_ext_rs=${file_ext_r/S/s}
+
+  if [ "$file_ext_rs" == "rs" ]; then
+    echo 1
+  else
+    echo 0
+  fi
+}
+
+is_cmake_file() {
+  file_name=$(basename $@)
+  if [ "$file_name" == "CMakeLists.txt" ] || [[ "$file_name" =~ \.cmake$ ]]; then
+    echo 1
+  else
+    echo 0
+  fi
+}
+
 check_file() {
-  if ! $TOOLDIR/nxstyle $@ 2>&1; then
+  if [ -x $@ ]; then
+    case $@ in
+    *.bat | *.sh | *.py)
+      ;;
+    *)
+      echo "$@: error: execute permissions detected!"
+      fail=1
+      ;;
+    esac
+  fi
+
+  if [ ${@##*.} == 'py' ]; then
+    setupcfg="${TOOLDIR}/../.github/linters/setup.cfg"
+    black --check "$@" || fail=1
+    flake8 --config "${setupcfg}" "$@" || fail=1
+    isort --diff --check-only --settings-path "${setupcfg}" "$@"
+    if [ $? -ne 0 ]; then
+      # Format in place
+      isort --settings-path "${setupcfg}" "$@"
+      fail=1
+    fi
+  elif [ "$(is_rust_file $@)" == "1" ]; then
+    if ! command -v rustfmt &> /dev/null; then
+      fail=1
+    elif ! rustfmt --edition 2021 --check $@ 2>&1; then
+      fail=1
+    fi
+  elif [ "$(is_cmake_file $@)" == "1" ]; then
+    if ! command -v cmake-format &> /dev/null; then
+      if [ $cmake_warning_once == 0 ]; then
+        echo -e "\ncmake-format not found, run following command to install:"
+        echo "  $ pip install cmake-format"
+        cmake_warning_once=1
+      fi
+      fail=1
+    elif ! cmake-format --check $@ 2>&1; then
+      if [ $cmake_warning_once == 0 ]; then
+        echo -e "\ncmake-format check failed, run following command to update the style:"
+        echo -e "  $ cmake-format <src> -o <dst>\n"
+        cmake-format --check $@ 2>&1
+        cmake_warning_once=1
+      fi
+      fail=1
+    fi
+  elif ! $TOOLDIR/nxstyle $@ 2>&1; then
     fail=1
   fi
 
   if [ $spell != 0 ]; then
     if ! codespell -q 7 ${@: -1}; then
+      fail=1
+    fi
+  fi
+
+  if [ $encoding != 0 ]; then
+    md5="$(md5sum $@)"
+    cvt2utf convert --nobak "$@" &> /dev/null
+    if [ "$md5" != "$(md5sum $@)" ]; then
+      echo "$@: error: Non-UTF8 characters detected!"
       fail=1
     fi
   fi
@@ -100,8 +181,10 @@ check_msg() {
 }
 
 check_commit() {
-  msg=`git show -s --format=%B $1`
-  check_msg <<< "$msg"
+  if [ $message != 0 ]; then
+    msg=`git show -s --format=%B $1`
+    check_msg <<< "$msg"
+  fi
   diffs=`git diff $1`
   check_ranges <<< "$diffs"
 }
@@ -121,8 +204,14 @@ while [ ! -z "$1" ]; do
   -c )
     spell=1
     ;;
+  -u )
+    encoding=1
+    ;;
   -f )
     check=check_file
+    ;;
+  -m )
+    message=1
     ;;
   -g )
     check=check_commit

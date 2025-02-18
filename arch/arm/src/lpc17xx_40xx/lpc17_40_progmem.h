@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/lpc17xx_40xx/lpc17_40_progmem.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -52,6 +54,10 @@
 
 #define LPC17_40_FLASH_NUM_SECTORS \
   (LPC17_40_FLASH_NUM_4K_SECTORS + LPC17_40_FLASH_NUM_32K_SECTORS)
+
+/* Flash erased byte value */
+
+#define LPC17_40_FLASH_ERASEDVAL (0xffu)
 
 /* Size of a write page. */
 

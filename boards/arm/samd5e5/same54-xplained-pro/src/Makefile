@@ -1,6 +1,8 @@
 ############################################################################
 # boards/arm/samd5e5/same54-xplained-pro/src/Makefile
 #
+# SPDX-License-Identifier: Apache-2.0
+#
 # Licensed to the Apache Software Foundation (ASF) under one or more
 # contributor license agreements.  See the NOTICE file distributed with
 # this work for additional information regarding copyright ownership.  The
@@ -32,7 +34,7 @@ else
 CSRCS += sam_userleds.c
 endif
 
-ifeq ($(CONFIG_SAMD5E5_GMAC_PHYINIT), y)
+ifeq ($(CONFIG_SAMD5E5_GMAC_PHYINIT),y)
 CSRCS += sam_phyinit.c
 endif
 

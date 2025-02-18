@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/cxd56xx/spresense/include/cxd56_bcm20706.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -18,8 +20,8 @@
  *
  ****************************************************************************/
 
-#ifndef __BSP_BOARD_COMMON_INCLUDE_CXD56_BCM20706_H
-#define __BSP_BOARD_COMMON_INCLUDE_CXD56_BCM20706_H
+#ifndef __BOARDS_ARM_CXD56XX_SPRESENSE_INCLUDE_CXD56_BCM20706_H
+#define __BOARDS_ARM_CXD56XX_SPRESENSE_INCLUDE_CXD56_BCM20706_H
 
 /****************************************************************************
  * Included Files
@@ -108,4 +110,4 @@ void board_bluetooth_enable_sleep(bool en);
 #endif
 
 #endif /* __ASSEMBLY__ */
-#endif /* __BSP_BOARD_COMMON_INCLUDE_CXD56_BCM20706_H */
+#endif /* __BOARDS_ARM_CXD56XX_SPRESENSE_INCLUDE_CXD56_BCM20706_H */

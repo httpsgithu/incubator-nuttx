@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/avr/at90usb/teensy-2.0/src/at90usb_spi.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -32,7 +34,7 @@
 #include <arch/board/board.h>
 #include <avr/io.h>
 
-#include "up_arch.h"
+#include "avr_internal.h"
 #include "chip.h"
 #include "at90usb.h"
 #include "teensy-20.h"

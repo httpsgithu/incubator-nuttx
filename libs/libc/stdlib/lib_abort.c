@@ -1,6 +1,8 @@
 /****************************************************************************
  * libs/libc/stdlib/lib_abort.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -63,21 +65,8 @@ void abort(void)
    * a conformant version of abort() at this time.  This version does not
    * signal the calling thread all.
    *
-   * Note that pthread_exit() is called instead of exit().  That is because
-   * we do no know if abort was called from a pthread or a normal thread
-   * (we could find out, of course).  If abort() is called from a
-   * non-pthread, then pthread_exit() should fail and fall back to call
-   * exit() anyway.
-   *
-   * If exit() is called (either below or via pthread_exit()), then exit()
-   * will flush and close all open files and terminate the thread.  If this
-   * function was called from a pthread, then pthread_exit() will complete
-   * any joins, but will not flush or close any streams.
+   * _exit() will close all open files and terminate the thread.
    */
 
-#ifdef CONFIG_DISABLE_PTHREAD
-  exit(EXIT_FAILURE);
-#else
-  pthread_exit(NULL);
-#endif
+  _exit(EXIT_FAILURE);
 }

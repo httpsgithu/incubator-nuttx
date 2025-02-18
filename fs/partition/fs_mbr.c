@@ -1,6 +1,8 @@
 /****************************************************************************
  * fs/partition/fs_mbr.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -25,17 +27,19 @@
 #include <debug.h>
 #include <endian.h>
 #include <string.h>
+#include <inttypes.h>
 
 #include <nuttx/kmalloc.h>
 
 #include "partition.h"
+#include "fs_heap.h"
 
 /****************************************************************************
  * Pre-processor Definitions
  ****************************************************************************/
 
 #define MBR_SIZE                   512
-#define MBR_LBA_TO_BLOCK(lba, blk) ((le32toh(lba) * 512 + (blk) - 1) / (blk))
+#define MBR_LBA_TO_BLOCK(lba, blk) (((blkcnt_t)le32toh(lba) * 512 + (blk) - 1) / (blk))
 
 /****************************************************************************
  * Private Types
@@ -108,7 +112,7 @@ int parse_mbr_partition(FAR struct partition_state_s *state,
   int i;
 
   num = (MBR_SIZE + state->blocksize - 1) / state->blocksize;
-  buffer = kmm_malloc(num * state->blocksize);
+  buffer = fs_heap_malloc(num * state->blocksize);
   if (!buffer)
     {
       return -ENOMEM;
@@ -117,13 +121,13 @@ int parse_mbr_partition(FAR struct partition_state_s *state,
   ret = read_partition_block(state, buffer, 0, num);
   if (ret < 0)
     {
-      kmm_free(buffer);
+      fs_heap_free(buffer);
       return ret;
     }
 
   if (buffer[0x1fe] != 0x55 || buffer[0x1ff] != 0xaa)
     {
-      kmm_free(buffer);
+      fs_heap_free(buffer);
       return -EINVAL;
     }
 
@@ -135,6 +139,7 @@ int parse_mbr_partition(FAR struct partition_state_s *state,
                           state->blocksize);
       pentry.nblocks    = MBR_LBA_TO_BLOCK(table[i].partition_size,
                           state->blocksize);
+      pentry.blocksize  = state->blocksize;
 
       if (pentry.nblocks != 0)
         {
@@ -169,7 +174,7 @@ int parse_mbr_partition(FAR struct partition_state_s *state,
 
           if (buffer[0x1fe] != 0x55 || buffer[0x1ff] != 0xaa)
             {
-              ferr("block %x doesn't contain an EBR signature\n",
+              ferr("block %" PRIu32 " doesn't contain an EBR signature\n",
                    ebr_block);
               ret = -EINVAL;
               goto out;
@@ -209,6 +214,6 @@ int parse_mbr_partition(FAR struct partition_state_s *state,
     }
 
 out:
-  kmm_free(buffer);
+  fs_heap_free(buffer);
   return ret;
 }

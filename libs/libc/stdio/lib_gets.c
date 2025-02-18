@@ -1,6 +1,8 @@
 /****************************************************************************
  * libs/libc/stdio/lib_gets.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -26,6 +28,7 @@
 
 #include <stdint.h>
 #include <stdio.h>
+#include <unistd.h>
 
 #include "libc.h"
 
@@ -58,5 +61,9 @@ FAR char *gets(FAR char *s)
 {
   /* Let lib_fgets() do the heavy lifting */
 
-  return lib_fgets(s, (size_t)INT_MAX, stdin, false, false);
+#ifdef CONFIG_FILE_STREAM
+  return lib_fgets(s, SIZE_MAX, stdin, false, false);
+#else
+  return lib_dgets(s, SIZE_MAX, STDIN_FILENO, false, false);
+#endif
 }

@@ -1,6 +1,8 @@
 /****************************************************************************
  * sched/sched/sched_reprioritize.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -79,11 +81,9 @@ int nxsched_reprioritize(FAR struct tcb_s *tcb, int sched_priority)
 
       tcb->base_priority  = (uint8_t)sched_priority;
 
-      /* Discard any pending reprioritizations as well */
+      /* Discard priority boost as well */
 
-#if CONFIG_SEM_NNESTPRIO > 0
-      tcb->npend_reprio   = 0;
-#endif
+      tcb->boost_priority = 0;
     }
 
   return ret;

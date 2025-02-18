@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/mips/src/pic32mx/pic32mx_serial.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -40,12 +42,11 @@
 #include <nuttx/irq.h>
 #include <nuttx/arch.h>
 #include <nuttx/serial/serial.h>
+#include <nuttx/spinlock.h>
 
 #include <arch/board/board.h>
 
-#include "mips_arch.h"
 #include "mips_internal.h"
-
 #include "pic32mx_config.h"
 #include "chip.h"
 #include "pic32mx_uart.h"
@@ -103,7 +104,7 @@
 
 /* Common initialization logic will not not know that the all of the UARTs
  * have been disabled.  So, as a result, we may still have to provide
- * stub implementations of up_earlyserialinit(), up_serialinit(), and
+ * stub implementations of mips_earlyserialinit(), mips_serialinit(), and
  * up_putc().
  */
 
@@ -140,6 +141,7 @@ struct up_dev_s
   uint8_t   parity;    /* 0=none, 1=odd, 2=even */
   uint8_t   bits;      /* Number of bits (5, 6, 7 or 8) */
   bool      stopbits2; /* true: Configure with 2 stop bits instead of 1 */
+  spinlock_t lock;     /* Spinlock */
 };
 
 /****************************************************************************
@@ -151,7 +153,9 @@ struct up_dev_s
 static inline uint32_t up_serialin(struct up_dev_s *priv, int offset);
 static inline void up_serialout(struct up_dev_s *priv, int offset,
                                 uint32_t value);
+#ifdef HAVE_SERIAL_CONSOLE
 static void up_restoreuartint(struct uart_dev_s *dev, uint8_t im);
+#endif
 static void up_disableuartint(struct uart_dev_s *dev, uint8_t *im);
 
 /* Serial driver methods */
@@ -219,6 +223,7 @@ static struct up_dev_s g_uart1priv =
   .parity    = CONFIG_UART1_PARITY,
   .bits      = CONFIG_UART1_BITS,
   .stopbits2 = CONFIG_UART1_2STOP,
+  .lock      = SP_UNLOCKED,
 };
 
 static uart_dev_t g_uart1port =
@@ -253,6 +258,7 @@ static struct up_dev_s g_uart2priv =
   .parity    = CONFIG_UART2_PARITY,
   .bits      = CONFIG_UART2_BITS,
   .stopbits2 = CONFIG_UART2_2STOP,
+  .lock      = SP_UNLOCKED,
 };
 
 static uart_dev_t g_uart2port =
@@ -299,19 +305,27 @@ static inline void up_serialout(struct up_dev_s *priv, int offset,
  * Name: up_restoreuartint
  ****************************************************************************/
 
+static void up_restoreuartint_nolock(struct uart_dev_s *dev, uint8_t im)
+{
+  up_rxint(dev, RX_ENABLED(im));
+  up_txint(dev, TX_ENABLED(im));
+}
+
+#ifdef HAVE_SERIAL_CONSOLE
 static void up_restoreuartint(struct uart_dev_s *dev, uint8_t im)
 {
+  struct up_dev_s *priv = (struct up_dev_s *)dev->priv;
   irqstate_t flags;
 
   /* Re-enable/re-disable interrupts corresponding to the state
    * of bits in im.
    */
 
-  flags = enter_critical_section();
-  up_rxint(dev, RX_ENABLED(im));
-  up_txint(dev, TX_ENABLED(im));
-  leave_critical_section(flags);
+  flags = spin_lock_irqsave(&priv->lock);
+  up_restoreuartint_nolock(dev, im);
+  spin_unlock_irqrestore(&priv->lock, flags);
 }
+#endif
 
 /****************************************************************************
  * Name: up_disableuartint
@@ -322,14 +336,14 @@ static void up_disableuartint(struct uart_dev_s *dev, uint8_t *im)
   struct up_dev_s *priv = (struct up_dev_s *)dev->priv;
   irqstate_t flags;
 
-  flags = enter_critical_section();
+  flags = spin_lock_irqsave(&priv->lock);
   if (im)
     {
       *im = priv->im;
     }
 
-  up_restoreuartint(dev, 0);
-  leave_critical_section(flags);
+  up_restoreuartint_nolock(dev, 0);
+  spin_unlock_irqrestore(&priv->lock, flags);
 }
 
 /****************************************************************************
@@ -436,9 +450,9 @@ static void up_detach(struct uart_dev_s *dev)
  *
  * Description:
  *   This is the UART interrupt handler.  It will be invoked when an
- *   interrupt received on the 'irq'  It should call uart_transmitchars or
- *   uart_receivechar to perform the appropriate data transfers.  The
- *   interrupt handling logic must be able to map the 'irq' number into the
+ *   interrupt is received on the 'irq'.  It should call uart_xmitchars or
+ *   uart_recvchars to perform the appropriate data transfers.  The
+ *   interrupt handling logic must be able to map the 'arg' to the
  *   appropriate uart_dev_s structure in order to call these functions.
  *
  ****************************************************************************/
@@ -471,11 +485,11 @@ static int up_interrupt(int irq, void *context, void *arg)
        */
 
 #ifdef CONFIG_DEBUG_FEATURES
-      if (up_pending_irq(priv->irqe))
+      if (mips_pending_irq(priv->irqe))
         {
           /* Clear the pending error interrupt */
 
-          up_clrpend_irq(priv->irqe);
+          mips_clrpend_irq(priv->irqe);
           _err("ERROR: interrupt STA: %08x\n",
               up_serialin(priv, PIC32MX_UART_STA_OFFSET));
           handled = true;
@@ -487,7 +501,7 @@ static int up_interrupt(int irq, void *context, void *arg)
        * FIFOs or 3 of 4 for 4-deep FIFOS.
        */
 
-      if (up_pending_irq(priv->irqrx))
+      if (mips_pending_irq(priv->irqrx))
         {
           /* Process incoming bytes */
 
@@ -505,7 +519,7 @@ static int up_interrupt(int irq, void *context, void *arg)
           if ((up_serialin(priv, PIC32MX_UART_STA_OFFSET) &
                UART_STA_URXDA) == 0)
             {
-              up_clrpend_irq(priv->irqrx);
+              mips_clrpend_irq(priv->irqrx);
             }
         }
 
@@ -524,7 +538,7 @@ static int up_interrupt(int irq, void *context, void *arg)
        * full condition.
        */
 
-      if (up_pending_irq(priv->irqtx))
+      if (mips_pending_irq(priv->irqtx))
         {
           /* Process outgoing bytes */
 
@@ -542,7 +556,7 @@ static int up_interrupt(int irq, void *context, void *arg)
           if ((up_serialin(priv, PIC32MX_UART_STA_OFFSET) &
                UART_STA_UTRMT) != 0)
             {
-              up_clrpend_irq(priv->irqtx);
+              mips_clrpend_irq(priv->irqtx);
             }
         }
     }
@@ -566,7 +580,6 @@ static int up_ioctl(struct file *filep, int cmd, unsigned long arg)
   struct up_dev_s   *priv;
   int                ret = OK;
 
-  DEBUGASSERT(filep, filep->f_inode);
   inode = filep->f_inode;
   dev   = inode->i_private;
 
@@ -608,7 +621,7 @@ static int up_ioctl(struct file *filep, int cmd, unsigned long arg)
           }
 
         /* TODO:  Handle other termios settings.
-         * Note that only cfgetispeed is used besued we have knowledge
+         * Note that only cfgetispeed is used because we have knowledge
          * that only one speed is supported.
          */
 
@@ -814,18 +827,18 @@ static bool up_txempty(struct uart_dev_s *dev)
 #ifdef USE_EARLYSERIALINIT
 
 /****************************************************************************
- * Name: up_earlyserialinit
+ * Name: mips_earlyserialinit
  *
  * Description:
  *   Performs the low level UART initialization early in debug so that the
  *   serial console will be available during bootup.  This must be called
- *   before up_serialinit.  NOTE:  This function depends on GPIO pin
+ *   before mips_serialinit.  NOTE:  This function depends on GPIO pin
  *   configuration performed in up_consoleinit() and main clock
  *   initialization performed in up_clkinitialize().
  *
  ****************************************************************************/
 
-void up_earlyserialinit(void)
+void mips_earlyserialinit(void)
 {
   /* Disable interrupts from all UARTS.  The console is enabled in
    * pic32mx_consoleinit().
@@ -846,15 +859,15 @@ void up_earlyserialinit(void)
 #endif
 
 /****************************************************************************
- * Name: up_serialinit
+ * Name: mips_serialinit
  *
  * Description:
  *   Register serial console and serial ports.  This assumes
- *   that up_earlyserialinit was called previously.
+ *   that mips_earlyserialinit was called previously.
  *
  ****************************************************************************/
 
-void up_serialinit(void)
+void mips_serialinit(void)
 {
   /* Register the console */
 
@@ -878,51 +891,39 @@ void up_serialinit(void)
  *
  ****************************************************************************/
 
-int up_putc(int ch)
+void up_putc(int ch)
 {
 #ifdef HAVE_SERIAL_CONSOLE
   struct uart_dev_s *dev = (struct uart_dev_s *)&CONSOLE_DEV;
   uint8_t imr;
 
   up_disableuartint(dev, &imr);
-
-  /* Check for LF */
-
-  if (ch == '\n')
-    {
-      /* Add CR */
-
-      up_lowputc('\r');
-    }
-
-  up_lowputc(ch);
+  mips_lowputc(ch);
   up_restoreuartint(dev, imr);
 #endif
-  return ch;
 }
 
 /****************************************************************************
- * Name: up_earlyserialinit, up_serialinit, and up_putc
+ * Name: mips_earlyserialinit, mips_serialinit, and up_putc
  *
  * Description:
  *   stubs that may be needed.  These stubs would be used if all UARTs are
- *   disabled.  In that case, the logic in common/up_initialize() is not
+ *   disabled.  In that case, the logic in common/mips_initialize() is not
  *   smart enough to know that there are not UARTs and will still expect
  *   these interfaces to be provided.
  *
  ****************************************************************************/
 #else /* HAVE_UART_DEVICE */
-void up_earlyserialinit(void)
+void mips_earlyserialinit(void)
 {
 }
 
-void up_serialinit(void)
+void mips_serialinit(void)
 {
 }
 
-int up_putc(int ch)
+void up_putc(int ch)
 {
-  return ch;
 }
 
 #endif /* HAVE_UART_DEVICE */
@@ -936,21 +937,11 @@ int up_putc(int ch)
  *
  ****************************************************************************/
 
-int up_putc(int ch)
+void up_putc(int ch)
 {
 #ifdef HAVE_SERIAL_CONSOLE
-  /* Check for LF */
-
-  if (ch == '\n')
-    {
-      /* Add CR */
-
-      up_lowputc('\r');
-    }
-
-  up_lowputc(ch);
+  mips_lowputc(ch);
 #endif
-  return ch;
 }
 
 #endif /* USE_SERIALDRIVER */

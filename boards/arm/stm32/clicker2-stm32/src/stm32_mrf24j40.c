@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/stm32/clicker2-stm32/src/stm32_mrf24j40.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -76,7 +78,7 @@ struct stm32_priv_s
 {
   struct mrf24j40_lower_s dev;
   xcpt_t handler;
-  FAR void *arg;
+  void *arg;
   uint32_t intcfg;
   uint8_t spidev;
 };
@@ -94,11 +96,11 @@ struct stm32_priv_s
  *   irq_enable - Enable or disable the GPIO interrupt
  */
 
-static int  stm32_attach_irq(FAR const struct mrf24j40_lower_s *lower,
-                             xcpt_t handler, FAR void *arg);
-static void stm32_enable_irq(FAR const struct mrf24j40_lower_s *lower,
+static int  stm32_attach_irq(const struct mrf24j40_lower_s *lower,
+                             xcpt_t handler, void *arg);
+static void stm32_enable_irq(const struct mrf24j40_lower_s *lower,
                              bool state);
-static int  stm32_mrf24j40_devsetup(FAR struct stm32_priv_s *priv);
+static int  stm32_mrf24j40_devsetup(struct stm32_priv_s *priv);
 
 /****************************************************************************
  * Private Data
@@ -153,10 +155,10 @@ static struct stm32_priv_s g_mrf24j40_mb2_priv =
  *   irq_enable       - Enable or disable the GPIO interrupt
  */
 
-static int stm32_attach_irq(FAR const struct mrf24j40_lower_s *lower,
-                            xcpt_t handler, FAR void *arg)
+static int stm32_attach_irq(const struct mrf24j40_lower_s *lower,
+                            xcpt_t handler, void *arg)
 {
-  FAR struct stm32_priv_s *priv = (FAR struct stm32_priv_s *)lower;
+  struct stm32_priv_s *priv = (struct stm32_priv_s *)lower;
 
   DEBUGASSERT(priv != NULL);
 
@@ -167,10 +169,10 @@ static int stm32_attach_irq(FAR const struct mrf24j40_lower_s *lower,
   return OK;
 }
 
-static void stm32_enable_irq(FAR const struct mrf24j40_lower_s *lower,
+static void stm32_enable_irq(const struct mrf24j40_lower_s *lower,
                              bool state)
 {
-  FAR struct stm32_priv_s *priv = (FAR struct stm32_priv_s *)lower;
+  struct stm32_priv_s *priv = (struct stm32_priv_s *)lower;
 
   /* The caller should not attempt to enable interrupts if the handler
    * has not yet been 'attached'
@@ -208,11 +210,11 @@ static void stm32_enable_irq(FAR const struct mrf24j40_lower_s *lower,
  *
  ****************************************************************************/
 
-static int stm32_mrf24j40_devsetup(FAR struct stm32_priv_s *priv)
+static int stm32_mrf24j40_devsetup(struct stm32_priv_s *priv)
 {
-  FAR struct ieee802154_radio_s *radio;
+  struct ieee802154_radio_s *radio;
   MACHANDLE mac;
-  FAR struct spi_dev_s *spi;
+  struct spi_dev_s *spi;
   int ret;
 
   /* Configure the interrupt pin */

@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/lpc31xx/lpc31_fdivinit.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -62,7 +64,7 @@
  *  Say an input frequency of 13 MHz is given while a frequency of 12
  *  MHz is required. In this case we want a frequency
  *
- *    f’ = 12/13 × f
+ *    f' = 12/13 x f
  *
  *  So n = 12 and m = 13. This then gives
  *
@@ -77,8 +79,8 @@
  * 4 bits. If madd/msub bit width has been set to say 8 bits, it is allowed
  * to shift 4 bits, giving:
  *
- *   msub’ = -(12<<4)= -12 × 24 = -12 × 16 = -192
- *   madd’ = 1<<4 = 24 = 16
+ *   msub' = -(12<<4)= -12 x 24 = -12 x 16 = -192
+ *   madd' = 1<<4 = 24 = 16
  *
  ****************************************************************************/
 

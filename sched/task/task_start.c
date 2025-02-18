@@ -1,6 +1,8 @@
 /****************************************************************************
  * sched/task/task_start.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -32,21 +34,12 @@
 
 #include <nuttx/arch.h>
 #include <nuttx/sched.h>
+#include <nuttx/tls.h>
 
 #include "group/group.h"
 #include "sched/sched.h"
 #include "signal/signal.h"
 #include "task/task.h"
-
-/****************************************************************************
- * Pre-processor Definitions
- ****************************************************************************/
-
-/* This is an artificial limit to detect error conditions where an argv[]
- * list is not properly terminated.
- */
-
-#define MAX_START_ARGS 256
 
 /****************************************************************************
  * Private Functions
@@ -74,66 +67,59 @@
 
 void nxtask_start(void)
 {
-  FAR struct task_tcb_s *tcb = (FAR struct task_tcb_s *)this_task();
+  FAR struct tcb_s *tcb = this_task();
+  uint8_t ttype = tcb->flags & TCB_FLAG_TTYPE_MASK;
+#ifdef CONFIG_SCHED_STARTHOOK
+  FAR struct task_tcb_s *ttcb = (FAR struct task_tcb_s *)tcb;
+#endif
   int exitcode = EXIT_FAILURE;
+  FAR char **argv;
   int argc;
 
-  DEBUGASSERT((tcb->cmn.flags & TCB_FLAG_TTYPE_MASK) != \
-              TCB_FLAG_TTYPE_PTHREAD);
+  DEBUGASSERT(ttype != TCB_FLAG_TTYPE_PTHREAD);
 
 #ifdef CONFIG_SIG_DEFAULT
-  /* Set up default signal actions */
+  if (ttype != TCB_FLAG_TTYPE_KERNEL)
+    {
+      /* Set up default signal actions for NON-kernel thread */
 
-  nxsig_default_initialize(&tcb->cmn);
+      nxsig_default_initialize(tcb);
+    }
 #endif
 
   /* Execute the start hook if one has been registered */
 
 #ifdef CONFIG_SCHED_STARTHOOK
-  if (tcb->starthook != NULL)
+  if (ttype != TCB_FLAG_TTYPE_KERNEL && ttcb->starthook != NULL)
     {
-      tcb->starthook(tcb->starthookarg);
+      ttcb->starthook(ttcb->starthookarg);
     }
 #endif
 
-  /* Count how many non-null arguments we are passing. The first non-null
-   * argument terminates the list .
-   */
+  /* Take args from stack, as group is shared for kthreads */
 
-  argc = 1;
-  while (tcb->argv[argc])
-    {
-      /* Increment the number of args.  Here is a sanity check to
-       * prevent running away with an unterminated argv[] list.
-       * MAX_START_ARGS should be sufficiently large that this never
-       * happens in normal usage.
-       */
-
-      if (++argc > MAX_START_ARGS)
-        {
-          exit(EXIT_FAILURE);
-        }
-    }
+  argv = nxsched_get_stackargs(tcb);
+  for (argc = 0; argv && argv[argc]; argc++);
 
   /* Call the 'main' entry point passing argc and argv.  In the kernel build
    * this has to be handled differently if we are starting a user-space task;
    * we have to switch to user-mode before calling the task.
    */
 
-  if ((tcb->cmn.flags & TCB_FLAG_TTYPE_MASK) == TCB_FLAG_TTYPE_KERNEL)
+  if (ttype == TCB_FLAG_TTYPE_KERNEL)
     {
-      exitcode = tcb->cmn.entry.main(argc, tcb->argv);
+      exitcode = tcb->entry.main(argc, argv);
     }
   else
     {
 #ifdef CONFIG_BUILD_FLAT
-      nxtask_startup(tcb->cmn.entry.main, argc, tcb->argv);
+      nxtask_startup(tcb->entry.main, argc, argv);
 #else
-      up_task_start(tcb->cmn.entry.main, argc, tcb->argv);
+      up_task_start(tcb->entry.main, argc, argv);
 #endif
     }
 
-  /* Call exit() if/when the task returns */
+  /* Call _exit() if/when the task returns */
 
-  exit(exitcode);
+  _exit(exitcode);
 }

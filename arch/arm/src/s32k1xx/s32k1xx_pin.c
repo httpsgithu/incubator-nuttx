@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/s32k1xx/s32k1xx_pin.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -30,9 +32,7 @@
 
 #include <nuttx/arch.h>
 
-#include "arm_arch.h"
 #include "arm_internal.h"
-
 #include "hardware/s32k1xx_port.h"
 #include "hardware/s32k1xx_gpio.h"
 #include "s32k1xx_pin.h"

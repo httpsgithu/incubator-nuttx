@@ -1,6 +1,8 @@
 /****************************************************************************
  * include/netinet/udp.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -31,10 +33,27 @@
  * Pre-processor Definitions
  ****************************************************************************/
 
-/* UDP protocol (SOL_UDP) socket options */
+/* UDP header as specified by RFC 768, August 1980. */
 
-#define UDP_BINDTODEVICE   (__SO_PROTOCOL + 0) /* Bind this UDP socket to a
-                                                * specific network device.
-                                                */
+struct udphdr
+{
+  union
+  {
+    struct
+    {
+      uint16_t uh_sport;        /* source port */
+      uint16_t uh_dport;        /* destination port */
+      uint16_t uh_ulen;         /* udp length */
+      uint16_t uh_sum;          /* udp checksum */
+    };
+    struct
+    {
+      uint16_t source;
+      uint16_t dest;
+      uint16_t len;
+      uint16_t check;
+    };
+  };
+};
 
 #endif /* __INCLUDE_NETINET_UDP_H */

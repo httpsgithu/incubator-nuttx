@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/lc823450/lc823450_syscontrol.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -32,9 +34,7 @@
 #include <arch/board/board.h>
 
 #include "chip.h"
-#include "arm_arch.h"
 #include "arm_internal.h"
-
 #include "lc823450_gpio.h"
 #include "lc823450_syscontrol.h"
 #include <arch/chip/clk.h>
@@ -43,6 +43,7 @@
  * Private Data
  ****************************************************************************/
 
+static spinlock_t g_lc823450_syscontrol_lock = SP_UNLOCKED;
 static struct clk_st lc823450_clocks[] = LC823450_CLOCKS;
 
 /****************************************************************************
@@ -67,16 +68,16 @@ uint32_t get_cpu_ver(void)
   switch (reg)
     {
       case MODEM_MAV_ES1:
-        sinfo("ES1 \n");
+        sinfo("ES1\n");
         break;
 
       case MODEM_MAV_ES2:
-        sinfo("ES2 \n");
+        sinfo("ES2\n");
         ret = 1;
         break;
 
       default:
-        sinfo("??? \n");
+        sinfo("???\n");
         break;
     }
 
@@ -119,7 +120,7 @@ void mod_stby_regs(uint32_t enabits, uint32_t disbits)
       modifyreg32(ISOCNT, 0, enabits);
     }
 
-  /* sinfo("ISOCNT=0x%x, LSISTBY=0x%x \n",
+  /* sinfo("ISOCNT=0x%x, LSISTBY=0x%x\n",
    * getreg32(ISOCNT), getreg32(LSISTBY));
    */
 }
@@ -132,7 +133,7 @@ void mod_stby_regs(uint32_t enabits, uint32_t disbits)
 void up_enable_clk(enum clock_e clk)
 {
   irqstate_t flags;
-  flags = spin_lock_irqsave(NULL);
+  flags = spin_lock_irqsave(&g_lc823450_syscontrol_lock);
 
   DEBUGASSERT(clk < LC823450_CLOCK_NUM);
 
@@ -142,7 +143,7 @@ void up_enable_clk(enum clock_e clk)
                   0, lc823450_clocks[clk].regmask);
     }
 
-  spin_unlock_irqrestore(NULL, flags);
+  spin_unlock_irqrestore(&g_lc823450_syscontrol_lock, flags);
 }
 
 /****************************************************************************
@@ -152,7 +153,7 @@ void up_enable_clk(enum clock_e clk)
 void up_disable_clk(enum clock_e clk)
 {
   irqstate_t flags;
-  flags = spin_lock_irqsave(NULL);
+  flags = spin_lock_irqsave(&g_lc823450_syscontrol_lock);
 
   DEBUGASSERT(clk < LC823450_CLOCK_NUM);
 
@@ -169,7 +170,7 @@ void up_disable_clk(enum clock_e clk)
       lc823450_clocks[clk].count = 0;
     }
 
-  spin_unlock_irqrestore(NULL, flags);
+  spin_unlock_irqrestore(&g_lc823450_syscontrol_lock, flags);
 }
 
 /****************************************************************************

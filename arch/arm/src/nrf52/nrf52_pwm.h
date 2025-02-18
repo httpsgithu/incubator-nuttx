@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/nrf52/nrf52_pwm.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -126,6 +128,6 @@
  *
  ****************************************************************************/
 
-FAR struct pwm_lowerhalf_s *nrf52_pwminitialize(int pwm);
+struct pwm_lowerhalf_s *nrf52_pwminitialize(int pwm);
 
 #endif /* __ARCH_ARM_SRC_NRF52_NRF52_PWM_H */

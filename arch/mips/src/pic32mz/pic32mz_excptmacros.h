@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/mips/src/pic32mz/pic32mz_excptmacros.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -18,8 +20,8 @@
  *
  ****************************************************************************/
 
-#ifndef __ARCH_MIPS_SRC_PIC32MZ_EXCPTMACROS_H
-#define __ARCH_MIPS_SRC_PIC32MZ_EXCPTMACROS_H
+#ifndef __ARCH_MIPS_SRC_PIC32MZ_PIC32MZ_EXCPTMACROS_H
+#define __ARCH_MIPS_SRC_PIC32MZ_PIC32MZ_EXCPTMACROS_H
 
 /****************************************************************************
  * Included Files
@@ -118,7 +120,7 @@
    * register save array.
    */
 
-  addiu	sp, sp, -XCPTCONTEXT_SIZE
+  addiu sp, sp, -XCPTCONTEXT_SIZE
 
   /* Save the EPC and STATUS in the register context array */
 
@@ -443,4 +445,4 @@
   .endm
 
 #endif /* __ASSEMBLY__ */
-#endif /* __ARCH_MIPS_SRC_PIC32MZ_EXCPTMACROS_H */
+#endif /* __ARCH_MIPS_SRC_PIC32MZ_PIC32MZ_EXCPTMACROS_H */

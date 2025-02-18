@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/xtensa/src/common/xtensa_backtrace.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -30,14 +32,29 @@
 
 #include "sched/sched.h"
 #include "xtensa.h"
+#include "chip.h"
 
 /****************************************************************************
  * Pre-processor Definitions
  ****************************************************************************/
 
+/* When the Windowed Register Option is configured, the register-window call
+ * instructions only store the low 30 bits of the return address, enabling
+ * addressing instructions within a 1GB region. To convert the return address
+ * to a valid PC, we need to add the base address of the instruction region.
+ * The following macro is used to define the base address of the 1GB region,
+ * which may not start in 0x00000000. This macro can be overriden in
+ * `chip_memory.h` of the chip directory.
+ */
+
+#ifndef XTENSA_INSTUCTION_REGION
+#  define XTENSA_INSTUCTION_REGION 0x00000000
+#endif
+
 /* Convert return address to a valid pc  */
 
-#define MAKE_PC_FROM_RA(ra)   (uintptr_t *)((ra) & 0x3fffffff)
+#define MAKE_PC_FROM_RA(ra) \
+  (uintptr_t *)(((ra) & 0x3fffffff) | XTENSA_INSTUCTION_REGION)
 
 /****************************************************************************
  * Private Types
@@ -56,8 +73,8 @@ struct xtensa_windowregs_s
  * Private Function Prototypes
  ****************************************************************************/
 
-static void inline get_window_regs(struct xtensa_windowregs_s *frame)
-inline_function;
+always_inline_function static
+void get_window_regs(struct xtensa_windowregs_s *frame);
 
 /****************************************************************************
  * Private Functions
@@ -72,7 +89,8 @@ inline_function;
  ****************************************************************************/
 
 #ifndef __XTENSA_CALL0_ABI__
-static void get_window_regs(struct xtensa_windowregs_s *frame)
+always_inline_function static
+void get_window_regs(struct xtensa_windowregs_s *frame)
 {
   __asm__ __volatile__("\trsr %0, WINDOWSTART\n": "=r"(frame->windowstart));
   __asm__ __volatile__("\trsr %0, WINDOWBASE\n": "=r"(frame->windowbase));
@@ -105,9 +123,10 @@ static void get_window_regs(struct xtensa_windowregs_s *frame)
  ****************************************************************************/
 
 #ifndef __XTENSA_CALL0_ABI__
+nosanitize_address
 static int backtrace_window(uintptr_t *base, uintptr_t *limit,
-                     struct xtensa_windowregs_s *frame,
-                     void **buffer, int size)
+                            struct xtensa_windowregs_s *frame,
+                            void **buffer, int size, int *skip)
 {
   uint32_t windowstart;
   uint32_t ra;
@@ -136,7 +155,10 @@ static int backtrace_window(uintptr_t *base, uintptr_t *limit,
               continue;
             }
 
-          buffer[i++] = MAKE_PC_FROM_RA(ra);
+          if ((*skip)-- <= 0)
+            {
+              buffer[i++] = MAKE_PC_FROM_RA(ra);
+            }
         }
     }
 
@@ -152,31 +174,39 @@ static int backtrace_window(uintptr_t *base, uintptr_t *limit,
  *
  ****************************************************************************/
 
+nosanitize_address
 static int backtrace_stack(uintptr_t *base, uintptr_t *limit,
-                     uintptr_t *sp, uintptr_t *ra,
-                     void **buffer, int size)
+                           uintptr_t *sp, uintptr_t *ra,
+                           void **buffer, int size, int *skip)
 {
   int i = 0;
 
   if (ra)
     {
-      buffer[i++] = MAKE_PC_FROM_RA((uintptr_t)ra);
+      if ((*skip)-- <= 0)
+        {
+          buffer[i++] = MAKE_PC_FROM_RA((uintptr_t)ra);
+        }
     }
 
-  for (; i < size; sp = (uintptr_t *)*(sp - 3), i++)
+  while (i < size)
     {
-      if (sp > limit || sp < base)
+      ra = MAKE_PC_FROM_RA((uintptr_t)(*(sp - 4)));
+      sp = (uintptr_t *)*(sp - 3);
+
+      if (!(xtensa_ptr_exec(ra) && xtensa_sp_sane((uintptr_t)sp))
+#if CONFIG_ARCH_INTERRUPTSTACK < 15
+          || sp >= limit || sp < base
+#endif
+         )
         {
           break;
         }
 
-      ra = (uintptr_t *)*(sp - 4);
-      if (ra == NULL)
+      if ((*skip)-- <= 0)
         {
-          break;
+          buffer[i++] = ra;
         }
-
-      buffer[i] = MAKE_PC_FROM_RA((uintptr_t)ra);
     }
 
   return i;
@@ -204,16 +234,24 @@ static int backtrace_stack(uintptr_t *base, uintptr_t *limit,
  *   tcb    - Address of the task's TCB
  *   buffer - Return address from the corresponding stack frame
  *   size   - Maximum number of addresses that can be stored in buffer
+ *   skip   - number of addresses to be skipped
  *
  * Returned Value:
  *   up_backtrace() returns the number of addresses returned in buffer
  *
+ * Assumptions:
+ *   Have to make sure tcb keep safe during function executing, it means
+ *   1. Tcb have to be self or not-running.  In SMP case, the running task
+ *      PC & SP cannot be backtrace, as whose get from tcb is not the newest.
+ *   2. Tcb have to keep not be freed.  In task exiting case, have to
+ *      make sure the tcb get from pid and up_backtrace in one critical
+ *      section procedure.
+ *
  ****************************************************************************/
 
-int up_backtrace(struct tcb_s *tcb, void **buffer, int size)
+int up_backtrace(struct tcb_s *tcb, void **buffer, int size, int skip)
 {
   struct tcb_s *rtcb = running_task();
-  irqstate_t flags;
   int ret;
 
   if (size <= 0 || !buffer)
@@ -226,29 +264,25 @@ int up_backtrace(struct tcb_s *tcb, void **buffer, int size)
       if (up_interrupt_context())
         {
 #if CONFIG_ARCH_INTERRUPTSTACK > 15
-          uintptr_t istackbase;
-#ifdef CONFIG_SMP
-          istackbase = xtensa_intstack_alloc();
-#else
-          istackbase = &g_intstackalloc;
-#endif
-          xtensa_window_spill();
+          void *istackbase = (void *)up_get_intstackbase(this_cpu());
 
-          ret = bactrace_stack((void *)istackbase,
-                          (void *)((uint32_t)&g_intstackalloc +
-                                       CONFIG_ARCH_INTERRUPTSTACK),
-                          (void *)up_getsp(), NULL, buffer, size);
+          xtensa_window_spill();
+          ret = backtrace_stack(istackbase,
+                                istackbase + CONFIG_ARCH_INTERRUPTSTACK,
+                                (void *)up_getsp(), NULL,
+                                buffer, size, &skip);
 #else
+          xtensa_window_spill();
           ret = backtrace_stack(rtcb->stack_base_ptr,
-                          rtcb->stack_base_ptr + rtcb->adj_stack_size,
-                          (void *)up_getsp(), NULL, buffer, size);
+                                rtcb->stack_base_ptr + rtcb->adj_stack_size,
+                                (void *)up_getsp(), NULL,
+                                buffer, size, &skip);
 #endif
           ret += backtrace_stack(rtcb->stack_base_ptr,
-                          rtcb->stack_base_ptr +
-                          rtcb->adj_stack_size,
-                          (void *)CURRENT_REGS[REG_A1],
-                          (void *)CURRENT_REGS[REG_A0],
-                          &buffer[ret], size - ret);
+                                 rtcb->stack_base_ptr + rtcb->adj_stack_size,
+                                 running_regs()[REG_A1],
+                                 running_regs()[REG_A0],
+                                 &buffer[ret], size - ret, &skip);
         }
       else
         {
@@ -268,27 +302,24 @@ int up_backtrace(struct tcb_s *tcb, void **buffer, int size)
           get_window_regs(&frame);
 
           ret = backtrace_window(rtcb->stack_base_ptr,
-                          rtcb->stack_base_ptr + rtcb->adj_stack_size,
-                          &frame, buffer, size);
+                                 rtcb->stack_base_ptr + rtcb->adj_stack_size,
+                                 &frame, buffer, size, &skip);
 #endif
           ret += backtrace_stack(rtcb->stack_base_ptr,
-                          rtcb->stack_base_ptr + rtcb->adj_stack_size,
-                          (void *)up_getsp(), NULL, buffer, size - ret);
+                                 rtcb->stack_base_ptr + rtcb->adj_stack_size,
+                                 (void *)up_getsp(), NULL,
+                                 buffer, size - ret, &skip);
         }
     }
   else
     {
       /* For non-current task, only check in stack. */
 
-      flags = enter_critical_section();
-
       ret = backtrace_stack(tcb->stack_base_ptr,
-                      tcb->stack_base_ptr + tcb->adj_stack_size,
-                      (void *)tcb->xcp.regs[REG_A1],
-                      (void *)tcb->xcp.regs[REG_A0],
-                      buffer, size);
-
-      leave_critical_section(flags);
+                            tcb->stack_base_ptr + tcb->adj_stack_size,
+                            (void *)tcb->xcp.regs[REG_A1],
+                            (void *)tcb->xcp.regs[REG_A0],
+                            buffer, size, &skip);
     }
 
   return ret;

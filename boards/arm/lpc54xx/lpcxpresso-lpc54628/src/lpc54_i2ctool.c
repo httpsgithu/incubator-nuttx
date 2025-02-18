@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/lpc54xx/lpcxpresso-lpc54628/src/lpc54_i2ctool.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -48,7 +50,7 @@
 
 static void lpc54_i2c_register(int bus, int ndx)
 {
-  FAR struct i2c_master_s *i2c;
+  struct i2c_master_s *i2c;
   int ret;
 
   i2c = lpc54_i2c_handle(bus, ndx);

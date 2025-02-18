@@ -1,6 +1,8 @@
 /****************************************************************************
  * sched/irq/irq_initialize.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -25,6 +27,7 @@
 #include <nuttx/config.h>
 #include <nuttx/arch.h>
 #include <nuttx/irq.h>
+#include <nuttx/trace.h>
 
 #include "irq/irq.h"
 
@@ -68,22 +71,13 @@ void irq_initialize(void)
 {
   int i;
 
+  sched_trace_begin();
+
   /* Point all interrupt vectors to the unexpected interrupt */
 
   for (i = 0; i < TAB_SIZE; i++)
     {
       g_irqvector[i].handler = irq_unexpected_isr;
-      g_irqvector[i].arg     = NULL;
-#ifdef CONFIG_SCHED_IRQMONITOR
-      g_irqvector[i].start   = 0;
-#ifdef CONFIG_HAVE_LONG_LONG
-      g_irqvector[i].count   = 0;
-#else
-      g_irqvector[i].mscount = 0;
-      g_irqvector[i].lscount = 0;
-#endif
-      g_irqvector[i].time    = 0;
-#endif
     }
 
 #ifdef CONFIG_IRQCHAIN
@@ -93,4 +87,5 @@ void irq_initialize(void)
 #endif
 
   up_irqinitialize();
+  sched_trace_end();
 }

@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/s32k1xx/s32k1xx_flexcan.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -33,7 +35,6 @@
 #include <debug.h>
 #include <errno.h>
 
-#include <nuttx/can.h>
 #include <nuttx/wdog.h>
 #include <nuttx/irq.h>
 #include <nuttx/arch.h>
@@ -42,7 +43,7 @@
 #include <nuttx/net/netdev.h>
 #include <nuttx/net/can.h>
 
-#include "arm_arch.h"
+#include "arm_internal.h"
 #include "chip.h"
 #include "s32k1xx_config.h"
 #include "hardware/s32k1xx_flexcan.h"
@@ -90,7 +91,11 @@
 
 #define POOL_SIZE                   1
 
+#if defined(CONFIG_NET_CAN_RAW_TX_DEADLINE) || defined(CONFIG_NET_TIMESTAMP)
 #define MSG_DATA                    sizeof(struct timeval)
+#else
+#define MSG_DATA                    0
+#endif
 
 /* CAN bit timing values  */
 #define CLK_FREQ                    80000000
@@ -341,8 +346,8 @@ static struct s32k1xx_driver_s g_flexcan2;
 static uint8_t g_tx_pool[(sizeof(struct canfd_frame)+MSG_DATA)*POOL_SIZE];
 static uint8_t g_rx_pool[(sizeof(struct canfd_frame)+MSG_DATA)*POOL_SIZE];
 #else
-static uint8_t g_tx_pool[sizeof(struct can_frame)*POOL_SIZE];
-static uint8_t g_rx_pool[sizeof(struct can_frame)*POOL_SIZE];
+static uint8_t g_tx_pool[(sizeof(struct can_frame)+MSG_DATA)*POOL_SIZE];
+static uint8_t g_rx_pool[(sizeof(struct can_frame)+MSG_DATA)*POOL_SIZE];
 #endif
 
 /****************************************************************************
@@ -491,8 +496,8 @@ uint32_t s32k1xx_bitratetotimeseg(struct flexcan_timeseg *timeseg,
 
 /* Common TX logic */
 
-static bool s32k1xx_txringfull(FAR struct s32k1xx_driver_s *priv);
-static int  s32k1xx_transmit(FAR struct s32k1xx_driver_s *priv);
+static bool s32k1xx_txringfull(struct s32k1xx_driver_s *priv);
+static int  s32k1xx_transmit(struct s32k1xx_driver_s *priv);
 static int  s32k1xx_txpoll(struct net_driver_s *dev);
 
 /* Helper functions */
@@ -502,23 +507,20 @@ static void s32k1xx_setfreeze(uint32_t base, uint32_t freeze);
 static uint32_t s32k1xx_waitmcr_change(uint32_t base,
                                        uint32_t mask,
                                        uint32_t target_state);
-static uint32_t s32k1xx_waitesr2_change(uint32_t base,
-                                       uint32_t mask,
-                                       uint32_t target_state);
 
 /* Interrupt handling */
 
-static void s32k1xx_receive(FAR struct s32k1xx_driver_s *priv,
+static void s32k1xx_receive(struct s32k1xx_driver_s *priv,
                             uint32_t flags);
-static void s32k1xx_txdone_work(FAR void *arg);
-static void s32k1xx_txdone(FAR struct s32k1xx_driver_s *priv);
+static void s32k1xx_txdone_work(void *arg);
+static void s32k1xx_txdone(struct s32k1xx_driver_s *priv);
 
-static int  s32k1xx_flexcan_interrupt(int irq, FAR void *context,
-                                      FAR void *arg);
+static int  s32k1xx_flexcan_interrupt(int irq, void *context,
+                                      void *arg);
 
 /* Watchdog timer expirations */
 #ifdef TX_TIMEOUT_WQ
-static void s32k1xx_txtimeout_work(FAR void *arg);
+static void s32k1xx_txtimeout_work(void *arg);
 static void s32k1xx_txtimeout_expiry(wdparm_t arg);
 #endif
 
@@ -527,7 +529,7 @@ static void s32k1xx_txtimeout_expiry(wdparm_t arg);
 static int  s32k1xx_ifup(struct net_driver_s *dev);
 static int  s32k1xx_ifdown(struct net_driver_s *dev);
 
-static void s32k1xx_txavail_work(FAR void *arg);
+static void s32k1xx_txavail_work(void *arg);
 static int  s32k1xx_txavail(struct net_driver_s *dev);
 
 #ifdef CONFIG_NETDEV_IOCTL
@@ -559,7 +561,7 @@ static void s32k1xx_reset(struct s32k1xx_driver_s *priv);
  *
  ****************************************************************************/
 
-static bool s32k1xx_txringfull(FAR struct s32k1xx_driver_s *priv)
+static bool s32k1xx_txringfull(struct s32k1xx_driver_s *priv)
 {
   uint32_t mbi = 0;
 
@@ -596,7 +598,7 @@ static bool s32k1xx_txringfull(FAR struct s32k1xx_driver_s *priv)
  *
  ****************************************************************************/
 
-static int s32k1xx_transmit(FAR struct s32k1xx_driver_s *priv)
+static int s32k1xx_transmit(struct s32k1xx_driver_s *priv)
 {
   /* Attempt to write frame */
 
@@ -694,6 +696,7 @@ static int s32k1xx_transmit(FAR struct s32k1xx_driver_s *priv)
       if (frame->can_id & CAN_EFF_FLAG)
         {
           cs.ide = 1;
+          cs.srr = 1;
           mb->id.ext = frame->can_id & MASKEXTID;
         }
       else
@@ -717,6 +720,7 @@ static int s32k1xx_transmit(FAR struct s32k1xx_driver_s *priv)
       if (frame->can_id & CAN_EFF_FLAG)
         {
           cs.ide = 1;
+          cs.srr = 1;
           mb->id.ext = frame->can_id & MASKEXTID;
         }
       else
@@ -726,7 +730,7 @@ static int s32k1xx_transmit(FAR struct s32k1xx_driver_s *priv)
 
       cs.rtr = frame->can_id & FLAGRTR ? 1 : 0;
 
-      cs.dlc = len_to_can_dlc[frame->len];
+      cs.dlc = g_len_to_can_dlc[frame->len];
 
       frame_data_word = (uint32_t *)&frame->data[0];
 
@@ -787,8 +791,8 @@ static int s32k1xx_transmit(FAR struct s32k1xx_driver_s *priv)
 
 static int s32k1xx_txpoll(struct net_driver_s *dev)
 {
-  FAR struct s32k1xx_driver_s *priv =
-    (FAR struct s32k1xx_driver_s *)dev->d_private;
+  struct s32k1xx_driver_s *priv =
+    (struct s32k1xx_driver_s *)dev->d_private;
 
   /* If the polling resulted in data that should be sent out on the network,
    * the field d_len is set to a value > 0.
@@ -796,26 +800,23 @@ static int s32k1xx_txpoll(struct net_driver_s *dev)
 
   if (priv->dev.d_len > 0)
     {
-      if (!devif_loopback(&priv->dev))
+      s32k1xx_txdone(priv);
+
+      /* Send the packet */
+
+      s32k1xx_transmit(priv);
+
+      /* Check if there is room in the device to hold another packet. If
+       * not, return a non-zero value to terminate the poll.
+       */
+
+      if ((getreg32(priv->base + S32K1XX_CAN_ESR2_OFFSET) &
+          (CAN_ESR2_IMB | CAN_ESR2_VPS)) ==
+          (CAN_ESR2_IMB | CAN_ESR2_VPS))
         {
-          s32k1xx_txdone(priv);
-
-          /* Send the packet */
-
-          s32k1xx_transmit(priv);
-
-          /* Check if there is room in the device to hold another packet. If
-           * not, return a non-zero value to terminate the poll.
-           */
-
-          if ((getreg32(priv->base + S32K1XX_CAN_ESR2_OFFSET) &
-              (CAN_ESR2_IMB | CAN_ESR2_VPS)) ==
-              (CAN_ESR2_IMB | CAN_ESR2_VPS))
+          if (s32k1xx_txringfull(priv))
             {
-              if (s32k1xx_txringfull(priv))
-                {
-                  return -EBUSY;
-                }
+              return -EBUSY;
             }
         }
     }
@@ -844,7 +845,7 @@ static int s32k1xx_txpoll(struct net_driver_s *dev)
  *
  ****************************************************************************/
 
-static void s32k1xx_receive(FAR struct s32k1xx_driver_s *priv,
+static void s32k1xx_receive(struct s32k1xx_driver_s *priv,
                             uint32_t flags)
 {
   uint32_t mb_index;
@@ -861,9 +862,11 @@ static void s32k1xx_receive(FAR struct s32k1xx_driver_s *priv,
       /* Read the frame contents */
 
 #ifdef CONFIG_NET_CAN_CANFD
-      if (rf->cs.edl) /* CAN FD frame */
+      if (rf->cs.edl)
         {
-        struct canfd_frame *frame = (struct canfd_frame *)priv->rxdesc;
+          /* CAN FD frame */
+
+          struct canfd_frame *frame = (struct canfd_frame *)priv->rxdesc;
 
           if (rf->cs.ide)
             {
@@ -880,7 +883,7 @@ static void s32k1xx_receive(FAR struct s32k1xx_driver_s *priv,
               frame->can_id |= FLAGRTR;
             }
 
-          frame->len = can_dlc_to_len[rf->cs.dlc];
+          frame->len = g_can_dlc_to_len[rf->cs.dlc];
 
           frame_data_word = (uint32_t *)&frame->data[0];
 
@@ -901,10 +904,12 @@ static void s32k1xx_receive(FAR struct s32k1xx_driver_s *priv,
           priv->dev.d_len = sizeof(struct canfd_frame);
           priv->dev.d_buf = (uint8_t *)frame;
         }
-      else /* CAN 2.0 Frame */
+      else
 #endif
         {
-        struct can_frame *frame = (struct can_frame *)priv->rxdesc;
+          /* CAN 2.0 Frame */
+
+          struct can_frame *frame = (struct can_frame *)priv->rxdesc;
 
           if (rf->cs.ide)
             {
@@ -983,7 +988,7 @@ static void s32k1xx_receive(FAR struct s32k1xx_driver_s *priv,
  *
  ****************************************************************************/
 
-static void s32k1xx_txdone(FAR struct s32k1xx_driver_s *priv)
+static void s32k1xx_txdone(struct s32k1xx_driver_s *priv)
 {
   uint32_t flags;
   uint32_t mbi;
@@ -1038,9 +1043,9 @@ static void s32k1xx_txdone(FAR struct s32k1xx_driver_s *priv)
  *
  ****************************************************************************/
 
-static void s32k1xx_txdone_work(FAR void *arg)
+static void s32k1xx_txdone_work(void *arg)
 {
-  FAR struct s32k1xx_driver_s *priv = (FAR struct s32k1xx_driver_s *)arg;
+  struct s32k1xx_driver_s *priv = (struct s32k1xx_driver_s *)arg;
 
   s32k1xx_txdone(priv);
 
@@ -1049,7 +1054,7 @@ static void s32k1xx_txdone_work(FAR void *arg)
    */
 
   net_lock();
-  devif_timer(&priv->dev, 0, s32k1xx_txpoll);
+  devif_poll(&priv->dev, s32k1xx_txpoll);
   net_unlock();
 }
 
@@ -1073,10 +1078,10 @@ static void s32k1xx_txdone_work(FAR void *arg)
  *
  ****************************************************************************/
 
-static int s32k1xx_flexcan_interrupt(int irq, FAR void *context,
-                                     FAR void *arg)
+static int s32k1xx_flexcan_interrupt(int irq, void *context,
+                                     void *arg)
 {
-  FAR struct s32k1xx_driver_s *priv = (struct s32k1xx_driver_s *)arg;
+  struct s32k1xx_driver_s *priv = (struct s32k1xx_driver_s *)arg;
 
   if (irq == priv->config->mb_irq)
     {
@@ -1129,9 +1134,9 @@ static int s32k1xx_flexcan_interrupt(int irq, FAR void *context,
  ****************************************************************************/
 #ifdef TX_TIMEOUT_WQ
 
-static void s32k1xx_txtimeout_work(FAR void *arg)
+static void s32k1xx_txtimeout_work(void *arg)
 {
-  FAR struct s32k1xx_driver_s *priv = (FAR struct s32k1xx_driver_s *)arg;
+  struct s32k1xx_driver_s *priv = (struct s32k1xx_driver_s *)arg;
   uint32_t flags;
   uint32_t mbi;
   uint32_t mb_bit;
@@ -1189,7 +1194,7 @@ static void s32k1xx_txtimeout_work(FAR void *arg)
 
 static void s32k1xx_txtimeout_expiry(wdparm_t arg)
 {
-  FAR struct s32k1xx_driver_s *priv = (FAR struct s32k1xx_driver_s *)arg;
+  struct s32k1xx_driver_s *priv = (struct s32k1xx_driver_s *)arg;
 
   /* Schedule to perform the TX timeout processing on the worker thread
    */
@@ -1217,26 +1222,6 @@ static void s32k1xx_setenable(uint32_t base, uint32_t enable)
     }
 
   s32k1xx_waitmcr_change(base, CAN_MCR_LPMACK, 1);
-}
-
-static uint32_t s32k1xx_waitesr2_change(uint32_t base, uint32_t mask,
-                                       uint32_t target_state)
-{
-  const uint32_t timeout = 1000;
-  uint32_t wait_ack;
-
-  for (wait_ack = 0; wait_ack < timeout; wait_ack++)
-    {
-      uint32_t state = (getreg32(base + S32K1XX_CAN_ESR2_OFFSET) & mask);
-      if (state == target_state)
-        {
-          return true;
-        }
-
-      up_udelay(10);
-    }
-
-  return false;
 }
 
 static void s32k1xx_setfreeze(uint32_t base, uint32_t freeze)
@@ -1306,8 +1291,8 @@ static uint32_t s32k1xx_waitfreezeack_change(uint32_t base,
 
 static int s32k1xx_ifup(struct net_driver_s *dev)
 {
-  FAR struct s32k1xx_driver_s *priv =
-    (FAR struct s32k1xx_driver_s *)dev->d_private;
+  struct s32k1xx_driver_s *priv =
+    (struct s32k1xx_driver_s *)dev->d_private;
 
   if (!s32k1xx_initialize(priv))
     {
@@ -1359,8 +1344,8 @@ static int s32k1xx_ifup(struct net_driver_s *dev)
 
 static int s32k1xx_ifdown(struct net_driver_s *dev)
 {
-  FAR struct s32k1xx_driver_s *priv =
-    (FAR struct s32k1xx_driver_s *)dev->d_private;
+  struct s32k1xx_driver_s *priv =
+    (struct s32k1xx_driver_s *)dev->d_private;
 
   s32k1xx_reset(priv);
 
@@ -1385,9 +1370,9 @@ static int s32k1xx_ifdown(struct net_driver_s *dev)
  *
  ****************************************************************************/
 
-static void s32k1xx_txavail_work(FAR void *arg)
+static void s32k1xx_txavail_work(void *arg)
 {
-  FAR struct s32k1xx_driver_s *priv = (FAR struct s32k1xx_driver_s *)arg;
+  struct s32k1xx_driver_s *priv = (struct s32k1xx_driver_s *)arg;
 
   /* Ignore the notification if the interface is not yet up */
 
@@ -1398,15 +1383,13 @@ static void s32k1xx_txavail_work(FAR void *arg)
        * packet.
        */
 
-      if (s32k1xx_waitesr2_change(priv->base,
-                             (CAN_ESR2_IMB | CAN_ESR2_VPS),
-                             (CAN_ESR2_IMB | CAN_ESR2_VPS)))
+      if (!s32k1xx_txringfull(priv))
         {
           /* No, there is space for another transfer.  Poll the network for
            * new XMIT data.
            */
 
-          devif_timer(&priv->dev, 0, s32k1xx_txpoll);
+          devif_poll(&priv->dev, s32k1xx_txpoll);
         }
     }
 
@@ -1434,8 +1417,8 @@ static void s32k1xx_txavail_work(FAR void *arg)
 
 static int s32k1xx_txavail(struct net_driver_s *dev)
 {
-  FAR struct s32k1xx_driver_s *priv =
-    (FAR struct s32k1xx_driver_s *)dev->d_private;
+  struct s32k1xx_driver_s *priv =
+    (struct s32k1xx_driver_s *)dev->d_private;
 
   /* Is our single work structure available?  It may not be if there are
    * pending interrupt actions and we will have to ignore the Tx
@@ -1474,8 +1457,8 @@ static int s32k1xx_txavail(struct net_driver_s *dev)
 static int s32k1xx_ioctl(struct net_driver_s *dev, int cmd,
                          unsigned long arg)
 {
-  FAR struct s32k1xx_driver_s *priv =
-      (FAR struct s32k1xx_driver_s *)dev->d_private;
+  struct s32k1xx_driver_s *priv =
+      (struct s32k1xx_driver_s *)dev->d_private;
 
   int ret;
 
@@ -1657,12 +1640,17 @@ static int s32k1xx_initialize(struct s32k1xx_driver_s *priv)
   putreg32(regval, priv->base + S32K1XX_CAN_CTRL2_OFFSET);
 #endif
 
+  /* Counting from TXMBCOUNT into priv->rx[] makes no sense, and MBs were
+   * zeroed by s32k1xx_reset() above anyways.
+   */
+#if 0
   for (i = TXMBCOUNT; i < TOTALMBCOUNT; i++)
     {
       priv->rx[i].id.w = 0x0;
 
       /* FIXME sometimes we get a hard fault here */
     }
+#endif
 
   putreg32(0x0, priv->base + S32K1XX_CAN_RXFGMASK_OFFSET);
 
@@ -1746,6 +1734,9 @@ static void s32k1xx_reset(struct s32k1xx_driver_s *priv)
     }
 
   regval  = getreg32(priv->base + S32K1XX_CAN_MCR_OFFSET);
+  regval &= ~CAN_MCR_MAXMB_MASK; /* Zero MAXMB to ensure "bitwise or"
+                                  * below sets the correct value.
+                                  */
   regval |= CAN_MCR_SLFWAK | CAN_MCR_WRNEN | CAN_MCR_SRXDIS |
             CAN_MCR_IRMQ | CAN_MCR_AEN |
             (((TOTALMBCOUNT - 1) << CAN_MCR_MAXMB_SHIFT) &

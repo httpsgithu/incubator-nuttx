@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/mips/src/mips32/mips_cache.S
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -28,7 +30,7 @@
 #include <arch/mips32/registers.h>
 #include <arch/mips32/cp0.h>
 
-#include "mips_arch.h"
+#include "mips_internal.h"
 
 /****************************************************************************
  * Pre-processor Definitions

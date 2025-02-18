@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/am335x/am335x_boot.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -29,7 +31,7 @@
 #include <debug.h>
 
 #include <nuttx/cache.h>
-#ifdef CONFIG_PAGING
+#ifdef CONFIG_LEGACY_PAGING
 #  include <nuttx/page.h>
 #endif
 
@@ -38,10 +40,7 @@
 #include "chip.h"
 #include "arm.h"
 #include "mmu.h"
-#include "fpu.h"
 #include "arm_internal.h"
-#include "arm_arch.h"
-
 #include "am335x_clockconfig.h"
 #include "am335x_wdog.h"
 #include "am335x_lowputc.h"
@@ -94,8 +93,8 @@
 
 /* Symbols defined via the linker script */
 
-extern uint32_t _vector_start; /* Beginning of vector block */
-extern uint32_t _vector_end;   /* End+1 of vector block */
+extern uint8_t _vector_start[]; /* Beginning of vector block */
+extern uint8_t _vector_end[];   /* End+1 of vector block */
 
 #define SAMA5_LCDC_FBNSECTIONS \
   ((CONFIG_SAMA5_LCDC_FB_SIZE + 0x000fffff) >> 20)
@@ -201,7 +200,7 @@ static inline void am335x_remap(void)
  ****************************************************************************/
 
 #if !defined(CONFIG_ARCH_ROMPGTABLE) && defined(CONFIG_ARCH_LOWVECTORS) && \
-     defined(CONFIG_PAGING)
+     defined(CONFIG_LEGACY_PAGING)
 static void am335x_vectorpermissions(uint32_t mmuflags)
 {
   /* The PTE for the beginning of OCMC0 RAM is at the base of the L2 page
@@ -240,13 +239,7 @@ static void am335x_vectorpermissions(uint32_t mmuflags)
 
 static inline size_t am335x_vectorsize(void)
 {
-  uintptr_t src;
-  uintptr_t end;
-
-  src = (uintptr_t)&_vector_start;
-  end = (uintptr_t)&_vector_end;
-
-  return (size_t)(end - src);
+  return _vector_end - _vector_start;
 }
 
 /****************************************************************************
@@ -267,7 +260,7 @@ static void am335x_vectormapping(void)
 {
   uint32_t vector_paddr = AM335X_VECTOR_PADDR & PTE_SMALL_PADDR_MASK;
   uint32_t vector_vaddr = AM335X_VECTOR_VADDR & PTE_SMALL_PADDR_MASK;
-  uint32_t vector_size  = (uint32_t)&_vector_end - (uint32_t)&_vector_start;
+  uint32_t vector_size  = _vector_end - _vector_start;
   uint32_t end_paddr    = AM335X_VECTOR_PADDR + vector_size;
 
   /* REVISIT:  Cannot really assert in this context */
@@ -281,7 +274,7 @@ static void am335x_vectormapping(void)
 
   while (vector_paddr < end_paddr)
     {
-      mmu_l2_setentry(VECTOR_L2_VBASE,  vector_paddr, vector_vaddr,
+      mmu_l2_setentry(VECTOR_L2_VBASE, vector_paddr, vector_vaddr,
                       MMU_L2_VECTORFLAGS);
       vector_paddr += 4096;
       vector_vaddr += 4096;
@@ -316,7 +309,7 @@ static void am335x_copyvectorblock(void)
   uint32_t *end;
   uint32_t *dest;
 
-#ifdef CONFIG_PAGING
+#ifdef CONFIG_LEGACY_PAGING
   /* If we are using re-mapped vectors in an area that has been marked
    * read only, then temporarily mark the mapping write-able (non-buffered).
    */
@@ -334,16 +327,16 @@ static void am335x_copyvectorblock(void)
    *                         0xffff0000)
    */
 
-  src  = (uint32_t *)&_vector_start;
-  end  = (uint32_t *)&_vector_end;
-  dest = (uint32_t *)(AM335X_VECTOR_VSRAM);
+  src  = (uint32_t *)_vector_start;
+  end  = (uint32_t *)_vector_end;
+  dest = (uint32_t *)AM335X_VECTOR_VSRAM;
 
   while (src < end)
     {
       *dest++ = *src++;
     }
 
-#if !defined(CONFIG_ARCH_LOWVECTORS) && defined(CONFIG_PAGING)
+#if !defined(CONFIG_ARCH_LOWVECTORS) && defined(CONFIG_LEGACY_PAGING)
   /* Make the vectors read-only, cache-able again */
 
   am335x_vectorpermissions(MMU_L2_VECTORFLAGS);
@@ -404,11 +397,9 @@ void arm_boot(void)
 
   am335x_clockconfig();
 
-#ifdef CONFIG_ARCH_FPU
   /* Initialize the FPU */
 
   arm_fpuconfig();
-#endif
 
   /* Disable CPU Watchdog */
 

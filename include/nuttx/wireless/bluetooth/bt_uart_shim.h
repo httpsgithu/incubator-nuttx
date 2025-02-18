@@ -1,6 +1,8 @@
 /****************************************************************************
  * include/nuttx/wireless/bluetooth/bt_uart_shim.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -18,8 +20,8 @@
  *
  ****************************************************************************/
 
-#ifndef __INCLUDE_NUTTX_WIRELESS_BT_UART_SHIM_H
-#define __INCLUDE_NUTTX_WIRELESS_BT_UART_SHIM_H
+#ifndef __INCLUDE_NUTTX_WIRELESS_BLUETOOTH_BT_UART_SHIM_H
+#define __INCLUDE_NUTTX_WIRELESS_BLUETOOTH_BT_UART_SHIM_H
 
 /****************************************************************************
  * Included Files
@@ -35,5 +37,5 @@
 
 FAR struct btuart_lowerhalf_s *btuart_shim_getdevice(FAR const char *path);
 
-#endif
-#endif
+#endif /* CONFIG_BLUETOOTH_UART_SHIM */
+#endif /* __INCLUDE_NUTTX_WIRELESS_BLUETOOTH_BT_UART_SHIM_H */

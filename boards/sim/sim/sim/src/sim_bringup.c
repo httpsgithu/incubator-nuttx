@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/sim/sim/sim/src/sim_bringup.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -34,7 +36,9 @@
 #include <nuttx/mtd/mtd.h>
 #include <nuttx/fs/fs.h>
 #include <nuttx/fs/nxffs.h>
-#include <nuttx/fs/hostfs_rpmsg.h>
+#include <nuttx/drivers/ramdisk.h>
+#include <nuttx/drivers/rpmsgdev.h>
+#include <nuttx/drivers/rpmsgblk.h>
 #include <nuttx/i2c/i2c_master.h>
 #include <nuttx/spi/spi_transfer.h>
 #include <nuttx/rc/lirc_dev.h>
@@ -43,26 +47,30 @@
 #include <nuttx/sensors/mpu60x0.h>
 #include <nuttx/sensors/wtgahrs2.h>
 #include <nuttx/serial/uart_rpmsg.h>
-#include <nuttx/syslog/syslog_rpmsg.h>
-#include <nuttx/timers/arch_rtc.h>
 #include <nuttx/timers/oneshot.h>
-#include <nuttx/timers/rpmsg_rtc.h>
 #include <nuttx/video/fb.h>
-#include <nuttx/timers/oneshot.h>
+#include <nuttx/video/v4l2_cap.h>
 #include <nuttx/wireless/pktradio.h>
 #include <nuttx/wireless/bluetooth/bt_null.h>
 #include <nuttx/wireless/bluetooth/bt_uart_shim.h>
 #include <nuttx/wireless/ieee802154/ieee802154_loopback.h>
+#include <nuttx/usb/adb.h>
+#include <nuttx/usb/mtp.h>
+#include <nuttx/usb/rndis.h>
 
 #ifdef CONFIG_LCD_DEV
 #include <nuttx/lcd/lcd_dev.h>
+#endif
+
+#ifdef CONFIG_VNCSERVER
+#  include <nuttx/video/vnc.h>
 #endif
 
 #if defined(CONFIG_INPUT_BUTTONS_LOWER) && defined(CONFIG_SIM_BUTTONS)
 #include <nuttx/input/buttons.h>
 #endif
 
-#include "up_internal.h"
+#include "sim_internal.h"
 #include "sim.h"
 
 /****************************************************************************
@@ -72,7 +80,7 @@
 #ifdef CONFIG_RPMSG_UART
 void rpmsg_serialinit(void)
 {
-#ifdef CONFIG_SIM_RPTUN_MASTER
+#ifdef CONFIG_SIM_RPMSG_MASTER
   uart_rpmsg_init("proxy", "proxy", 4096, false);
 #else
   uart_rpmsg_init("server", "proxy", 4096, true);
@@ -91,21 +99,23 @@ void rpmsg_serialinit(void)
 int sim_bringup(void)
 {
 #ifdef CONFIG_ONESHOT
-  FAR struct oneshot_lowerhalf_s *oneshot;
+  struct oneshot_lowerhalf_s *oneshot;
 #endif
 #ifdef CONFIG_RAMMTD
-  FAR uint8_t *ramstart;
+  uint8_t *ramstart;
+#endif
+#if !defined(CONFIG_DISABLE_MOUNTPOINT) && defined(CONFIG_BLK_RPMSG_SERVER)
+  uint8_t *ramdiskstart;
 #endif
 #ifdef CONFIG_SIM_I2CBUS
-  FAR struct i2c_master_s *i2cbus;
+  struct i2c_master_s *i2cbus;
 #endif
 #ifdef CONFIG_MPU60X0_I2C
-  FAR struct mpu_config_s *mpu_config;
+  struct mpu_config_s *mpu_config;
 #endif
 #ifdef CONFIG_SIM_SPI
-  FAR struct spi_dev_s *spidev;
+  struct spi_dev_s *spidev;
 #endif
-
   int ret = OK;
 
 #ifdef CONFIG_FS_BINFS
@@ -155,7 +165,7 @@ int sim_bringup(void)
 #ifdef CONFIG_RAMMTD
   /* Create a RAM MTD device if configured */
 
-  ramstart = (FAR uint8_t *)kmm_malloc(128 * 1024);
+  ramstart = kmm_malloc(128 * 1024);
   if (ramstart == NULL)
     {
       syslog(LOG_ERR, "ERROR: Allocation for RAM MTD failed\n");
@@ -164,7 +174,7 @@ int sim_bringup(void)
     {
       /* Initialized the RAM MTD */
 
-      FAR struct mtd_dev_s *mtd = rammtd_initialize(ramstart, 128 * 1024);
+      struct mtd_dev_s *mtd = rammtd_initialize(ramstart, 128 * 1024);
       if (mtd == NULL)
         {
           syslog(LOG_ERR, "ERROR: rammtd_initialize failed\n");
@@ -180,14 +190,6 @@ int sim_bringup(void)
               syslog(LOG_ERR, "ERROR: IOCTL MTDIOC_BULKERASE failed\n");
             }
 
-#if defined(CONFIG_MTD_SMART) && defined(CONFIG_FS_SMARTFS)
-          /* Initialize a SMART Flash block device and bind it to the MTD
-           * device.
-           */
-
-          smart_initialize(0, mtd, NULL);
-
-#elif defined(CONFIG_FS_SPIFFS)
           /* Register the MTD driver so that it can be accessed from the
            * VFS.
            */
@@ -199,6 +201,14 @@ int sim_bringup(void)
                      ret);
             }
 
+#if defined(CONFIG_MTD_SMART) && defined(CONFIG_FS_SMARTFS)
+          /* Initialize a SMART Flash block device and bind it to the MTD
+           * device.
+           */
+
+          smart_initialize(0, mtd, NULL);
+
+#elif defined(CONFIG_FS_SPIFFS)
           /* Mount the SPIFFS file system */
 
           ret = nx_mount("/dev/rammtd", "/mnt/spiffs", "spiffs", 0, NULL);
@@ -210,17 +220,6 @@ int sim_bringup(void)
             }
 
 #elif defined(CONFIG_FS_LITTLEFS)
-          /* Register the MTD driver so that it can be accessed from the
-           * VFS.
-           */
-
-          ret = register_mtddriver("/dev/rammtd", mtd, 0755, NULL);
-          if (ret < 0)
-            {
-              syslog(LOG_ERR, "ERROR: Failed to register MTD driver: %d\n",
-                     ret);
-            }
-
           /* Mount the LittleFS file system */
 
           ret = nx_mount("/dev/rammtd", "/mnt/lfs", "littlefs", 0,
@@ -243,6 +242,16 @@ int sim_bringup(void)
             }
 #endif
         }
+    }
+#endif
+
+#if !defined(CONFIG_DISABLE_MOUNTPOINT) && defined(CONFIG_BLK_RPMSG_SERVER)
+  ramdiskstart = kmm_malloc(512 * 2048);
+  ret = ramdisk_register(1, ramdiskstart, 2048, 512,
+                         RDFLAG_WRENABLED | RDFLAG_FUNLINK);
+  if (ret < 0)
+    {
+      syslog(LOG_ERR, "ERROR: Failed to register ramdisk: %d\n", ret);
     }
 #endif
 
@@ -281,27 +290,38 @@ int sim_bringup(void)
   sim_ajoy_initialize();
 #endif
 
-#if defined(CONFIG_NX) && defined(CONFIG_SIM_TOUCHSCREEN)
-  /* Initialize the touchscreen */
-
-  ret = sim_tsc_setup(0);
-  if (ret < 0)
-    {
-      syslog(LOG_ERR, "ERROR: sim_tsc_setup failed: %d\n", ret);
-    }
-#else
-
-#  ifdef CONFIG_VIDEO_FB
+#ifdef CONFIG_VIDEO_FB
   /* Initialize and register the simulated framebuffer driver */
 
+#  ifdef CONFIG_VNCSERVER
+  ret = vnc_fb_register(0);
+  if (ret < 0)
+    {
+      syslog(LOG_ERR, "ERROR: vnc_fb_register() failed: %d\n", ret);
+    }
+#  else
   ret = fb_register(0, 0);
   if (ret < 0)
     {
       syslog(LOG_ERR, "ERROR: fb_register() failed: %d\n", ret);
     }
 #  endif
+#endif
 
-#  ifdef CONFIG_LCD
+#ifdef CONFIG_SIM_CAMERA
+  /* Initialize and register the simulated video driver */
+
+  sim_camera_initialize();
+
+  ret = capture_initialize(CONFIG_SIM_CAMERA_DEV_PATH);
+  if (ret < 0)
+    {
+      syslog(LOG_ERR, "ERROR: capture_initialize() failed: %d\n", ret);
+    }
+
+#endif
+
+#ifdef CONFIG_LCD
 
   ret = board_lcd_initialize();
   if (ret < 0)
@@ -319,9 +339,9 @@ int sim_bringup(void)
 
 #  endif
 
-#  endif
+#endif
 
-#  ifdef CONFIG_SIM_TOUCHSCREEN
+#ifdef CONFIG_SIM_TOUCHSCREEN
   /* Initialize the touchscreen */
 
   ret = sim_tsc_initialize(0);
@@ -329,8 +349,16 @@ int sim_bringup(void)
     {
       syslog(LOG_ERR, "ERROR: sim_tsc_initialize failed: %d\n", ret);
     }
-#  endif
+#endif
 
+#ifdef CONFIG_SIM_KEYBOARD
+  /* Initialize the keyboard */
+
+  ret = sim_kbd_initialize();
+  if (ret < 0)
+    {
+      syslog(LOG_ERR, "ERROR: sim_kbd_initialize failed: %d\n", ret);
+    }
 #endif
 
 #ifdef CONFIG_IEEE802154_LOOPBACK
@@ -366,10 +394,10 @@ int sim_bringup(void)
 #ifdef CONFIG_SIM_HCISOCKET
   /* Register the Host Bluetooth network device via HCI socket */
 
-  ret = bthcisock_register(0);  /* Use HCI0 */
+  ret = sim_bthcisock_register(CONFIG_SIM_HCISOCKET_DEVID);
   if (ret < 0)
     {
-      syslog(LOG_ERR, "ERROR: bthcisock_register() failed: %d\n", ret);
+      syslog(LOG_ERR, "ERROR: sim_bthcisock_register() failed: %d\n", ret);
     }
 #endif
 
@@ -437,7 +465,7 @@ int sim_bringup(void)
     }
 #endif
 
-#ifdef CONFIG_SIM_MOTOR_FOC
+#ifdef CONFIG_MOTOR_FOC_DUMMY
   /* Setup FOC device */
 
   ret = sim_foc_setup();
@@ -448,27 +476,42 @@ int sim_bringup(void)
 #endif
 
 #ifdef CONFIG_RPTUN
-#ifdef CONFIG_SIM_RPTUN_MASTER
-  up_rptun_init("server-proxy", "proxy", true);
-#else
-  up_rptun_init("server-proxy", "server", false);
+#  ifdef CONFIG_SIM_RPMSG_MASTER
+  sim_rptun_init("server-proxy", "proxy",
+                 SIM_RPTUN_MASTER | SIM_RPTUN_NOBOOT);
+#  else
+  sim_rptun_init("server-proxy", "server", SIM_RPTUN_SLAVE);
+#  endif
 #endif
 
-#ifdef CONFIG_SYSLOG_RPMSG_SERVER
-  syslog_rpmsg_server_init();
+#ifdef CONFIG_RPMSG_VIRTIO_LITE
+#  ifdef CONFIG_SIM_RPMSG_MASTER
+  sim_rpmsg_virtio_init("server-proxy", "proxy", true);
+#  else
+  sim_rpmsg_virtio_init("server-proxy", "server", false);
+#  endif
 #endif
 
-#ifndef CONFIG_RTC_RPMSG_SERVER
-  up_rtc_set_lowerhalf(rpmsg_rtc_initialize(0));
+#ifdef CONFIG_RPMSG_PORT_UART
+#  ifdef CONFIG_SIM_RPMSG_MASTER
+  sim_rpmsg_port_uart_init("server", "proxy", "/dev/ttyVS0");
+#  else
+  sim_rpmsg_port_uart_init("proxy", "server", "/dev/ttyVS0");
+#  endif
 #endif
 
-#ifdef CONFIG_FS_HOSTFS_RPMSG
-  hostfs_rpmsg_init("server");
+#ifdef CONFIG_DEV_RPMSG
+  rpmsgdev_register("server", "/dev/console", "/dev/server-console", 0);
+  rpmsgdev_register("server", "/dev/null", "/dev/server-null", 0);
+  rpmsgdev_register("server", "/dev/ttyUSB0", "/dev/ttyUSB0", 0);
 #endif
 
-#ifdef CONFIG_FS_HOSTFS_RPMSG_SERVER
-  hostfs_rpmsg_server_init();
+#ifdef CONFIG_BLK_RPMSG
+  rpmsgblk_register("server", "/dev/ram1", NULL);
 #endif
+
+#ifdef CONFIG_RPMSGMTD
+  rpmsgmtd_register("server", "/dev/rammtd", NULL);
 #endif
 
 #ifdef CONFIG_SIM_WTGAHRS2_UARTN
@@ -485,6 +528,29 @@ int sim_bringup(void)
 
 #ifdef CONFIG_RC_DUMMY
   rc_dummy_initialize(0);
+#endif
+
+#if defined(CONFIG_USBADB) && \
+    !defined(CONFIG_USBADB_COMPOSITE) && \
+    !defined(CONFIG_BOARDCTL_USBDEVCTRL)
+  usbdev_adb_initialize();
+#endif
+
+#if defined(CONFIG_USBMTP) && !defined(CONFIG_USBMTP_COMPOSITE)
+  usbdev_mtp_initialize();
+#endif
+
+#if defined(CONFIG_RNDIS) && !defined(CONFIG_RNDIS_COMPOSITE)
+  /* Set up a MAC address for the RNDIS device. */
+
+  uint8_t mac[6];
+  mac[0] = (CONFIG_SIM_RNDIS_MACADDR >> (8 * 5)) & 0xff;
+  mac[1] = (CONFIG_SIM_RNDIS_MACADDR >> (8 * 4)) & 0xff;
+  mac[2] = (CONFIG_SIM_RNDIS_MACADDR >> (8 * 3)) & 0xff;
+  mac[3] = (CONFIG_SIM_RNDIS_MACADDR >> (8 * 2)) & 0xff;
+  mac[4] = (CONFIG_SIM_RNDIS_MACADDR >> (8 * 1)) & 0xff;
+  mac[5] = (CONFIG_SIM_RNDIS_MACADDR >> (8 * 0)) & 0xff;
+  usbdev_rndis_initialize(mac);
 #endif
 
   return ret;

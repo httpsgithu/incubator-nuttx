@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/kinetis/hardware/kinetis_enet.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -489,13 +491,13 @@
  */
 
 #ifdef KINETIS_ENET_HAS_DBSWAP
-# ifndef CONFIG_ENDIAN_BIG
-#  define KINETIS_USE_DBSWAP
-# endif
+#  ifndef CONFIG_ENDIAN_BIG
+#    define KINETIS_USE_DBSWAP
+#  endif
 #else
-# ifndef CONFIG_ENDIAN_BIG
-#  define KINETIS_BUFFERS_SWAP
-# endif
+#  ifndef CONFIG_ENDIAN_BIG
+#    define KINETIS_BUFFERS_SWAP
+#  endif
 #endif
 
 #ifndef KINETIS_BUFFERS_SWAP

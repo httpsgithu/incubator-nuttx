@@ -1,6 +1,8 @@
 /****************************************************************************
  * sched/signal/sig_suspend.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -100,7 +102,7 @@ int sigsuspend(FAR const sigset_t *set)
 
   saved_sigprocmask = rtcb->sigprocmask;
   rtcb->sigprocmask = *set;
-  rtcb->sigwaitmask = NULL_SIGNAL_SET;
+  sigemptyset(&rtcb->sigwaitmask);
 
   /* Check if there is a pending signal corresponding to one of the
    * signals that will be unblocked by the new sigprocmask.
@@ -122,8 +124,20 @@ int sigsuspend(FAR const sigset_t *set)
        * isn't going to end well.
        */
 
-      DEBUGASSERT(NULL != rtcb->flink);
-      up_block_task(rtcb, TSTATE_WAIT_SIG);
+      DEBUGASSERT(!is_idle_task(rtcb));
+
+      /* Remove the tcb task from the running list. */
+
+      nxsched_remove_self(rtcb);
+
+      /* Add the task to the specified blocked task list */
+
+      rtcb->task_state = TSTATE_WAIT_SIG;
+      dq_addlast((FAR dq_entry_t *)rtcb, list_waitingforsignal());
+
+      /* Now, perform the context switch */
+
+      up_switch_context(this_task(), rtcb);
 
       /* We are running again, restore the original sigprocmask */
 

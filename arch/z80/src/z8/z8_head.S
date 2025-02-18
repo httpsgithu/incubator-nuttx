@@ -1,6 +1,8 @@
 /**************************************************************************
  * arch/z80/src/z8/z8_head.S
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -43,7 +45,6 @@
 #else
 #  undef CONFIG_Z8_COPYPRAM
 #endif
-
 
 /**************************************************************************
  * External References / External Definitions

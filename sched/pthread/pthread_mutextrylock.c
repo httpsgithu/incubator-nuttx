@@ -1,6 +1,8 @@
 /****************************************************************************
  * sched/pthread/pthread_mutextrylock.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -71,37 +73,20 @@ int pthread_mutex_trylock(FAR pthread_mutex_t *mutex)
   int status;
   int ret = EINVAL;
 
-  sinfo("mutex=0x%p\n", mutex);
+  sinfo("mutex=%p\n", mutex);
   DEBUGASSERT(mutex != NULL);
 
   if (mutex != NULL)
     {
-      int mypid = (int)getpid();
-
-      /* Make sure the semaphore is stable while we make the following
-       * checks.  This all needs to be one atomic action.
-       */
-
-      sched_lock();
+#ifndef CONFIG_PTHREAD_MUTEX_UNSAFE
+      pid_t pid = mutex_get_holder(&mutex->mutex);
+#endif
 
       /* Try to get the semaphore. */
 
       status = pthread_mutex_trytake(mutex);
       if (status == OK)
         {
-          /* If we successfully obtained the semaphore, then indicate
-           * that we own it.
-           */
-
-          mutex->pid = mypid;
-
-#ifdef CONFIG_PTHREAD_MUTEX_TYPES
-          if (mutex->type == PTHREAD_MUTEX_RECURSIVE)
-            {
-              mutex->nlocks = 1;
-            }
-#endif
-
           ret = OK;
         }
 
@@ -111,28 +96,6 @@ int pthread_mutex_trylock(FAR pthread_mutex_t *mutex)
 
       else if (status == EAGAIN)
         {
-#ifdef CONFIG_PTHREAD_MUTEX_TYPES
-          /* Check if recursive mutex was locked by the calling thread. */
-
-          if (mutex->type == PTHREAD_MUTEX_RECURSIVE && mutex->pid == mypid)
-            {
-              /* Increment the number of locks held and return
-               * successfully.
-               */
-
-              if (mutex->nlocks < INT16_MAX)
-                {
-                  mutex->nlocks++;
-                  ret = OK;
-                }
-              else
-                {
-                  ret = EOVERFLOW;
-                }
-            }
-          else
-#endif
-
 #ifndef CONFIG_PTHREAD_MUTEX_UNSAFE
           /* The calling thread does not hold the semaphore.  The correct
            * behavior for the 'robust' mutex is to verify that the holder of
@@ -144,35 +107,35 @@ int pthread_mutex_trylock(FAR pthread_mutex_t *mutex)
 #ifdef CONFIG_PTHREAD_MUTEX_TYPES
           /* Check if this NORMAL mutex is robust */
 
-          if (mutex->pid > 0 &&
+          if (pid > 0 &&
               ((mutex->flags & _PTHREAD_MFLAGS_ROBUST) != 0 ||
                mutex->type != PTHREAD_MUTEX_NORMAL) &&
-              nxsched_get_tcb(mutex->pid) == NULL)
+              nxsched_get_tcb(pid) == NULL)
 
 #else /* CONFIG_PTHREAD_MUTEX_TYPES */
           /* Check if this NORMAL mutex is robust */
 
-          if (mutex->pid > 0 &&
+          if (pid > 0 &&
               (mutex->flags & _PTHREAD_MFLAGS_ROBUST) != 0 &&
-              nxsched_get_tcb(mutex->pid) == NULL)
+              nxsched_get_tcb(pid) == NULL)
 
 #endif /* CONFIG_PTHREAD_MUTEX_TYPES */
 #else /* CONFIG_PTHREAD_MUTEX_ROBUST */
           /* This mutex is always robust, whatever type it is. */
 
-          if (mutex->pid > 0 && nxsched_get_tcb(mutex->pid) == NULL)
+          if (pid > 0 && nxsched_get_tcb(pid) == NULL)
 #endif
             {
               /* < 0: available, >0 owned, ==0 error */
 
-              DEBUGASSERT(mutex->pid != 0);
+              DEBUGASSERT(pid != 0);
               DEBUGASSERT((mutex->flags & _PTHREAD_MFLAGS_INCONSISTENT)
                           != 0);
 
               /* A thread holds the mutex, but there is no such thread.
                * POSIX requires that the 'robust' mutex return EOWNERDEAD
                * in this case. It is then the caller's responsibility to
-               * call pthread_mutx_consistent() to fix the mutex.
+               * call pthread_mutex_consistent() to fix the mutex.
                */
 
               mutex->flags |= _PTHREAD_MFLAGS_INCONSISTENT;
@@ -194,8 +157,6 @@ int pthread_mutex_trylock(FAR pthread_mutex_t *mutex)
         {
           ret = status;
         }
-
-      sched_unlock();
     }
 
   sinfo("Returning %d\n", ret);

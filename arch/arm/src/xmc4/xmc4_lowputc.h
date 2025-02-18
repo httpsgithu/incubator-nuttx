@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/xmc4/xmc4_lowputc.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -41,11 +43,14 @@
 
 struct uart_config_s
 {
-  uint32_t baud;         /* Desired BAUD rate */
-  uint8_t  dx;           /* Input pin 0=DXA, 1=DXB, ... 6=DXG */
-  uint8_t  parity;       /* Parity selection:  0=none, 1=odd, 2=even */
-  uint8_t  nbits;        /* Number of bits per word */
-  bool     stop2;        /* true=2 stop bits; false=1 stop bit */
+  uint32_t baud;           /* Desired BAUD rate */
+  uint8_t  dx;             /* Input pin 0=DXA, 1=DXB, ... 6=DXG */
+  uint8_t  parity;         /* Parity selection:  0=none, 1=odd, 2=even */
+  uint8_t  nbits;          /* Number of bits per word */
+  bool     stop2;          /* true=2 stop bits; false=1 stop bit */
+  uint8_t  startbufferptr; /* Hardware Tx buffer start pointer */
+  uint8_t  txbuffersize;   /* Hardware Tx Buffer Size */
+  uint8_t  rxbuffersize;   /* Hardware Rx Buffer Size */
 };
 
 /****************************************************************************
@@ -94,7 +99,7 @@ void xmc4_earlyserialinit(void);
 
 #ifdef HAVE_UART_DEVICE
 int xmc4_uart_configure(enum usic_channel_e channel,
-                        FAR const struct uart_config_s *config);
+                        const struct uart_config_s *config);
 #endif
 
 /****************************************************************************

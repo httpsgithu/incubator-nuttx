@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/moxart/moxart_irq.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -33,7 +35,6 @@
 #include <arch/board/board.h>
 
 #include "arm.h"
-#include "arm_arch.h"
 #include "arm_internal.h"
 
 /****************************************************************************
@@ -49,26 +50,6 @@
 #define IRQ__MODE   0x0C
 #define IRQ__LEVEL  0x10
 #define IRQ__STATUS 0x14
-
-/****************************************************************************
- * Public Data
- ****************************************************************************/
-
-/* g_current_regs[] holds a references to the current interrupt level
- * register storage structure.  If is non-NULL only during interrupt
- * processing.  Access to g_current_regs[] must be through the macro
- * CURRENT_REGS for portability.
- */
-
-volatile uint32_t *g_current_regs[1];
-
-/****************************************************************************
- * Private Data
- ****************************************************************************/
-
-/****************************************************************************
- * Private Functions
- ****************************************************************************/
 
 /****************************************************************************
  * Public Functions
@@ -117,10 +98,6 @@ void up_irqinitialize(void)
   putreg32(0, IRQ_REG(IRQ__MODE + 0x20));
   putreg32(0, IRQ_REG(IRQ__LEVEL + 0x20));
 
-  /* currents_regs is non-NULL only while processing an interrupt */
-
-  CURRENT_REGS = NULL;
-
   /* Setup UART shared interrupt */
 
   irq_attach(CONFIG_UART_MOXA_SHARED_IRQ, uart_decodeirq, NULL);
@@ -139,7 +116,7 @@ void up_irqinitialize(void)
           getreg32(0x98800020));
 
 #ifndef CONFIG_SUPPRESS_INTERRUPTS
-  up_irq_restore(PSR_MODE_SVC | PSR_F_BIT);
+  up_irq_restore(PSR_MODE_SYS | PSR_F_BIT);
 #endif
 }
 
@@ -285,6 +262,7 @@ void arm_ack_irq(int irq)
 
 uint32_t *arm_decodeirq(uint32_t *regs)
 {
+  struct tcb_s *tcb = this_task();
   uint32_t num;
   uint32_t status;
 
@@ -301,11 +279,18 @@ uint32_t *arm_decodeirq(uint32_t *regs)
   num = ffs(status) - 1;
   arm_ack_irq(num);
 
-  DEBUGASSERT(CURRENT_REGS == NULL);
-  CURRENT_REGS = regs;
+  DEBUGASSERT(!up_interrupt_context());
+
+  /* Set irq flag */
+
+  up_set_interrupt_context(true);
+  tcb->xcp.regs = regs;
 
   irq_dispatch(num, regs);
-  CURRENT_REGS = NULL;
+
+  /* Set irq flag */
+
+  up_set_interrupt_context(false);
 
   return NULL;  /* Return not used in this architecture */
 }

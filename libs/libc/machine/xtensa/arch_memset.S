@@ -1,6 +1,8 @@
 /****************************************************************************
  * libs/libc/machine/xtensa/arch_memset.S
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -27,6 +29,10 @@
 #include <arch/chip/core-isa.h>
 #include <arch/xtensa/xtensa_abi.h>
 
+#include "libc.h"
+
+#ifdef LIBC_BUILD_MEMSET
+
 /****************************************************************************
  * Public Functions
  ****************************************************************************/
@@ -47,7 +53,6 @@
    case of an aligned destination (except for the branches to
    the alignment labels).  */
 
-
 /* Byte-by-byte set.  */
 
 	.section .text
@@ -59,9 +64,9 @@
 	.local	.Ldst2mod4
 
 	.align	4
-	.global	memset
-	.type	memset, @function
-memset:
+	.global	ARCH_LIBCFUN(memset)
+	.type	ARCH_LIBCFUN(memset), @function
+ARCH_LIBCFUN(memset):
   ENTRY(16)
 	/* a2 = dst, a3 = c, a4 = length */
 
@@ -153,7 +158,6 @@ memset:
 	s8i	a3, a5, 0
 6:	RET(16)
 
-
 	// .align	XCHAL_INST_FETCH_WIDTH
 __memset_aux:
 
@@ -176,4 +180,6 @@ __memset_aux:
 
 	.end schedule
 
-	.size	memset, . - memset
+	.size	ARCH_LIBCFUN(memset), . - ARCH_LIBCFUN(memset)
+
+#endif

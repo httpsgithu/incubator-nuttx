@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/cxd56xx/spresense/include/cxd56_emmcdev.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -60,6 +62,7 @@ extern "C"
 
 #ifdef CONFIG_CXD56_EMMC
 int board_emmc_initialize(void);
+int board_emmc_finalize(void);
 #endif
 
 #undef EXTERN

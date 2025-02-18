@@ -1,6 +1,8 @@
 /****************************************************************************
  * include/nuttx/input/touchscreen.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -36,10 +38,11 @@
 
 #include <nuttx/config.h>
 #include <nuttx/fs/ioctl.h>
-#include <nuttx/mm/circbuf.h>
+#include <nuttx/circbuf.h>
 #include <nuttx/semaphore.h>
-
-#ifdef CONFIG_INPUT
+#include <time.h>
+#include <inttypes.h>
+#include <fixedmath.h>
 
 /****************************************************************************
  * Pre-processor Definitions
@@ -49,14 +52,56 @@
 
 /* Common TSC IOCTL commands */
 
-#define TSIOC_SETCALIB       _TSIOC(0x0001)  /* arg: Pointer to int calibration value */
-#define TSIOC_GETCALIB       _TSIOC(0x0002)  /* arg: Pointer to int calibration value */
-#define TSIOC_SETFREQUENCY   _TSIOC(0x0003)  /* arg: Pointer to uint32_t frequency value */
-#define TSIOC_GETFREQUENCY   _TSIOC(0x0004)  /* arg: Pointer to uint32_t frequency value */
-#define TSIOC_GETFWVERSION   _TSIOC(0x0005)  /* arg: Pointer to uint32_t firmware version value */
+#define TSIOC_SETXRCAL       _TSIOC(0x0001) /* arg: Pointer to
+                                             * int Xplate R calibration value
+                                             */
+#define TSIOC_GETXRCAL       _TSIOC(0x0002) /* arg: Pointer to
+                                             * int Xplate R calibration value
+                                             */
+#define TSIOC_SETFREQUENCY   _TSIOC(0x0003) /* arg: Pointer to
+                                             * uint32_t frequency value
+                                             */
+#define TSIOC_GETFREQUENCY   _TSIOC(0x0004) /* arg: Pointer to
+                                             *  uint32_t frequency value
+                                             */
+#define TSIOC_GETFWVERSION   _TSIOC(0x0005) /* arg: Pointer to
+                                             * uint32_t firmware version
+                                             * value
+                                             * */
+#define TSIOC_ENABLEGESTURE  _TSIOC(0x0006) /* arg: Pointer to
+                                             * int for enable gesture feature
+                                             */
+#define TSIOC_DOACALIB       _TSIOC(0x0007) /* arg: none.
+                                             * Initiate TS auto calibration
+                                             */
+#define TSIOC_CALDATA        _TSIOC(0x0008) /* arg: Pointer to
+                                             * struct g_tscaldata_s
+                                             */
+#define TSIOC_USESCALED      _TSIOC(0x0009) /* arg: bool, yes/no */
+#define TSIOC_GETOFFSETX     _TSIOC(0x000a) /* arg: Pointer to
+                                             * int X offset value
+                                             */
+#define TSIOC_GETOFFSETY     _TSIOC(0x000b) /* arg: Pointer to
+                                             * int Y offset value
+                                             */
+#define TSIOC_GETTHRESHX     _TSIOC(0x000c) /* arg: Pointer to
+                                             * int X threshold value
+                                             */
+#define TSIOC_GETTHRESHY     _TSIOC(0x000d) /* arg: Pointer to
+                                             * int Y threshold value
+                                             */
+
+#define TSIOC_GRAB           _TSIOC(0x000e) /* arg: Pointer to
+                                             * int for enable grab
+                                             */
 
 #define TSC_FIRST            0x0001          /* First common command */
-#define TSC_NCMDS            5               /* Five common commands */
+#define TSC_NCMDS            14              /* Fourteen common commands */
+
+/* Backward compatible IOCTL */
+
+#define TSIOC_SETCALIB       TSIOC_SETXRCAL
+#define TSIOC_GETCALIB       TSIOC_GETXRCAL
 
 /* User defined ioctl commands are also supported.  However, the
  * TSC driver must reserve a block of commands as follows in order
@@ -94,10 +139,53 @@
 #define TOUCH_POS_VALID      (1 << 4) /* Hardware provided a valid X/Y position */
 #define TOUCH_PRESSURE_VALID (1 << 5) /* Hardware provided a valid pressure */
 #define TOUCH_SIZE_VALID     (1 << 6) /* Hardware provided a valid H/W contact size */
+#define TOUCH_GESTURE_VALID  (1 << 7) /* Hardware provided a valid gesture */
+
+/* These are definitions for touch gesture */
+
+#define TOUCH_DOUBLE_CLICK   (0x00)
+#define TOUCH_SLIDE_UP       (0x01)
+#define TOUCH_SLIDE_DOWN     (0x02)
+#define TOUCH_SLIDE_LEFT     (0x03)
+#define TOUCH_SLIDE_RIGHT    (0x04)
+#define TOUCH_PALM           (0x05)
+
+/* Help function */
+
+#define SCALE_TS(x, o, s)     (b16toi(b16divb16(((x) - (o)), (s))))
 
 /****************************************************************************
  * Public Types
  ****************************************************************************/
+
+/* This struct is used to store touchscreen calibration data for use by
+ * low level touichscreen drivers.
+ *
+ * It is used as follows:
+ *
+ *   scaledX = (raw_x - offset_x) / slope_x
+ *   scaledY = (raw_y - offset_y) / slope_y
+ *
+ * The calibration values would typically be derived by taking top left and
+ * bottom right measurements on the actual LCD/touchscreen used:
+ *
+ * xSlope  = (ActualRightX -  ActualLeftX) / (WantedRightX - WantedLeftX)
+ * xOffset =  ActualLeftX  - (WantedLeftX * xSlope)
+ *
+ * And similarly for the Y values.
+ *
+ * ySlope  = (ActualBottomY -  ActualTopY) / (WantedBottomY - WantedTopY)
+ * yOffset =  ActualTopY    - (WantedTopY * ySlope)
+ *
+ */
+
+  struct g_tscaldata_s
+  {
+    b16_t slope_x;
+    b16_t offset_x;
+    b16_t slope_y;
+    b16_t offset_y;
+  };
 
 /* This structure contains information about a single touch point.
  * Positional units are device specific.
@@ -105,13 +193,15 @@
 
 struct touch_point_s
 {
-  uint8_t  id;       /* Unique identifies contact; Same in all reports for the contact */
-  uint8_t  flags;    /* See TOUCH_* definitions above */
-  int16_t  x;        /* X coordinate of the touch point (uncalibrated) */
-  int16_t  y;        /* Y coordinate of the touch point (uncalibrated) */
-  int16_t  h;        /* Height of touch point (uncalibrated) */
-  int16_t  w;        /* Width of touch point (uncalibrated) */
-  uint16_t pressure; /* Touch pressure */
+  uint8_t  id;        /* Unique identifies contact; Same in all reports for the contact */
+  uint8_t  flags;     /* See TOUCH_* definitions above */
+  int16_t  x;         /* X coordinate of the touch point (uncalibrated) */
+  int16_t  y;         /* Y coordinate of the touch point (uncalibrated) */
+  int16_t  h;         /* Height of touch point (uncalibrated) */
+  int16_t  w;         /* Width of touch point (uncalibrated) */
+  uint16_t gesture;   /* Gesture of touchscreen contact */
+  uint16_t pressure;  /* Touch pressure */
+  uint64_t timestamp; /* Touch event time stamp, in microseconds */
 };
 
 /* The typical touchscreen driver is a read-only, input character device
@@ -136,6 +226,8 @@ struct touch_sample_s
 
 #define SIZEOF_TOUCH_SAMPLE_S(n) \
   (sizeof(struct touch_sample_s) + ((n) - 1) * sizeof(struct touch_point_s))
+
+#ifdef CONFIG_INPUT_TOUCHSCREEN
 
 /* This structure is for touchscreen lower half driver */
 
@@ -162,7 +254,38 @@ struct touch_lowerhalf_s
 
   CODE int (*control)(FAR struct touch_lowerhalf_s *lower,
                       int cmd, unsigned long arg);
+
+  /**************************************************************************
+   * Name: write
+   *
+   * Description:
+   *   Users can use this interface to implement custom write.
+   *
+   * Arguments:
+   *   lower   - The instance of lower half of touchscreen device.
+   *   buffer  - User defined specific buffer.
+   *   buflen  - User defined specific buffer size.
+   *
+   * Return Value:
+   *   Number of bytes written；a negated errno value on failure.
+   *
+   **************************************************************************/
+
+  CODE ssize_t (*write)(FAR struct touch_lowerhalf_s *lower,
+                        FAR const char *buffer, size_t buflen);
 };
+
+/****************************************************************************
+ * Inline Functions
+ ****************************************************************************/
+
+static inline uint64_t touch_get_time(void)
+{
+  struct timespec ts;
+
+  clock_systime_timespec(&ts);
+  return 1000000ull * ts.tv_sec + ts.tv_nsec / 1000;
+}
 
 /****************************************************************************
  * Public Function Prototypes
@@ -192,7 +315,7 @@ void touch_event(FAR void *priv, FAR const struct touch_sample_s *sample);
  * Arguments:
  *   lower     - A pointer of lower half instance.
  *   path      - The path of touchscreen device. such as "/dev/input0"
- *   buff_nums - Number of the touch points structure.
+ *   nums      - Number of the touch points structure.
  *
  * Return:
  *   OK if the driver was successfully registered; A negated errno value is
@@ -201,7 +324,7 @@ void touch_event(FAR void *priv, FAR const struct touch_sample_s *sample);
  ****************************************************************************/
 
 int touch_register(FAR struct touch_lowerhalf_s *lower,
-                   FAR const char *path, uint8_t buff_nums);
+                   FAR const char *path, uint8_t nums);
 
 /****************************************************************************
  * Name: touch_unregister

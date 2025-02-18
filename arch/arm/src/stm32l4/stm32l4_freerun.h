@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/stm32l4/stm32l4_freerun.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -18,8 +20,8 @@
  *
  ****************************************************************************/
 
-#ifndef __ARCH_ARM_SRC_STM32L4_FREERUN_H
-#define __ARCH_ARM_SRC_STM32L4_FREERUN_H
+#ifndef __ARCH_ARM_SRC_STM32L4_STM32L4_FREERUN_H
+#define __ARCH_ARM_SRC_STM32L4_STM32L4_FREERUN_H
 
 /****************************************************************************
  * Included Files
@@ -47,9 +49,9 @@
 
 struct stm32l4_freerun_s
 {
-  uint8_t chan;                      /* The timer/counter in use */
-  uint32_t overflow;                 /* Timer counter overflow */
-  FAR struct stm32l4_tim_dev_s *tch; /* Handle returned by stm32l4_tim_init() */
+  uint8_t chan;                  /* The timer/counter in use */
+  uint32_t overflow;             /* Timer counter overflow */
+  struct stm32l4_tim_dev_s *tch; /* Handle returned by stm32l4_tim_init() */
   uint32_t frequency;
 };
 
@@ -139,4 +141,4 @@ int stm32l4_freerun_uninitialize(struct stm32l4_freerun_s *freerun);
 #endif
 
 #endif /* CONFIG_STM32L4_FREERUN */
-#endif /* __ARCH_ARM_SRC_STM32L4_FREERUN_H */
+#endif /* __ARCH_ARM_SRC_STM32L4_STM32L4_FREERUN_H */

@@ -1,6 +1,8 @@
 /****************************************************************************
  * mm/iob/iob_pack.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -44,23 +46,18 @@
  *
  ****************************************************************************/
 
-FAR struct iob_s *iob_pack(FAR struct iob_s *iob,
-                           enum iob_user_e producerid)
+FAR struct iob_s *iob_pack(FAR struct iob_s *iob)
 {
   FAR struct iob_s *head;
   FAR struct iob_s *next;
   unsigned int ncopy;
   unsigned int navail;
 
-  /* Handle special cases */
+  /* Handle special cases, preserve at least one iob. */
 
-  while (iob->io_len <= 0)
+  while (iob->io_len <= 0 && iob->io_flink != NULL)
     {
-      iob = iob_free(iob, producerid);
-      if (iob == NULL)
-        {
-          return NULL;
-        }
+      iob = iob_free(iob);
     }
 
   /* Now remember the head of the chain (for the return value) */
@@ -91,7 +88,7 @@ FAR struct iob_s *iob_pack(FAR struct iob_s *iob,
            */
 
           ncopy  = next->io_len;
-          navail = CONFIG_IOB_BUFSIZE - iob->io_len;
+          navail = IOB_BUFSIZE(iob) - iob->io_len;
           if (ncopy > navail)
             {
               ncopy = navail;
@@ -120,7 +117,7 @@ FAR struct iob_s *iob_pack(FAR struct iob_s *iob,
             {
               /* Yes.. free the next entry in I/O buffer chain */
 
-              next          = iob_free(next, producerid);
+              next          = iob_free(next);
               iob->io_flink = next;
             }
         }

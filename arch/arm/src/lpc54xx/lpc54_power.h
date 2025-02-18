@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/lpc54xx/lpc54_power.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -18,8 +20,8 @@
  *
  ****************************************************************************/
 
-#ifndef __ARCH_ARM_SRC_LPC54XX_LPC54_PERIPHPOWER_H
-#define __ARCH_ARM_SRC_LPC54XX_LPC54_PERIPHPOWER_H
+#ifndef __ARCH_ARM_SRC_LPC54XX_LPC54_POWER_H
+#define __ARCH_ARM_SRC_LPC54XX_LPC54_POWER_H
 
 /****************************************************************************
  * Included Files
@@ -35,4 +37,4 @@
 #  error "Unsupported LPC54 architecture"
 #endif
 
-#endif /* __ARCH_ARM_SRC_LPC54XX_LPC54_PERIPHPOWER_H */
+#endif /* __ARCH_ARM_SRC_LPC54XX_LPC54_POWER_H */

@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/imxrt/imxrt_adc.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -18,8 +20,8 @@
  *
  ****************************************************************************/
 
-#ifndef __ARCH_ARM_SRC_IMXRT_ADC_H
-#define __ARCH_ARM_SRC_IMXRT_ADC_H
+#ifndef __ARCH_ARM_SRC_IMXRT_IMXRT_ADC_H
+#define __ARCH_ARM_SRC_IMXRT_IMXRT_ADC_H
 
 /****************************************************************************
  * Included Files
@@ -67,9 +69,9 @@ extern "C"
  ****************************************************************************/
 
 #ifdef CONFIG_IMXRT_ADC
-FAR struct adc_dev_s *imxrt_adcinitialize(int intf,
-                                          FAR const uint8_t *chanlist,
-                                          int nchannels);
+struct adc_dev_s *imxrt_adcinitialize(int intf,
+                                      const uint8_t *chanlist,
+                                      int nchannels);
 #endif
 
 #undef EXTERN
@@ -77,4 +79,4 @@ FAR struct adc_dev_s *imxrt_adcinitialize(int intf,
 }
 #endif
 
-#endif /* __ARCH_ARM_SRC_IMXRT_ADC_H */
+#endif /* __ARCH_ARM_SRC_IMXRT_IMXRT_ADC_H */

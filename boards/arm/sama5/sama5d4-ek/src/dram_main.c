@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/sama5/sama5d4-ek/src/dram_main.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -31,7 +33,7 @@
 #include <nuttx/cache.h>
 #include <arch/irq.h>
 
-#include "arm_arch.h"
+#include "arm_internal.h"
 #include "mmu.h"
 #include "cp15_cacheops.h"
 
@@ -73,7 +75,7 @@ typedef void (*dram_entry_t)(void);
  *
  ****************************************************************************/
 
-int dram_main(int argc, char *argv)
+int dram_main(int argc, char *argv[])
 {
   /* Here we have a in memory value we can change in the debugger
    * to begin booting in NOR Flash
@@ -151,7 +153,7 @@ int dram_main(int argc, char *argv)
 
   /* Invalidate caches and TLBs */
 
-  cp15_invalidate_icache();
+  cp15_invalidate_icache_all();
   cp15_invalidate_dcache_all();
   cp15_invalidate_tlbs();
 

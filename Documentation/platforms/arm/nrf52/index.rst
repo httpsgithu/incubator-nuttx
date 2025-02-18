@@ -5,6 +5,30 @@ Nordic nRF52
 The nRF52 series of chips from Nordic Semiconductor are based around an ARM Cortex-M4 core running
 at 64 MHz and feature Bluetooth Low Energy (BLE) support.
 
+
+Memory Map
+==========
+
+nRF52832
+--------
+
+============ ============= ======
+Block Name   Start Address Length
+============ ============= ======
+FLASH        0x00000000    512K
+RAM          0x20000000    64K
+============ ============= ======
+
+nRF52840
+--------
+
+============ ============= ======
+Block Name   Start Address Length
+============ ============= ======
+FLASH        0x00000000    1024K
+RAM          0x20000000    256K
+============ ============= ======
+
 Clock Configuration
 ===================
 
@@ -27,9 +51,9 @@ Peripheral Support
 
 The following list indicates peripherals supported in NuttX:
 
-==========  ======= =====
+==========  ======= ===============
 Peripheral  Support Notes
-==========  ======= =====
+==========  ======= ===============
 GPIO        Yes
 GPIOTE      Yes
 I2S         No
@@ -39,8 +63,8 @@ PDM         No
 PPI         Yes
 PWM         Yes
 QDEC        No
-QSPI        No
-RADIO       Yes     Basic
+QSPI        Yes
+RADIO       Yes     BLE, IEEE 802.15.4
 RNG         Yes
 RTC         Yes
 SAADC       Yes
@@ -52,9 +76,9 @@ TWIM        Yes
 TWIS        No
 UART        Yes
 UARTE       No
-USBD        No
+USBD        Yes
 WDT         Yes
-==========  ======= =====
+==========  ======= ===============
 
 Peripherals such as AAR, ACL, CCM, ECB are not directly used by NuttX since they
 are part of BLE controller implementation (link).
@@ -134,6 +158,12 @@ PWM
 PWM is supported via standard driver. This means that more advanced features such as
 complex sequences or waveform modes are not yet supported.
 
+QSPI
+----
+
+QSPI is supported both in interrupt-based (via EasyDMA) mode and is exposed
+via standard QSPI interface.
+
 RNG
 ---
 
@@ -150,6 +180,11 @@ RTC
 
 The RTC peripheral is exposed as a standard timer, since it is really a low-power
 timer, without any date handling capabilities.
+
+USBD
+----
+
+The USBD peripheral is exposed via standard USBDEV interface.
 
 WDT
 ---
@@ -171,6 +206,11 @@ is provided with settings already set.
 Note that in this case, some peripherals (mostly those related to BLE) will be unavailable. Some PPI
 channels will also be ocuppied (``NRF52_PPI_NUM_CONFIGURABLE_CHANNELS`` will be set accordingly in this case).
 
+IEEE 802.15.4 Support
+=====================
+
+Details about IEEE 802.15.4 support for nRF52 can be found in :doc:`ieee802154`.
+
 Supported Boards
 ================
 
@@ -179,3 +219,4 @@ Supported Boards
    :maxdepth: 1
 
    boards/*/*
+   ieee802154.rst

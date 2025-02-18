@@ -13,8 +13,59 @@ menuconfig INPUT
 
 if INPUT
 
+config INPUT_GOLDFISH_EVENTS
+	bool "Goldfish input events driver"
+	select INPUT_TOUCHSCREEN
+	select INPUT_KEYBOARD
+	select INPUT_MOUSE
+	default n
+
+config INPUT_GOLDFISH_NBUFFER
+	int "Number of goldfish events buffer"
+	depends on INPUT_GOLDFISH_EVENTS
+	default 8
+
+config INPUT_FF
+	bool "Support Force Feedback device"
+	default n
+	---help---
+		Enable support for force feedback devices.
+		The doc link: https://www.kernel.org/doc/html/v4.19/input/ff.html.
+
+if INPUT_FF
+
+config FF_DUMMY
+	bool "Enable dummy force feedback driver"
+	default n
+	---help---
+		Enable support for a dummy force feedback driver.
+
+config FF_AW86225
+	bool "Enable aw86225 driver"
+	default n
+	---help---
+		Enable aw86225 haptic controller chip.
+
+if FF_AW86225
+
+config AW86225_RTP_FILE_SUPPORT
+	bool "Enable aw86225 rtp file support"
+	default n
+	---help---
+		Enable support for aw86225 rtp file.
+
+config AW86225_RTP_FILE_PATH
+	string "Path of aw86225 rtp file"
+	default "/etc"
+	---help---
+		File path depend on the opening of FF_AW86225.
+
+endif # FF_AW86225
+
+endif # INPUT_FF
+
 config INPUT_MOUSE
-	bool "Enable mouse support"
+	bool
 	default n
 	---help---
 		Enable support for mouse devices.
@@ -25,25 +76,76 @@ config INPUT_MOUSE_WHEEL
 	bool "Enable mouse wheel support"
 	default n
 	---help---
-		Enable support for a 4-button mouse report that includes a while
+		Enable support for a 4-button mouse report that includes a wheel
 		position.
 
 endif # INPUT_MOUSE
 
 config INPUT_TOUCHSCREEN
 	bool
-	select MM_CIRCBUF
 	default n
 
-if INPUT_TOUCHSCREEN
+config INPUT_KEYBOARD
+	bool
+	default n
 
-config INPUT_TOUCHSCREEN_NPOLLWAITERS
-	int "Number touchscreen poll waiters"
-	default 4
+config INPUT_UINPUT
+	bool
+	default n
 	---help---
-		Maximum number of threads that can be waiting on poll()
+		Enable support virtual input device driver
 
-endif # INPUT_TOUCHSCREEN
+config UINPUT_RPMSG
+	bool "Enable uinput RPMSG"
+	depends on INPUT_UINPUT
+	depends on RPMSG
+	default n
+	---help---
+		Enable support uinput cross core communication
+
+config UINPUT_TOUCH
+	bool "Enable uinput touch"
+	select INPUT_TOUCHSCREEN
+	select INPUT_UINPUT
+	default n
+	---help---
+		Enable support virtual input touch device driver
+
+if UINPUT_TOUCH
+
+config UINPUT_TOUCH_MAXPOINT
+	int "Maximum number of touch points supported"
+	default 1
+
+config UINPUT_TOUCH_BUFNUMBER
+	int "Number of touch data buffer"
+	default 8
+
+endif
+
+config UINPUT_BUTTONS
+	bool "Enable uinput buttons"
+	select INPUT_BUTTONS
+	select INPUT_UINPUT
+	default n
+	---help---
+		Enable support virtual input button device driver
+
+config UINPUT_KEYBOARD
+	bool "Enable uinput keyboard"
+	select INPUT_KEYBOARD
+	select INPUT_UINPUT
+	default n
+	---help---
+		Enable support virtual input keyboard device driver
+
+if UINPUT_KEYBOARD
+
+config UINPUT_KEYBOARD_BUFNUMBER
+	int "Number keyboard data buffer"
+	default 8
+
+endif
 
 config INPUT_MAX11802
 	bool "MAX11802 touchscreen controller"
@@ -364,29 +466,45 @@ config STMPE811_SWAPXY
 	---help---
 		Reverse the meaning of X and Y to handle different LCD orientations.
 
+config STMPE811_OFFSETX
+	int "X offset"
+	default 0
+	depends on !STMPE811_TSC_DISABLE
+	---help---
+		Horizontal offset between the left edge of the touchscreen and
+		the left edge of the display area.
+
+config STMPE811_OFFSETY
+	int "Y offset"
+	default 0
+	depends on !STMPE811_TSC_DISABLE
+	---help---
+		Vertical offset between the top edge of the touchscreen and
+		the top edge of the display area.
+
 config STMPE811_THRESHX
 	int "X threshold"
 	default 12
 	depends on !STMPE811_TSC_DISABLE
 	---help---
-		STMPE811 touchscreen data comes in a a very high rate.  New touch positions
-		will only be reported when the X or Y data changes by these thresholds.
-		This trades reduced data rates for some loss in dragging accuracy.  The
-		STMPE811 is configure for 12-bit values the raw ranges are 0-4095. So
-		for example, if your display is 320x240, then THRESHX=13 and THRESHY=17
-		would correspond to one pixel.  Default: 12
+		STMPE811 touchscreen data comes in at a very high rate.  New touch
+		positions will only be reported when the X or Y data changes by these
+		thresholds.  This trades reduced data rates for some loss in dragging
+		accuracy.  The STMPE811 is configured for 12-bit values; the raw ranges
+		are 0-4095.  So for example, if your display is 320x240, then THRESHX=13
+		and THRESHY=17 would correspond to one pixel.  Default: 12
 
 config STMPE811_THRESHY
 	int "Y threshold"
 	default 12
 	depends on !STMPE811_TSC_DISABLE
 	---help---
-		STMPE811 touchscreen data comes in a a very high rate.  New touch positions
-		will only be reported when the X or Y data changes by these thresholds.
-		This trades reduced data rates for some loss in dragging accuracy.  The
-		STMPE811 is configure for 12-bit values the raw ranges are 0-4095. So
-		for example, if your display is 320x240, then THRESHX=13 and THRESHY=17
-		would correspond to one pixel.  Default: 12
+		STMPE811 touchscreen data comes in at a very high rate.  New touch
+		positions will only be reported when the X or Y data changes by these
+		thresholds.  This trades reduced data rates for some loss in dragging
+		accuracy.  The STMPE811 is configured for 12-bit values; the raw ranges
+		are 0-4095. So for example, if your display is 320x240, then THRESHX=13
+		and THRESHY=17 would correspond to one pixel.  Default: 12
 
 config STMPE811_ADC_DISABLE
 	bool "Disable STMPE811 ADC Support"
@@ -405,8 +523,8 @@ config STMPE811_GPIOINT_DISABLE
 	default y
 	depends on !STMPE811_GPIO_DISABLE
 	---help---
-		Disable driver GPIO interrupt functionality (ignored if GPIO functionality is
-		disabled).
+		Disable driver GPIO interrupt functionality (ignored if GPIO
+		functionality is disabled).
 
 config STMPE811_TEMP_DISABLE
 	bool "Disable STMPE811 Temperature Sensor Support"
@@ -448,11 +566,41 @@ config INPUT_CYPRESS_MBR3108_NPOLLWAITERS
 
 endif # INPUT_CYPRESS_MBR3108
 
+config INPUT_GT9XX
+	bool "Goodix GT9xx Driver"
+	default n
+	select INPUT_TOUCHSCREEN
+	---help---
+		Enable support for Goodix GT9xx touch panel.
+
+if INPUT_GT9XX
+
+config INPUT_GT9XX_NPOLLWAITERS
+	int "Number of waiters to poll"
+	default 1
+	---help---
+		Maximum number of threads that can be waiting on poll()
+
+config INPUT_GT9XX_I2C_FREQUENCY
+	int "I2C frequency (Hz)"
+	default 400000
+	---help---
+		I2C frequency in Hz
+
+endif # INPUT_GT9XX
+
 config INPUT_BUTTONS
 	bool "Button Inputs"
 	default n
 	---help---
 		Enable standard button upper half driver.
+
+config INPUT_BUTTONS_DEBOUNCE_DELAY
+	int "Button Debounce Delay (millisecond)"
+	default 0
+	depends on INPUT_BUTTONS
+	---help---
+		Button Debounce Delay in ms
 
 if INPUT_BUTTONS
 
@@ -461,21 +609,18 @@ config INPUT_BUTTONS_LOWER
 	default n
 	depends on ARCH_BUTTONS && ARCH_IRQBUTTONS
 	---help---
-		If the board supports the standard button interfaces as
-		defined in include/nuttx/board.h header file, then this
-		standard button lower half driver might be usable.
+		If the board supports the standard button interfaces as defined in
+		include/nuttx/board.h header file, then this standard button lower
+		half driver might be usable.
 
 		In order for this generic driver to be usable:
-
-		1. The board implementation must provide the button
-		   interfaces as defined in include/nuttx/board.h
-		2. The board implementation must support interrupts for each
-		   button.
+		1. The board implementation must provide the button interfaces as
+		   defined in include/nuttx/board.h
+		2. The board implementation must support interrupts for each button.
 
 		If your board does not meet these requirements, then the
-		button_lower.c file can still be copied to your your
-		board src/ directory and modified for your specific board
-		requirements.
+		button_lower.c file can still be copied to your board src/ directory
+		and modified for your specific board requirements.
 
 config INPUT_BUTTONS_NPOLLWAITERS
 	int "Max Number of Poll Waiters"
@@ -526,8 +671,8 @@ config INPUT_NUNCHUCK
 	---help---
 		Enable a Nintendo Wii Nunchuck joystick upper half driver. The
 		nunchuck joystick provides position data as an integer value.The
-		analog positional data may also	be accompanied by discrete
-		button data.
+		analog positional data may also be accompanied by discrete button
+		data.
 
 if INPUT_NUNCHUCK
 
@@ -551,7 +696,7 @@ config INPUT_SPQ10KBD
 if INPUT_SPQ10KBD
 
 config SPQ10KBD_DJOY
-    bool "Joystick Interface for Buttons"
+	bool "Joystick Interface for Buttons"
 	select INPUT_DJOYSTICK
 	default n
 

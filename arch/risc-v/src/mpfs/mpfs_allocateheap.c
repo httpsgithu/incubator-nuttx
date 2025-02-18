@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/risc-v/src/mpfs/mpfs_allocateheap.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -28,8 +30,10 @@
 #include <nuttx/userspace.h>
 
 #include <nuttx/arch.h>
-#include <nuttx/board.h>
-#include <arch/board/board.h>
+
+#ifdef CONFIG_MM_KERNEL_HEAP
+#include <arch/board/board_memorymap.h>
+#endif
 
 #include "mpfs.h"
 
@@ -37,7 +41,15 @@
  * Pre-processor Definitions
  ****************************************************************************/
 
-#define KRAM_END CONFIG_RAM_END
+#ifdef CONFIG_MM_KERNEL_HEAP
+#define KRAM_END    KSRAM_END
+#else
+#define KRAM_END    CONFIG_RAM_END
+#endif
+
+/****************************************************************************
+ * Public Data
+ ****************************************************************************/
 
 /****************************************************************************
  * Public Functions
@@ -76,7 +88,11 @@
  *
  ****************************************************************************/
 
+#ifdef CONFIG_BUILD_KERNEL
+void up_allocate_kheap(void **heap_start, size_t *heap_size)
+#else
 void up_allocate_heap(void **heap_start, size_t *heap_size)
+#endif /* CONFIG_BUILD_KERNEL */
 {
 #if defined(CONFIG_BUILD_PROTECTED) && defined(CONFIG_MM_KERNEL_HEAP)
   /* Get the size and position of the user-space heap.
@@ -100,7 +116,7 @@ void up_allocate_heap(void **heap_start, size_t *heap_size)
 
   *heap_start = (void *)g_idle_topstack;
   *heap_size = KRAM_END - g_idle_topstack;
-#endif
+#endif /* CONFIG_BUILD_PROTECTED && CONFIG_MM_KERNEL_HEAP */
 }
 
 /****************************************************************************
@@ -113,7 +129,8 @@ void up_allocate_heap(void **heap_start, size_t *heap_size)
  *
  ****************************************************************************/
 
-#if defined(CONFIG_BUILD_PROTECTED) && defined(CONFIG_MM_KERNEL_HEAP)
+#if defined(CONFIG_BUILD_PROTECTED) && defined(CONFIG_MM_KERNEL_HEAP) && \
+    defined(__KERNEL__)
 void up_allocate_kheap(void **heap_start, size_t *heap_size)
 {
   /* Return the kernel heap settings. */
@@ -121,12 +138,14 @@ void up_allocate_kheap(void **heap_start, size_t *heap_size)
   *heap_start = (void *)g_idle_topstack;
   *heap_size = KRAM_END - g_idle_topstack;
 }
-#endif
+#endif /* CONFIG_BUILD_PROTECTED && CONFIG_MM_KERNEL_HEAP */
 
 /****************************************************************************
- * Name: up_addregion
+ * Name: riscv_addregion
  ****************************************************************************/
 
-void up_addregion(void)
+#if CONFIG_MM_REGIONS > 1
+void riscv_addregion(void)
 {
 }
+#endif

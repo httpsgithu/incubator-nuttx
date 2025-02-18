@@ -1,8 +1,9 @@
 /****************************************************************************
  * boards/arm/stm32l4/stm32l476-mdk/include/board.h
  *
- *   Copyright (C) 2016 Gregory Nutt. All rights reserved.
- *   Copyright (C) 2016 Motorola Mobility, LLC.
+ * SPDX-License-Identifier: BSD-3-Clause
+ * SPDX-FileCopyrightText: 2016 Gregory Nutt. All rights reserved.
+ * SPDX-FileCopyrightText: 2016 Motorola Mobility, LLC.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -33,8 +34,8 @@
  *
  ****************************************************************************/
 
-#ifndef __BOARDS_ARM_STM32L_STM32L476_MDK_INCLUDE_BOARD_H
-#define __BOARDS_ARM_STM32L_STM32L476_MDK_INCLUDE_BOARD_H
+#ifndef __BOARDS_ARM_STM32L4_STM32L476_MDK_INCLUDE_BOARD_H
+#define __BOARDS_ARM_STM32L4_STM32L476_MDK_INCLUDE_BOARD_H
 
 /****************************************************************************
  * Included Files
@@ -42,16 +43,16 @@
 
 #include <nuttx/config.h>
 #ifndef __ASSEMBLY__
-# include <stdint.h>
+#  include <stdint.h>
 #endif
-
-/****************************************************************************
- * Pre-processor Definitions
- ****************************************************************************/
 
 /* Clocking *****************************************************************/
 
 #include <arch/board/stm32l476-mdk-clocking.h>
+
+/****************************************************************************
+ * Pre-processor Definitions
+ ****************************************************************************/
 
 /* DMA Channel/Stream Selections ********************************************/
 
@@ -217,4 +218,4 @@ void stm32l4_board_initialize(void);
 #endif
 
 #endif /* __ASSEMBLY__ */
-#endif /* __BOARDS_ARM_STM32L_STM32L476_MDK_INCLUDE_BOARD_H */
+#endif /* __BOARDS_ARM_STM32L4_STM32L476_MDK_INCLUDE_BOARD_H */

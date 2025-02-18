@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/s32k1xx/s32k1xx_lpi2c.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -52,7 +54,7 @@
  *
  ****************************************************************************/
 
-FAR struct i2c_master_s *s32k1xx_i2cbus_initialize(int port);
+struct i2c_master_s *s32k1xx_i2cbus_initialize(int port);
 
 /****************************************************************************
  * Name: s32k1xx_i2cbus_uninitialize
@@ -69,6 +71,6 @@ FAR struct i2c_master_s *s32k1xx_i2cbus_initialize(int port);
  *
  ****************************************************************************/
 
-int s32k1xx_i2cbus_uninitialize(FAR struct i2c_master_s *dev);
+int s32k1xx_i2cbus_uninitialize(struct i2c_master_s *dev);
 
 #endif /* __ARCH_ARM_SRC_S32K1XX_S32K1XX_LPI2C_H */

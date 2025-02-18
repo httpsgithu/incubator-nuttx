@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/armv7-a/arm_scu.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -26,101 +28,14 @@
 
 #include <stdint.h>
 
-#include "arm_arch.h"
+#include <arch/barriers.h>
+#include <arch/irq.h>
+#include <sched/sched.h>
+
+#include "arm_internal.h"
 #include "cp15_cacheops.h"
-#include "barriers.h"
 #include "sctlr.h"
 #include "scu.h"
-
-#ifdef CONFIG_SMP
-
-/****************************************************************************
- * Private Functions
- ****************************************************************************/
-
-/****************************************************************************
- * Name: arm_get_sctlr
- *
- * Description:
- *   Get the contents of the SCTLR register
- *
- ****************************************************************************/
-
-static inline uint32_t arm_get_sctlr(void)
-{
-  uint32_t sctlr;
-
-  __asm__ __volatile__
-  (
-    "\tmrc   p15, 0, %0, c1, c0, 0\n"  /* Read SCTLR */
-    : "=r"(sctlr)
-    :
-    :
-  );
-
-  return sctlr;
-}
-
-/****************************************************************************
- * Name: arm_set_sctlr
- *
- * Description:
- *   Set the contents of the SCTLR register
- *
- ****************************************************************************/
-
-static inline void arm_set_sctlr(uint32_t sctlr)
-{
-  __asm__ __volatile__
-  (
-    "\tmcr  p15, 0, %0, c1, c0, 0\n" /* Write SCTLR */
-    :
-    : "r"(sctlr)
-    :
-  );
-}
-
-/****************************************************************************
- * Name: arm_get_actlr
- *
- * Description:
- *   Get the contents of the ACTLR register
- *
- ****************************************************************************/
-
-static inline uint32_t arm_get_actlr(void)
-{
-  uint32_t actlr;
-
-  __asm__ __volatile__
-  (
-    "\tmrc  p15, 0, %0, c1, c0, 1\n"  /* Read ACTLR */
-    : "=r"(actlr)
-    :
-    :
-  );
-
-  return actlr;
-}
-
-/****************************************************************************
- * Name: arm_set_actlr
- *
- * Description:
- *   Set the contents of the ACTLR register
- *
- ****************************************************************************/
-
-static inline void arm_set_actlr(uint32_t actlr)
-{
-  __asm__ __volatile__
-  (
-    "\tmcr p15, 0, %0, c1, c0, 1\n" /* Write ACTLR */
-    :
-    : "r"(actlr)
-    :
-  );
-}
 
 /****************************************************************************
  * Public Functions
@@ -160,7 +75,7 @@ void arm_enable_smp(int cpu)
        */
 
       cp15_invalidate_dcache_all();
-      ARM_DSB();
+      UP_DSB();
 
       /* Invalidate the L2C-310 -- Missing logic. */
 
@@ -169,6 +84,10 @@ void arm_enable_smp(int cpu)
       regval  = getreg32(SCU_CTRL);
       regval |= SCU_CTRL_ENABLE;
       putreg32(regval, SCU_CTRL);
+
+      /* Initialize done, kick other cpus which waiting on __start */
+
+      UP_SEV();
     }
 
   /* Actions for other CPUs */
@@ -179,12 +98,20 @@ void arm_enable_smp(int cpu)
        * coherent L2.
        */
 
-      cp15_invalidate_dcache_all();
-      ARM_DSB();
+      cp15_dcache_op_level(0, CP15_CACHE_INVALIDATE);
+      UP_DSB();
 
       /* Wait for the SCU to be enabled by the primary processor -- should
        * not be necessary.
        */
+
+      /* We need to confirm that current_task has been initialized. */
+
+      while (!current_task(this_cpu()));
+
+      /* Init idle task to percpu reg */
+
+      up_update_task(current_task(cpu));
     }
 
   /* Enable the data cache, set the SMP mode with ACTLR.SMP=1.
@@ -197,16 +124,14 @@ void arm_enable_smp(int cpu)
    *   FW  - Cache and TLB maintenance broadcast.
    */
 
-  regval  = arm_get_actlr();
+  regval  = CP15_GET(ACTLR);
   regval |= ACTLR_SMP;
 #ifdef CONFIG_ARCH_CORTEXA9
   regval |= ACTLR_FW;
 #endif
-  arm_set_actlr(regval);
+  CP15_SET(ACTLR, regval);
 
-  regval  = arm_get_sctlr();
-  regval |= SCTLR_C;
-  arm_set_sctlr(regval);
+  regval  = CP15_GET(SCTLR);
+  regval |= SCTLR_C | SCTLR_I | SCTLR_M;
+  CP15_SET(SCTLR, regval);
 }
-
-#endif

@@ -1,6 +1,8 @@
 /****************************************************************************
  * include/nuttx/lcd/st7789.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -18,8 +20,8 @@
  *
  ****************************************************************************/
 
-#ifndef __INCLUDE_NUTTX_ST7789_H
-#define __INCLUDE_NUTTX_ST7789_H
+#ifndef __INCLUDE_NUTTX_LCD_ST7789_H
+#define __INCLUDE_NUTTX_LCD_ST7789_H
 
 /****************************************************************************
  * Included Files
@@ -30,6 +32,11 @@
 /****************************************************************************
  * Pre-processor Definitions
  ****************************************************************************/
+
+#define LCD_PORTRAIT   0
+#define LCD_LANDSCAPE  1
+#define LCD_RPORTRAIT  2
+#define LCD_RLANDSCAPE 3
 
 /****************************************************************************
  * Public Types
@@ -63,10 +70,16 @@ extern "C"
  *
  ****************************************************************************/
 
+#ifdef CONFIG_LCD_DYN_ORIENTATION
+FAR struct lcd_dev_s *st7789_lcdinitialize(FAR struct spi_dev_s *spi,
+                                           uint8_t orientation,
+                                           uint16_t xoff, uint16_t yoff);
+#else
 FAR struct lcd_dev_s *st7789_lcdinitialize(FAR struct spi_dev_s *spi);
+#endif
 
 #ifdef __cplusplus
 }
 #endif
 
-#endif /* __INCLUDE_NUTTX_ST7789_H */
+#endif /* __INCLUDE_NUTTX_LCD_ST7789_H */

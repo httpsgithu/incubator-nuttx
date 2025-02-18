@@ -1,6 +1,8 @@
 /****************************************************************************
  * wireless/bluetooth/bt_conn.c
  *
+ * SPDX-License-Identifier: BSD-3-Clause
+ *
  *   Copyright (c) 2016, Intel Corporation
  *   All rights reserved.
  *
@@ -294,7 +296,7 @@ void bt_conn_receive(FAR struct bt_conn_s *conn, FAR struct bt_buf_s *buf,
 
         /* First packet */
 
-        hdr = (void *)buf->data;
+        hdr = (FAR void *)buf->data;
         len = BT_LE162HOST(hdr->len);
 
         wlinfo("First, len %u final %u\n", buf->len, len);
@@ -367,7 +369,7 @@ void bt_conn_receive(FAR struct bt_conn_s *conn, FAR struct bt_buf_s *buf,
         return;
     }
 
-  hdr = (void *)buf->data;
+  hdr = (FAR void *)buf->data;
   len = BT_LE162HOST(hdr->len);
 
   if (sizeof(*hdr) + len != buf->len)
@@ -409,7 +411,7 @@ void bt_conn_send(FAR struct bt_conn_s *conn, FAR struct bt_buf_s *buf)
 
   sq_init(&fraglist);
 
-  wlinfo("conn handle %u buf len %u\n", conn->handle, buf->len);
+  wlwarn("conn handle %u buf len %u\n", conn->handle, buf->len);
 
   if (conn->state != BT_CONN_CONNECTED)
     {
@@ -557,14 +559,12 @@ void bt_conn_set_state(FAR struct bt_conn_s *conn,
     {
       case BT_CONN_CONNECTED:
         {
-          pid_t pid;
           int ret;
 
-          ret = bt_queue_open(BT_CONN_TX, O_RDWR | O_CREAT,
+          ret = bt_queue_open(BT_CONN_TX, O_RDWR | O_CREAT | O_CLOEXEC,
                               CONFIG_BLUETOOTH_TXCONN_NMSGS,
                               &conn->tx_queue);
           DEBUGASSERT(ret >= 0);
-          UNUSED(ret);
 
           /* Get exclusive access to the handoff structure.  The count will
            * be zero when we complete this.
@@ -576,12 +576,11 @@ void bt_conn_set_state(FAR struct bt_conn_s *conn,
               /* Start the Tx connection kernel thread */
 
               g_conn_handoff.conn = bt_conn_addref(conn);
-              pid = kthread_create("BT Conn Tx",
+              ret = kthread_create("BT Conn Tx",
                                    CONFIG_BLUETOOTH_TXCONN_PRIORITY,
                                    CONFIG_BLUETOOTH_TXCONN_STACKSIZE,
                                    conn_tx_kthread, NULL);
-              DEBUGASSERT(pid > 0);
-              UNUSED(pid);
+              DEBUGASSERT(ret > 0);
 
               /* Take the semaphore again.  This will force us to wait with
                * the sem_count at -1.  It will be zero again when we
@@ -591,6 +590,8 @@ void bt_conn_set_state(FAR struct bt_conn_s *conn,
               ret = nxsem_wait_uninterruptible(&g_conn_handoff.sync_sem);
               nxsem_post(&g_conn_handoff.sync_sem);
           }
+
+          UNUSED(ret);
         }
         break;
 
@@ -761,7 +762,8 @@ FAR struct bt_conn_s *bt_conn_addref(FAR struct bt_conn_s *conn)
 {
   bt_atomic_incr(&conn->ref);
 
-  wlinfo("handle %u ref %u\n", conn->handle, bt_atomic_get(&conn->ref));
+  wlinfo("handle %u ref %" PRId32 "\n", conn->handle,
+         bt_atomic_get(&conn->ref));
 
   return conn;
 }
@@ -786,7 +788,8 @@ void bt_conn_release(FAR struct bt_conn_s *conn)
 
   old_ref = bt_atomic_decr(&conn->ref);
 
-  wlinfo("handle %u ref %u\n", conn->handle, bt_atomic_get(&conn->ref));
+  wlinfo("handle %u ref %" PRId32 "\n", conn->handle,
+          bt_atomic_get(&conn->ref));
 
   if (old_ref > 1)
     {
@@ -1078,4 +1081,23 @@ int bt_conn_le_conn_update(FAR struct bt_conn_s *conn, uint16_t min,
   conn_update->supervision_timeout = BT_HOST2LE16(timeout);
 
   return bt_hci_cmd_send(BT_HCI_OP_LE_CONN_UPDATE, buf);
+}
+
+/****************************************************************************
+ * Name: bt_conn_initialize
+ *
+ * Description:
+ *   Initialize this module's private data.
+ *
+ * Input Parameters:
+ *   None
+ *
+ * Returned Value:
+ *   None
+ *
+ ****************************************************************************/
+
+void bt_conn_initialize(void)
+{
+  memset(g_conns, 0, sizeof(g_conns));
 }

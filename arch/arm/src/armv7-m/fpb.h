@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/armv7-m/fpb.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -18,8 +20,8 @@
  *
  ****************************************************************************/
 
-#ifndef __ARCH_ARM_SRC_ARMV&-M_FPB_H
-#define __ARCH_ARM_SRC_ARMV&-M_FPB_H
+#ifndef __ARCH_ARM_SRC_ARMV7_M_FPB_H
+#define __ARCH_ARM_SRC_ARMV7_M_FPB_H
 
 /****************************************************************************
  * Pre-processor Definitions
@@ -60,6 +62,17 @@
 /* FPB Register Bitfield Definitions ****************************************/
 
 /* FPB_CTRL */
+
+/* REV
+ *
+ * Flash Patch and Breakpoint Unit revision number.
+ * 0000: Flash patch Breakpoint Unit revision 1
+ * 0001: Flash patch Breakpoint Unit revision 2. Supports breakpoints on
+ * any location in the 4GB address range.
+ */
+
+#define FPB_CTRL_REV_SHIFT        28
+#define FPB_CTRL_REV_MASK         0xF0000000
 
 /* NUM_CODE2
  *
@@ -164,4 +177,4 @@
 #define FPB_COMP0_ENABLE_SHIFT    0
 #  define FPB_COMP0_ENABLE        0x00000001
 
-#endif /* __ARCH_ARM_SRC_ARMV&-M_FPB_H */
+#endif /* __ARCH_ARM_SRC_ARMV7_M_FPB_H */

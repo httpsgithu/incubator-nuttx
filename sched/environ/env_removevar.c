@@ -1,6 +1,8 @@
 /****************************************************************************
  * sched/environ/env_removevar.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -30,6 +32,8 @@
 #include <sched.h>
 #include <assert.h>
 
+#include <nuttx/kmalloc.h>
+
 #include "environ/environ.h"
 
 /****************************************************************************
@@ -45,10 +49,10 @@
  * Input Parameters:
  *   group - The task group with the environment containing the name=value
  *           pair
- *   pvar  - A pointer to the name=value pair in the restroom
+ *   index - A index to the name=value pair in the restroom
  *
  * Returned Value:
- *   Zero on success
+ *   None
  *
  * Assumptions:
  *   - Not called from an interrupt handler
@@ -57,47 +61,46 @@
  *
  ****************************************************************************/
 
-int env_removevar(FAR struct task_group_s *group, FAR char *pvar)
+void env_removevar(FAR struct task_group_s *group, ssize_t index)
 {
-  FAR char *end;    /* Pointer to the end+1 of the environment */
-  int alloc;        /* Size of the allocated environment */
-  int ret = ERROR;
+  DEBUGASSERT(group != NULL && index >= 0 && index < group->tg_envc);
 
-  DEBUGASSERT(group != NULL && pvar != NULL);
+  /* Free the allocate environment string */
 
-  /* Verify that the pointer lies within the environment region */
+  group_free(group, group->tg_envp[index]);
 
-  alloc = group->tg_envsize;             /* Size of the allocated environment */
-  end   = &group->tg_envp[alloc];        /* Pointer to the end+1 of the environment */
+  /* Exchange the last env and the index env */
 
-  if (pvar >= group->tg_envp && pvar < end)
+  group->tg_envc--;
+  if (index == group->tg_envc)
     {
-      /* Set up for the removal */
-
-      int len        = strlen(pvar) + 1; /* Length of name=value string to remove */
-      FAR char *src  = &pvar[len];       /* Address of name=value string after */
-      FAR char *dest = pvar;             /* Location to move the next string */
-      int count      = end - src;        /* Number of bytes to move (might be zero) */
-
-      /* Move all of the environment strings after the removed one 'down.'
-       * this is inefficient, but robably not high duty.
-       */
-
-      while (count-- > 0)
-        {
-          *dest++ = *src++;
-        }
-
-      /* Then set to the new allocation size.  The caller is expected to
-       * call realloc at some point but we don't do that here because the
-       * caller may add more stuff to the environment.
-       */
-
-      group->tg_envsize -= len;
-      ret = OK;
+      group->tg_envp[index] = NULL;
+    }
+  else
+    {
+      group->tg_envp[index] = group->tg_envp[group->tg_envc];
+      group->tg_envp[group->tg_envc] = NULL;
     }
 
-  return ret;
+  /* Free the old environment (if there was one) */
+
+  if (group->tg_envc == 0)
+    {
+      group_free(group, group->tg_envp);
+      group->tg_envp = NULL;
+      group->tg_envpc = 0;
+    }
+  else if (group->tg_envc <=
+           (group->tg_envpc - SCHED_ENVIRON_RESERVED * 2))
+    {
+      /* Reallocate the environment to reclaim a little memory */
+
+      group->tg_envpc = group->tg_envc + SCHED_ENVIRON_RESERVED + 1;
+
+      group->tg_envp = group_realloc(group, group->tg_envp,
+         sizeof(*group->tg_envp) * group->tg_envpc);
+      DEBUGASSERT(group->tg_envp != NULL);
+    }
 }
 
 #endif /* CONFIG_DISABLE_ENVIRON */

@@ -128,7 +128,8 @@ Command                Depends on Configuration                    Can Be Disabl
 :ref:`cmdsleep`        .                                           ``CONFIG_NSH_DISABLE_SLEEP``
 ``cmdsource``          ``CONFIG_FILE_STREAM`` &&                   ``CONFIG_NSH_DISABLE_SOURCE``
                        ! ``CONFIG_NSH_DISABLESCRIPT``
-:ref:`cmdtelnetd`      ``CONFIG_NSH_TELNET``                       ``CONFIG_NSH_DISABLE_TELNETD``
+:ref:`cmdtelnetd`      ``CONFIG_NSH_TELNET`` &&
+                       ``CONFIG_SYSTEM_TELNETD``
 :ref:`cmdtest`         !  ``CONFIG_NSH_DISABLESCRIPT``             ``CONFIG_NSH_DISABLE_TEST``
 :ref:`cmdtime`         .                                           ``CONFIG_NSH_DISABLE_TIME``
 :ref:`cmdtruncate`     ! ``CONFIG_DISABLE_MOUNTPOINT``             ``CONFIG_NSH_DISABLE_TRUNCATE``
@@ -200,9 +201,6 @@ Configuration                        Description
                                      ``strerror()`` is very large and will not be used unless this
                                      setting is *y*. This setting depends upon the ``strerror()``
                                      having been enabled with ``CONFIG_LIBC_STRERROR``.
-
- ``CONFIG_NSH_LINELEN``              The maximum length of one command line and of one output line.
-                                     Default: 80
 
  ``CONFIG_NSH_DISABLE_SEMICOLON``    By default, you can enter multiple NSH commands on a line
                                      with each command separated by a semicolon. You can disable this
@@ -297,11 +295,6 @@ Configuration                        Description
                                      the MMC/SD minor number, i.e., the MMC/SD block driver will be
                                      registered as ``/dev/mmcsd``\ *N* where *N* is the minor number.
                                      Default is zero.
-
- ``CONFIG_NSH_ROMFSETC``             Mount a ROMFS file system at ``/etc`` and provide a startup
-                                     script at ``/etc/init.d/rcS``.
-                                     The default startup script will mount a FAT FS RAMDISK at
-                                     ``/tmp`` but the logic is `easily extensible <#startupscript>`__.
 
  ``CONFIG_NSH_CONSOLE``              If ``CONFIG_NSH_CONSOLE`` is set to *y*, then a serial console
                                      front-end is selected.
@@ -398,19 +391,18 @@ CMD                 w/o ``CONFIG_NSH_VARS``               w/``CONFIG_NSH_VARS``
 ``env``             Lists all environment variables       Lists all environment variables (*only*)
 ==================  ===================================   =============================================
 
-
 If Telnet is selected for the NSH console, then we must configure the
 resources used by the Telnet daemon and by the Telnet clients.
 
-======================================  ================================
-Configuration                           Description
-======================================  ================================
-``CONFIG_NSH_TELNETD_PORT``             The telnet daemon will listen on this TCP port number for connections. Default: 23
-``CONFIG_NSH_TELNETD_DAEMONPRIO``       Priority of the Telnet daemon. Default: ``SCHED_PRIORITY_DEFAULT``
-``CONFIG_NSH_TELNETD_DAEMONSTACKSIZE``  Stack size allocated for the Telnet daemon. Default: 2048
-``CONFIG_NSH_TELNETD_CLIENTPRIO``       Priority of the Telnet client. Default: ``SCHED_PRIORITY_DEFAULT``
-``CONFIG_NSH_TELNETD_CLIENTSTACKSIZE``  Stack size allocated for the Telnet client. Default: 2048
-======================================  ================================
+===========================================  ================================
+Configuration                                Description
+===========================================  ================================
+``CONFIG_SYSTEM_TELNETD_PORT``               The telnet daemon will listen on this TCP port number for connections. Default: 23
+``CONFIG_SYSTEM_TELNETD_PRIORITY``           Priority of the Telnet daemon. Default: ``SCHED_PRIORITY_DEFAULT``
+``CONFIG_SYSTEM_TELNETD_STACKSIZE``          Stack size allocated for the Telnet daemon. Default: 2048
+``CONFIG_SYSTEM_TELNETD_SESSION_PRIORITY``   Priority of the Telnet client. Default: ``SCHED_PRIORITY_DEFAULT``
+``CONFIG_SYSTEM_TELNETD_SESSION_STACKSIZE``  Stack size allocated for the Telnet client. Default: 2048
+===========================================  ================================
 
 One or both of ``CONFIG_NSH_CONSOLE`` and ``CONFIG_NSH_TELNET`` must be
 defined. If ``CONFIG_NSH_TELNET`` is selected, then there some other
@@ -422,8 +414,6 @@ Configuration                           Description
 ``CONFIG_NET=y``                        Of course, networking must be enabled.
 ``CONFIG_NET_TCP=y``                    TCP/IP support is required for telnet (as well as various other
                                         TCP-related configuration settings).
-``CONFIG_NSH_IOBUFFER_SIZE``            Determines the size of the I/O buffer to use for sending/ receiving
-                                        TELNET commands/responses
 ``CONFIG_NSH_DHCPC``                    Obtain the IP address via DHCP.
 ``CONFIG_NSH_IPADDR``                   If ``CONFIG_NSH_DHCPC`` is NOT set, then the static IP address must be
                                         provided.
@@ -452,37 +442,29 @@ Configuration                                  Description
                                                is indicated.
 ============================================== ============================================================
 
-If ``CONFIG_NSH_ROMFSETC`` is selected, then the following additional
+If ``CONFIG_ETC_ROMFS`` is selected, then the following additional
 configuration setting apply:
 
 ============================== ==============================================================
 Configuration                  Description
 ============================== ==============================================================
-``CONFIG_NSH_ARCHROMFS``       May be defined to specify an alternative ROMFS image
-                               that can be found at ``boards/<arch>/<chip>/<board>/include/nsh_romfsimg.h``.
-``CONFIG_NSH_ROMFSMOUNTPT``    The default mountpoint for the ROMFS volume is ``"/etc"``,
-                               but that can be changed with this setting. This must be a
-                               absolute path beginning with '``/``' and enclosed in quotes.
+``CONFIG_NSH_SYSINITSCRIPT``   This is the relative path to the system init script within the
+                               mountpoint. The default is ``"init.d/rc.sysinit"``. This is a relative
+                               path and must not start with '``/``' but must be enclosed in quotes.
 ``CONFIG_NSH_INITSCRIPT``      This is the relative path to the startup script within the
                                mountpoint. The default is ``"init.d/rcS"``. This is a relative
                                path and must not start with '``/``' but must be enclosed in quotes.
-``CONFIG_NSH_ROMFSDEVNO``      This is the minor number of the ROMFS block device.
-                               The default is '``0``' corresponding to ``/dev/ram0``.
-``CONFIG_NSH_ROMFSSECTSIZE``   This is the sector size to use with the ROMFS volume. Since the
-                               default volume is very small, this defaults to 64 but should
-                               be increased if the ROMFS volume were to be become large.
-                               Any value selected must be a power of 2.
 ============================== ==============================================================
 
-When the default ``rcS`` file used when ``CONFIG_NSH_ROMFSETC`` is
-selected, it will mount a FAT FS under ``/tmp``. The following
-selections describe that FAT FS.
+Common Problems
+===============
 
-============================== =======================================================
-Configuration                  Description
-============================== =======================================================
-``CONFIG_NSH_FATDEVNO``        This is the minor number of the FAT FS block device.
-                               The default is '``1``' corresponding to ``/dev/ram1``.
-``CONFIG_NSH_FATSECTSIZE``     This is the sector size use with the FAT FS. Default is 512.
-============================== =======================================================
+Problem::
 
+  The function 'readline' is undefined.
+
+Usual Cause:
+
+* The following is missing from your `defconfig` file::
+
+    CONFIG_SYSTEM_READLINE=y

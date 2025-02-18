@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/x86/src/qemu/qemu_serial.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -29,7 +31,8 @@
 
 #include <arch/io.h>
 
-#include "up_internal.h"
+#include "chip.h"
+#include "x86_internal.h"
 
 /* This is a "stub" file to support up_putc if no real serial driver is
  * configured.  Normally, drivers/serial/uart_16550.c provides the serial
@@ -51,15 +54,15 @@
  *
  ****************************************************************************/
 
-uart_datawidth_t uart_getreg(uart_addrwidth_t base, unsigned int offset)
+uart_datawidth_t uart_getreg(struct u16550_s *priv, unsigned int offset)
 {
-  return inb(base + offset);
+  return inb(priv->uartbase + offset);
 }
 
-void uart_putreg(uart_addrwidth_t base,
+void uart_putreg(struct u16550_s *priv,
                  unsigned int offset, uart_datawidth_t value)
 {
-  outb(value, base + offset);
+  outb(value, priv->uartbase + offset);
 }
 
 #else /* USE_SERIALDRIVER */
@@ -72,19 +75,23 @@ void uart_putreg(uart_addrwidth_t base,
  *
  ****************************************************************************/
 
-int up_putc(int ch)
+void up_putc(int ch)
 {
-  /* Check for LF */
-
-  if (ch == '\n')
-    {
-      /* Add CR */
-
-      up_lowputc('\r');
-    }
-
-  up_lowputc(ch);
-  return ch;
+  x86_lowputc(ch);
 }
 
 #endif /* USE_SERIALDRIVER */
+
+#ifdef USE_EARLYSERIALINIT
+void x86_earlyserialinit(void)
+{
+  u16550_earlyserialinit();
+}
+#endif
+
+#ifdef USE_SERIALDRIVER
+void x86_serialinit(void)
+{
+  u16550_serialinit();
+}
+#endif

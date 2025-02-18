@@ -1,6 +1,8 @@
 ############################################################################
 # boards/arm/sama5/sama5d3-xplained/src/Makefile
 #
+# SPDX-License-Identifier: Apache-2.0
+#
 # Licensed to the Apache Software Foundation (ASF) under one or more
 # contributor license agreements.  See the NOTICE file distributed with
 # this work for additional information regarding copyright ownership.  The
@@ -102,10 +104,6 @@ ifeq ($(CONFIG_USBMSC),y)
 CSRCS += sam_usbmsc.c
 endif
 
-ifeq ($(CONFIG_ARCH_FPU),y)
-CSRCS += sam_ostest.c
-endif
-
 ifeq ($(CONFIG_ARCH_LEDS),y)
 CSRCS += sam_autoleds.c
 else
@@ -114,6 +112,10 @@ endif
 
 ifeq ($(CONFIG_ARCH_BUTTONS),y)
 CSRCS += sam_buttons.c
+endif
+
+ifeq ($(CONFIG_BOARDCTL_RESET),y)
+CSRCS += sam_reset.c
 endif
 
 include $(TOPDIR)/boards/Board.mk

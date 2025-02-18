@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/imxrt/teensy-4.x/src/imxrt_userleds.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -65,7 +67,7 @@ uint32_t board_userled_initialize(void)
 
 void board_userled(int led, bool ledon)
 {
-  imxrt_gpio_write(GPIO_LED, !ledon);   /* Low illuminates */
+  imxrt_gpio_write(GPIO_LED, ledon);
 }
 
 /****************************************************************************
@@ -74,9 +76,7 @@ void board_userled(int led, bool ledon)
 
 void board_userled_all(uint32_t ledset)
 {
-  /* Low illuminates */
-
-  imxrt_gpio_write(GPIO_LED, (ledset & BOARD_USERLED_BIT) == 0);
+  imxrt_gpio_write(GPIO_LED, (ledset & BOARD_USERLED_BIT));
 }
 
 #endif                                 /* !CONFIG_ARCH_LEDS */

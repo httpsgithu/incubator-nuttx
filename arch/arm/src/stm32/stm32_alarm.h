@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/stm32/stm32_alarm.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -39,7 +41,7 @@
 
 /* The form of an alarm callback */
 
-typedef CODE void (*alarmcb_t)(void);
+typedef void (*alarmcb_t)(void);
 
 /****************************************************************************
  * Public Function Prototypes
@@ -70,7 +72,7 @@ extern "C"
  ****************************************************************************/
 
 struct timespec;
-int stm32_rtc_setalarm(FAR const struct timespec *tp, alarmcb_t callback);
+int stm32_rtc_setalarm(const struct timespec *tp, alarmcb_t callback);
 
 /****************************************************************************
  * Name: stm32_rtc_cancelalarm

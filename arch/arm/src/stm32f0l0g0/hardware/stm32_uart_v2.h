@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/stm32f0l0g0/hardware/stm32_uart_v2.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -18,8 +20,8 @@
  *
  ****************************************************************************/
 
-#ifndef __ARCH_ARM_SRC_STM32F0L0G0_HARDWARE_STM32F0_UART_V2_H
-#define __ARCH_ARM_SRC_STM32F0L0G0_HARDWARE_STM32F0_UART_V2_H
+#ifndef __ARCH_ARM_SRC_STM32F0L0G0_HARDWARE_STM32_UART_V2_H
+#define __ARCH_ARM_SRC_STM32F0L0G0_HARDWARE_STM32_UART_V2_H
 
 /****************************************************************************
  * Included Files
@@ -334,17 +336,17 @@
 
 #define USART_PRESC_SHIFT         (0)       /* Bits 0-3: Clock prescaler */
 #define USART_PRESC_MASK          (15 << USART_PRESC_SHIFT)
-# define USART_PRESC_NODIV        (0 << USART_PRESC_SHIFT)  /* Input clock not divided */
-# define USART_PRESC_DIV1         (1 << USART_PRESC_SHIFT)  /* Input clock divided by 2 */
-# define USART_PRESC_DIV4         (2 << USART_PRESC_SHIFT)  /* Input clock divided by 4 */
-# define USART_PRESC_DIV6         (3 << USART_PRESC_SHIFT)  /* Input clock divided by 6 */
-# define USART_PRESC_DIV8         (4 << USART_PRESC_SHIFT)  /* Input clock divided by 8 */
-# define USART_PRESC_DIV10        (5 << USART_PRESC_SHIFT)  /* Input clock divided by 10 */
-# define USART_PRESC_DIV12        (6 << USART_PRESC_SHIFT)  /* Input clock divided by 12 */
-# define USART_PRESC_DIV16        (7 << USART_PRESC_SHIFT)  /* Input clock divided by 16 */
-# define USART_PRESC_DIV32        (8 << USART_PRESC_SHIFT)  /* Input clock divided by 32 */
-# define USART_PRESC_DIV64        (9 << USART_PRESC_SHIFT)  /* Input clock divided by 64 */
-# define USART_PRESC_DIV128       (10 << USART_PRESC_SHIFT) /* Input clock divided by 128 */
-# define USART_PRESC_DIV256       (11 << USART_PRESC_SHIFT) /* Input clock divided by 256 */
+#  define USART_PRESC_NODIV       (0 << USART_PRESC_SHIFT)  /* Input clock not divided */
+#  define USART_PRESC_DIV1        (1 << USART_PRESC_SHIFT)  /* Input clock divided by 2 */
+#  define USART_PRESC_DIV4        (2 << USART_PRESC_SHIFT)  /* Input clock divided by 4 */
+#  define USART_PRESC_DIV6        (3 << USART_PRESC_SHIFT)  /* Input clock divided by 6 */
+#  define USART_PRESC_DIV8        (4 << USART_PRESC_SHIFT)  /* Input clock divided by 8 */
+#  define USART_PRESC_DIV10       (5 << USART_PRESC_SHIFT)  /* Input clock divided by 10 */
+#  define USART_PRESC_DIV12       (6 << USART_PRESC_SHIFT)  /* Input clock divided by 12 */
+#  define USART_PRESC_DIV16       (7 << USART_PRESC_SHIFT)  /* Input clock divided by 16 */
+#  define USART_PRESC_DIV32       (8 << USART_PRESC_SHIFT)  /* Input clock divided by 32 */
+#  define USART_PRESC_DIV64       (9 << USART_PRESC_SHIFT)  /* Input clock divided by 64 */
+#  define USART_PRESC_DIV128      (10 << USART_PRESC_SHIFT) /* Input clock divided by 128 */
+#  define USART_PRESC_DIV256      (11 << USART_PRESC_SHIFT) /* Input clock divided by 256 */
 
 #endif /* __ARCH_ARM_SRC_STM32F0L0G0_HARDWARE_STM32_UART_V2_H */

@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/nrf52/nrf52_lowputc.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -83,7 +85,7 @@ void nrf52_lowsetup(void);
 
 #ifdef HAVE_UART_DEVICE
 void nrf52_usart_configure(uintptr_t base,
-                           FAR const struct uart_config_s *config);
+                           const struct uart_config_s *config);
 #endif
 
 /****************************************************************************
@@ -97,7 +99,7 @@ void nrf52_usart_configure(uintptr_t base,
 
 #ifdef HAVE_UART_DEVICE
 void nrf52_usart_disable(uintptr_t base,
-                         FAR const struct uart_config_s *config);
+                         const struct uart_config_s *config);
 #endif
 
 /****************************************************************************
@@ -110,7 +112,7 @@ void nrf52_usart_disable(uintptr_t base,
 
 #ifdef HAVE_UART_DEVICE
 void nrf52_usart_setformat(uintptr_t base,
-                           FAR const struct uart_config_s *config);
+                           const struct uart_config_s *config);
 #endif
 
 #endif /* __ARCH_ARM_SRC_NRF52_NRF52_LOWPUTC_H */

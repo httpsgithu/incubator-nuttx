@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/risc-v/c906/smartl-c906/src/c906_leds.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -48,7 +50,7 @@ void board_autoled_initialize(void)
  * Name: board_autoled_on
  *
  * Description:
- *    Turn on the LED specificed.
+ *    Turn on the LED specified.
  *
  * Input Parameters:
  *   led - The LED which is under this control
@@ -63,7 +65,7 @@ void board_autoled_on(int led)
  * Name: board_autoled_off
  *
  * Description:
- *    Turn off the LED specificed.
+ *    Turn off the LED specified.
  *
  * Input Parameters:
  *   led - The LED which is under this control

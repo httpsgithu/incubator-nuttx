@@ -1,13 +1,10 @@
 /****************************************************************************
  * arch/arm/src/nrf52/nrf52_nvmc.h
  *
- *   Copyright (C) 2018 Gregory Nutt. All rights reserved.
- *   Author: Gregory Nutt <gnutt@nuttx.org>
- *
- * Ported from the Nordic SDK, this is the original license:
- *
- * Copyright (c) 2012 - 2018, Nordic Semiconductor ASA
- * All rights reserved.
+ * SPDX-License-Identifier: BSD-3-Clause
+ * SPDX-FileCopyrightText: 2018 Gregory Nutt. All rights reserved.
+ * SPDX-FileCopyrightText: 2012 - 2018, Nordic Semiconductor ASA
+ * SPDX-FileContributor: Gregory Nutt <gnutt@nuttx.org>
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -145,38 +142,6 @@ void nrf_nvmc_write_bytes(uint32_t address, const uint8_t *src,
 
 void nrf_nvmc_write_words(uint32_t address, const uint32_t *src,
                           uint32_t num_words);
-
-/****************************************************************************
- * Name: nrf_nvmc_enable_icache
- *
- * Description:
- *   Enable I-Cache for Flash
- *
- * Input Parameter:
- *   flag - Flag to enable or disable.
- *
- * Returned Values:
- *   None
- *
- ****************************************************************************/
-
-void nrf_nvmc_enable_icache(bool flag);
-
-/****************************************************************************
- * Name: nrf_nvmc_enable_profile
- *
- * Description:
- *   Enable profiling I-Cache for flash
- *
- * Input Parameter:
- *   flag - Flag to enable or disable.
- *
- * Returned Values:
- *   None
- *
- ****************************************************************************/
-
-void nrf_nvmc_enable_profile(bool flag);
 
 /****************************************************************************
  * Name: nrf_nvmc_get_profiling_ihit

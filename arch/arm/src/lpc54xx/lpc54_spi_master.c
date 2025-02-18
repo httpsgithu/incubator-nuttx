@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/lpc54xx/lpc54_spi_master.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -43,12 +45,10 @@
 
 #include <arch/board/board.h>
 #include <nuttx/arch.h>
-#include <nuttx/semaphore.h>
+#include <nuttx/mutex.h>
 #include <nuttx/spi/spi.h>
 
 #include "arm_internal.h"
-#include "arm_arch.h"
-
 #include "hardware/lpc54_pinmux.h"
 #include "hardware/lpc54_syscon.h"
 #include "hardware/lpc54_flexcomm.h"
@@ -84,7 +84,7 @@ struct lpc54_spidev_s
 {
   struct spi_dev_s dev;       /* Externally visible part of the SPI interface */
   uintptr_t base;             /* Base address of Flexcomm registers */
-  sem_t exclsem;              /* Held while chip is selected for mutual exclusion */
+  mutex_t lock;               /* Held while chip is selected for mutual exclusion */
   uint32_t fclock;            /* Flexcomm function clock frequency */
   uint32_t frequency;         /* Requested clock frequency */
   uint32_t actual;            /* Actual clock frequency */
@@ -99,17 +99,17 @@ struct lpc54_spidev_s
 
 struct lpc54_rxtransfer8_s
 {
-  FAR uint8_t *rxptr;         /* Pointer into receive buffer */
-  unsigned int remaining;     /* Bytes remaining in the receive buffer */
-  unsigned int expected;      /* Bytes expected to be received */
+  uint8_t *rxptr;         /* Pointer into receive buffer */
+  unsigned int remaining; /* Bytes remaining in the receive buffer */
+  unsigned int expected;  /* Bytes expected to be received */
 };
 
 #ifdef CONFIG_LPC54_SPI_WIDEDATA
 struct lpc54_rxtransfer16_s
 {
-  FAR uint16_t *rxptr;        /* Pointer into receive buffer */
-  unsigned int remaining;     /* Hwords remaining in the receive buffer */
-  unsigned int expected;      /* Hwords expected to be received */
+  uint16_t *rxptr;        /* Pointer into receive buffer */
+  unsigned int remaining; /* Hwords remaining in the receive buffer */
+  unsigned int expected;  /* Hwords expected to be received */
 };
 #endif
 
@@ -119,24 +119,24 @@ struct lpc54_rxtransfer16_s
 
 struct lpc54_txtransfer8_s
 {
-  uint32_t txctrl;            /* Tx control bits */
-  FAR const uint8_t *txptr;   /* Pointer into transmit buffer */
-  unsigned int remaining;     /* Bytes remaining in the transmit buffer */
+  uint32_t txctrl;        /* Tx control bits */
+  const uint8_t *txptr;   /* Pointer into transmit buffer */
+  unsigned int remaining; /* Bytes remaining in the transmit buffer */
 };
 
 #ifdef CONFIG_LPC54_SPI_WIDEDATA
 struct lpc54_txtransfer16_s
 {
-  uint32_t txctrl;            /* Tx control bits */
-  FAR const uint16_t *txptr;  /* Pointer into transmit buffer */
-  unsigned int remaining;     /* Hwords remaining in the transmit buffer */
+  uint32_t txctrl;        /* Tx control bits */
+  const uint16_t *txptr;  /* Pointer into transmit buffer */
+  unsigned int remaining; /* Hwords remaining in the transmit buffer */
 };
 #endif
 
 struct lpc54_txdummy_s
 {
-  uint32_t txctrl;            /* Tx control bits */
-  unsigned int remaining;     /* Bytes remaining in the transmit buffer */
+  uint32_t txctrl;        /* Tx control bits */
+  unsigned int remaining; /* Bytes remaining in the transmit buffer */
 };
 
 /****************************************************************************
@@ -145,66 +145,66 @@ struct lpc54_txdummy_s
 
 /* Transfer helpers */
 
-static inline size_t lpc54_spi_fifodepth(FAR struct lpc54_spidev_s *priv);
-static inline bool lpc54_spi_txavailable(FAR struct lpc54_spidev_s *priv);
-static inline bool lpc54_spi_rxavailable(FAR struct lpc54_spidev_s *priv);
+static inline size_t lpc54_spi_fifodepth(struct lpc54_spidev_s *priv);
+static inline bool lpc54_spi_txavailable(struct lpc54_spidev_s *priv);
+static inline bool lpc54_spi_rxavailable(struct lpc54_spidev_s *priv);
 
-static void     lpc54_spi_resetfifos(FAR struct lpc54_spidev_s *priv);
-static void     lpc54_spi_rxtransfer8(FAR struct lpc54_spidev_s *priv,
-                  FAR struct lpc54_rxtransfer8_s *xfr);
+static void     lpc54_spi_resetfifos(struct lpc54_spidev_s *priv);
+static void     lpc54_spi_rxtransfer8(struct lpc54_spidev_s *priv,
+                  struct lpc54_rxtransfer8_s *xfr);
 #ifdef CONFIG_LPC54_SPI_WIDEDATA
-static void     lpc54_spi_rxtransfer16(FAR struct lpc54_spidev_s *priv,
-                  FAR struct lpc54_rxtransfer16_s *xfr);
+static void     lpc54_spi_rxtransfer16(struct lpc54_spidev_s *priv,
+                  struct lpc54_rxtransfer16_s *xfr);
 #endif
-static bool     lpc54_spi_txtransfer8(FAR struct lpc54_spidev_s *priv,
-                  FAR struct lpc54_txtransfer8_s *xfr);
+static bool     lpc54_spi_txtransfer8(struct lpc54_spidev_s *priv,
+                  struct lpc54_txtransfer8_s *xfr);
 #ifdef CONFIG_LPC54_SPI_WIDEDATA
-static bool     lpc54_spi_txtransfer16(FAR struct lpc54_spidev_s *priv,
-                  FAR struct lpc54_txtransfer16_s *xfr);
+static bool     lpc54_spi_txtransfer16(struct lpc54_spidev_s *priv,
+                  struct lpc54_txtransfer16_s *xfr);
 #endif
-static bool     lpc54_spi_txdummy(FAR struct lpc54_spidev_s *priv,
-                  FAR struct lpc54_txdummy_s *xfr);
+static bool     lpc54_spi_txdummy(struct lpc54_spidev_s *priv,
+                  struct lpc54_txdummy_s *xfr);
 #ifdef CONFIG_SPI_EXCHANGE
-static void     lpc54_spi_exchange8(FAR struct lpc54_spidev_s *priv,
-                  FAR const void *txbuffer, FAR void *rxbuffer,
+static void     lpc54_spi_exchange8(struct lpc54_spidev_s *priv,
+                  const void *txbuffer, void *rxbuffer,
                   size_t nwords);
 #ifdef CONFIG_LPC54_SPI_WIDEDATA
-static void     lpc54_spi_exchange16(FAR struct lpc54_spidev_s *priv,
-                  FAR const void *txbuffer, FAR void *rxbuffer,
+static void     lpc54_spi_exchange16(struct lpc54_spidev_s *priv,
+                  const void *txbuffer, void *rxbuffer,
                   size_t nwords);
 #endif
 #endif
-static void     lpc54_spi_sndblock8(FAR struct lpc54_spidev_s *priv,
-                  FAR const void *buffer, size_t nwords);
+static void     lpc54_spi_sndblock8(struct lpc54_spidev_s *priv,
+                  const void *buffer, size_t nwords);
 #ifdef CONFIG_LPC54_SPI_WIDEDATA
-static void     lpc54_spi_sndblock16(FAR struct lpc54_spidev_s *priv,
-                  FAR const void *buffer, size_t nwords);
+static void     lpc54_spi_sndblock16(struct lpc54_spidev_s *priv,
+                  const void *buffer, size_t nwords);
 #endif
-static void     lpc54_spi_recvblock8(FAR struct lpc54_spidev_s *priv,
-                  FAR void *buffer, size_t nwords);
+static void     lpc54_spi_recvblock8(struct lpc54_spidev_s *priv,
+                  void *buffer, size_t nwords);
 #ifdef CONFIG_LPC54_SPI_WIDEDATA
-static void     lpc54_spi_recvblock16(FAR struct lpc54_spidev_s *priv,
-                  FAR void *buffer, size_t nwords);
+static void     lpc54_spi_recvblock16(struct lpc54_spidev_s *priv,
+                  void *buffer, size_t nwords);
 #endif
 
 /* SPI methods */
 
-static int      lpc54_spi_lock(FAR struct spi_dev_s *dev, bool lock);
-static uint32_t lpc54_spi_setfrequency(FAR struct spi_dev_s *dev,
+static int      lpc54_spi_lock(struct spi_dev_s *dev, bool lock);
+static uint32_t lpc54_spi_setfrequency(struct spi_dev_s *dev,
                   uint32_t frequency);
-static void     lpc54_spi_setmode(FAR struct spi_dev_s *dev,
+static void     lpc54_spi_setmode(struct spi_dev_s *dev,
                   enum spi_mode_e mode);
-static void     lpc54_spi_setbits(FAR struct spi_dev_s *dev, int nbits);
-static uint32_t lpc54_spi_send(FAR struct spi_dev_s *dev, uint32_t wd);
+static void     lpc54_spi_setbits(struct spi_dev_s *dev, int nbits);
+static uint32_t lpc54_spi_send(struct spi_dev_s *dev, uint32_t wd);
 #ifdef CONFIG_SPI_EXCHANGE
-static void     lpc54_spi_exchange(FAR struct spi_dev_s *dev,
-                  FAR const void *txbuffer, FAR void *rxbuffer,
+static void     lpc54_spi_exchange(struct spi_dev_s *dev,
+                  const void *txbuffer, void *rxbuffer,
                   size_t nwords);
 #endif
-static void     lpc54_spi_sndblock(FAR struct spi_dev_s *dev,
-                  FAR const void *buffer, size_t nwords);
-static void     lpc54_spi_recvblock(FAR struct spi_dev_s *dev,
-                  FAR void *buffer, size_t nwords);
+static void     lpc54_spi_sndblock(struct spi_dev_s *dev,
+                  const void *buffer, size_t nwords);
+static void     lpc54_spi_recvblock(struct spi_dev_s *dev,
+                  void *buffer, size_t nwords);
 
 /****************************************************************************
  * Private Data
@@ -239,7 +239,10 @@ static const struct spi_ops_s g_spi0_ops =
 #endif
 };
 
-static struct lpc54_spidev_s g_spi0_dev;
+static struct lpc54_spidev_s g_spi0_dev =
+{
+  .lock = NXMUTEX_INITIALIZER,
+};
 #endif
 
 #ifdef CONFIG_LPC54_SPI1_MASTER
@@ -271,7 +274,10 @@ static const struct spi_ops_s g_spi1_ops =
 #endif
 };
 
-static struct lpc54_spidev_s g_spi1_dev;
+static struct lpc54_spidev_s g_spi1_dev =
+{
+  .lock = NXMUTEX_INITIALIZER,
+};
 #endif
 
 #ifdef CONFIG_LPC54_SPI2_MASTER
@@ -303,7 +309,10 @@ static const struct spi_ops_s g_spi2_ops =
 #endif
 };
 
-static struct lpc54_spidev_s g_spi2_dev;
+static struct lpc54_spidev_s g_spi2_dev =
+{
+  .lock = NXMUTEX_INITIALIZER,
+};
 #endif
 
 #ifdef CONFIG_LPC54_SPI3_MASTER
@@ -335,7 +344,10 @@ static const struct spi_ops_s g_spi3_ops =
 #endif
 };
 
-static struct lpc54_spidev_s g_spi3_dev;
+static struct lpc54_spidev_s g_spi3_dev =
+{
+  .lock = NXMUTEX_INITIALIZER,
+};
 #endif
 
 #ifdef CONFIG_LPC54_SPI4_MASTER
@@ -367,7 +379,10 @@ static const struct spi_ops_s g_spi4_ops =
 #endif
 };
 
-static struct lpc54_spidev_s g_spi4_dev;
+static struct lpc54_spidev_s g_spi4_dev =
+{
+  .lock = NXMUTEX_INITIALIZER,
+};
 #endif
 
 #ifdef CONFIG_LPC54_SPI5_MASTER
@@ -399,7 +414,10 @@ static const struct spi_ops_s g_spi5_ops =
 #endif
 };
 
-static struct lpc54_spidev_s g_spi5_dev;
+static struct lpc54_spidev_s g_spi5_dev =
+{
+  .lock = NXMUTEX_INITIALIZER,
+};
 #endif
 
 #ifdef CONFIG_LPC54_SPI6_MASTER
@@ -431,7 +449,10 @@ static const struct spi_ops_s g_spi6_ops =
 #endif
 };
 
-static struct lpc54_spidev_s g_spi6_dev;
+static struct lpc54_spidev_s g_spi6_dev =
+{
+  .lock = NXMUTEX_INITIALIZER,
+};
 #endif
 
 #ifdef CONFIG_LPC54_SPI7_MASTER
@@ -463,7 +484,10 @@ static const struct spi_ops_s g_spi7_ops =
 #endif
 };
 
-static struct lpc54_spidev_s g_spi7_dev;
+static struct lpc54_spidev_s g_spi7_dev =
+{
+  .lock = NXMUTEX_INITIALIZER,
+};
 #endif
 
 #ifdef CONFIG_LPC54_SPI8_MASTER
@@ -495,7 +519,10 @@ static const struct spi_ops_s g_spi8_ops =
 #endif
 };
 
-static struct lpc54_spidev_s g_spi8_dev;
+static struct lpc54_spidev_s g_spi8_dev =
+{
+  .lock = NXMUTEX_INITIALIZER,
+};
 #endif
 
 #ifdef CONFIG_LPC54_SPI9_MASTER
@@ -527,7 +554,10 @@ static const struct spi_ops_s g_spi9_ops =
 #endif
 };
 
-static struct lpc54_spidev_s g_spi9_dev;
+static struct lpc54_spidev_s g_spi9_dev =
+{
+  .lock = NXMUTEX_INITIALIZER,
+};
 #endif
 
 /****************************************************************************
@@ -577,7 +607,7 @@ static inline uint32_t lpc54_spi_getreg(struct lpc54_spidev_s *priv,
  *
  ****************************************************************************/
 
-static inline size_t lpc54_spi_fifodepth(FAR struct lpc54_spidev_s *priv)
+static inline size_t lpc54_spi_fifodepth(struct lpc54_spidev_s *priv)
 {
   uint32_t regval = lpc54_spi_getreg(priv, LPC54_SPI_FIFOCFG_OFFSET);
   return ((regval & SPI_FIFOCFG_SIZE_MASK) >> SPI_FIFOCFG_SIZE_SHIFT) << 3;
@@ -597,7 +627,7 @@ static inline size_t lpc54_spi_fifodepth(FAR struct lpc54_spidev_s *priv)
  *
  ****************************************************************************/
 
-static inline bool lpc54_spi_txavailable(FAR struct lpc54_spidev_s *priv)
+static inline bool lpc54_spi_txavailable(struct lpc54_spidev_s *priv)
 {
   uint32_t regval = lpc54_spi_getreg(priv, LPC54_SPI_FIFOSTAT_OFFSET);
   return ((regval & SPI_FIFOSTAT_TXNOTFULL) != 0);
@@ -617,7 +647,7 @@ static inline bool lpc54_spi_txavailable(FAR struct lpc54_spidev_s *priv)
  *
  ****************************************************************************/
 
-static inline bool lpc54_spi_rxavailable(FAR struct lpc54_spidev_s *priv)
+static inline bool lpc54_spi_rxavailable(struct lpc54_spidev_s *priv)
 {
   uint32_t regval = lpc54_spi_getreg(priv, LPC54_SPI_FIFOSTAT_OFFSET);
   return ((regval & SPI_FIFOSTAT_RXNOTEMPTY) != 0);
@@ -637,7 +667,7 @@ static inline bool lpc54_spi_rxavailable(FAR struct lpc54_spidev_s *priv)
  *
  ****************************************************************************/
 
-static void lpc54_spi_rxdiscard(FAR struct lpc54_spidev_s *priv)
+static void lpc54_spi_rxdiscard(struct lpc54_spidev_s *priv)
 {
   while (lpc54_spi_rxavailable(priv))
     {
@@ -659,7 +689,7 @@ static void lpc54_spi_rxdiscard(FAR struct lpc54_spidev_s *priv)
  *
  ****************************************************************************/
 
-static void lpc54_spi_resetfifos(FAR struct lpc54_spidev_s *priv)
+static void lpc54_spi_resetfifos(struct lpc54_spidev_s *priv)
 {
   uint32_t regval;
 
@@ -689,8 +719,8 @@ static void lpc54_spi_resetfifos(FAR struct lpc54_spidev_s *priv)
  *
  ****************************************************************************/
 
-static void lpc54_spi_rxtransfer8(FAR struct lpc54_spidev_s *priv,
-                                  FAR struct lpc54_rxtransfer8_s *xfr)
+static void lpc54_spi_rxtransfer8(struct lpc54_spidev_s *priv,
+                                  struct lpc54_rxtransfer8_s *xfr)
 {
   /* Read one byte if available and expected */
 
@@ -725,8 +755,8 @@ static void lpc54_spi_rxtransfer8(FAR struct lpc54_spidev_s *priv,
 }
 
 #ifdef CONFIG_LPC54_SPI_WIDEDATA
-static void lpc54_spi_rxtransfer16(FAR struct lpc54_spidev_s *priv,
-                                   FAR struct lpc54_rxtransfer16_s *xfr)
+static void lpc54_spi_rxtransfer16(struct lpc54_spidev_s *priv,
+                                   struct lpc54_rxtransfer16_s *xfr)
 {
   /* Read one HWord if available and expected */
 
@@ -776,8 +806,8 @@ static void lpc54_spi_rxtransfer16(FAR struct lpc54_spidev_s *priv,
  *
  ****************************************************************************/
 
-static bool lpc54_spi_txtransfer8(FAR struct lpc54_spidev_s *priv,
-                                  FAR struct lpc54_txtransfer8_s *xfr)
+static bool lpc54_spi_txtransfer8(struct lpc54_spidev_s *priv,
+                                  struct lpc54_txtransfer8_s *xfr)
 {
   uint32_t regval;
 
@@ -806,8 +836,8 @@ static bool lpc54_spi_txtransfer8(FAR struct lpc54_spidev_s *priv,
 }
 
 #ifdef CONFIG_LPC54_SPI_WIDEDATA
-static bool lpc54_spi_txtransfer16(FAR struct lpc54_spidev_s *priv,
-                                   FAR struct lpc54_txtransfer16_s *xfr)
+static bool lpc54_spi_txtransfer16(struct lpc54_spidev_s *priv,
+                                   struct lpc54_txtransfer16_s *xfr)
 {
   uint32_t regval;
 
@@ -851,8 +881,8 @@ static bool lpc54_spi_txtransfer16(FAR struct lpc54_spidev_s *priv,
  *
  ****************************************************************************/
 
-static bool lpc54_spi_txdummy(FAR struct lpc54_spidev_s *priv,
-                              FAR struct lpc54_txdummy_s *xfr)
+static bool lpc54_spi_txdummy(struct lpc54_spidev_s *priv,
+                              struct lpc54_txdummy_s *xfr)
 {
   /* Transmit if txFIFO is not full and there is more Tx data to be sent */
 
@@ -894,8 +924,8 @@ static bool lpc54_spi_txdummy(FAR struct lpc54_spidev_s *priv,
  ****************************************************************************/
 
 #ifdef CONFIG_SPI_EXCHANGE
-static void lpc54_spi_exchange8(FAR struct lpc54_spidev_s *priv,
-                                FAR const void *txbuffer, FAR void *rxbuffer,
+static void lpc54_spi_exchange8(struct lpc54_spidev_s *priv,
+                                const void *txbuffer, void *rxbuffer,
                                 size_t nwords)
 {
   struct lpc54_rxtransfer8_s rxtransfer;
@@ -911,9 +941,9 @@ static void lpc54_spi_exchange8(FAR struct lpc54_spidev_s *priv,
   /* Set up the transfer data */
 
   txtransfer.txctrl = SPI_FIFOWR_LEN(priv->nbits) | SPI_FIFOWR_TXSSELN_ALL;
-  txtransfer.txptr = (FAR uint8_t *)txbuffer;
+  txtransfer.txptr = (uint8_t *)txbuffer;
   txtransfer.remaining = nwords;
-  rxtransfer.rxptr = (FAR uint8_t *)rxbuffer;
+  rxtransfer.rxptr = (uint8_t *)rxbuffer;
   rxtransfer.remaining = nwords;
   rxtransfer.expected = 0;
 
@@ -953,9 +983,9 @@ static void lpc54_spi_exchange8(FAR struct lpc54_spidev_s *priv,
 #endif /* CONFIG_SPI_EXCHANGE */
 
 #if defined(CONFIG_SPI_EXCHANGE) && defined(CONFIG_LPC54_SPI_WIDEDATA)
-static void lpc54_spi_exchange16(FAR struct lpc54_spidev_s *priv,
-                                 FAR const void *txbuffer,
-                                 FAR void *rxbuffer,
+static void lpc54_spi_exchange16(struct lpc54_spidev_s *priv,
+                                 const void *txbuffer,
+                                 void *rxbuffer,
                                  size_t nwords)
 {
   struct lpc54_rxtransfer16_s rxtransfer;
@@ -973,9 +1003,9 @@ static void lpc54_spi_exchange16(FAR struct lpc54_spidev_s *priv,
   /* Set up the transfer data */
 
   txtransfer.txctrl = SPI_FIFOWR_LEN(priv->nbits) | SPI_FIFOWR_TXSSELN_ALL;
-  txtransfer.txptr = (FAR uint16_t *)txbuffer;
+  txtransfer.txptr = (uint16_t *)txbuffer;
   txtransfer.remaining = nwords;
-  rxtransfer.rxptr = (FAR uint16_t *)rxbuffer;
+  rxtransfer.rxptr = (uint16_t *)rxbuffer;
   rxtransfer.remaining = nwords;
   rxtransfer.expected = 0;
 
@@ -1033,8 +1063,8 @@ static void lpc54_spi_exchange16(FAR struct lpc54_spidev_s *priv,
  *
  ****************************************************************************/
 
-static void lpc54_spi_sndblock8(FAR struct lpc54_spidev_s *priv,
-                                FAR const void *buffer, size_t nwords)
+static void lpc54_spi_sndblock8(struct lpc54_spidev_s *priv,
+                                const void *buffer, size_t nwords)
 {
   struct lpc54_txtransfer8_s txtransfer;
 
@@ -1044,7 +1074,7 @@ static void lpc54_spi_sndblock8(FAR struct lpc54_spidev_s *priv,
 
   txtransfer.txctrl    = SPI_FIFOWR_RXIGNORE | SPI_FIFOWR_LEN(priv->nbits) |
                          SPI_FIFOWR_TXSSELN_ALL;
-  txtransfer.txptr     = (FAR uint8_t *)buffer;
+  txtransfer.txptr     = (uint8_t *)buffer;
   txtransfer.remaining = nwords;
 
   /* Clear Tx/Rx errors and empty FIFOs */
@@ -1064,8 +1094,8 @@ static void lpc54_spi_sndblock8(FAR struct lpc54_spidev_s *priv,
 }
 
 #ifdef CONFIG_LPC54_SPI_WIDEDATA
-static void lpc54_spi_sndblock16(FAR struct lpc54_spidev_s *priv,
-                                 FAR const void *buffer, size_t nwords)
+static void lpc54_spi_sndblock16(struct lpc54_spidev_s *priv,
+                                 const void *buffer, size_t nwords)
 {
   struct lpc54_txtransfer16_s txtransfer;
 
@@ -1075,7 +1105,7 @@ static void lpc54_spi_sndblock16(FAR struct lpc54_spidev_s *priv,
 
   txtransfer.txctrl    = SPI_FIFOWR_RXIGNORE | SPI_FIFOWR_LEN(priv->nbits) |
                          SPI_FIFOWR_TXSSELN_ALL;
-  txtransfer.txptr     = (FAR uint16_t *)buffer;
+  txtransfer.txptr     = (uint16_t *)buffer;
   txtransfer.remaining = nwords;
 
   /* Clear Tx/Rx errors and empty FIFOs */
@@ -1118,8 +1148,8 @@ static void lpc54_spi_sndblock16(FAR struct lpc54_spidev_s *priv,
  *
  ****************************************************************************/
 
-static void lpc54_spi_recvblock8(FAR struct lpc54_spidev_s *priv,
-                                 FAR void *buffer, size_t nwords)
+static void lpc54_spi_recvblock8(struct lpc54_spidev_s *priv,
+                                 void *buffer, size_t nwords)
 {
   struct lpc54_rxtransfer8_s rxtransfer;
   struct lpc54_txdummy_s txtransfer;
@@ -1136,7 +1166,7 @@ static void lpc54_spi_recvblock8(FAR struct lpc54_spidev_s *priv,
   txtransfer.txctrl    = SPI_DUMMYDATA8 | SPI_FIFOWR_LEN(priv->nbits) |
                          SPI_FIFOWR_TXSSELN_ALL;
   txtransfer.remaining = nwords;
-  rxtransfer.rxptr     = (FAR uint8_t *)buffer;
+  rxtransfer.rxptr     = (uint8_t *)buffer;
   rxtransfer.remaining = nwords;
   rxtransfer.expected  = 0;
 
@@ -1173,8 +1203,8 @@ static void lpc54_spi_recvblock8(FAR struct lpc54_spidev_s *priv,
 }
 
 #ifdef CONFIG_LPC54_SPI_WIDEDATA
-static void lpc54_spi_recvblock16(FAR struct lpc54_spidev_s *priv,
-                                  FAR void *buffer, size_t nwords)
+static void lpc54_spi_recvblock16(struct lpc54_spidev_s *priv,
+                                  void *buffer, size_t nwords)
 {
   struct lpc54_rxtransfer16_s rxtransfer;
   struct lpc54_txdummy_s txtransfer;
@@ -1191,7 +1221,7 @@ static void lpc54_spi_recvblock16(FAR struct lpc54_spidev_s *priv,
   txtransfer.txctrl    = SPI_DUMMYDATA16 | SPI_FIFOWR_LEN(priv->nbits) |
                          SPI_FIFOWR_TXSSELN_ALL;
   txtransfer.remaining = nwords;
-  rxtransfer.rxptr     = (FAR uint16_t *)rxbuffer;
+  rxtransfer.rxptr     = (uint16_t *)rxbuffer;
   rxtransfer.remaining = nwords;
   rxtransfer.expected  = 0;
 
@@ -1249,18 +1279,18 @@ static void lpc54_spi_recvblock16(FAR struct lpc54_spidev_s *priv,
  *
  ****************************************************************************/
 
-static int lpc54_spi_lock(FAR struct spi_dev_s *dev, bool lock)
+static int lpc54_spi_lock(struct spi_dev_s *dev, bool lock)
 {
-  FAR struct lpc54_spidev_s *priv = (FAR struct lpc54_spidev_s *)dev;
+  struct lpc54_spidev_s *priv = (struct lpc54_spidev_s *)dev;
   int ret;
 
   if (lock)
     {
-      ret = nxsem_wait_uninterruptible(&priv->exclsem);
+      ret = nxmutex_lock(&priv->lock);
     }
   else
     {
-      ret = nxsem_post(&priv->exclsem);
+      ret = nxmutex_unlock(&priv->lock);
     }
 
   return ret;
@@ -1281,10 +1311,10 @@ static int lpc54_spi_lock(FAR struct spi_dev_s *dev, bool lock)
  *
  ****************************************************************************/
 
-static uint32_t lpc54_spi_setfrequency(FAR struct spi_dev_s *dev,
+static uint32_t lpc54_spi_setfrequency(struct spi_dev_s *dev,
                                        uint32_t frequency)
 {
-  FAR struct lpc54_spidev_s *priv = (FAR struct lpc54_spidev_s *)dev;
+  struct lpc54_spidev_s *priv = (struct lpc54_spidev_s *)dev;
   uint32_t divider;
   uint32_t actual;
   uint32_t regval;
@@ -1343,10 +1373,10 @@ static uint32_t lpc54_spi_setfrequency(FAR struct spi_dev_s *dev,
  *
  ****************************************************************************/
 
-static void lpc54_spi_setmode(FAR struct spi_dev_s *dev,
+static void lpc54_spi_setmode(struct spi_dev_s *dev,
                               enum spi_mode_e mode)
 {
-  FAR struct lpc54_spidev_s *priv = (FAR struct lpc54_spidev_s *)dev;
+  struct lpc54_spidev_s *priv = (struct lpc54_spidev_s *)dev;
   uint32_t regval;
 
   /* Has the mode changed? */
@@ -1403,9 +1433,9 @@ static void lpc54_spi_setmode(FAR struct spi_dev_s *dev,
  *
  ****************************************************************************/
 
-static void lpc54_spi_setbits(FAR struct spi_dev_s *dev, int nbits)
+static void lpc54_spi_setbits(struct spi_dev_s *dev, int nbits)
 {
-  FAR struct lpc54_spidev_s *priv = (FAR struct lpc54_spidev_s *)dev;
+  struct lpc54_spidev_s *priv = (struct lpc54_spidev_s *)dev;
 
   /* The valid range of bit selections is SPI_MINWIDTH through SPI_MAXWIDTH */
 
@@ -1436,9 +1466,9 @@ static void lpc54_spi_setbits(FAR struct spi_dev_s *dev, int nbits)
  *
  ****************************************************************************/
 
-static uint32_t lpc54_spi_send(FAR struct spi_dev_s *dev, uint32_t wd)
+static uint32_t lpc54_spi_send(struct spi_dev_s *dev, uint32_t wd)
 {
-  FAR struct lpc54_spidev_s *priv = (FAR struct lpc54_spidev_s *)dev;
+  struct lpc54_spidev_s *priv = (struct lpc54_spidev_s *)dev;
   uint32_t regval;
 
   DEBUGASSERT(priv != NULL);
@@ -1489,11 +1519,11 @@ static uint32_t lpc54_spi_send(FAR struct spi_dev_s *dev, uint32_t wd)
  ****************************************************************************/
 
 #ifdef CONFIG_SPI_EXCHANGE
-static void lpc54_spi_exchange(FAR struct lpc54_spidev_s *priv,
-                               FAR const void *txbuffer, FAR void *rxbuffer,
+static void lpc54_spi_exchange(struct lpc54_spidev_s *priv,
+                               const void *txbuffer, void *rxbuffer,
                                size_t nwords)
 {
-  FAR struct lpc54_spidev_s *priv = (FAR struct lpc54_spidev_s *)dev;
+  struct lpc54_spidev_s *priv = (struct lpc54_spidev_s *)dev;
 
   DEBUGASSERT(priv != NULL);
 
@@ -1555,10 +1585,10 @@ static void lpc54_spi_exchange(FAR struct lpc54_spidev_s *priv,
  *
  ****************************************************************************/
 
-static void lpc54_spi_sndblock(FAR struct spi_dev_s *dev,
-                               FAR const void *buffer, size_t nwords)
+static void lpc54_spi_sndblock(struct spi_dev_s *dev,
+                               const void *buffer, size_t nwords)
 {
-  FAR struct lpc54_spidev_s *priv = (FAR struct lpc54_spidev_s *)dev;
+  struct lpc54_spidev_s *priv = (struct lpc54_spidev_s *)dev;
 
   spiinfo("buffer=%p nwords=%d\n", buffer, nwords);
   DEBUGASSERT(priv != NULL && buffer != NULL);
@@ -1602,10 +1632,10 @@ static void lpc54_spi_sndblock(FAR struct spi_dev_s *dev,
  *
  ****************************************************************************/
 
-static void lpc54_spi_recvblock(FAR struct spi_dev_s *dev, FAR void *buffer,
+static void lpc54_spi_recvblock(struct spi_dev_s *dev, void *buffer,
                                 size_t nwords)
 {
-  FAR struct lpc54_spidev_s *priv = (FAR struct lpc54_spidev_s *)dev;
+  struct lpc54_spidev_s *priv = (struct lpc54_spidev_s *)dev;
 
   spiinfo("buffer=%p nwords=%d\n", buffer, nwords);
   DEBUGASSERT(priv != NULL && buffer != NULL);
@@ -1651,7 +1681,7 @@ static void lpc54_spi_recvblock(FAR struct spi_dev_s *dev, FAR void *buffer,
  *
  ****************************************************************************/
 
-FAR struct spi_dev_s *lpc54_spibus_initialize(int port)
+struct spi_dev_s *lpc54_spibus_initialize(int port)
 {
   struct lpc54_spidev_s *priv;
   irqstate_t flags;
@@ -2006,6 +2036,7 @@ FAR struct spi_dev_s *lpc54_spibus_initialize(int port)
   else
 #endif
     {
+      leave_critical_section(flags);
       return NULL;
     }
 
@@ -2016,10 +2047,6 @@ FAR struct spi_dev_s *lpc54_spibus_initialize(int port)
   priv->frequency = 0;
   priv->nbits     = 8;
   priv->mode      = SPIDEV_MODE0;
-
-  /* Initialize the SPI semaphore that enforces mutually exclusive access */
-
-  nxsem_init(&priv->exclsem, 0, 1);
 
   /* Configure master mode in mode 0:
    *
@@ -2066,7 +2093,7 @@ FAR struct spi_dev_s *lpc54_spibus_initialize(int port)
 
   /* Select a default frequency of approx. 400KHz */
 
-  lpc54_spi_setfrequency((FAR struct spi_dev_s *)priv, 400000);
+  lpc54_spi_setfrequency((struct spi_dev_s *)priv, 400000);
 
   /* Enable the SPI peripheral */
 

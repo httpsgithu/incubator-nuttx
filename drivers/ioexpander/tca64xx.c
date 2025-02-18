@@ -1,6 +1,8 @@
 /****************************************************************************
  * drivers/ioexpander/tca64xx.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -27,6 +29,7 @@
 #include <assert.h>
 #include <errno.h>
 #include <debug.h>
+#include <sys/param.h>
 
 #include <nuttx/kmalloc.h>
 #include <nuttx/wdog.h>
@@ -38,24 +41,11 @@
 #ifdef CONFIG_IOEXPANDER_TCA64XX
 
 /****************************************************************************
- * Pre-processor Definitions
- ****************************************************************************/
-
-#ifndef MAX
-#  define MAX(a,b) (((a) > (b)) ? (a) : (b))
-#endif
-
-#ifndef MIN
-#  define MIN(a,b) (((a) < (b)) ? (a) : (b))
-#endif
-
-/****************************************************************************
  * Private Function Prototypes
  ****************************************************************************/
 
 /* TCA64xx Helpers */
 
-static int tca64_lock(FAR struct tca64_dev_s *priv);
 static FAR const struct tca64_part_s *tca64_getpart(
                           FAR struct tca64_dev_s *priv);
 static uint8_t tca64_ngpios(FAR struct tca64_dev_s *priv);
@@ -80,9 +70,9 @@ static int tca64_readpin(FAR struct ioexpander_dev_s *dev, uint8_t pin,
              FAR bool *value);
 #ifdef CONFIG_IOEXPANDER_MULTIPIN
 static int tca64_multiwritepin(FAR struct ioexpander_dev_s *dev,
-             FAR uint8_t *pins, FAR bool *values, int count);
+             FAR const uint8_t *pins, FAR const bool *values, int count);
 static int tca64_multireadpin(FAR struct ioexpander_dev_s *dev,
-             FAR uint8_t *pins, FAR bool *values, int count);
+             FAR const uint8_t *pins, FAR bool *values, int count);
 #endif
 #ifdef CONFIG_IOEXPANDER_INT_ENABLE
 static FAR void *tca64_attach(FAR struct ioexpander_dev_s *dev,
@@ -168,21 +158,6 @@ static const struct tca64_part_s g_tca64_parts[TCA64_NPARTS] =
  ****************************************************************************/
 
 /****************************************************************************
- * Name: tca64_lock
- *
- * Description:
- *   Get exclusive access to the I/O Expander
- *
- ****************************************************************************/
-
-static int tca64_lock(FAR struct tca64_dev_s *priv)
-{
-  return nxsem_wait_uninterruptible(&priv->exclsem);
-}
-
-#define tca64_unlock(p) nxsem_post(&(p)->exclsem)
-
-/****************************************************************************
  * Name: tca64_getpart
  *
  * Description:
@@ -190,8 +165,8 @@ static int tca64_lock(FAR struct tca64_dev_s *priv)
  *
  ****************************************************************************/
 
-static FAR const struct tca64_part_s *tca64_getpart(
-                          FAR struct tca64_dev_s *priv)
+static FAR const struct tca64_part_s *
+tca64_getpart(FAR struct tca64_dev_s *priv)
 {
   DEBUGASSERT(priv != NULL && priv->config != NULL &&
               priv->config->part < TCA64_NPARTS);
@@ -393,7 +368,7 @@ static int tca64_putreg(struct tca64_dev_s *priv, uint8_t regaddr,
  ****************************************************************************/
 
 static int tca64_direction(FAR struct ioexpander_dev_s *dev, uint8_t pin,
-                          int direction)
+                           int direction)
 {
   FAR struct tca64_dev_s *priv = (FAR struct tca64_dev_s *)dev;
   uint8_t regaddr;
@@ -415,7 +390,7 @@ static int tca64_direction(FAR struct ioexpander_dev_s *dev, uint8_t pin,
 
   /* Get exclusive access to the I/O Expander */
 
-  ret = tca64_lock(priv);
+  ret = nxmutex_lock(&priv->lock);
   if (ret < 0)
     {
       return ret;
@@ -467,7 +442,7 @@ static int tca64_direction(FAR struct ioexpander_dev_s *dev, uint8_t pin,
     }
 
 errout_with_lock:
-  tca64_unlock(priv);
+  nxmutex_unlock(&priv->lock);
   return ret;
 }
 
@@ -511,13 +486,12 @@ static int tca64_option(FAR struct ioexpander_dev_s *dev, uint8_t pin,
 
   if (opt == IOEXPANDER_OPTION_INVERT)
     {
-      unsigned int ival = (unsigned int)((uintptr_t)value);
       uint8_t regaddr;
       uint8_t polarity;
 
       /* Get exclusive access to the I/O Expander */
 
-      ret = tca64_lock(priv);
+      ret = nxmutex_lock(&priv->lock);
       if (ret < 0)
         {
           return ret;
@@ -531,13 +505,13 @@ static int tca64_option(FAR struct ioexpander_dev_s *dev, uint8_t pin,
         {
           gpioerr("ERROR: Failed to read polarity register at %u: %d\n",
                   regaddr, ret);
-          tca64_unlock(priv);
+          nxmutex_unlock(&priv->lock);
           return ret;
         }
 
       /* Set/clear the pin option */
 
-      if (ival == IOEXPANDER_OPTION_INVERT)
+      if ((uintptr_t)value == IOEXPANDER_VAL_INVERT)
         {
           polarity |= (1 << (pin & 7));
         }
@@ -555,7 +529,7 @@ static int tca64_option(FAR struct ioexpander_dev_s *dev, uint8_t pin,
                   regaddr, ret);
         }
 
-      tca64_unlock(priv);
+      nxmutex_unlock(&priv->lock);
     }
 
 #ifdef CONFIG_TCA64XX_INT_ENABLE
@@ -566,7 +540,7 @@ static int tca64_option(FAR struct ioexpander_dev_s *dev, uint8_t pin,
       unsigned int ival = (unsigned int)((uintptr_t)value);
       ioe_pinset_t bit = ((ioe_pinset_t)1 << pin);
 
-      ret = tca64_lock(priv);
+      ret = nxmutex_lock(&priv->lock);
       if (ret < 0)
         {
           return ret;
@@ -611,7 +585,7 @@ static int tca64_option(FAR struct ioexpander_dev_s *dev, uint8_t pin,
             ret = -EINVAL;
         }
 
-      tca64_unlock(priv);
+      nxmutex_unlock(&priv->lock);
     }
 #endif
 
@@ -636,7 +610,7 @@ static int tca64_option(FAR struct ioexpander_dev_s *dev, uint8_t pin,
  ****************************************************************************/
 
 static int tca64_writepin(FAR struct ioexpander_dev_s *dev, uint8_t pin,
-                         bool value)
+                          bool value)
 {
   FAR struct tca64_dev_s *priv = (FAR struct tca64_dev_s *)dev;
   uint8_t regaddr;
@@ -651,7 +625,7 @@ static int tca64_writepin(FAR struct ioexpander_dev_s *dev, uint8_t pin,
 
   /* Get exclusive access to the I/O Expander */
 
-  ret = tca64_lock(priv);
+  ret = nxmutex_lock(&priv->lock);
   if (ret < 0)
     {
       return ret;
@@ -692,7 +666,7 @@ static int tca64_writepin(FAR struct ioexpander_dev_s *dev, uint8_t pin,
     }
 
 errout_with_lock:
-  tca64_unlock(priv);
+  nxmutex_unlock(&priv->lock);
   return ret;
 }
 
@@ -716,7 +690,7 @@ errout_with_lock:
  ****************************************************************************/
 
 static int tca64_readpin(FAR struct ioexpander_dev_s *dev, uint8_t pin,
-                        FAR bool *value)
+                         FAR bool *value)
 {
   FAR struct tca64_dev_s *priv = (FAR struct tca64_dev_s *)dev;
   uint8_t regaddr;
@@ -730,7 +704,7 @@ static int tca64_readpin(FAR struct ioexpander_dev_s *dev, uint8_t pin,
 
   /* Get exclusive access to the I/O Expander */
 
-  ret = tca64_lock(priv);
+  ret = nxmutex_lock(&priv->lock);
   if (ret < 0)
     {
       return ret;
@@ -765,7 +739,7 @@ static int tca64_readpin(FAR struct ioexpander_dev_s *dev, uint8_t pin,
   ret = OK;
 
 errout_with_lock:
-  tca64_unlock(priv);
+  nxmutex_unlock(&priv->lock);
   return ret;
 }
 
@@ -788,8 +762,8 @@ errout_with_lock:
 
 #ifdef CONFIG_IOEXPANDER_MULTIPIN
 static int tca64_multiwritepin(FAR struct ioexpander_dev_s *dev,
-                                 FAR uint8_t *pins, FAR bool *values,
-                                 int count)
+                               FAR const uint8_t *pins,
+                               FAR const bool *values, int count)
 {
   FAR struct tca64_dev_s *priv = (FAR struct tca64_dev_s *)dev;
   ioe_pinset_t pinset;
@@ -802,7 +776,7 @@ static int tca64_multiwritepin(FAR struct ioexpander_dev_s *dev,
 
   /* Get exclusive access to the I/O Expander */
 
-  ret = tca64_lock(priv);
+  ret = nxmutex_lock(&priv->lock);
   if (ret < 0)
     {
       return ret;
@@ -834,11 +808,11 @@ static int tca64_multiwritepin(FAR struct ioexpander_dev_s *dev,
 
       if (values[i])
         {
-          pinset |= (1 << pin);
+          pinset |= ((ioe_pinset_t)1 << pin);
         }
       else
         {
-          pinset &= ~(1 << pin);
+          pinset &= ~((ioe_pinset_t)1 << pin);
         }
     }
 
@@ -852,7 +826,7 @@ static int tca64_multiwritepin(FAR struct ioexpander_dev_s *dev,
     }
 
 errout_with_lock:
-  tca64_unlock(priv);
+  nxmutex_unlock(&priv->lock);
   return ret;
 }
 #endif
@@ -876,8 +850,8 @@ errout_with_lock:
 
 #ifdef CONFIG_IOEXPANDER_MULTIPIN
 static int tca64_multireadpin(FAR struct ioexpander_dev_s *dev,
-                                FAR uint8_t *pins, FAR bool *values,
-                                int count)
+                              FAR const uint8_t *pins,
+                              FAR bool *values, int count)
 {
   FAR struct tca64_dev_s *priv = (FAR struct tca64_dev_s *)dev;
   ioe_pinset_t pinset;
@@ -895,7 +869,7 @@ static int tca64_multireadpin(FAR struct ioexpander_dev_s *dev,
 
   /* Get exclusive access to the I/O Expander */
 
-  ret = tca64_lock(priv);
+  ret = nxmutex_lock(&priv->lock);
   if (ret < 0)
     {
       return ret;
@@ -928,7 +902,7 @@ static int tca64_multireadpin(FAR struct ioexpander_dev_s *dev,
       pin = pins[i];
       DEBUGASSERT(pin < CONFIG_IOEXPANDER_NPINS);
 
-      values[i] = ((pinset & (1 << pin)) != 0);
+      values[i] = (((pinset >> pin) & 1) != 0);
     }
 
 #ifdef CONFIG_TCA64XX_INT_ENABLE
@@ -938,7 +912,7 @@ static int tca64_multireadpin(FAR struct ioexpander_dev_s *dev,
 #endif
 
 errout_with_lock:
-  tca64_unlock(priv);
+  nxmutex_unlock(&priv->lock);
   return ret;
 }
 #endif
@@ -974,7 +948,7 @@ static FAR void *tca64_attach(FAR struct ioexpander_dev_s *dev,
 
   /* Get exclusive access to the I/O Expander */
 
-  ret = tca64_lock(priv);
+  ret = nxmutex_lock(&priv->lock);
   if (ret < 0)
     {
       return ret;
@@ -998,7 +972,7 @@ static FAR void *tca64_attach(FAR struct ioexpander_dev_s *dev,
         }
     }
 
-  tca64_unlock(priv);
+  nxmutex_unlock(&priv->lock);
   return handle;
 }
 
@@ -1076,7 +1050,7 @@ static void tca64_int_update(FAR struct tca64_dev_s *priv,
               if (((input & 1) == 0 && TCA64_EDGE_FALLING(priv, pin)) ||
                   ((input & 1) != 0 && TCA64_EDGE_RISING(priv, pin)))
                 {
-                  priv->intstat |= 1 << pin;
+                  priv->intstat |= ((ioe_pinset_t)1 << pin);
                 }
             }
         }
@@ -1087,7 +1061,7 @@ static void tca64_int_update(FAR struct tca64_dev_s *priv,
           if (((input & 1) != 0 && TCA64_LEVEL_HIGH(priv, pin)) ||
               ((input & 1) == 0 && TCA64_LEVEL_LOW(priv, pin)))
             {
-              priv->intstat |= 1 << pin;
+              priv->intstat |= ((ioe_pinset_t)1 << pin);
             }
         }
 
@@ -1174,7 +1148,7 @@ static void tca64_irqworker(void *arg)
 
   /* Get exclusive access to read inputs and assess pending interrupts. */
 
-  ret = tca64_lock(priv);
+  ret = nxmutex_lock(&priv->lock);
   if (ret < 0)
     {
       return ret;
@@ -1197,7 +1171,7 @@ static void tca64_irqworker(void *arg)
     {
       gpioerr("ERROR: Failed to read input %u registers at %u: %d\n",
               nregs, regaddr, ret);
-      tca64_unlock(priv);
+      nxmutex_unlock(&priv->lock);
       goto errout_with_restart;
     }
 
@@ -1209,7 +1183,7 @@ static void tca64_irqworker(void *arg)
 
   pinset        = priv->intstat;
   priv->intstat = 0;
-  tca64_unlock(priv);
+  nxmutex_unlock(&priv->lock);
 
   /* Perform pin interrupt callbacks */
 
@@ -1233,7 +1207,6 @@ static void tca64_irqworker(void *arg)
     }
 
 errout_with_restart:
-
 #ifdef CONFIG_TCA64XX_INT_POLL
   /* Check for pending interrupts */
 
@@ -1241,7 +1214,6 @@ errout_with_restart:
 
   /* Re-start the poll timer */
 
-  sched_lock();
   ret = wd_start(&priv->wdog, TCA64XX_POLLDELAY,
                  tca64_poll_expiry, (wdparm_t)priv);
   if (ret < 0)
@@ -1253,10 +1225,6 @@ errout_with_restart:
   /* Re-enable interrupts */
 
   priv->config->enable(priv->config, true);
-
-#ifdef CONFIG_TCA64XX_INT_POLL
-  sched_unlock();
-#endif
 }
 #endif
 
@@ -1373,8 +1341,9 @@ static void tca64_poll_expiry(wdparm_t arg)
  *
  ****************************************************************************/
 
-FAR struct ioexpander_dev_s *tca64_initialize(FAR struct i2c_master_s *i2c,
-                               FAR struct tca64_config_s *config)
+FAR struct ioexpander_dev_s *
+tca64_initialize(FAR struct i2c_master_s *i2c,
+                 FAR struct tca64_config_s *config)
 {
   FAR struct tca64_dev_s *priv;
   int ret;
@@ -1382,7 +1351,7 @@ FAR struct ioexpander_dev_s *tca64_initialize(FAR struct i2c_master_s *i2c,
 #ifdef CONFIG_TCA64XX_MULTIPLE
   /* Allocate the device state structure */
 
-  priv = (FAR struct tca64_dev_s *)kmm_zalloc(sizeof(struct tca64_dev_s));
+  priv = kmm_zalloc(sizeof(struct tca64_dev_s));
   if (!priv)
     {
       gpioerr("ERROR: Failed to allocate driver instance\n");
@@ -1424,7 +1393,7 @@ FAR struct ioexpander_dev_s *tca64_initialize(FAR struct i2c_master_s *i2c,
   priv->config->enable(config, true);
 #endif
 
-  nxsem_init(&priv->exclsem, 0, 1);
+  nxmutex_init(&priv->lock);
   return &priv->dev;
 }
 

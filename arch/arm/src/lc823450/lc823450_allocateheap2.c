@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/lc823450/lc823450_allocateheap2.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -39,7 +41,6 @@
 
 #include "chip.h"
 #include "mpu.h"
-#include "arm_arch.h"
 #include "arm_internal.h"
 #include "lc823450_mpuinit2.h"
 
@@ -62,7 +63,7 @@
  ****************************************************************************/
 
 #ifdef CONFIG_HEAP_COLORATION
-static inline void up_heap_color(FAR void *start, size_t size)
+static inline void up_heap_color(void *start, size_t size)
 {
   memset(start, HEAP_COLOR, size);
 }
@@ -108,7 +109,7 @@ static inline void up_heap_color(FAR void *start, size_t size)
  *
  ****************************************************************************/
 
-void up_allocate_heap(FAR void **heap_start, size_t *heap_size)
+void up_allocate_heap(void **heap_start, size_t *heap_size)
 {
 #if defined(CONFIG_BUILD_PROTECTED) && defined(CONFIG_MM_KERNEL_HEAP)
   /* Get the unaligned size and position of the user-space heap.
@@ -137,12 +138,12 @@ void up_allocate_heap(FAR void **heap_start, size_t *heap_size)
 
   /* Return the user-space heap settings */
 
-  *heap_start = (FAR void *)ubase;
+  *heap_start = (void *)ubase;
   *heap_size  = usize;
 
   /* Colorize the heap for debug */
 
-  up_heap_color((FAR void *)ubase, usize);
+  up_heap_color((void *)ubase, usize);
 
   /* Allow user-mode access to the user heap memory */
 
@@ -152,9 +153,9 @@ void up_allocate_heap(FAR void **heap_start, size_t *heap_size)
   /* Return the heap settings */
 
 #ifdef CONFIG_LC823450_SPIFI_BOOT
-  *heap_start = (uintptr_t *)&_ebss + 4096; /* see ld-spif-boot.script */
+  *heap_start = _ebss + 4096; /* see ld-spif-boot.script */
 #else
-  *heap_start = (uintptr_t *)&_eronly; /* see ld.script */
+  *heap_start = (void *)_eronly; /* see ld.script */
 #endif
 
   *heap_size  = SRAM1_END - (int)*heap_start;
@@ -176,7 +177,7 @@ void up_allocate_heap(FAR void **heap_start, size_t *heap_size)
  ****************************************************************************/
 
 #if defined(CONFIG_BUILD_PROTECTED) && defined(CONFIG_MM_KERNEL_HEAP)
-void up_allocate_kheap(FAR void **heap_start, size_t *heap_size)
+void up_allocate_kheap(void **heap_start, size_t *heap_size)
 {
   /* Get the unaligned size and position of the user-space heap.
    * This heap begins after the user-space .bss section at an offset
@@ -206,7 +207,7 @@ void up_allocate_kheap(FAR void **heap_start, size_t *heap_size)
    * that was not dedicated to the user heap).
    */
 
-  *heap_start = (FAR void *)USERSPACE->us_bssend;
+  *heap_start = (void *)USERSPACE->us_bssend;
   *heap_size  = ubase - (uintptr_t)USERSPACE->us_bssend;
 }
 #endif
@@ -223,12 +224,12 @@ void up_allocate_kheap(FAR void **heap_start, size_t *heap_size)
 #if CONFIG_MM_REGIONS > 1
 void arm_addregion(void)
 {
-  FAR void *region_start;
+  void *region_start;
   size_t region_size;
 
   /* NOTE: add 1KB to avoid conflicts of initial stack */
 
-  region_start = (uintptr_t *)&_ebss + 1024;
+  region_start = _ebss + 1024;
   region_size  = 0x02040000 - (int)region_start;
 
   umm_addregion(region_start, region_size);

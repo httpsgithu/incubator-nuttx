@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/nrf52/nrf52_pwm.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -34,12 +36,11 @@
 #include <arch/board/board.h>
 
 #include "arm_internal.h"
-#include "arm_arch.h"
-
 #include "nrf52_gpio.h"
 #include "nrf52_pwm.h"
 
 #include "hardware/nrf52_pwm.h"
+#include "hardware/nrf52_utils.h"
 
 /****************************************************************************
  * Pre-processor Definitions
@@ -59,14 +60,17 @@
 
 struct nrf52_pwm_s
 {
-  FAR const struct pwm_ops_s *ops;       /* PWM operations */
-  uint32_t                    base;      /* Base address of PWM register */
-  uint32_t                    frequency; /* Current frequency setting */
-  uint32_t                    cntrtop;   /* Counter top */
-  uint32_t                    ch0_pin;   /* Channel 1 pin */
-  uint32_t                    ch1_pin;   /* Channel 2 pin */
-  uint32_t                    ch2_pin;   /* Channel 3 pin */
-  uint32_t                    ch3_pin;   /* Channel 4 pin */
+  const struct pwm_ops_s *ops;       /* PWM operations */
+  uint32_t                base;      /* Base address of PWM register */
+  uint32_t                frequency; /* Current frequency setting */
+  uint32_t                cntrtop;   /* Counter top */
+  uint32_t                ch0_pin;   /* Channel 1 pin */
+  uint32_t                ch1_pin;   /* Channel 2 pin */
+  uint32_t                ch2_pin;   /* Channel 3 pin */
+  uint32_t                ch3_pin;   /* Channel 4 pin */
+#ifndef CONFIG_PWM_MULTICHAN
+  uint8_t                 channel;   /* Assigned channel */
+#endif
 
   /* Sequence 0 */
 
@@ -79,33 +83,33 @@ struct nrf52_pwm_s
 
 /* PWM Register access */
 
-static inline void nrf52_pwm_putreg(FAR struct nrf52_pwm_s *priv,
+static inline void nrf52_pwm_putreg(struct nrf52_pwm_s *priv,
                                     uint32_t offset,
                                     uint32_t value);
-static inline uint32_t nrf52_pwm_getreg(FAR struct nrf52_pwm_s *priv,
+static inline uint32_t nrf52_pwm_getreg(struct nrf52_pwm_s *priv,
                                         uint32_t offset);
 
 /* PWM helpers */
 
-static int nrf52_pwm_configure(FAR struct nrf52_pwm_s *priv);
-static int nrf52_pwm_duty(FAR struct nrf52_pwm_s *priv, uint8_t chan,
+static int nrf52_pwm_configure(struct nrf52_pwm_s *priv);
+static int nrf52_pwm_duty(struct nrf52_pwm_s *priv, uint8_t chan,
                           ub16_t duty);
-static int nrf52_pwm_freq(FAR struct nrf52_pwm_s *priv, uint32_t freq);
+static int nrf52_pwm_freq(struct nrf52_pwm_s *priv, uint32_t freq);
 
 /* PWM driver methods */
 
-static int nrf52_pwm_setup(FAR struct pwm_lowerhalf_s *dev);
-static int nrf52_pwm_shutdown(FAR struct pwm_lowerhalf_s *dev);
+static int nrf52_pwm_setup(struct pwm_lowerhalf_s *dev);
+static int nrf52_pwm_shutdown(struct pwm_lowerhalf_s *dev);
 #ifdef CONFIG_PWM_PULSECOUNT
-static int nrf52_pwm_start(FAR struct pwm_lowerhalf_s *dev,
-                           FAR const struct pwm_info_s *info,
-                           FAR void *handle);
+static int nrf52_pwm_start(struct pwm_lowerhalf_s *dev,
+                           const struct pwm_info_s *info,
+                           void *handle);
 #else
-static int nrf52_pwm_start(FAR struct pwm_lowerhalf_s *dev,
-                           FAR const struct pwm_info_s *info);
+static int nrf52_pwm_start(struct pwm_lowerhalf_s *dev,
+                           const struct pwm_info_s *info);
 #endif
-static int nrf52_pwm_stop(FAR struct pwm_lowerhalf_s *dev);
-static int nrf52_pwm_ioctl(FAR struct pwm_lowerhalf_s *dev,
+static int nrf52_pwm_stop(struct pwm_lowerhalf_s *dev);
+static int nrf52_pwm_ioctl(struct pwm_lowerhalf_s *dev,
                            int cmd, unsigned long arg);
 
 /****************************************************************************
@@ -144,6 +148,9 @@ struct nrf52_pwm_s g_nrf52_pwm0 =
 #ifdef CONFIG_NRF52_PWM0_CH3
   .ch3_pin = NRF52_PWM0_CH3_PIN,
 #endif
+#ifndef CONFIG_PWM_MULTICHAN
+  .channel = CONFIG_NRF52_PWM0_CHANNEL
+#endif
 };
 #endif
 
@@ -165,6 +172,9 @@ struct nrf52_pwm_s g_nrf52_pwm1 =
 #endif
 #ifdef CONFIG_NRF52_PWM1_CH3
   .ch3_pin = NRF52_PWM1_CH3_PIN,
+#endif
+#ifndef CONFIG_PWM_MULTICHAN
+  .channel = CONFIG_NRF52_PWM1_CHANNEL
 #endif
 };
 #endif
@@ -188,6 +198,9 @@ struct nrf52_pwm_s g_nrf52_pwm2 =
 #ifdef CONFIG_NRF52_PWM2_CH3
   .ch3_pin = NRF52_PWM2_CH3_PIN,
 #endif
+#ifndef CONFIG_PWM_MULTICHAN
+  .channel = CONFIG_NRF52_PWM2_CHANNEL
+#endif
 };
 #endif
 
@@ -210,6 +223,9 @@ struct nrf52_pwm_s g_nrf52_pwm3 =
 #ifdef CONFIG_NRF52_PWM3_CH3
   .ch3_pin = NRF52_PWM3_CH3_PIN,
 #endif
+#ifndef CONFIG_PWM_MULTICHAN
+  .channel = CONFIG_NRF52_PWM3_CHANNEL
+#endif
 };
 #endif
 
@@ -225,7 +241,7 @@ struct nrf52_pwm_s g_nrf52_pwm3 =
  *
  ****************************************************************************/
 
-static inline void nrf52_pwm_putreg(FAR struct nrf52_pwm_s *priv,
+static inline void nrf52_pwm_putreg(struct nrf52_pwm_s *priv,
                                     uint32_t offset,
                                     uint32_t value)
 {
@@ -240,7 +256,7 @@ static inline void nrf52_pwm_putreg(FAR struct nrf52_pwm_s *priv,
  *
  ****************************************************************************/
 
-static inline uint32_t nrf52_pwm_getreg(FAR struct nrf52_pwm_s *priv,
+static inline uint32_t nrf52_pwm_getreg(struct nrf52_pwm_s *priv,
                                         uint32_t offset)
 {
   return getreg32(priv->base + offset);
@@ -254,7 +270,7 @@ static inline uint32_t nrf52_pwm_getreg(FAR struct nrf52_pwm_s *priv,
  *
  ****************************************************************************/
 
-static int nrf52_pwm_configure(FAR struct nrf52_pwm_s *priv)
+static int nrf52_pwm_configure(struct nrf52_pwm_s *priv)
 {
   uint32_t regval = 0;
   int      ret    = OK;
@@ -273,6 +289,7 @@ static int nrf52_pwm_configure(FAR struct nrf52_pwm_s *priv)
   /* Configure sequence 0 */
 
   regval = (uint32_t)priv->seq0;
+  DEBUGASSERT(nrf52_easydma_valid(regval));
   nrf52_pwm_putreg(priv, NRF52_PWM_SEQ0PTR_OFFSET, regval);
 
   regval = PWM_SEQ0_LEN;
@@ -292,7 +309,7 @@ static int nrf52_pwm_configure(FAR struct nrf52_pwm_s *priv)
  *
  ****************************************************************************/
 
-static int nrf52_pwm_duty(FAR struct nrf52_pwm_s *priv, uint8_t chan,
+static int nrf52_pwm_duty(struct nrf52_pwm_s *priv, uint8_t chan,
                           ub16_t duty)
 {
   uint16_t compare = 0;
@@ -325,7 +342,7 @@ static int nrf52_pwm_duty(FAR struct nrf52_pwm_s *priv, uint8_t chan,
  *
  ****************************************************************************/
 
-static int nrf52_pwm_freq(FAR struct nrf52_pwm_s *priv, uint32_t freq)
+static int nrf52_pwm_freq(struct nrf52_pwm_s *priv, uint32_t freq)
 {
   uint32_t regval    = 0;
   uint32_t pwm_clk   = 0;
@@ -425,13 +442,13 @@ static int nrf52_pwm_freq(FAR struct nrf52_pwm_s *priv, uint32_t freq)
  *
  ****************************************************************************/
 
-static int nrf52_pwm_setup(FAR struct pwm_lowerhalf_s *dev)
+static int nrf52_pwm_setup(struct pwm_lowerhalf_s *dev)
 {
-  FAR struct nrf52_pwm_s *priv = (FAR struct nrf52_pwm_s *)dev;
-  int                     ret  = OK;
-  uint32_t                regval = 0;
-  uint32_t                pin = 0;
-  uint32_t                port = 0;
+  struct nrf52_pwm_s *priv = (struct nrf52_pwm_s *)dev;
+  int                 ret  = OK;
+  uint32_t            regval = 0;
+  uint32_t            pin = 0;
+  uint32_t            port = 0;
 
   DEBUGASSERT(dev);
 
@@ -516,10 +533,10 @@ errout:
  *
  ****************************************************************************/
 
-static int nrf52_pwm_shutdown(FAR struct pwm_lowerhalf_s *dev)
+static int nrf52_pwm_shutdown(struct pwm_lowerhalf_s *dev)
 {
-  FAR struct nrf52_pwm_s *priv = (FAR struct nrf52_pwm_s *)dev;
-  int                     ret  = OK;
+  struct nrf52_pwm_s *priv = (struct nrf52_pwm_s *)dev;
+  int                 ret  = OK;
 
   DEBUGASSERT(dev);
 
@@ -539,20 +556,20 @@ static int nrf52_pwm_shutdown(FAR struct pwm_lowerhalf_s *dev)
  ****************************************************************************/
 
 #ifdef CONFIG_PWM_PULSECOUNT
-static int nrf52_pwm_start(FAR struct pwm_lowerhalf_s *dev,
-                           FAR const struct pwm_info_s *info,
-                           FAR void *handle)
+static int nrf52_pwm_start(struct pwm_lowerhalf_s *dev,
+                           const struct pwm_info_s *info,
+                           void *handle)
 {
 #error Not supported
 }
 #else
-static int nrf52_pwm_start(FAR struct pwm_lowerhalf_s *dev,
-                           FAR const struct pwm_info_s *info)
+static int nrf52_pwm_start(struct pwm_lowerhalf_s *dev,
+                           const struct pwm_info_s *info)
 {
-  FAR struct nrf52_pwm_s *priv = (FAR struct nrf52_pwm_s *)dev;
-  int                     ret  = OK;
+  struct nrf52_pwm_s *priv = (struct nrf52_pwm_s *)dev;
+  int                 ret  = OK;
 #ifdef CONFIG_PWM_MULTICHAN
-  int                     i    = 0;
+  int                 i    = 0;
 #endif
 
   DEBUGASSERT(dev);
@@ -592,9 +609,7 @@ static int nrf52_pwm_start(FAR struct pwm_lowerhalf_s *dev,
         }
 
 #else
-      ret = nrf52_pwm_duty(dev,
-                           (info->channels[0].channel - 1),
-                           info->duty);
+      ret = nrf52_pwm_duty(priv, priv->channel, info->duty);
 #endif /* CONFIG_PWM_MULTICHAN */
 
   /* Start sequence 0 */
@@ -617,9 +632,9 @@ static int nrf52_pwm_start(FAR struct pwm_lowerhalf_s *dev,
  *
  ****************************************************************************/
 
-static int nrf52_pwm_stop(FAR struct pwm_lowerhalf_s *dev)
+static int nrf52_pwm_stop(struct pwm_lowerhalf_s *dev)
 {
-  FAR struct nrf52_pwm_s *priv = (FAR struct nrf52_pwm_s *)dev;
+  struct nrf52_pwm_s *priv = (struct nrf52_pwm_s *)dev;
 
   DEBUGASSERT(dev);
 
@@ -642,10 +657,10 @@ static int nrf52_pwm_stop(FAR struct pwm_lowerhalf_s *dev)
  *
  ****************************************************************************/
 
-static int nrf52_pwm_ioctl(FAR struct pwm_lowerhalf_s *dev,
+static int nrf52_pwm_ioctl(struct pwm_lowerhalf_s *dev,
                            int cmd, unsigned long arg)
 {
-  FAR struct nrf52_pwm_s *priv = (FAR struct nrf52_pwm_s *)dev;
+  struct nrf52_pwm_s *priv = (struct nrf52_pwm_s *)dev;
 
   DEBUGASSERT(dev);
 
@@ -675,7 +690,7 @@ static int nrf52_pwm_ioctl(FAR struct pwm_lowerhalf_s *dev,
  *
  ****************************************************************************/
 
-FAR struct pwm_lowerhalf_s *nrf52_pwminitialize(int pwm)
+struct pwm_lowerhalf_s *nrf52_pwminitialize(int pwm)
 {
   struct nrf52_pwm_s *lower = NULL;
 

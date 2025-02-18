@@ -1,14 +1,28 @@
 /****************************************************************************
  * libs/libc/misc/lib_ncompress.c
- * File compression ala IEEE Computer, Mar 1992.
  *
- *   Copyright (C) 2008 Gregory Nutt. All rights reserved.
- *   Author: Gregory Nutt <gnutt@nuttx.org>
+ * SPDX-License-Identifier: Apache-2.0
  *
- * This is the file compress24.c extracted from the ncompress-4.2.4 release
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.  The
+ * ASF licenses this file to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance with the
+ * License.  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.  See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ ****************************************************************************/
+
+/* This is the file compress24.c extracted from the ncompress-4.2.4 release
  * and adapted for NuttX.  The original code was released into the public
- * domain.   This NuttX version is re-released under the standard NuttX
- * BSD 3-clause license.  The original authors are listed below:
+ * domain. The original authors are listed below:
  *
  *   Spencer W. Thomas   (decvax!harpo!utah-cs!utah-gr!thomas)
  *   Jim McKie           (decvax!mcvax!jim)
@@ -19,34 +33,6 @@
  *   Dave Mack           (csu@alembic.acs.com)
  *   Peter Jannesen, Network Communication Systems
  *                       (peter@ncs.nl)
- *
- * Redistribution and use in source and binary forms, with or without
- * modification, are permitted provided that the following conditions
- * are met:
- *
- * 1. Redistributions of source code must retain the above copyright
- *    notice, this list of conditions and the following disclaimer.
- * 2. Redistributions in binary form must reproduce the above copyright
- *    notice, this list of conditions and the following disclaimer in
- *    the documentation and/or other materials provided with the
- *    distribution.
- * 3. Neither the name NuttX nor the names of its contributors may be
- *    used to endorse or promote products derived from this software
- *    without specific prior written permission.
- *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
- * "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
- * LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS
- * FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE
- * COPYRIGHT OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT,
- * INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING,
- * BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS
- * OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED
- * AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
- * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN
- * ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
- * POSSIBILITY OF SUCH DAMAGE.
- *
  ****************************************************************************/
 
 /****************************************************************************
@@ -86,9 +72,6 @@
 #endif
 
 #define MARK(a) { asm(" .globl M.a"); asm("M.a:"); }
-
-#undef min
-#define min(a,b) ((a>b) ? b : a)
 
 #ifndef IBUFSIZ
 #  define IBUFSIZ BUFSIZ        /* Defailt input buffer size */
@@ -173,10 +156,6 @@
 #  undef NOALLIGN
 #  define NOALLIGN 1
 #endif                                 /* DOS */
-
-#ifndef O_BINARY
-#  define O_BINARY 0            /* System has no binary mode */
-#endif
 
 #ifdef M_XENIX                  /* Stupid compiler can't handle arrays with */
 #  if BITS == 16                /* more than 65535 bytes - so we fake it */
@@ -716,8 +695,6 @@ void compress(int fdin, int fdout)
     write_error();
 
   bytes_out += (outbits + 7) >> 3;
-
-  return;
 }
 
 /* Decompress stdin to stdout.  This routine adapts to the codes in the

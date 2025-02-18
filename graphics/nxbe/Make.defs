@@ -1,6 +1,8 @@
 ############################################################################
 # graphics/nxbe/Make.defs
 #
+# SPDX-License-Identifier: Apache-2.0
+#
 # Licensed to the Apache Software Foundation (ASF) under one or more
 # contributor license agreements.  See the NOTICE file distributed with
 # this work for additional information regarding copyright ownership.  The
@@ -40,5 +42,5 @@ CSRCS += nxbe_notify_rectangle.c
 endif
 
 DEPPATH += --dep-path nxbe
-CFLAGS += ${shell $(INCDIR) "$(CC)" $(TOPDIR)/graphics/nxbe}
+CFLAGS += ${INCDIR_PREFIX}$(TOPDIR)/graphics/nxbe
 VPATH += :nxbe

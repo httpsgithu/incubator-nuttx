@@ -1,6 +1,8 @@
 /****************************************************************************
  * net/socket/net_fstat.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -58,6 +60,7 @@
 
 int psock_fstat(FAR struct socket *psock, FAR struct stat *buf)
 {
+  FAR struct socket_conn_s *conn;
   int ret = OK;
 
   if (psock == NULL)
@@ -82,7 +85,9 @@ int psock_fstat(FAR struct socket *psock, FAR struct stat *buf)
    * devices, each supporting a different MSS.
    */
 
-  if (psock->s_conn == NULL || !_SS_ISCONNECTED(psock->s_flags))
+  conn = psock->s_conn;
+
+  if (conn == NULL || !_SS_ISCONNECTED(conn->s_flags))
     {
       /* Not connected.. Return an optimal blocksize of zero (or, perhaps,
        * even an error?)
@@ -105,14 +110,13 @@ int psock_fstat(FAR struct socket *psock, FAR struct stat *buf)
 #if defined(NET_TCP_HAVE_STACK)
        case SOCK_STREAM:
          {
-           FAR struct tcp_conn_s *conn =
-                       (FAR struct tcp_conn_s *)psock->s_conn;
+           FAR struct tcp_conn_s *tcp_conn = psock->s_conn;
 
            /* For TCP, the MSS is a dynamic value that maintained in the
             * connection structure.
             */
 
-           buf->st_blksize = conn->mss;
+           buf->st_blksize = tcp_conn->mss;
          }
          break;
 #endif
@@ -120,8 +124,7 @@ int psock_fstat(FAR struct socket *psock, FAR struct stat *buf)
 #if defined(NET_UDP_HAVE_STACK)
        case SOCK_DGRAM:
          {
-           FAR struct udp_conn_s *conn =
-                                   (FAR struct udp_conn_s *)psock->s_conn;
+           FAR struct udp_conn_s *udp_conn = psock->s_conn;
            FAR struct net_driver_s *dev;
            uint16_t iplen;
 
@@ -133,7 +136,7 @@ int psock_fstat(FAR struct socket *psock, FAR struct stat *buf)
             * order to get the MTU and LL_HDRLEN:
             */
 
-           dev = udp_find_raddr_device(conn);
+           dev = udp_find_raddr_device(udp_conn, NULL);
            if (dev == NULL)
              {
                /* This should never happen except perhaps in some rare race
@@ -149,13 +152,9 @@ int psock_fstat(FAR struct socket *psock, FAR struct stat *buf)
              {
                /* We need the length of the IP header */
 
-#if defined(CONFIG_NET_IPv4) && defined(CONFIG_NET_IPv6)
-               iplen = (conn->domain == PF_INET) ? IPv4_HDRLEN : IPv6_HDRLEN;
-#elif defined(CONFIG_NET_IPv4)
-               iplen = IPv4_HDRLEN;
-#else
-               iplen = IPv6_HDRLEN;
-#endif
+               iplen = net_ip_domain_select(udp_conn->domain,
+                                            IPv4_HDRLEN, IPv6_HDRLEN);
+
                /* Now we can calculate the MSS */
 
                buf->st_blksize = UDP_MSS(dev, iplen);

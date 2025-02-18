@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/stm32/olimex-stm32-p207/src/olimex-stm32-p207.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -18,8 +20,8 @@
  *
  ****************************************************************************/
 
-#ifndef __BOARDS_ARM_STM32_OLIMEX_STM32_P207_SRC_H
-#define __BOARDS_ARM_STM32_OLIMEX_STM32_P207_SRC_H
+#ifndef __BOARDS_ARM_STM32_OLIMEX_STM32_P207_SRC_OLIMEX_STM32_P207_H
+#define __BOARDS_ARM_STM32_OLIMEX_STM32_P207_SRC_OLIMEX_STM32_P207_H
 
 /****************************************************************************
  * Included Files
@@ -28,6 +30,8 @@
 #include <nuttx/config.h>
 #include <nuttx/compiler.h>
 #include <stdint.h>
+
+#include "stm32.h"
 
 /****************************************************************************
  * Pre-processor Definitions
@@ -131,9 +135,9 @@ int stm32_adc_setup(void);
  *
  ****************************************************************************/
 
-#ifdef CONFIG_CAN
+#ifdef CONFIG_STM32_CAN_CHARDRIVER
 int stm32_can_setup(void);
 #endif
 
 #endif /* __ASSEMBLY__ */
-#endif /* __BOARDS_ARM_STM32_OLIMEX_STM32_P207_SRC_H */
+#endif /* __BOARDS_ARM_STM32_OLIMEX_STM32_P207_SRC_OLIMEX_STM32_P207_H */

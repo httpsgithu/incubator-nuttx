@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/rtl8720c/amebaz_netdev.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -26,75 +28,43 @@
 #include <string.h>
 #include <nuttx/arch.h>
 #include <nuttx/irq.h>
-#include <nuttx/net/arp.h>
 #include <nuttx/kmalloc.h>
+
 #include "amebaz_netdev.h"
-
-/****************************************************************************
- * Pre-processor Definitions
- ****************************************************************************/
-
-#define WDDELAY   (1 * CLK_TCK / 2)
 
 /****************************************************************************
  * Public Functions
  ****************************************************************************/
 
-static void amebaz_poll_work(FAR void *arg);
-static void amebaz_netdev_notify_tx_done(FAR struct amebaz_dev_s *priv)
+static void amebaz_netdev_notify_tx_done(struct amebaz_dev_s *priv)
 {
-  work_queue(LPWORK, &priv->pollwork, amebaz_poll_work, priv, 0);
+  work_queue(LPWORK, &priv->pollwork, amebaz_txavail_work, priv, 0);
 }
 
-static int amebaz_txpoll(FAR struct net_driver_s *dev)
+static int amebaz_txpoll(struct net_driver_s *dev)
 {
-  FAR struct amebaz_dev_s *priv = (FAR struct amebaz_dev_s *)dev->d_private;
-  if (priv->dev.d_len > 0)
+  struct amebaz_dev_s *priv = (struct amebaz_dev_s *)dev->d_private;
+
+  net_lock();
+  if (!priv->curr)
     {
-#ifdef CONFIG_NET_IPv4
-#ifdef CONFIG_NET_IPv6
-      if (IFF_IS_IPv4(priv->dev.d_flags))
-#endif
-        {
-          arp_out(&priv->dev);
-        }
-
-#endif /* CONFIG_NET_IPv4 */
-#ifdef CONFIG_NET_IPv6
-#ifdef CONFIG_NET_IPv4
-      else
-#endif
-        {
-          neighbor_out(&priv->dev);
-        }
-
-#endif /* CONFIG_NET_IPv6 */
-      if (!devif_loopback(&priv->dev))
-        {
-          net_lock();
-          if (!priv->curr)
-            {
-              net_unlock();
-              amebaz_netdev_notify_tx_done(priv);
-              return false;
-            }
-
-          DEBUGASSERT(priv->curr->tail == priv->dev.d_buf);
-          skb_put(priv->curr, priv->dev.d_len);
-          rltk_wlan_send_skb(priv->devnum, priv->curr);
-          priv->dev.d_buf = NULL;
-          priv->curr = NULL;
-          net_unlock();
-          NETDEV_TXPACKETS(&priv->dev);
-          amebaz_netdev_notify_tx_done(priv);
-          return true;
-        }
+      net_unlock();
+      amebaz_netdev_notify_tx_done(priv);
+      return false;
     }
 
-  return false;
+  DEBUGASSERT(priv->curr->tail == priv->dev.d_buf);
+  skb_put(priv->curr, priv->dev.d_len);
+  rltk_wlan_send_skb(priv->devnum, priv->curr);
+  priv->dev.d_buf = NULL;
+  priv->curr = NULL;
+  net_unlock();
+  NETDEV_TXPACKETS(&priv->dev);
+  amebaz_netdev_notify_tx_done(priv);
+  return true;
 }
 
-static int amebaz_transmit(FAR struct amebaz_dev_s *priv)
+static int amebaz_transmit(struct amebaz_dev_s *priv)
 {
   struct sk_buff *skb;
   skb = rltk_wlan_alloc_skb(priv->dev.d_len);
@@ -112,35 +82,21 @@ static int amebaz_transmit(FAR struct amebaz_dev_s *priv)
   return OK;
 }
 
-static void amebaz_reply(FAR struct amebaz_dev_s *priv)
+static void amebaz_reply(struct amebaz_dev_s *priv)
 {
   if (priv->dev.d_len > 0)
     {
-#ifdef CONFIG_NET_IPv6
-      if (IFF_IS_IPv4(priv->dev.d_flags))
-#endif
-        {
-          arp_out(&priv->dev);
-        }
-
-#ifdef CONFIG_NET_IPv6
-      else
-        {
-          neighbor_out(&priv->dev);
-        }
-
-#endif
       amebaz_transmit(priv);
     }
 }
 
-void amebaz_netdev_notify_receive(FAR struct amebaz_dev_s *priv,
+void amebaz_netdev_notify_receive(struct amebaz_dev_s *priv,
                                   int index, unsigned int len)
 {
-  FAR struct net_driver_s *dev = &priv->dev;
-  FAR struct eth_hdr_s *hdr;
-  FAR struct sk_buff *skb;
-  FAR void *oldbuf;
+  struct net_driver_s *dev = &priv->dev;
+  struct eth_hdr_s *hdr;
+  struct sk_buff *skb;
+  void *oldbuf;
   skb = rltk_wlan_get_recv_skb(index);
   if (skb == NULL)
     {
@@ -153,12 +109,12 @@ void amebaz_netdev_notify_receive(FAR struct amebaz_dev_s *priv,
       return;
     }
 
-  NETDEV_RXPACKETS(&priv->dev);
   net_lock();
   oldbuf = priv->dev.d_buf;
   hdr = (struct eth_hdr_s *)skb->data;
   priv->dev.d_buf = (void *)skb->data;
   priv->dev.d_len = len;
+  NETDEV_RXPACKETS(&priv->dev);
 #ifdef CONFIG_NET_PKT
   pkt_input(&priv->dev);
 #endif
@@ -175,7 +131,6 @@ void amebaz_netdev_notify_receive(FAR struct amebaz_dev_s *priv,
   if (hdr->type == HTONS(ETHTYPE_IP))
     {
       NETDEV_RXIPV4(&priv->dev);
-      arp_ipin(&priv->dev);
       ipv4_input(&priv->dev);
       amebaz_reply(priv);
     }
@@ -195,9 +150,9 @@ void amebaz_netdev_notify_receive(FAR struct amebaz_dev_s *priv,
         {
 #endif
 #ifdef CONFIG_NET_ARP
-          if (hdr->type == htons(ETHTYPE_ARP))
+          if (hdr->type == HTONS(ETHTYPE_ARP))
             {
-              arp_arpin(&priv->dev);
+              arp_input(&priv->dev);
               NETDEV_RXARP(&priv->dev);
               if (priv->dev.d_len > 0)
                 {
@@ -222,16 +177,10 @@ void amebaz_netdev_notify_receive(FAR struct amebaz_dev_s *priv,
   net_unlock();
 }
 
-static void amebaz_poll_expiry(wdparm_t arg)
+static void amebaz_txavail_work(void *arg)
 {
-  FAR struct amebaz_dev_s *priv = (FAR struct amebaz_dev_s *)arg;
-  work_queue(LPWORK, &priv->pollwork, amebaz_poll_work, priv, 0);
-}
-
-static void amebaz_txavail_work(FAR void *arg)
-{
-  FAR struct amebaz_dev_s *priv = (FAR struct amebaz_dev_s *)arg;
-  FAR struct net_driver_s *dev = &priv->dev;
+  struct amebaz_dev_s *priv = (struct amebaz_dev_s *)arg;
+  struct net_driver_s *dev = &priv->dev;
   net_lock();
   if (IFF_IS_UP(dev->d_flags))
     {
@@ -247,43 +196,16 @@ static void amebaz_txavail_work(FAR void *arg)
 
       if (priv->dev.d_buf)
         {
-          devif_timer(&priv->dev, 0, amebaz_txpoll);
+          devif_poll(&priv->dev, amebaz_txpoll);
         }
     }
 
   net_unlock();
 }
 
-static void amebaz_poll_work(FAR void *arg)
+static int amebaz_txavail(struct net_driver_s *dev)
 {
-  FAR struct amebaz_dev_s *priv = (FAR struct amebaz_dev_s *)arg;
-  FAR struct net_driver_s *dev = &priv->dev;
-  net_lock();
-  if (IFF_IS_UP(dev->d_flags))
-    {
-      if (!priv->curr && rltk_wlan_check_isup(priv->devnum))
-        {
-          priv->curr = rltk_wlan_alloc_skb(MAX_NETDEV_PKTSIZE);
-          if (priv->curr)
-            {
-              priv->dev.d_buf = priv->curr->tail;
-              priv->dev.d_len = 0;
-            }
-        }
-
-      if (priv->dev.d_buf)
-        {
-          devif_timer(&priv->dev, WDDELAY, amebaz_txpoll);
-        }
-    }
-
-  wd_start(&priv->txpoll, WDDELAY, amebaz_poll_expiry, (wdparm_t)priv);
-  net_unlock();
-}
-
-static int amebaz_txavail(FAR struct net_driver_s *dev)
-{
-  FAR struct amebaz_dev_s *priv = (FAR struct amebaz_dev_s *)dev->d_private;
+  struct amebaz_dev_s *priv = (struct amebaz_dev_s *)dev->d_private;
   if (work_available(&priv->pollwork))
     {
       work_queue(LPWORK, &priv->pollwork, amebaz_txavail_work, priv, 0);
@@ -292,10 +214,10 @@ static int amebaz_txavail(FAR struct net_driver_s *dev)
   return OK;
 }
 
-int amebaz_ioctl(FAR struct net_driver_s *dev, int cmd,
+int amebaz_ioctl(struct net_driver_s *dev, int cmd,
                  unsigned long arg)
 {
-  FAR struct amebaz_dev_s *priv = (struct amebaz_dev_s *)dev->d_private;
+  struct amebaz_dev_s *priv = (struct amebaz_dev_s *)dev->d_private;
   int ret;
   if (!IFF_IS_UP(dev->d_flags) ||
       (!rltk_wlan_running(priv->devnum) && cmd != SIOCSIWMODE))
@@ -358,23 +280,22 @@ int amebaz_ioctl(FAR struct net_driver_s *dev, int cmd,
   return ret;
 }
 
-static int amebaz_ifup(FAR struct net_driver_s *dev)
+static int amebaz_ifup(struct net_driver_s *dev)
 {
-  FAR struct amebaz_dev_s *priv = (FAR struct amebaz_dev_s *)dev->d_private;
+  struct amebaz_dev_s *priv = (struct amebaz_dev_s *)dev->d_private;
   if (!IFF_IS_UP(dev->d_flags))
     {
       priv->mode = RTW_MODE_NONE;
       priv->conn.status = AMEBAZ_STATUS_DISABLED;
-      wd_start(&priv->txpoll, WDDELAY, amebaz_poll_expiry, (wdparm_t)dev);
     }
 
   return OK;
 }
 
-static int amebaz_ifdown(FAR struct net_driver_s *dev)
+static int amebaz_ifdown(struct net_driver_s *dev)
 {
   int ret = 0;
-  FAR struct amebaz_dev_s *priv = (FAR struct amebaz_dev_s *)dev->d_private;
+  struct amebaz_dev_s *priv = (struct amebaz_dev_s *)dev->d_private;
   irqstate_t flags;
   if (priv->devnum == 0 && rltk_wlan_running(1))
     {
@@ -393,7 +314,6 @@ static int amebaz_ifdown(FAR struct net_driver_s *dev)
           priv->curr = NULL;
         }
 
-      wd_cancel(&priv->txpoll);
       if (priv->devnum == 0)
         {
           rltk_wlan_deinit();
@@ -417,7 +337,7 @@ static int amebaz_ifdown(FAR struct net_driver_s *dev)
   return ret;
 }
 
-int amebaz_netdev_register(FAR struct amebaz_dev_s *priv)
+int amebaz_netdev_register(struct amebaz_dev_s *priv)
 {
   struct net_driver_s *dev = &priv->dev;
   dev->d_ifup    = amebaz_ifup;

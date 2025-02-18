@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/imxrt/hardware/rt106x/imxrt106x_gpio.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -18,8 +20,8 @@
  *
  ****************************************************************************/
 
-#ifndef __ARCH_ARM_SRC_IMXRT_HARDWARE_IMXRT106X_GPIO_H
-#define __ARCH_ARM_SRC_IMXRT_HARDWARE_IMXRT106X_GPIO_H
+#ifndef __ARCH_ARM_SRC_IMXRT_HARDWARE_RT106X_IMXRT106X_GPIO_H
+#define __ARCH_ARM_SRC_IMXRT_HARDWARE_RT106X_IMXRT106X_GPIO_H
 
 /****************************************************************************
  * Included Files
@@ -156,4 +158,4 @@
 #  define IMXRT_GPIO9_CLEAR      (IMXRT_GPIO9_BASE + IMXRT_GPIO_CLEAR_OFFSET)
 #  define IMXRT_GPIO9_TOGGLE     (IMXRT_GPIO9_BASE + IMXRT_GPIO_TOGGLE_OFFSET)
 
-#endif /* __ARCH_ARM_SRC_IMXRT_HARDWARE_IMXRT106X_GPIO_H */
+#endif /* __ARCH_ARM_SRC_IMXRT_HARDWARE_RT106X_IMXRT106X_GPIO_H */

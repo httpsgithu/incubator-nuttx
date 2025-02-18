@@ -1,6 +1,8 @@
 /****************************************************************************
  * libs/libc/termios/lib_tcgetattr.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -60,5 +62,5 @@
 
 int tcgetattr(int fd, FAR struct termios *termiosp)
 {
-  return ioctl(fd, TCGETS, (unsigned long)termiosp);
+  return ioctl(fd, TCGETS, (unsigned long)(uintptr_t)termiosp);
 }

@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/imxrt/teensy-4.x/src/imxrt_appinit.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -28,12 +30,9 @@
 #include <syslog.h>
 
 #include <nuttx/board.h>
+#include <nuttx/leds/userled.h>
 
 #include "teensy-4.h"
-
-#if !defined(CONFIG_ARCH_LEDS) && defined(CONFIG_USERLED_LOWER)
-#  define HAVE_LEDS 0
-#endif
 
 #ifdef CONFIG_BOARDCTL
 
@@ -69,7 +68,7 @@
 int board_app_initialize(uintptr_t arg)
 {
   int ret;
-  #ifdef HAVE_LEDS
+#if !defined(CONFIG_ARCH_LEDS) && defined(CONFIG_USERLED_LOWER)
   /* Register the LED driver */
 
   ret = userled_lower_initialize(LED_DRIVER_PATH);

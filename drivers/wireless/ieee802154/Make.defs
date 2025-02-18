@@ -1,6 +1,8 @@
 ############################################################################
 # drivers/wireless/ieee802154/Make.defs
 #
+# SPDX-License-Identifier: Apache-2.0
+#
 # Licensed to the Apache Software Foundation (ASF) under one or more
 # contributor license agreements.  See the NOTICE file distributed with
 # this work for additional information regarding copyright ownership.  The
@@ -34,6 +36,6 @@ include wireless/ieee802154/xbee/Make.defs
 
 DEPPATH += --dep-path wireless$(DELIM)ieee802154
 VPATH += :wireless$(DELIM)ieee802154
-CFLAGS += ${shell $(INCDIR) "$(CC)" $(TOPDIR)$(DELIM)drivers$(DELIM)wireless$(DELIM)ieee802154}
+CFLAGS += ${INCDIR_PREFIX}$(TOPDIR)$(DELIM)drivers$(DELIM)wireless$(DELIM)ieee802154
 
 endif # CONFIG_DRIVERS_IEEE802154

@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/stm32/stm32_dfumode.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -18,8 +20,8 @@
  *
  ****************************************************************************/
 
-#ifndef __ARCH_ARM_SRC_STM32_DFUMODE_H
-#define __ARCH_ARM_SRC_STM32_DFUMODE_H
+#ifndef __ARCH_ARM_SRC_STM32_STM32_DFUMODE_H
+#define __ARCH_ARM_SRC_STM32_STM32_DFUMODE_H
 
 /****************************************************************************
  * Included Files
@@ -46,4 +48,4 @@
 void stm32_dfumode(void) noreturn_function;
 #endif
 
-#endif /* __ARCH_ARM_SRC_STM32_DFUMODE_H */
+#endif /* __ARCH_ARM_SRC_STM32_STM32_DFUMODE_H */

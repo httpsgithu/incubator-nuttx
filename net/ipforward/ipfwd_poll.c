@@ -1,6 +1,8 @@
 /****************************************************************************
  * net/ipforward/ipfwd_poll.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -54,20 +56,19 @@
 static int ipfwd_packet_proto(FAR struct net_driver_s *dev)
 {
   FAR struct ipv6_hdr_s *ipv6;
-  int llhdrlen = NET_LL_HDRLEN(dev);
 
   /* Make sure the there is something in buffer that is at least as large as
    * the IPv6_HDR.
    */
 
-  if (dev->d_len > (IPv6_HDRLEN + llhdrlen))
+  if (dev->d_len > (IPv6_HDRLEN + NET_LL_HDRLEN(dev)))
     {
       if (dev->d_lltype == NET_LL_IEEE802154 ||
           dev->d_lltype == NET_LL_PKTRADIO)
         {
           /* There should be an IPv6 packet at the beginning of the buffer */
 
-          ipv6 = (FAR struct ipv6_hdr_s *)&dev->d_buf[llhdrlen];
+          ipv6 = IPv6BUF;
           if ((ipv6->vtc & IP_VERSION_MASK) == IPv6_VERSION)
             {
               /* Yes.. return the L2 protocol of the packet */
@@ -153,7 +154,7 @@ static void ipfwd_packet_conversion(FAR struct net_driver_s *dev, int proto)
  *
  * Assumptions:
  *   This function is called from the MAC device driver indirectly through
- *   devif_poll() and devif_timer().
+ *   devif_poll().
  *
  ****************************************************************************/
 
@@ -171,7 +172,7 @@ void ipfwd_poll(FAR struct net_driver_s *dev)
    * the packet was forwarded, then the new set will be zero.
    */
 
-  flags = devif_conn_event(dev, NULL, IPFWD_POLL, dev->d_conncb);
+  flags = devif_conn_event(dev, IPFWD_POLL, dev->d_conncb);
 
 #ifdef CONFIG_NET_6LOWPAN
   if ((flags & DEVPOLL_MASK) == 0)

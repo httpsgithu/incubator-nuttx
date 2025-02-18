@@ -1,6 +1,8 @@
 /****************************************************************************
  * drivers/wireless/ieee80211/bcm43xxx/bcmf_chip_43438.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -25,7 +27,7 @@
 #include <nuttx/config.h>
 #include <stdint.h>
 
-#include "bcmf_sdio.h"
+#include "bcmf_interface.h"
 
 /****************************************************************************
  * Pre-processor Definitions
@@ -48,10 +50,11 @@ extern const uint8_t ap6212_clm_blob[];
 extern const unsigned int ap6212_clm_blob_len;
 #endif
 
-const struct bcmf_sdio_chip bcmf_43438_config_sdio =
+const struct bcmf_chip_data bcmf_43438_config_data =
 {
   /* General chip stats */
 
+  .ram_base = 0,
   .ram_size = 512 * 1024,
 
   /* Backplane architecture */

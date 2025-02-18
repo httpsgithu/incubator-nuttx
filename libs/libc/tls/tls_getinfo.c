@@ -1,6 +1,8 @@
 /****************************************************************************
  * libs/libc/tls/tls_getinfo.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -27,11 +29,10 @@
 #include <stdint.h>
 #include <assert.h>
 
-#include <nuttx/arch.h>
 #include <nuttx/tls.h>
-#include <arch/tls.h>
+#include <nuttx/sched.h>
 
-#ifndef CONFIG_TLS_ALIGNED
+#if !defined(up_tls_info) && (defined(__KERNEL__) || !defined(CONFIG_TLS_ALIGNED))
 
 /****************************************************************************
  * Public Functions
@@ -43,10 +44,10 @@
  * Description:
  *   Return a reference to the tls_info_s structure.  This is used as part
  *   of the internal implementation of tls_get/set_elem() and ONLY for the
- *   where CONFIG_TLS_ALIGNED is *not* defined
+ *   where CONFIG_TLS_ALIGNED is *not* defined or __KERNEL__ is defined.
  *
  * Input Parameters:
- *   None
+ *   None.
  *
  * Returned Value:
  *   A reference to the thread-specific tls_info_s structure is return on
@@ -73,4 +74,4 @@ FAR struct tls_info_s *tls_get_info(void)
   return info;
 }
 
-#endif /* !CONFIG_TLS_ALIGNED */
+#endif /* !defined(up_tls_info) && (defined(__KERNEL__) || !defined(CONFIG_TLS_ALIGNED)) */

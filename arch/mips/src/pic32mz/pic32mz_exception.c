@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/mips/src/pic32mz/pic32mz_exception.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -35,9 +37,7 @@
 #include <arch/board/board.h>
 #include <arch/pic32mz/cp0.h>
 
-#include "mips_arch.h"
 #include "mips_internal.h"
-
 #include "hardware/pic32mz_int.h"
 
 /****************************************************************************
@@ -54,10 +54,16 @@
 
 uint32_t *pic32mz_exception(uint32_t *regs)
 {
+  struct tcb_s **running_task = &g_running_tasks[this_cpu()];
 #ifdef CONFIG_DEBUG_FEATURES
   uint32_t cause;
   uint32_t epc;
 #endif
+
+  if (*running_task != NULL)
+    {
+      mips_copystate((*running_task)->xcp.regs, regs);
+    }
 
   /* If the board supports LEDs, turn on an LED now to indicate that we are
    * processing an interrupt.
@@ -164,7 +170,7 @@ uint32_t *pic32mz_exception(uint32_t *regs)
    * contents.
    */
 
-  CURRENT_REGS = regs;
-  PANIC();
+  up_set_current_regs(regs);
+  PANIC_WITH_REGS("panic", regs);
   return regs; /* Won't get here */
 }

@@ -1,6 +1,8 @@
 /****************************************************************************
  * drivers/wireless/bluetooth/bt_uart_bcm4343x.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -125,7 +127,6 @@ static int uartwriteconf(FAR const struct btuart_lowerhalf_s *lower,
   int ret;
   int gotlen = 0;
   FAR uint8_t *din;
-  struct timespec abstime;
 
   DEBUGASSERT(lower != NULL);
 
@@ -149,22 +150,7 @@ static int uartwriteconf(FAR const struct btuart_lowerhalf_s *lower,
   din = kmm_malloc(maxl);
   while (gotlen < maxl)
     {
-      ret = clock_gettime(CLOCK_REALTIME, &abstime);
-      if (ret < 0)
-        {
-          goto exit_uartwriteconf;
-        }
-
-      /* Add the offset to the time in the future */
-
-      abstime.tv_nsec += NSEC_PER_SEC / 10;
-      if (abstime.tv_nsec >= NSEC_PER_SEC)
-        {
-          abstime.tv_nsec -= NSEC_PER_SEC;
-          abstime.tv_sec++;
-        }
-
-      ret = nxsem_timedwait_uninterruptible(rxsem, &abstime);
+      ret = nxsem_tickwait_uninterruptible(rxsem, MSEC2TICK(100));
       if (ret < 0)
         {
           /* We didn't receive enough message, so fall out */
@@ -294,7 +280,6 @@ static int load_bcm4343x_firmware(FAR const struct btuart_lowerhalf_s *lower)
   lower->rxenable(lower, true);
 
   nxsem_init(&rxsem, 0, 0);
-  nxsem_set_protocol(&rxsem, SEM_PRIO_NONE);
 
   /* It is possible this could fail if modem is already at high speed, so we
    * can safely ignore error return value.
@@ -384,7 +369,7 @@ static int load_bcm4343x_firmware(FAR const struct btuart_lowerhalf_s *lower)
       ret = -ECOMM;
     }
 
-  load_bcm4343x_firmware_finished:
+load_bcm4343x_firmware_finished:
   lower->rxenable(lower, false);
   lower->rxattach(lower, NULL, NULL);
 
@@ -396,10 +381,9 @@ static int load_bcm4343x_firmware(FAR const struct btuart_lowerhalf_s *lower)
  ****************************************************************************/
 
 /****************************************************************************
- * Name: btuart_register
+ * Name: btuart_create
  *
- *   Create the UART-based Bluetooth device and register it with the
- *   Bluetooth stack.
+ *   Create the UART-based bluetooth device.
  *
  * Input Parameters:
  *   lower - an instance of the lower half driver interface
@@ -410,7 +394,8 @@ static int load_bcm4343x_firmware(FAR const struct btuart_lowerhalf_s *lower)
  *
  ****************************************************************************/
 
-int btuart_register(FAR const struct btuart_lowerhalf_s *lower)
+int btuart_create(FAR const struct btuart_lowerhalf_s *lower,
+                  FAR struct bt_driver_s **driver)
 {
   FAR struct btuart_upperhalf_s *upper;
   int ret;
@@ -439,6 +424,8 @@ int btuart_register(FAR const struct btuart_lowerhalf_s *lower)
   upper->dev.head_reserve = H4_HEADER_SIZE;
   upper->dev.open = btuart_open;
   upper->dev.send = btuart_send;
+  upper->dev.close = btuart_close;
+  upper->dev.ioctl = btuart_ioctl;
   upper->lower = lower;
 
   /* Load firmware */
@@ -451,14 +438,6 @@ int btuart_register(FAR const struct btuart_lowerhalf_s *lower)
       return -EINVAL;
     }
 
-  /* And register the driver with the network and the Bluetooth stack. */
-
-  ret = bt_netdev_register(&upper->dev);
-  if (ret < 0)
-    {
-      wlerr("ERROR: bt_netdev_register failed: %d\n", ret);
-      kmm_free(upper);
-    }
-
+  *driver = &upper->dev;
   return ret;
 }

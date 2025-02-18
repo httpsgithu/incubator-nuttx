@@ -1,16 +1,10 @@
 /****************************************************************************
  * arch/xtensa/include/xtensa/xtensa_corebits.h
- * Xtensa Special Register field positions, masks, values.
- * NOTE: This file may be processor configuration dependent.
  *
- * Adapted from use in NuttX by:
- *
- *   Copyright (C) 2016 Gregory Nutt. All rights reserved.
- *   Author: Gregory Nutt <gnutt@nuttx.org>
- *
- * Derives from logic originally provided by Tensilica Inc.
- *
- *   Copyright (c) 2005-2011 Tensilica Inc.
+ * SPDX-License-Identifier: MIT
+ * SPDX-FileCopyrightText: 2016 Gregory Nutt. All rights reserved.
+ * SPDX-FileCopyrightText: 2005-2011 Tensilica Inc.
+ * SPDX-FileContributor: Gregory Nutt <gnutt@nuttx.org>
  *
  * Permission is hereby granted, free of charge, to any person obtaining
  * a copy of this software and associated documentation files (the
@@ -55,11 +49,11 @@
 #define EXCCAUSE_ILLEGAL           0  /* Illegal Instruction */
 #define EXCCAUSE_SYSCALL           1  /* System Call (SYSCALL instruction) */
 #define EXCCAUSE_INSTR_ERROR       2  /* Instruction Fetch Error */
-# define EXCCAUSE_IFETCHERROR      2  /* (backward compatibility macro, deprecated, avoid) */
+#  define EXCCAUSE_IFETCHERROR     2  /* (backward compatibility macro, deprecated, avoid) */
 #define EXCCAUSE_LOAD_STORE_ERROR  3  /* Load Store Error */
-# define EXCCAUSE_LOADSTOREERROR   3  /* (backward compatibility macro, deprecated, avoid) */
+#  define EXCCAUSE_LOADSTOREERROR  3  /* (backward compatibility macro, deprecated, avoid) */
 #define EXCCAUSE_LEVEL1_INTERRUPT  4  /* Level 1 Interrupt */
-# define EXCCAUSE_LEVEL1INTERRUPT  4  /* (backward compatibility macro, deprecated, avoid) */
+#  define EXCCAUSE_LEVEL1INTERRUPT 4  /* (backward compatibility macro, deprecated, avoid) */
 #define EXCCAUSE_ALLOCA            5  /* Stack Extension Assist (MOVSP instruction) for alloca */
 #define EXCCAUSE_DIVIDE_BY_ZERO    6  /* Integer Divide by Zero */
 #define EXCCAUSE_SPECULATION       7  /* Use of Failed Speculative Access (not implemented) */

@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/xtensa/src/common/xtensa_lowputs.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -31,17 +33,17 @@
  ****************************************************************************/
 
 /****************************************************************************
- * Name: up_lowputs
+ * Name: xtensa_lowputs
  *
  * Description:
  *   This is a low-level helper function used to support debug.
  *
  ****************************************************************************/
 
-void up_lowputs(const char *str)
+void xtensa_lowputs(const char *str)
 {
   while (*str)
     {
-      up_lowputc(*str++);
+      xtensa_lowputc(*str++);
     }
 }

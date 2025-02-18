@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/renesas/m16c/skp16c26/src/m16c_lcdconsole.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -26,7 +28,7 @@
 
 #include <nuttx/arch.h>
 
-#include "up_internal.h"
+#include "renesas_internal.h"
 #include "skp16c26.h"
 
 /* Only use the LCD as a console if there are is no serial console */
@@ -96,14 +98,14 @@ void up_consoleinit(void)
 #endif
 
 /****************************************************************************
- * Name: up_lowputc
+ * Name: renesas_lowputc
  *
  * Description:
  *   Output one character on the console
  *
  ****************************************************************************/
 
-void up_lowputc(char ch)
+void renesas_lowputc(char ch)
 {
   up_lcdputc(ch);
 }
@@ -116,10 +118,9 @@ void up_lowputc(char ch)
  *
  ****************************************************************************/
 
-int up_putc(int ch)
+void up_putc(int ch)
 {
   up_lcdputc(ch);
-  return ch;
 }
 
 #endif /* !HAVE_SERIALCONSOLE && CONFIG_SLCD && CONFIG_SLCD_CONSOLE */

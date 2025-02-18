@@ -1,6 +1,7 @@
 /****************************************************************************
  * net/tcp/tcp_input.c
- * Handling incoming TCP input
+ *
+ * SPDX-License-Identifier: BSD-3-Clause
  *
  *   Copyright (C) 2007-2014, 2017-2019, 2020 Gregory Nutt. All rights
  *     reserved.
@@ -48,6 +49,7 @@
 #if defined(CONFIG_NET) && defined(CONFIG_NET_TCP)
 
 #include <inttypes.h>
+#include <stdbool.h>
 #include <stdint.h>
 #include <string.h>
 #include <assert.h>
@@ -63,12 +65,7 @@
 #include "utils/utils.h"
 #include "tcp/tcp.h"
 
-/****************************************************************************
- * Pre-processor Definitions
- ****************************************************************************/
-
-#define IPv4BUF ((FAR struct ipv4_hdr_s *)&dev->d_buf[NET_LL_HDRLEN(dev)])
-#define IPv6BUF ((FAR struct ipv6_hdr_s *)&dev->d_buf[NET_LL_HDRLEN(dev)])
+#define IPDATA(hl) (*(FAR uint8_t *)IPBUF(hl))
 
 /****************************************************************************
  * Private Functions
@@ -203,7 +200,7 @@ static void tcp_snd_wnd_init(FAR struct tcp_conn_s *conn,
   ninfo("snd_wnd init: wl1 %" PRIu32 "\n", conn->snd_wl1);
 }
 
-static void tcp_snd_wnd_update(FAR struct tcp_conn_s *conn,
+static bool tcp_snd_wnd_update(FAR struct tcp_conn_s *conn,
                                FAR struct tcp_hdr_s *tcp)
 {
   uint32_t ackseq = tcp_getsequence(tcp->ackno);
@@ -258,7 +255,418 @@ static void tcp_snd_wnd_update(FAR struct tcp_conn_s *conn,
 
       conn->snd_wl1 = seq;
       conn->snd_wl2 = ackseq;
-      conn->snd_wnd = wnd;
+      if (conn->snd_wnd != wnd)
+        {
+          conn->snd_wnd = wnd;
+          return true;
+        }
+    }
+
+  return false;
+}
+
+#ifdef CONFIG_NET_TCP_OUT_OF_ORDER
+
+/****************************************************************************
+ * Name: tcp_rebuild_ofosegs
+ *
+ * Description:
+ *   Re-build out-of-order pool from incoming segment
+ *
+ * Input Parameters:
+ *   conn   - The TCP connection of interest
+ *   ofoseg - Pointer to incoming out-of-order segment
+ *   start  - Index of start postion of segment pool
+ *
+ * Returned Value:
+ *   True if incoming data has been consumed
+ *
+ * Assumptions:
+ *   The network is locked.
+ *
+ ****************************************************************************/
+
+static bool tcp_rebuild_ofosegs(FAR struct tcp_conn_s *conn,
+                                FAR struct tcp_ofoseg_s *ofoseg,
+                                int start)
+{
+  struct tcp_ofoseg_s *seg;
+  int i;
+
+  for (i = start; i < conn->nofosegs && ofoseg->data != NULL; i++)
+    {
+      seg = &conn->ofosegs[i];
+
+      /* ofoseg    |~~~
+       * segpool |---|
+       */
+
+      if (TCP_SEQ_GTE(ofoseg->left, seg->left))
+        {
+          /* ofoseg        |---|
+           * segpool |---|
+           */
+
+          if (TCP_SEQ_GT(ofoseg->left, seg->right))
+            {
+              continue;
+            }
+
+          /* ofoseg      |---|
+           * segpool |---|
+           */
+
+          else if (ofoseg->left == seg->right)
+            {
+              net_iob_concat(&seg->data, &ofoseg->data);
+              seg->right = ofoseg->right;
+            }
+
+          /* ofoseg   |--|
+           * segpool |---|
+           */
+
+          else if (TCP_SEQ_LTE(ofoseg->right, seg->right))
+            {
+              iob_free_chain(ofoseg->data);
+              ofoseg->data = NULL;
+            }
+
+          /* ofoseg    |---|
+           * segpool |---|
+           */
+
+          else if (TCP_SEQ_GT(ofoseg->right, seg->right))
+            {
+              ofoseg->data =
+                iob_trimhead(ofoseg->data,
+                             TCP_SEQ_SUB(seg->right, ofoseg->left));
+              net_iob_concat(&seg->data, &ofoseg->data);
+              seg->right = ofoseg->right;
+            }
+        }
+
+      /* ofoseg  |~~~
+       * segpool   |---|
+       */
+
+      else
+        {
+          /* ofoseg  |---|
+           * segpool     |---|
+           */
+
+          if (ofoseg->right == seg->left)
+            {
+              net_iob_concat(&ofoseg->data, &seg->data);
+              seg->data = ofoseg->data;
+              seg->left = ofoseg->left;
+              ofoseg->data = NULL;
+            }
+
+          /* ofoseg  |---|
+           * segpool       |---|
+           */
+
+          else if (TCP_SEQ_LT(ofoseg->right, seg->left))
+            {
+              continue;
+            }
+
+          /* ofoseg  |---|~|
+           * segpool  |--|
+           */
+
+          else if (TCP_SEQ_GTE(ofoseg->right, seg->right))
+            {
+              iob_free_chain(seg->data);
+              *seg = *ofoseg;
+              ofoseg->data = NULL;
+            }
+
+          /* ofoseg  |---|
+           * segpool   |---|
+           */
+
+          else if (TCP_SEQ_GT(ofoseg->right, seg->left))
+            {
+              ofoseg->data =
+                iob_trimtail(ofoseg->data,
+                             ofoseg->right - seg->left);
+              net_iob_concat(&ofoseg->data, &seg->data);
+              seg->data = ofoseg->data;
+              seg->left = ofoseg->left;
+              ofoseg->data = NULL;
+            }
+        }
+    }
+
+  return (ofoseg->data == NULL);
+}
+
+/****************************************************************************
+ * Name: tcp_input_ofosegs
+ *
+ * Description:
+ *   Handle incoming TCP data to out-of-order pool
+ *
+ * Input Parameters:
+ *   dev    - The device driver structure containing the received TCP packet.
+ *   conn   - The TCP connection of interest
+ *   iplen  - Length of the IP header (IPv4_HDRLEN or IPv6_HDRLEN).
+ *
+ * Returned Value:
+ *   None
+ *
+ * Assumptions:
+ *   The network is locked.
+ *
+ ****************************************************************************/
+
+static void tcp_input_ofosegs(FAR struct net_driver_s *dev,
+                              FAR struct tcp_conn_s *conn,
+                              unsigned int iplen)
+{
+  struct tcp_ofoseg_s ofoseg;
+  bool rebuild;
+  int i = 0;
+  int len;
+
+  ofoseg.left =
+    tcp_getsequence(((FAR struct tcp_hdr_s *)IPBUF(iplen))->seqno);
+
+  /* Calculate the pending size of out-of-order cache, if the input edge can
+   * not fill the adjacent segments, drop it
+   */
+
+  if (tcp_ofoseg_bufsize(conn) > CONFIG_NET_TCP_OUT_OF_ORDER_BUFSIZE &&
+      ofoseg.left >= conn->ofosegs[0].left)
+    {
+      return;
+    }
+
+  /* Get left/right edge from incoming data */
+
+  len = (dev->d_appdata - dev->d_iob->io_data) - dev->d_iob->io_offset;
+  ofoseg.right = TCP_SEQ_ADD(ofoseg.left, dev->d_iob->io_pktlen - len);
+
+  ninfo("TCP OFOSEG out-of-order "
+        "[%" PRIu32 " : %" PRIu32 " : %" PRIu32 "]\n",
+        ofoseg.left, ofoseg.right, TCP_SEQ_SUB(ofoseg.right, ofoseg.left));
+
+  /* Trim l3/l4 header to reserve appdata */
+
+  dev->d_iob = iob_trimhead(dev->d_iob, len);
+  if (dev->d_iob == NULL || dev->d_iob->io_pktlen == 0)
+    {
+      /* No available data, prepare device iob */
+
+      goto prepare;
+    }
+
+  ofoseg.data = dev->d_iob;
+
+  /* Build out-of-order pool */
+
+  rebuild = tcp_rebuild_ofosegs(conn, &ofoseg, 0);
+
+  /* Incoming segment out of order from existing pool, add to new segment */
+
+  if (!rebuild && conn->nofosegs != TCP_SACK_RANGES_MAX)
+    {
+      conn->ofosegs[conn->nofosegs] = ofoseg;
+      conn->nofosegs++;
+      rebuild = true;
+    }
+
+  /* Try Re-order ofosegs */
+
+  if (rebuild &&
+      tcp_reorder_ofosegs(conn->nofosegs, (FAR void *)conn->ofosegs))
+    {
+      /* Re-build out-of-order pool after re-order */
+
+      while (i < conn->nofosegs - 1)
+        {
+          if (tcp_rebuild_ofosegs(conn, &conn->ofosegs[i], i + 1))
+            {
+              for (; i < conn->nofosegs - 1; i++)
+                {
+                  conn->ofosegs[i] = conn->ofosegs[i + 1];
+                }
+
+              conn->nofosegs--;
+
+              i = 0;
+            }
+          else
+            {
+              i++;
+            }
+        }
+    }
+
+  for (i = 0; i < conn->nofosegs; i++)
+    {
+      ninfo("TCP OFOSEG [%d][%" PRIu32 " : %" PRIu32 " : %" PRIu32 "]\n", i,
+            conn->ofosegs[i].left, conn->ofosegs[i].right,
+            TCP_SEQ_SUB(conn->ofosegs[i].right, conn->ofosegs[i].left));
+    }
+
+  /* Incoming data has been consumed, re-prepare device buffer to send
+   * response.
+   */
+
+  if (rebuild)
+    {
+      netdev_iob_clear(dev);
+    }
+
+prepare:
+  netdev_iob_prepare(dev, false, 0);
+}
+#endif /* CONFIG_NET_TCP_OUT_OF_ORDER */
+
+/****************************************************************************
+ * Name: tcp_parse_option
+ *
+ * Description:
+ *   Parse incoming TCP options
+ *
+ * Input Parameters:
+ *   dev    - The device driver structure containing the received TCP packet.
+ *   conn   - The TCP connection of interest
+ *   iplen  - Length of the IP header (IPv4_HDRLEN or IPv6_HDRLEN).
+ *
+ * Returned Value:
+ *   None
+ *
+ * Assumptions:
+ *   The network is locked.
+ *
+ ****************************************************************************/
+
+static void tcp_parse_option(FAR struct net_driver_s *dev,
+                             FAR struct tcp_conn_s *conn,
+                             unsigned int iplen)
+{
+  FAR struct tcp_hdr_s *tcp;
+  unsigned int tcpiplen;
+  uint16_t tmp16;
+  uint8_t  opt;
+  int i;
+
+  tcp = IPBUF(iplen);
+
+  if ((tcp->tcpoffset & 0xf0) <= 0x50)
+    {
+      return;
+    }
+
+  tcpiplen = iplen + TCP_HDRLEN;
+
+  for (i = 0; i < ((tcp->tcpoffset >> 4) - 5) << 2 ; )
+    {
+      opt = IPDATA(tcpiplen + i);
+      if (opt == TCP_OPT_END)
+        {
+          /* End of options. */
+
+          break;
+        }
+      else if (opt == TCP_OPT_NOOP)
+        {
+          /* NOP option. */
+
+          ++i;
+          continue;
+        }
+      else if (opt == TCP_OPT_MSS &&
+               IPDATA(tcpiplen + 1 + i) == TCP_OPT_MSS_LEN)
+        {
+          uint16_t tcp_mss = TCP_MSS(dev, iplen);
+
+          /* An MSS option with the right option length. */
+
+          tmp16 = ((uint16_t)IPDATA(tcpiplen + 2 + i) << 8) |
+                   (uint16_t)IPDATA(tcpiplen + 3 + i);
+#ifdef CONFIG_NET_TCPPROTO_OPTIONS
+          if (conn->user_mss > 0 && conn->user_mss < tcp_mss)
+            {
+              tcp_mss = conn->user_mss;
+            }
+#endif
+
+          conn->mss = tmp16 > tcp_mss ? tcp_mss : tmp16;
+        }
+#ifdef CONFIG_NET_TCP_WINDOW_SCALE
+      else if (opt == TCP_OPT_WS &&
+               IPDATA(tcpiplen + 1 + i) == TCP_OPT_WS_LEN)
+        {
+          conn->snd_scale = IPDATA(tcpiplen + 2 + i);
+          conn->rcv_scale = CONFIG_NET_TCP_WINDOW_SCALE_FACTOR;
+          conn->flags    |= TCP_WSCALE;
+        }
+#endif
+#ifdef CONFIG_NET_TCP_SELECTIVE_ACK
+      else if (opt == TCP_OPT_SACK_PERM &&
+               IPDATA(tcpiplen + 1 + i) ==
+               TCP_OPT_SACK_PERM_LEN)
+        {
+          conn->flags    |= TCP_SACK;
+        }
+#endif
+      else
+        {
+          /* All other options have a length field, so that we
+           * easily can skip past them.
+           */
+
+          if (IPDATA(tcpiplen + 1 + i) == 0)
+            {
+              /* If the length field is zero, the options are
+               * malformed and we don't process them further.
+               */
+
+              break;
+            }
+        }
+
+      i += IPDATA(tcpiplen + 1 + i);
+    }
+}
+
+/****************************************************************************
+ * Name: tcp_clear_zero_probe
+ *
+ * Description:
+ *   clear the TCP zero window probe
+ *
+ * Input Parameters:
+ *   conn   - The TCP connection of interest
+ *   tcp    - Header of TCP structure
+ *
+ * Returned Value:
+ *   None
+ *
+ * Assumptions:
+ *   The network is locked.
+ *
+ ****************************************************************************/
+
+static void tcp_clear_zero_probe(FAR struct tcp_conn_s *conn,
+                                 FAR struct tcp_hdr_s *tcp)
+{
+  /* If the receive window is not 0,
+   * the zero window probe timer needs to be cleared
+   */
+
+  if ((tcp->wnd[0] || tcp->wnd[1]) && conn->zero_probe &&
+      (tcp->flags & TCP_ACK) != 0)
+    {
+      conn->zero_probe = false;
+      conn->nrtx = 0;
+      conn->timer = 0;
     }
 }
 
@@ -288,13 +696,10 @@ static void tcp_input(FAR struct net_driver_s *dev, uint8_t domain,
   FAR struct tcp_hdr_s *tcp;
   union ip_binding_u uaddr;
   unsigned int tcpiplen;
-  unsigned int hdrlen;
   uint16_t tmp16;
   uint16_t flags;
   uint16_t result;
-  uint8_t  opt;
   int      len;
-  int      i;
 
 #ifdef CONFIG_NET_STATISTICS
   /* Bump up the count of TCP packets received */
@@ -306,7 +711,7 @@ static void tcp_input(FAR struct net_driver_s *dev, uint8_t domain,
    * the link layer header and the IP header.
    */
 
-  tcp = (FAR struct tcp_hdr_s *)&dev->d_buf[iplen + NET_LL_HDRLEN(dev)];
+  tcp = IPBUF(iplen);
 
   /* Get the size of the IP header and the TCP header.
    *
@@ -318,10 +723,7 @@ static void tcp_input(FAR struct net_driver_s *dev, uint8_t domain,
 
   tcpiplen = iplen + TCP_HDRLEN;
 
-  /* Get the size of the link layer header, the IP and TCP header */
-
-  hdrlen = tcpiplen + NET_LL_HDRLEN(dev);
-
+#ifdef CONFIG_NET_TCP_CHECKSUMS
   /* Start of TCP input header processing code. */
 
   if (tcp_chksum(dev) != 0xffff)
@@ -335,6 +737,7 @@ static void tcp_input(FAR struct net_driver_s *dev, uint8_t domain,
       nwarn("WARNING: Bad TCP checksum\n");
       goto drop;
     }
+#endif
 
   /* Demultiplex this segment. First check any active connections. */
 
@@ -392,11 +795,17 @@ static void tcp_input(FAR struct net_driver_s *dev, uint8_t domain,
 #endif
 
 #if defined(CONFIG_NET_IPv4) && defined(CONFIG_NET_IPv6)
-      if (tcp_islistener(&uaddr, tmp16, domain))
+      if ((conn = tcp_findlistener(&uaddr, tmp16, domain)) != NULL)
 #else
-      if (tcp_islistener(&uaddr, tmp16))
+      if ((conn = tcp_findlistener(&uaddr, tmp16)) != NULL)
 #endif
         {
+          if (!tcp_backlogavailable(conn))
+            {
+              nerr("ERROR: no free containers for TCP BACKLOG!\n");
+              goto drop;
+            }
+
           /* We matched the incoming packet with a connection in LISTEN.
            * We now need to create a new connection and send a SYNACK in
            * response.
@@ -406,7 +815,7 @@ static void tcp_input(FAR struct net_driver_s *dev, uint8_t domain,
            * any user application to accept it.
            */
 
-          conn = tcp_alloc_accept(dev, tcp);
+          conn = tcp_alloc_accept(dev, tcp, conn);
           if (conn)
             {
               /* The connection structure was successfully allocated and has
@@ -451,63 +860,7 @@ static void tcp_input(FAR struct net_driver_s *dev, uint8_t domain,
 
           /* Parse the TCP MSS option, if present. */
 
-          if ((tcp->tcpoffset & 0xf0) > 0x50)
-            {
-              for (i = 0; i < ((tcp->tcpoffset >> 4) - 5) << 2 ; )
-                {
-                  opt = dev->d_buf[hdrlen + i];
-                  if (opt == TCP_OPT_END)
-                    {
-                      /* End of options. */
-
-                      break;
-                    }
-                  else if (opt == TCP_OPT_NOOP)
-                    {
-                      /* NOP option. */
-
-                      ++i;
-                      continue;
-                    }
-                  else if (opt == TCP_OPT_MSS &&
-                          dev->d_buf[hdrlen + 1 + i] == TCP_OPT_MSS_LEN)
-                    {
-                      uint16_t tcp_mss = TCP_MSS(dev, iplen);
-
-                      /* An MSS option with the right option length. */
-
-                      tmp16 = ((uint16_t)dev->d_buf[hdrlen + 2 + i] << 8) |
-                               (uint16_t)dev->d_buf[hdrlen + 3 + i];
-                      conn->mss = tmp16 > tcp_mss ? tcp_mss : tmp16;
-                    }
-#ifdef CONFIG_NET_TCP_WINDOW_SCALE
-                  else if (opt == TCP_OPT_WS &&
-                          dev->d_buf[hdrlen + 1 + i] == TCP_OPT_WS_LEN)
-                    {
-                      conn->snd_scale = dev->d_buf[hdrlen + 2 + i];
-                      conn->rcv_scale = CONFIG_NET_TCP_WINDOW_SCALE_FACTOR;
-                      conn->flags    |= TCP_WSCALE;
-                    }
-#endif
-                  else
-                    {
-                      /* All other options have a length field, so that we
-                       * easily can skip past them.
-                       */
-
-                      if (dev->d_buf[hdrlen + 1 + i] == 0)
-                        {
-                          /* If the length field is zero, the options are
-                           * malformed and we don't process them further.
-                           */
-
-                          break;
-                        }
-                    }
-
-                  i += dev->d_buf[hdrlen + 1 + i];
-                }
-            }
+          tcp_parse_option(dev, conn, iplen);
 
           /* Our response will be a SYNACK. */
 
@@ -534,11 +887,10 @@ reset:
 #ifdef CONFIG_NET_STATISTICS
   g_netstats.tcp.synrst++;
 #endif
-  tcp_reset(dev);
+  tcp_reset(dev, conn);
   return;
 
 found:
-
   flags = 0;
 
   /* We do a very naive form of TCP reset processing; we just accept
@@ -549,8 +901,6 @@ found:
 
   if ((tcp->flags & TCP_RST) != 0)
     {
-      FAR struct tcp_conn_s *listener = NULL;
-
       /* An RST received during the 3-way connection handshake requires
        * little more clean-up.
        */
@@ -559,33 +909,6 @@ found:
         {
           conn->tcpstateflags = TCP_CLOSED;
           nwarn("WARNING: RESET in TCP_SYN_RCVD\n");
-
-          /* Notify the listener for the connection of the reset event */
-
-#ifdef CONFIG_NET_IPv6
-#  ifdef CONFIG_NET_IPv4
-          if (domain == PF_INET6)
-#  endif
-            {
-              net_ipv6addr_copy(&uaddr.ipv6.laddr, IPv6BUF->destipaddr);
-            }
-#endif
-
-#ifdef CONFIG_NET_IPv4
-#  ifdef CONFIG_NET_IPv6
-          if (domain == PF_INET)
-#  endif
-            {
-              net_ipv4addr_copy(uaddr.ipv4.laddr,
-                                net_ip4addr_conv32(IPv4BUF->destipaddr));
-            }
-#endif
-
-#if defined(CONFIG_NET_IPv4) && defined(CONFIG_NET_IPv6)
-          listener = tcp_findlistener(&uaddr, conn->lport, domain);
-#else
-          listener = tcp_findlistener(&uaddr, conn->lport);
-#endif
 
           /* We must free this TCP connection structure; this connection
            * will never be established.  There should only be one reference
@@ -603,15 +926,10 @@ found:
 
           /* Notify this connection of the reset event */
 
-          listener = conn;
+          tcp_callback(dev, conn, TCP_ABORT);
         }
 
-      /* Perform the TCP_ABORT callback and drop the packet */
-
-      if (listener != NULL)
-        {
-          tcp_callback(dev, listener, TCP_ABORT);
-        }
+      /* Drop the packet */
 
       goto drop;
     }
@@ -622,6 +940,16 @@ found:
 
   len = (tcp->tcpoffset >> 4) << 2;
 
+  /* d_appdata should remove the tcp specific option field. */
+
+  if ((tcp->tcpoffset & 0xf0) > 0x50)
+    {
+      if (dev->d_len >= len)
+        {
+          dev->d_appdata += len - TCP_HDRLEN;
+        }
+    }
+
   /* d_len will contain the length of the actual TCP data. This is
    * calculated by subtracting the length of the TCP header (in
    * len) and the length of the IP header.
@@ -629,51 +957,36 @@ found:
 
   dev->d_len -= (len + iplen);
 
-  /* Check if the sequence number of the incoming packet is what we are
-   * expecting next.  If not, we send out an ACK with the correct numbers
-   * in, unless we are in the SYN_RCVD state and receive a SYN, in which
-   * case we should retransmit our SYNACK (which is done further down).
-   */
+#if defined(CONFIG_NET_STATISTICS) && \
+    defined(CONFIG_NET_TCP_DEBUG_DROP_RECV)
 
-  if (!((((conn->tcpstateflags & TCP_STATE_MASK) == TCP_SYN_SENT) &&
-        ((tcp->flags & TCP_CTL) == (TCP_SYN | TCP_ACK))) ||
-        (((conn->tcpstateflags & TCP_STATE_MASK) == TCP_SYN_RCVD) &&
-        ((tcp->flags & TCP_CTL) == TCP_SYN))))
+#pragma message \
+  "CONFIG_NET_TCP_DEBUG_DROP_RECV is selected, this is debug " \
+  "feature to drop the tcp received packet on the floor, " \
+  "please confirm the configuration again if you do not want " \
+  "debug the TCP stack."
+
+  /* Debug feature to drop the tcp received packet on the floor */
+
+  if (dev->d_len > 0)
     {
-      uint32_t seq;
-      uint32_t rcvseq;
-
-      seq = tcp_getsequence(tcp->seqno);
-      rcvseq = tcp_getsequence(conn->rcvseq);
-
-      if (seq != rcvseq)
+      if ((g_netstats.tcp.recv %
+          CONFIG_NET_TCP_DEBUG_DROP_RECV_PROBABILITY) == 0)
         {
-          /* Trim the head of the segment */
+          uint32_t seq = tcp_getsequence(tcp->seqno);
 
-          if (TCP_SEQ_LT(seq, rcvseq))
-            {
-              uint32_t trimlen = TCP_SEQ_SUB(rcvseq, seq);
+          g_netstats.tcp.drop++;
 
-              if (tcp_trim_head(dev, tcp, trimlen))
-                {
-                  /* The segment was completely out of the window.
-                   * E.g. a retransmit which was not necessary.
-                   * E.g. a keep-alive segment.
-                   */
+          ninfo("TCP DROP RCVPKT: "
+                "[%d][%" PRIu32 " : %" PRIu32 " : %d]\n",
+                g_netstats.tcp.drop, seq, TCP_SEQ_ADD(seq, dev->d_len),
+                dev->d_len);
 
-                  tcp_send(dev, conn, TCP_ACK, tcpiplen);
-                  return;
-                }
-            }
-          else
-            {
-              /* We never queue out-of-order segments. */
-
-              tcp_send(dev, conn, TCP_ACK, tcpiplen);
-              return;
-            }
+          dev->d_len = 0;
+          return;
         }
     }
+#endif
 
   /* Check if the incoming segment acknowledges any outstanding data. If so,
    * we update the sequence number, reset the length of the outstanding
@@ -684,17 +997,26 @@ found:
     {
       uint32_t unackseq;
       uint32_t ackseq;
-      uint32_t sndseq;
+      int timeout;
 
       /* The next sequence number is equal to the current sequence
        * number (sndseq) plus the size of the outstanding, unacknowledged
        * data (tx_unacked).
        */
 
-#ifdef CONFIG_NET_TCP_WRITE_BUFFERS
+#if defined(CONFIG_NET_TCP_WRITE_BUFFERS) && !defined(CONFIG_NET_SENDFILE)
       unackseq = conn->sndseq_max;
+#elif defined(CONFIG_NET_TCP_WRITE_BUFFERS) && defined(CONFIG_NET_SENDFILE)
+      if (!conn->sendfile)
+        {
+          unackseq = conn->sndseq_max;
+        }
+      else
+        {
+          unackseq = tcp_getsequence(conn->sndseq);
+        }
 #else
-      unackseq = tcp_addsequence(conn->sndseq, conn->tx_unacked);
+      unackseq = tcp_getsequence(conn->sndseq);
 #endif
 
       /* Get the sequence number of that has just been acknowledged by this
@@ -737,20 +1059,28 @@ found:
             }
         }
 
-      /* Update sequence number to the unacknowledge sequence number.  If
-       * there is still outstanding, unacknowledged data, then this will
-       * be beyond ackseq.
-       */
-
-      sndseq = tcp_getsequence(conn->sndseq);
-      if (TCP_SEQ_LT(sndseq, ackseq))
+#ifdef CONFIG_NET_TCP_WRITE_BUFFERS
+#ifdef CONFIG_NET_SENDFILE
+      if (!conn->sendfile)
+#endif
         {
-          ninfo("sndseq: %08" PRIx32 "->%08" PRIx32
-                " unackseq: %08" PRIx32 " new tx_unacked: %" PRId32 "\n",
-                tcp_getsequence(conn->sndseq), ackseq, unackseq,
-                (uint32_t)conn->tx_unacked);
-          tcp_setsequence(conn->sndseq, ackseq);
+          /* Update sequence number to the unacknowledge sequence number. If
+           * there is still outstanding, unacknowledged data, then this will
+           * be beyond ackseq.
+           */
+
+          uint32_t sndseq = tcp_getsequence(conn->sndseq);
+          if (TCP_SEQ_LT(sndseq, ackseq))
+            {
+              ninfo("sndseq: %08" PRIx32 "->%08" PRIx32
+                    " unackseq: %08" PRIx32 " new tx_unacked: %" PRIu32 "\n",
+                    tcp_getsequence(conn->sndseq), ackseq, unackseq,
+                    (uint32_t)conn->tx_unacked);
+              tcp_setsequence(conn->sndseq, ackseq);
+              conn->nrtx = 0;
+            }
         }
+#endif
 
       /* Do RTT estimation, unless we have done retransmissions. */
 
@@ -777,17 +1107,113 @@ found:
 
       flags |= TCP_ACKDATA;
 
+      /* Check if no packet need to retransmission, clear timer. */
+
+      if (conn->tx_unacked == 0 && conn->tcpstateflags == TCP_ESTABLISHED)
+        {
+          timeout = 0;
+        }
+      else
+        {
+          timeout = conn->rto;
+        }
+
       /* Reset the retransmission timer. */
 
-      conn->timer = conn->rto;
+      tcp_update_retrantimer(conn, timeout);
     }
+
+  /* Check if the sequence number of the incoming packet is what we are
+   * expecting next.  If not, we send out an ACK with the correct numbers
+   * in, unless we are in the SYN_RCVD state and receive a SYN, in which
+   * case we should retransmit our SYNACK (which is done further down).
+   */
+
+  if (!((((conn->tcpstateflags & TCP_STATE_MASK) == TCP_SYN_SENT) &&
+        ((tcp->flags & TCP_CTL) == (TCP_SYN | TCP_ACK))) ||
+        (((conn->tcpstateflags & TCP_STATE_MASK) == TCP_SYN_RCVD) &&
+        ((tcp->flags & TCP_CTL) == TCP_SYN))))
+    {
+      uint32_t seq;
+      uint32_t rcvseq;
+
+      seq = tcp_getsequence(tcp->seqno);
+      rcvseq = tcp_getsequence(conn->rcvseq);
+
+      /* According to RFC793, Section 3.4, Page 33.
+       * In the SYN_SENT state, if receive a ACK without SYN,
+       * we should reset the connection and retransmit the SYN.
+       */
+
+      if (((conn->tcpstateflags & TCP_STATE_MASK) == TCP_SYN_SENT) &&
+          ((tcp->flags & TCP_SYN) == 0 && (tcp->flags & TCP_ACK) != 0))
+        {
+          /* Send the RST to close the half-open connection. */
+
+          tcp_reset(dev, conn);
+
+          /* Retransmit the SYN as soon as possible in order to establish
+           * the tcp connection.
+           */
+
+          tcp_update_retrantimer(conn, 1);
+
+          return;
+        }
+
+      if (seq != rcvseq)
+        {
+          /* Trim the head of the segment */
+
+          if (TCP_SEQ_LT(seq, rcvseq))
+            {
+              uint32_t trimlen = TCP_SEQ_SUB(rcvseq, seq);
+
+              if (tcp_trim_head(dev, tcp, trimlen))
+                {
+                  /* The segment was completely out of the window.
+                   * E.g. a retransmit which was not necessary.
+                   * E.g. a keep-alive segment.
+                   */
+
+                  tcp_send(dev, conn, TCP_ACK, tcpiplen);
+                  return;
+                }
+            }
+          else if ((conn->tcpstateflags & TCP_STATE_MASK) <= TCP_ESTABLISHED)
+            {
+#ifdef CONFIG_NET_TCP_OUT_OF_ORDER
+              /* Queue out-of-order segments. */
+
+              tcp_input_ofosegs(dev, conn, iplen);
+#endif
+              if ((conn->tcpstateflags & TCP_STATE_MASK) <= TCP_ESTABLISHED)
+                {
+                  tcp_send(dev, conn, TCP_ACK, tcpiplen);
+                  return;
+                }
+            }
+        }
+    }
+
+  tcp_clear_zero_probe(conn, tcp);
 
   /* Update the connection's window size */
 
   if ((tcp->flags & TCP_ACK) != 0 &&
       (conn->tcpstateflags & TCP_STATE_MASK) != TCP_SYN_RCVD)
     {
-      tcp_snd_wnd_update(conn, tcp);
+#ifdef CONFIG_NET_TCP_CC_NEWRENO
+      /* If the packet is ack, update the cc var. */
+
+      tcp_cc_recv_ack(conn, tcp);
+#endif
+      if (tcp_snd_wnd_update(conn, tcp))
+        {
+          /* Window updated, set the acknowledged flag. */
+
+          flags |= TCP_ACKDATA;
+        }
     }
 
   /* Do different things depending on in what state the connection is. */
@@ -825,8 +1251,7 @@ found:
                  */
 
                 nwarn("WARNING: Listen canceled while waiting for ACK on "
-                      "port %d\n",
-                      ntohs(tcp->destport));
+                      "port %d\n", NTOHS(tcp->destport));
 
                 /* Free the connection structure */
 
@@ -849,6 +1274,9 @@ found:
             tcp_snd_wnd_init(conn, tcp);
             tcp_snd_wnd_update(conn, tcp);
 
+#ifdef CONFIG_NET_TCP_CC_NEWRENO
+            tcp_cc_update(conn, tcp);
+#endif
             flags               = TCP_CONNECTED;
             ninfo("TCP state: TCP_ESTABLISHED\n");
 
@@ -867,6 +1295,11 @@ found:
 
         if ((tcp->flags & TCP_CTL) == TCP_SYN)
           {
+#if !defined(CONFIG_NET_TCP_WRITE_BUFFERS)
+            tcp_setsequence(conn->sndseq, conn->rexmit_seq);
+#else
+            /* REVISIT for the buffered mode */
+#endif
             tcp_synack(dev, conn, TCP_ACK | TCP_SYN);
             return;
           }
@@ -885,64 +1318,7 @@ found:
           {
             /* Parse the TCP MSS option, if present. */
 
-            if ((tcp->tcpoffset & 0xf0) > 0x50)
-              {
-                for (i = 0; i < ((tcp->tcpoffset >> 4) - 5) << 2 ; )
-                  {
-                    opt = dev->d_buf[hdrlen + i];
-                    if (opt == TCP_OPT_END)
-                      {
-                        /* End of options. */
-
-                        break;
-                      }
-                    else if (opt == TCP_OPT_NOOP)
-                      {
-                        /* NOP option. */
-
-                        ++i;
-                        continue;
-                      }
-                    else if (opt == TCP_OPT_MSS &&
-                              dev->d_buf[hdrlen + 1 + i] == TCP_OPT_MSS_LEN)
-                      {
-                        uint16_t tcp_mss = TCP_MSS(dev, iplen);
-
-                        /* An MSS option with the right option length. */
-
-                        tmp16 =
-                          (dev->d_buf[hdrlen + 2 + i] << 8) |
-                          dev->d_buf[hdrlen + 3 + i];
-                        conn->mss = tmp16 > tcp_mss ? tcp_mss : tmp16;
-                      }
-#ifdef CONFIG_NET_TCP_WINDOW_SCALE
-                    else if (opt == TCP_OPT_WS &&
-                            dev->d_buf[hdrlen + 1 + i] == TCP_OPT_WS_LEN)
-                      {
-                        conn->snd_scale = dev->d_buf[hdrlen + 2 + i];
-                        conn->rcv_scale = CONFIG_NET_TCP_WINDOW_SCALE_FACTOR;
-                        conn->flags    |= TCP_WSCALE;
-                      }
-#endif
-                    else
-                      {
-                        /* All other options have a length field, so that we
-                         * easily can skip past them.
-                         */
-
-                        if (dev->d_buf[hdrlen + 1 + i] == 0)
-                          {
-                            /* If the length field is zero, the options are
-                             * malformed and we don't process them further.
-                             */
-
-                            break;
-                          }
-                      }
-
-                    i += dev->d_buf[hdrlen + 1 + i];
-                  }
-              }
+            tcp_parse_option(dev, conn, iplen);
 
             conn->tcpstateflags = TCP_ESTABLISHED;
             memcpy(conn->rcvseq, tcp->seqno, 4);
@@ -950,6 +1326,9 @@ found:
             tcp_snd_wnd_init(conn, tcp);
             tcp_snd_wnd_update(conn, tcp);
 
+#ifdef CONFIG_NET_TCP_CC_NEWRENO
+            tcp_cc_update(conn, tcp);
+#endif
             net_incr32(conn->rcvseq, 1); /* ack SYN */
             conn->tx_unacked    = 0;
 
@@ -982,7 +1361,7 @@ found:
             goto drop;
           }
 
-        tcp_reset(dev);
+        tcp_reset(dev, conn);
         return;
 
       case TCP_ESTABLISHED:
@@ -1124,13 +1503,9 @@ found:
         if (conn->keepalive &&
             (dev->d_len > 0 || (tcp->flags & TCP_ACK) != 0))
           {
-            /* Reset the last known "alive" time.
-             *
-             * REVISIT:  At this level, we don't actually know if keep-
-             * alive is enabled for this connection.
-             */
+            /* Reset the "alive" timer. */
 
-            conn->keeptime    = clock_systime_ticks();
+            tcp_update_keeptimer(conn, conn->keepidle);
             conn->keepretries = 0;
           }
 #endif
@@ -1210,7 +1585,8 @@ found:
             if ((flags & TCP_ACKDATA) != 0 && conn->tx_unacked == 0)
               {
                 conn->tcpstateflags = TCP_TIME_WAIT;
-                conn->timer         = 0;
+                tcp_update_retrantimer(conn,
+                                       TCP_TIME_WAIT_TIMEOUT * HSEC_PER_SEC);
                 ninfo("TCP state: TCP_TIME_WAIT\n");
               }
             else
@@ -1233,7 +1609,21 @@ found:
 
         if (dev->d_len > 0)
           {
-            tcp_send(dev, conn, TCP_ACK, tcpiplen);
+            /* Due to RFC 2525, Section 2.17, we SHOULD send RST if we can no
+             * longer read any received data. Also set state into TCP_CLOSED
+             * because the peer will not send FIN after RST received.
+             *
+             * TODO: Modify shutdown behavior to allow read in FIN_WAIT.
+             */
+
+            conn->tcpstateflags = TCP_CLOSED;
+
+            /* In the TCP_FIN_WAIT_1, we need call tcp_close_eventhandler to
+             * release nofosegs, that we received in this state.
+             */
+
+            tcp_callback(dev, conn, TCP_CLOSE);
+            tcp_reset(dev, conn);
             return;
           }
 
@@ -1248,7 +1638,8 @@ found:
         if ((tcp->flags & TCP_FIN) != 0)
           {
             conn->tcpstateflags = TCP_TIME_WAIT;
-            conn->timer         = 0;
+            tcp_update_retrantimer(conn,
+                                   TCP_TIME_WAIT_TIMEOUT * HSEC_PER_SEC);
             ninfo("TCP state: TCP_TIME_WAIT\n");
 
             net_incr32(conn->rcvseq, 1); /* ack FIN */
@@ -1259,7 +1650,19 @@ found:
 
         if (dev->d_len > 0)
           {
-            tcp_send(dev, conn, TCP_ACK, tcpiplen);
+            /* Due to RFC 2525, Section 2.17, we SHOULD send RST if we can no
+             * longer read any received data. Also set state into TCP_CLOSED
+             * because the peer will not send FIN after RST received.
+             */
+
+            conn->tcpstateflags = TCP_CLOSED;
+
+            /* In the TCP_FIN_WAIT_2, we need call tcp_close_eventhandler to
+             * release nofosegs, that we received in this state.
+             */
+
+            tcp_callback(dev, conn, TCP_CLOSE);
+            tcp_reset(dev, conn);
             return;
           }
 
@@ -1273,7 +1676,8 @@ found:
         if ((flags & TCP_ACKDATA) != 0)
           {
             conn->tcpstateflags = TCP_TIME_WAIT;
-            conn->timer        = 0;
+            tcp_update_retrantimer(conn,
+                                   TCP_TIME_WAIT_TIMEOUT * HSEC_PER_SEC);
             ninfo("TCP state: TCP_TIME_WAIT\n");
           }
 
@@ -1288,6 +1692,51 @@ drop:
 /****************************************************************************
  * Public Functions
  ****************************************************************************/
+
+/****************************************************************************
+ * Name: tcp_reorder_ofosegs
+ *
+ * Description:
+ *   Sort out-of-order segments by left edge
+ *
+ * Input Parameters:
+ *   nofosegs - Number of out-of-order semgnets
+ *   ofosegs  - Pointer to out-of-order segments
+ *
+ * Returned Value:
+ *   True if re-order occurs
+ *
+ * Assumptions:
+ *   The network is locked.
+ *
+ ****************************************************************************/
+
+bool tcp_reorder_ofosegs(int nofosegs, FAR struct tcp_ofoseg_s *ofosegs)
+{
+  struct tcp_ofoseg_s segs;
+  bool reordered = false;
+  int i;
+  int j;
+
+  /* Sort out-of-order segments by left edge */
+
+  for (i = 0; i < nofosegs - 1; i++)
+    {
+      for (j = 0; j < nofosegs - 1 - i; j++)
+        {
+          if (TCP_SEQ_GT(ofosegs[j].left,
+                         ofosegs[j + 1].left))
+            {
+              segs = ofosegs[j];
+              ofosegs[j] = ofosegs[j + 1];
+              ofosegs[j + 1] = segs;
+              reordered = true;
+            }
+        }
+    }
+
+  return reordered;
+}
 
 /****************************************************************************
  * Name: tcp_ipv4_input

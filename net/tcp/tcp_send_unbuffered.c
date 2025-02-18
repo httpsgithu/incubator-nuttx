@@ -1,6 +1,8 @@
 /****************************************************************************
  * net/tcp/tcp_send_unbuffered.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -40,9 +42,9 @@
 #include <arch/irq.h>
 
 #include <nuttx/semaphore.h>
+#include <nuttx/tls.h>
 #include <nuttx/net/net.h>
 #include <nuttx/net/netdev.h>
-#include <nuttx/net/arp.h>
 #include <nuttx/net/tcp.h>
 
 #include "netdev/netdev.h"
@@ -67,9 +69,6 @@
 #  define NEED_IPDOMAIN_SUPPORT 1
 #endif
 
-#define TCPIPv4BUF ((struct tcp_hdr_s *)&dev->d_buf[NET_LL_HDRLEN(dev) + IPv4_HDRLEN])
-#define TCPIPv6BUF ((struct tcp_hdr_s *)&dev->d_buf[NET_LL_HDRLEN(dev) + IPv6_HDRLEN])
-
 /****************************************************************************
  * Private Types
  ****************************************************************************/
@@ -80,62 +79,30 @@
 
 struct send_s
 {
-  FAR struct socket      *snd_sock;    /* Points to the parent socket structure */
-  FAR struct devif_callback_s *snd_cb; /* Reference to callback instance */
-  sem_t                   snd_sem;     /* Used to wake up the waiting thread */
-  FAR const uint8_t      *snd_buffer;  /* Points to the buffer of data to send */
-  size_t                  snd_buflen;  /* Number of bytes in the buffer to send */
-  ssize_t                 snd_sent;    /* The number of bytes sent */
-  uint32_t                snd_isn;     /* Initial sequence number */
-  uint32_t                snd_acked;   /* The number of bytes acked */
+  FAR struct tcp_conn_s  *snd_conn;     /* The TCP connection of interest */
+  FAR struct devif_callback_s *snd_cb;  /* Reference to callback instance */
+  sem_t                   snd_sem;      /* Used to wake up the waiting thread */
+  FAR const uint8_t      *snd_buffer;   /* Points to the buffer of data to send */
+  size_t                  snd_buflen;   /* Number of bytes in the buffer to send */
+  ssize_t                 snd_sent;     /* The number of bytes sent */
+  uint32_t                snd_isn;      /* Initial sequence number */
+  uint32_t                snd_acked;    /* The number of bytes acked */
+#ifdef CONFIG_NET_TCP_FAST_RETRANSMIT
+  uint32_t                snd_prev_ack; /* The previous ACKed seq number */
+#ifdef CONFIG_NET_TCP_WINDOW_SCALE
+  uint32_t                snd_prev_wnd; /* The advertised window in the last
+                                         * incoming acknowledgment
+                                         */
+#else
+  uint16_t                snd_prev_wnd;
+#endif
+  int                     snd_dup_acks; /* Duplicate ACK counter */
+#endif
 };
 
 /****************************************************************************
  * Private Functions
  ****************************************************************************/
-
-/****************************************************************************
- * Name: tcpsend_ipselect
- *
- * Description:
- *   If both IPv4 and IPv6 support are enabled, then we will need to select
- *   which one to use when generating the outgoing packet.  If only one
- *   domain is selected, then the setup is already in place and we need do
- *   nothing.
- *
- * Input Parameters:
- *   dev    - The structure of the network driver that caused the event
- *   pstate - sendto state structure
- *
- * Returned Value:
- *   None
- *
- * Assumptions:
- *   The network is locked.
- *
- ****************************************************************************/
-
-#ifdef NEED_IPDOMAIN_SUPPORT
-static inline void tcpsend_ipselect(FAR struct net_driver_s *dev,
-                                    FAR struct tcp_conn_s *conn)
-{
-  /* Which domain does the socket support */
-
-  if (conn->domain == PF_INET)
-    {
-      /* Select the IPv4 domain */
-
-      tcp_ipv4_select(dev);
-    }
-  else /* if (conn->domain == PF_INET6) */
-    {
-      /* Select the IPv6 domain */
-
-      DEBUGASSERT(conn->domain == PF_INET6);
-      tcp_ipv6_select(dev);
-    }
-}
-#endif
 
 /****************************************************************************
  * Name: tcpsend_eventhandler
@@ -146,7 +113,7 @@ static inline void tcpsend_ipselect(FAR struct net_driver_s *dev,
  *
  * Input Parameters:
  *   dev      The structure of the network driver that caused the event
- *   conn     The connection structure associated with the socket
+ *   pvpriv   An instance of struct send_s cast to void*
  *   flags    Set of events describing why the callback was invoked
  *
  * Returned Value:
@@ -158,11 +125,20 @@ static inline void tcpsend_ipselect(FAR struct net_driver_s *dev,
  ****************************************************************************/
 
 static uint16_t tcpsend_eventhandler(FAR struct net_driver_s *dev,
-                                     FAR void *pvconn,
                                      FAR void *pvpriv, uint16_t flags)
 {
-  FAR struct tcp_conn_s *conn = (FAR struct tcp_conn_s *)pvconn;
-  FAR struct send_s *pstate = (FAR struct send_s *)pvpriv;
+  FAR struct send_s *pstate = pvpriv;
+  FAR struct tcp_conn_s *conn;
+  int ret;
+
+  DEBUGASSERT(pstate != NULL);
+
+  /* Get the TCP connection pointer reliably from
+   * the corresponding TCP socket.
+   */
+
+  conn = pstate->snd_conn;
+  DEBUGASSERT(conn != NULL);
 
   /* The TCP socket is connected and, hence, should be bound to a device.
    * Make sure that the polling device is the one that we are bound to.
@@ -177,12 +153,24 @@ static uint16_t tcpsend_eventhandler(FAR struct net_driver_s *dev,
   ninfo("flags: %04x acked: %" PRId32 " sent: %zd\n",
         flags, pstate->snd_acked, pstate->snd_sent);
 
+  /* The TCP_ACKDATA, TCP_REXMIT and TCP_DISCONN_EVENTS flags are expected to
+   * appear here strictly one at a time, except for the FIN + ACK case.
+   */
+
+  DEBUGASSERT((flags & TCP_ACKDATA) == 0 ||
+              (flags & TCP_REXMIT) == 0);
+  DEBUGASSERT((flags & TCP_DISCONN_EVENTS) == 0 ||
+              (flags & TCP_REXMIT) == 0);
+
   /* If this packet contains an acknowledgement, then update the count of
    * acknowledged bytes.
+   * This condition is located here for performance reasons
+   * (TCP_ACKDATA is the most frequent event).
    */
 
   if ((flags & TCP_ACKDATA) != 0)
     {
+      uint32_t ackno;
       FAR struct tcp_hdr_s *tcp;
 
       /* Get the offset address of the TCP header */
@@ -192,7 +180,6 @@ static uint16_t tcpsend_eventhandler(FAR struct net_driver_s *dev,
       if (conn->domain == PF_INET)
 #endif
         {
-          DEBUGASSERT(IFF_IS_IPv4(dev->d_flags));
           tcp = TCPIPv4BUF;
         }
 #endif /* CONFIG_NET_IPv4 */
@@ -202,7 +189,6 @@ static uint16_t tcpsend_eventhandler(FAR struct net_driver_s *dev,
       else
 #endif
         {
-          DEBUGASSERT(IFF_IS_IPv6(dev->d_flags));
           tcp = TCPIPv6BUF;
         }
 #endif /* CONFIG_NET_IPv6 */
@@ -213,9 +199,10 @@ static uint16_t tcpsend_eventhandler(FAR struct net_driver_s *dev,
        * of bytes to be acknowledged.
        */
 
-      pstate->snd_acked = TCP_SEQ_SUB(tcp_getsequence(tcp->ackno),
+      ackno = tcp_getsequence(tcp->ackno);
+      pstate->snd_acked = TCP_SEQ_SUB(ackno,
                                       pstate->snd_isn);
-      ninfo("ACK: acked=%" PRId32 " sent=%zd buflen=%zd\n",
+      ninfo("ACK: acked=%" PRId32 " sent=%zd buflen=%zu\n",
             pstate->snd_acked, pstate->snd_sent, pstate->snd_buflen);
 
       /* Have all of the bytes in the buffer been sent and acknowledged? */
@@ -229,28 +216,97 @@ static uint16_t tcpsend_eventhandler(FAR struct net_driver_s *dev,
           goto end_wait;
         }
 
-      /* No.. fall through to send more data if necessary */
-    }
-
-  /* Check if we are being asked to retransmit data */
-
-  else if ((flags & TCP_REXMIT) != 0)
-    {
-      /* Yes.. in this case, reset the number of bytes that have been sent
-       * to the number of bytes that have been ACKed.
+#ifdef CONFIG_NET_TCP_FAST_RETRANSMIT
+      /* Fast Retransmit (RFC 5681): an acknowledgment is considered a
+       * "duplicate" when (a) the receiver of the ACK has outstanding data,
+       * (b) the incoming acknowledgment carries no data, (c) the SYN and
+       * FIN bits are both off, (d) the acknowledgment number is equal to
+       * the greatest acknowledgment received on the given connection
+       * and (e) the advertised window in the incoming acknowledgment equals
+       * the advertised window in the last incoming acknowledgment.
        */
 
-      pstate->snd_sent = pstate->snd_acked;
+      if (pstate->snd_acked < pstate->snd_sent &&
+          (flags & TCP_NEWDATA) == 0 &&
+          (tcp->flags & (TCP_SYN | TCP_FIN)) == 0 &&
+          ackno == pstate->snd_prev_ack &&
+          conn->snd_wnd == pstate->snd_prev_wnd)
+        {
+          if (++pstate->snd_dup_acks >= TCP_FAST_RETRANSMISSION_THRESH)
+            {
+              flags |= TCP_REXMIT;
+              pstate->snd_dup_acks = 0;
+            }
+        }
+      else
+        {
+          pstate->snd_dup_acks = 0;
+        }
 
-      /* Fall through to re-send data from the last that was ACKed */
+      pstate->snd_prev_ack = ackno;
+      pstate->snd_prev_wnd = conn->snd_wnd;
+#endif
     }
 
-  /* Check for a loss of connection */
+  /* Check if we are being asked to retransmit data.
+   * This condition is located here after TCP_ACKDATA for performance reasons
+   * (TCP_REXMIT is less frequent than TCP_ACKDATA).
+   */
+
+  if ((flags & TCP_REXMIT) != 0)
+    {
+      uint32_t sndlen;
+
+      nwarn("WARNING: TCP_REXMIT\n");
+
+      /* According to RFC 6298 (5.4), retransmit the earliest segment
+       * that has not been acknowledged by the TCP receiver.
+       */
+
+      /* Reconstruct the length of the earliest segment to be retransmitted */
+
+      sndlen = pstate->snd_buflen - pstate->snd_acked;
+
+      if (sndlen > conn->mss)
+        {
+          sndlen = conn->mss;
+        }
+
+      conn->rexmit_seq = pstate->snd_isn + pstate->snd_acked;
+
+#ifdef NEED_IPDOMAIN_SUPPORT
+      /* If both IPv4 and IPv6 support are enabled, then we will need to
+       * select which one to use when generating the outgoing packet.
+       * If only one domain is selected, then the setup is already in
+       * place and we need do nothing.
+       */
+
+      tcp_ip_select(conn);
+#endif
+      /* Then set-up to send that amount of data. (this won't actually
+       * happen until the polling cycle completes).
+       */
+
+      ret = devif_send(dev, &pstate->snd_buffer[pstate->snd_acked],
+                       sndlen, tcpip_hdrsize(conn));
+      if (ret <= 0)
+        {
+          pstate->snd_sent = ret;
+          goto end_wait;
+        }
+
+      /* Continue waiting */
+
+      return flags;
+    }
+
+  /* Check for a loss of connection.
+   * This condition is located here after both the TCP_ACKDATA and TCP_REXMIT
+   * because TCP_DISCONN_EVENTS is the least frequent event.
+   */
 
   else if ((flags & TCP_DISCONN_EVENTS) != 0)
     {
-      FAR struct socket *psock = pstate->snd_sock;
-
       ninfo("Lost connection\n");
 
       /* We could get here recursively through the callback actions of
@@ -258,12 +314,11 @@ static uint16_t tcpsend_eventhandler(FAR struct net_driver_s *dev,
        * already been disconnected.
        */
 
-      DEBUGASSERT(psock != NULL);
-      if (_SS_ISCONNECTED(psock->s_flags))
+      if (_SS_ISCONNECTED(conn->sconn.s_flags))
         {
           /* Report not connected */
 
-          tcp_lost_connection(psock, pstate->snd_cb, flags);
+          tcp_lost_connection(conn, pstate->snd_cb, flags);
         }
 
       pstate->snd_sent = -ENOTCONN;
@@ -293,8 +348,6 @@ static uint16_t tcpsend_eventhandler(FAR struct net_driver_s *dev,
 
   if ((flags & TCP_NEWDATA) == 0 && pstate->snd_sent < pstate->snd_buflen)
     {
-      uint32_t seqno;
-
       /* Get the amount of data that we can send in the next packet */
 
       uint32_t sndlen = pstate->snd_buflen - pstate->snd_sent;
@@ -308,19 +361,6 @@ static uint16_t tcpsend_eventhandler(FAR struct net_driver_s *dev,
 
       if ((pstate->snd_sent - pstate->snd_acked + sndlen) < conn->snd_wnd)
         {
-          /* Set the sequence number for this packet.  NOTE:  The network
-           * updates sndseq on receipt of ACK *before* this function is
-           * called.  In that case sndseq will point to the next
-           * unacknowledged byte (which might have already been sent).  We
-           * will overwrite the value of sndseq here before the packet is
-           * sent.
-           */
-
-          seqno = pstate->snd_sent + pstate->snd_isn;
-          ninfo("SEND: sndseq %08" PRIx32 "->%08" PRIx32 "\n",
-                tcp_getsequence(conn->sndseq), seqno);
-          tcp_setsequence(conn->sndseq, seqno);
-
 #ifdef NEED_IPDOMAIN_SUPPORT
           /* If both IPv4 and IPv6 support are enabled, then we will need to
            * select which one to use when generating the outgoing packet.
@@ -328,19 +368,29 @@ static uint16_t tcpsend_eventhandler(FAR struct net_driver_s *dev,
            * place and we need do nothing.
            */
 
-          tcpsend_ipselect(dev, conn);
+          tcp_ip_select(conn);
 #endif
           /* Then set-up to send that amount of data. (this won't actually
            * happen until the polling cycle completes).
            */
 
-          devif_send(dev, &pstate->snd_buffer[pstate->snd_sent], sndlen);
+          ret = devif_send(dev, &pstate->snd_buffer[pstate->snd_sent],
+                           sndlen, tcpip_hdrsize(conn));
+          if (ret <= 0)
+            {
+              pstate->snd_sent = ret;
+              goto end_wait;
+            }
 
           /* Update the amount of data sent (but not necessarily ACKed) */
 
           pstate->snd_sent += sndlen;
-          ninfo("SEND: acked=%" PRId32 " sent=%zd buflen=%zd\n",
+          ninfo("SEND: acked=%" PRId32 " sent=%zd buflen=%zu\n",
                 pstate->snd_acked, pstate->snd_sent, pstate->snd_buflen);
+        }
+      else
+        {
+          nwarn("WARNING: Window full, wait for ack\n");
         }
     }
 
@@ -351,6 +401,8 @@ static uint16_t tcpsend_eventhandler(FAR struct net_driver_s *dev,
 end_wait:
 
   /* Do not allow any further callbacks */
+
+  DEBUGASSERT(pstate->snd_cb != NULL);
 
   pstate->snd_cb->flags   = 0;
   pstate->snd_cb->priv    = NULL;
@@ -430,24 +482,28 @@ ssize_t psock_tcp_send(FAR struct socket *psock,
                        FAR const void *buf, size_t len, int flags)
 {
   FAR struct tcp_conn_s *conn;
+  struct tcp_callback_s info;
   struct send_s state;
   int ret = OK;
 
   /* Verify that the sockfd corresponds to valid, allocated socket */
 
-  if (psock == NULL || psock->s_conn == NULL)
+  if (psock == NULL || psock->s_type != SOCK_STREAM ||
+      psock->s_conn == NULL)
     {
       nerr("ERROR: Invalid socket\n");
       ret = -EBADF;
       goto errout;
     }
 
+  conn = psock->s_conn;
+
   /* Check early if this is an un-connected socket, if so, then
    * return -ENOTCONN. Note, we will have to check this again, as we can't
    * guarantee the state won't change until we have the network locked.
    */
 
-  if (psock->s_type != SOCK_STREAM)
+  if (!_SS_ISCONNECTED(conn->sconn.s_flags))
     {
       nerr("ERROR: Not connected\n");
       ret = -ENOTCONN;
@@ -456,14 +512,9 @@ ssize_t psock_tcp_send(FAR struct socket *psock,
 
   /* Make sure that we have the IP address mapping */
 
-  conn = (FAR struct tcp_conn_s *)psock->s_conn;
-  DEBUGASSERT(conn);
-
 #if defined(CONFIG_NET_ARP_SEND) || defined(CONFIG_NET_ICMPv6_NEIGHBOR)
 #ifdef CONFIG_NET_ARP_SEND
-#ifdef CONFIG_NET_ICMPv6_NEIGHBOR
   if (psock->s_domain == PF_INET)
-#endif
     {
       /* Make sure that the IP address mapping is in the ARP table */
 
@@ -472,13 +523,11 @@ ssize_t psock_tcp_send(FAR struct socket *psock,
 #endif /* CONFIG_NET_ARP_SEND */
 
 #ifdef CONFIG_NET_ICMPv6_NEIGHBOR
-#ifdef CONFIG_NET_ARP_SEND
-  else
-#endif
+  if (psock->s_domain == PF_INET6)
     {
       /* Make sure that the IP address mapping is in the Neighbor Table */
 
-      ret = icmpv6_neighbor(conn->u.ipv6.raddr);
+      ret = icmpv6_neighbor(NULL, conn->u.ipv6.raddr);
     }
 #endif /* CONFIG_NET_ICMPv6_NEIGHBOR */
 
@@ -505,7 +554,7 @@ ssize_t psock_tcp_send(FAR struct socket *psock,
    * state again to ensure the connection is still valid.
    */
 
-  if (!_SS_ISCONNECTED(psock->s_flags))
+  if (!_SS_ISCONNECTED(conn->sconn.s_flags))
     {
       nerr("ERROR: No longer connected\n");
       net_unlock();
@@ -514,17 +563,11 @@ ssize_t psock_tcp_send(FAR struct socket *psock,
     }
 
   memset(&state, 0, sizeof(struct send_s));
-
-  /* This semaphore is used for signaling and, hence, should not have
-   * priority inheritance enabled.
-   */
-
   nxsem_init(&state.snd_sem, 0, 0);    /* Doesn't really fail */
-  nxsem_set_protocol(&state.snd_sem, SEM_PRIO_NONE);
 
-  state.snd_sock      = psock;             /* Socket descriptor to use */
-  state.snd_buflen    = len;               /* Number of bytes to send */
-  state.snd_buffer    = buf;               /* Buffer to send from */
+  state.snd_conn   = conn; /* Socket descriptor to use */
+  state.snd_buflen = len;  /* Number of bytes to send */
+  state.snd_buffer = buf;  /* Buffer to send from */
 
   if (len > 0)
     {
@@ -556,17 +599,32 @@ ssize_t psock_tcp_send(FAR struct socket *psock,
           tcp_send_txnotify(psock, conn);
 
           /* Wait for the send to complete or an error to occur:  NOTES:
-           * net_lockedwait will also terminate if a signal is received.
+           * net_sem_wait will also terminate if a signal is received.
            */
 
           for (; ; )
             {
               uint32_t acked = state.snd_acked;
 
-              ret = net_timedwait(&state.snd_sem,
-                                  _SO_TIMEOUT(psock->s_sndtimeo));
+              /* Push a cancellation point onto the stack.  This will be
+               * called if the thread is canceled.
+               */
+
+              info.tc_conn = conn;
+              info.tc_cb   = state.snd_cb;
+              info.tc_sem  = &state.snd_sem;
+              tls_cleanup_push(tls_get_info(), tcp_callback_cleanup, &info);
+
+              ret = net_sem_timedwait(&state.snd_sem,
+                                  _SO_TIMEOUT(conn->sconn.s_sndtimeo));
+              tls_cleanup_pop(tls_get_info(), 0);
               if (ret != -ETIMEDOUT || acked == state.snd_acked)
                 {
+                  if (ret == -ETIMEDOUT)
+                    {
+                      ret = -EAGAIN;
+                    }
+
                   break; /* Timeout without any progress */
                 }
             }
@@ -590,9 +648,9 @@ ssize_t psock_tcp_send(FAR struct socket *psock,
       goto errout;
     }
 
-  /* If net_timedwait failed, then we were probably reawakened by a signal.
-   * In this case, net_timedwait will have returned negated errno
-   * appropriately.
+  /* If net_sem_timedwait failed, then we were probably reawakened by a
+   * signal. In this case, net_sem_timedwait will have returned negated
+   * errno appropriately.
    */
 
   if (ret < 0)
@@ -617,7 +675,7 @@ errout:
  *   write occurs first.
  *
  * Input Parameters:
- *   psock    An instance of the internal socket structure.
+ *   conn     The TCP connection of interest
  *
  * Returned Value:
  *   OK (Always can send).
@@ -627,7 +685,7 @@ errout:
  *
  ****************************************************************************/
 
-int psock_tcp_cansend(FAR struct socket *psock)
+int psock_tcp_cansend(FAR struct tcp_conn_s *conn)
 {
   return OK;
 }

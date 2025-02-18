@@ -1,6 +1,8 @@
 /****************************************************************************
  * drivers/sensors/ina226.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -74,9 +76,9 @@ struct ina226_dev_s
 static int     ina226_write16(FAR struct ina226_dev_s *priv, uint8_t regaddr,
                               FAR uint16_t regvalue);
 static int     ina226_read16(FAR struct ina226_dev_s *priv, uint8_t regaddr,
-                              FAR uint16_t *regvalue);
+                             FAR uint16_t *regvalue);
 static int     ina226_readpower(FAR struct ina226_dev_s *priv,
-                                 FAR struct ina226_s *buffer);
+                                FAR struct ina226_s *buffer);
 
 /* Character driver methods */
 
@@ -86,8 +88,6 @@ static ssize_t ina226_read(FAR struct file *filep, FAR char *buffer,
                            size_t buflen);
 static ssize_t ina226_write(FAR struct file *filep, FAR const char *buffer,
                             size_t buflen);
-static int     ina226_ioctl(FAR struct file *filep, int cmd,
-                            unsigned long arg);
 
 /****************************************************************************
  * Private Data
@@ -95,16 +95,10 @@ static int     ina226_ioctl(FAR struct file *filep, int cmd,
 
 static const struct file_operations g_ina226fops =
 {
-  ina226_open,
-  ina226_close,
-  ina226_read,
-  ina226_write,
-  NULL,
-  ina226_ioctl,
-  NULL
-#ifndef CONFIG_DISABLE_PSEUDOFS_OPERATIONS
-  , NULL
-#endif
+  ina226_open,     /* open */
+  ina226_close,    /* close */
+  ina226_read,     /* read */
+  ina226_write,    /* write */
 };
 
 /****************************************************************************
@@ -319,15 +313,6 @@ static ssize_t ina226_write(FAR struct file *filep, FAR const char *buffer,
 }
 
 /****************************************************************************
- * Name: ina226_ioctl
- ****************************************************************************/
-
-static int ina226_ioctl(FAR struct file *filep, int cmd, unsigned long arg)
-{
-  return -ENOTTY;
-}
-
-/****************************************************************************
  * Public Functions
  ****************************************************************************/
 
@@ -361,7 +346,7 @@ int ina226_register(FAR const char *devpath, FAR struct i2c_master_s *i2c,
 
   /* Initialize the ina226 device structure */
 
-  priv = (FAR struct ina226_dev_s *)kmm_malloc(sizeof(struct ina226_dev_s));
+  priv = kmm_malloc(sizeof(struct ina226_dev_s));
   if (priv == NULL)
     {
       snerr("ERROR: Failed to allocate instance\n");

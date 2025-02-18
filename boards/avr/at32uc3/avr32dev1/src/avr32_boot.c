@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/avr/at32uc3/avr32dev1/src/avr32_boot.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -29,9 +31,7 @@
 #include <nuttx/board.h>
 #include <arch/board/board.h>
 
-#include "up_arch.h"
-#include "up_internal.h"
-
+#include "avr_internal.h"
 #include "at32uc3.h"
 #include "avr32dev1.h"
 

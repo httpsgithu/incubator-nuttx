@@ -1,6 +1,8 @@
 /****************************************************************************
  * libs/libc/unistd/lib_restoredir.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -24,7 +26,7 @@
 
 #include <nuttx/config.h>
 
-#include <string.h>
+#include <stdlib.h>
 #include <unistd.h>
 #include <errno.h>
 
@@ -42,15 +44,13 @@
 
 int lib_restoredir(void)
 {
-  char *oldpwd;
+  FAR char *oldpwd;
   int ret = OK;
 
   oldpwd = getenv("OLDPWD");
   if (oldpwd)
     {
-      oldpwd = strdup(oldpwd);  /* kludge needed because environment is realloc'ed */
       ret = setenv("PWD", oldpwd, TRUE);
-      lib_free(oldpwd);
     }
 
   return ret;

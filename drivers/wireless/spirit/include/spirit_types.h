@@ -1,8 +1,9 @@
 /******************************************************************************
  * drivers/wireless/spirit/include/spirit_types.h
  *
- *   Copyright(c) 2015 STMicroelectronics
- *   Author:  VMA division - AMS
+ * SPDX-License-Identifier: BSD-3-Clause
+ * SPDX-FileCopyrightText: Copyright(c) 2015 STMicroelectronics
+ * SPDX-FileContributor: Author: VMA division - AMS
  *   Version 3.2.2 08-July-2015
  *
  * Redistribution and use in source and binary forms, with or without
@@ -32,8 +33,8 @@
  *
  ******************************************************************************/
 
-#ifndef __INCLUDE_NUTT_WIRELESS_SPIRIT_INCLUDE_SPIRIT_TYPES_H
-#define __INCLUDE_NUTT_WIRELESS_SPIRIT_INCLUDE_SPIRIT_TYPES_H
+#ifndef __DRIVERS_WIRELESS_SPIRIT_INCLUDE_SPIRIT_TYPES_H
+#define __DRIVERS_WIRELESS_SPIRIT_INCLUDE_SPIRIT_TYPES_H
 
 /* This module provide some types definitions which will be used in
  * all the modules of this library. Here is defined also the global
@@ -171,4 +172,4 @@ struct spirit_library_s
 }
 #endif
 
-#endif /* __INCLUDE_NUTT_WIRELESS_SPIRIT_INCLUDE_SPIRIT_TYPES_H */
+#endif /* __DRIVERS_WIRELESS_SPIRIT_INCLUDE_SPIRIT_TYPES_H */

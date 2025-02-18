@@ -1,6 +1,8 @@
 /****************************************************************************
  * libs/libc/string/lib_isbasedigit.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -43,7 +45,7 @@
  *
  * Description:
  *   Given an ASCII character, ch, and a base (1-36) do two
- *   things:  1) Determine if ch is a valid charcter, and 2)
+ *   things:  1) Determine if ch is a valid character, and 2)
  *   convert ch to its binary value.
  *
  ****************************************************************************/
@@ -80,7 +82,7 @@ bool lib_isbasedigit(int ch, int base, int *value)
         }
     }
 
-  if (value)
+  if (ret && value)
     {
       *value = tmp;
     }

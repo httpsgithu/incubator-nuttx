@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/samd2l2/hardware/samd_wdt.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -20,7 +22,7 @@
 
 /* References:
  *   "Atmel SAM D20J / SAM D20G / SAM D20E ARM-Based Microcontroller
- *   Datasheet", 42129J–SAM–12/2013
+ *   Datasheet", 42129J-SAM-12/2013
  */
 
 #ifndef __ARCH_ARM_SRC_SAMD2L2_HARDWARE_SAM_WDT_H
@@ -72,7 +74,7 @@
 
 /* Configuration register */
 
-#define WDT_CONFIG_PER_SHIFT       (0)       /* Bits 0–3: Time-Out Period */
+#define WDT_CONFIG_PER_SHIFT       (0)       /* Bits 0-3: Time-Out Period */
 #define WDT_CONFIG_PER_MASK        (15 << WDT_CONFIG_PER_SHIFT)
 #  define WDT_CONFIG_PER_8         (0 << WDT_CONFIG_PER_SHIFT)  /* 8 clock cycles */
 #  define WDT_CONFIG_PER_16        (1 << WDT_CONFIG_PER_SHIFT)  /* 16 clock cycles */

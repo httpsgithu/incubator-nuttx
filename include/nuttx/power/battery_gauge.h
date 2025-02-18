@@ -1,6 +1,7 @@
 /****************************************************************************
  * include/nuttx/power/battery_gauge.h
- * NuttX Battery Fuel Gauge Interfaces
+ *
+ * SPDX-License-Identifier: Apache-2.0
  *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -28,7 +29,7 @@
 
 #include <nuttx/config.h>
 #include <nuttx/fs/ioctl.h>
-#include <nuttx/semaphore.h>
+#include <nuttx/mutex.h>
 #include <nuttx/list.h>
 
 #include <stdbool.h>
@@ -73,6 +74,13 @@
  *   (SoC).  The returned value is a fixed precision percentage of the
  *   batteries full capacity.
  *   Input value:  A pointer to type b16_t.
+ * BATIOC_CURRENT - Return the current of the battery . The returned value
+ *   is a fixed precision number in units of ma.
+ *   Input value:  A pointer to type b16_t.
+ * BATIOC_TEMPERATURE- Return the current temperature of the battery.
+ *   Input value:  A pointer to type b8_t.
+ * BATIOC_CHIPID- Return the chip id of the gauge.
+ *   Input value:  A pointer to type unsigned int.
  */
 
 /****************************************************************************
@@ -86,27 +94,37 @@ struct battery_gauge_operations_s
 {
   /* Return the current battery state (see enum battery_status_e) */
 
-  int (*state)(struct battery_gauge_dev_s *dev, int *status);
+  CODE int (*state)(FAR struct battery_gauge_dev_s *dev, FAR int *status);
 
   /* Return true if the batter is online */
 
-  int (*online)(struct battery_gauge_dev_s *dev, bool *status);
+  CODE int (*online)(FAR struct battery_gauge_dev_s *dev, FAR bool *status);
 
   /* Current battery voltage */
 
-  int (*voltage)(struct battery_gauge_dev_s *dev, b16_t *value);
+  CODE int (*voltage)(FAR struct battery_gauge_dev_s *dev, FAR b16_t *value);
 
   /* Battery capacity */
 
-  int (*capacity)(struct battery_gauge_dev_s *dev, b16_t *value);
+  CODE int (*capacity)(FAR struct battery_gauge_dev_s *dev,
+                       FAR b16_t *value);
 
   /* Battery current */
 
-  int (*current)(struct battery_gauge_dev_s *dev, b16_t *value);
+  CODE int (*current)(FAR struct battery_gauge_dev_s *dev, FAR b16_t *value);
 
   /* Battery temp */
 
-  int (*temp)(struct battery_gauge_dev_s *dev, b8_t *value);
+  CODE int (*temp)(FAR struct battery_gauge_dev_s *dev, FAR b8_t *value);
+
+  /* Battery chipid */
+
+  CODE int (*chipid)(FAR struct battery_gauge_dev_s *dev,
+                     FAR unsigned int *value);
+
+  /* Do device specific operation */
+
+  CODE int (*operate)(FAR struct battery_gauge_dev_s *dev, FAR int *param);
 };
 
 /* This structure defines the battery driver state structure */
@@ -116,9 +134,11 @@ struct battery_gauge_dev_s
   /* Fields required by the upper-half driver */
 
   FAR const struct battery_gauge_operations_s *ops; /* Battery operations */
-  sem_t batsem;                                     /* Enforce mutually exclusive access */
+  mutex_t batlock;                                  /* Enforce mutually exclusive access */
 
   struct list_node flist;
+
+  uint32_t mask;  /* record drive support features */
 
   /* Data fields specific to the lower-half driver may follow */
 };
@@ -236,6 +256,25 @@ FAR struct battery_gauge_dev_s *max1704x_initialize(
                                                 FAR struct i2c_master_s *i2c,
                                                 uint8_t addr,
                                                 uint32_t frequency);
+#endif
+
+#if defined(CONFIG_GOLDFISH_BATTERY)
+/****************************************************************************
+ * Name: goldfish_battery_register
+ *
+ * Description:
+ *   Register a emulate battery to tyhe upper-half battery driver.
+ *
+ * Input Parameters:
+ *   regs - the base address for the goldfish battery.
+ *   irq - An irq num for the goldfish battery.
+ *
+ * Returned Value:
+ *    Zero on success or a negated errno value on failure.
+ *
+ ****************************************************************************/
+
+int goldfish_battery_register(FAR void *regs, int irq);
 #endif
 
 #undef EXTERN

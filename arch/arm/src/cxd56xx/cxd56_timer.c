@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/cxd56xx/cxd56_timer.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -39,7 +41,7 @@
 #include <arch/board/board.h>
 #include <arch/chip/timer.h>
 
-#include "arm_arch.h"
+#include "arm_internal.h"
 #include "cxd56_timer.h"
 #include "hardware/cxd56_timer.h"
 #include "cxd56_clock.h"
@@ -72,7 +74,7 @@
  * wrap around. Timer's base clock is dynamically changed with cpu clock.
  */
 
-#define TIMER_MAXTIMEOUT    (ULONG_MAX / 160 / TIMER_DIVIDER)
+#define CXD56_MAXTIMEOUT    (ULONG_MAX / 160 / TIMER_DIVIDER)
 
 /****************************************************************************
  * Private Types
@@ -85,16 +87,16 @@
 
 struct cxd56_lowerhalf_s
 {
-  FAR const struct timer_ops_s  *ops;  /* Lower half operations */
+  const struct timer_ops_s  *ops;  /* Lower half operations */
 
   /* Private data */
 
-  uint32_t  base;            /* Base address of the timer */
-  tccb_t    callback;        /* Current user interrupt callback */
-  FAR void *arg;             /* Argument passed to upper half callback */
-  uint32_t  timeout;         /* The current timeout value (us) */
-  uint32_t  clkticks;        /* actual clock ticks for current interval */
-  bool      started;         /* The timer has been started */
+  uint32_t  base;     /* Base address of the timer */
+  tccb_t    callback; /* Current user interrupt callback */
+  void     *arg;      /* Argument passed to upper half callback */
+  uint32_t  timeout;  /* The current timeout value (us) */
+  uint32_t  clkticks; /* actual clock ticks for current interval */
+  bool      started;  /* The timer has been started */
 };
 
 /****************************************************************************
@@ -103,20 +105,20 @@ struct cxd56_lowerhalf_s
 
 /* Interrupt handling *******************************************************/
 
-static int      cxd56_timer_interrupt(int irq, FAR void *context,
-                                      FAR void *arg);
+static int      cxd56_timer_interrupt(int irq, void *context,
+                                      void *arg);
 
 /* "Lower half" driver methods **********************************************/
 
-static int      cxd56_start(FAR struct timer_lowerhalf_s *lower);
-static int      cxd56_stop(FAR struct timer_lowerhalf_s *lower);
-static int      cxd56_getstatus(FAR struct timer_lowerhalf_s *lower,
-                                FAR struct timer_status_s *status);
-static int      cxd56_settimeout(FAR struct timer_lowerhalf_s *lower,
+static int      cxd56_start(struct timer_lowerhalf_s *lower);
+static int      cxd56_stop(struct timer_lowerhalf_s *lower);
+static int      cxd56_getstatus(struct timer_lowerhalf_s *lower,
+                                struct timer_status_s *status);
+static int      cxd56_settimeout(struct timer_lowerhalf_s *lower,
                                  uint32_t timeout);
 static void     cxd56_setcallback(struct timer_lowerhalf_s *lower,
-                                  tccb_t callback, FAR void *arg);
-static int      cxd56_ioctl(FAR struct timer_lowerhalf_s *lower, int cmd,
+                                  tccb_t callback, void *arg);
+static int      cxd56_ioctl(struct timer_lowerhalf_s *lower, int cmd,
                             unsigned long arg);
 
 /****************************************************************************
@@ -157,9 +159,9 @@ static struct cxd56_lowerhalf_s g_tmrdevs[2];
  *
  ****************************************************************************/
 
-static int cxd56_timer_interrupt(int irq, FAR void *context, FAR void *arg)
+static int cxd56_timer_interrupt(int irq, void *context, void *arg)
 {
-  FAR struct cxd56_lowerhalf_s *priv = (FAR struct cxd56_lowerhalf_s *)arg;
+  struct cxd56_lowerhalf_s *priv = (struct cxd56_lowerhalf_s *)arg;
   uint32_t timeout;
   uint32_t load;
 
@@ -187,7 +189,7 @@ static int cxd56_timer_interrupt(int irq, FAR void *context, FAR void *arg)
     {
       /* No callback or the callback returned false.. stop the timer */
 
-      cxd56_stop((FAR struct timer_lowerhalf_s *)priv);
+      cxd56_stop((struct timer_lowerhalf_s *)priv);
       tmrinfo("Stopped\n");
     }
 
@@ -213,9 +215,9 @@ static int cxd56_timer_interrupt(int irq, FAR void *context, FAR void *arg)
  *
  ****************************************************************************/
 
-static int cxd56_start(FAR struct timer_lowerhalf_s *lower)
+static int cxd56_start(struct timer_lowerhalf_s *lower)
 {
-  FAR struct cxd56_lowerhalf_s *priv = (FAR struct cxd56_lowerhalf_s *)lower;
+  struct cxd56_lowerhalf_s *priv = (struct cxd56_lowerhalf_s *)lower;
 
   tmrinfo("Entry: started %d\n", priv->started);
 
@@ -263,9 +265,9 @@ static int cxd56_start(FAR struct timer_lowerhalf_s *lower)
  *
  ****************************************************************************/
 
-static int cxd56_stop(FAR struct timer_lowerhalf_s *lower)
+static int cxd56_stop(struct timer_lowerhalf_s *lower)
 {
-  FAR struct cxd56_lowerhalf_s *priv = (FAR struct cxd56_lowerhalf_s *)lower;
+  struct cxd56_lowerhalf_s *priv = (struct cxd56_lowerhalf_s *)lower;
 
   tmrinfo("Entry: started %d\n", priv->started);
 
@@ -306,10 +308,10 @@ static int cxd56_stop(FAR struct timer_lowerhalf_s *lower)
  *
  ****************************************************************************/
 
-static int cxd56_getstatus(FAR struct timer_lowerhalf_s *lower,
-                           FAR struct timer_status_s *status)
+static int cxd56_getstatus(struct timer_lowerhalf_s *lower,
+                           struct timer_status_s *status)
 {
-  FAR struct cxd56_lowerhalf_s *priv = (FAR struct cxd56_lowerhalf_s *)lower;
+  struct cxd56_lowerhalf_s *priv = (struct cxd56_lowerhalf_s *)lower;
   uint64_t remaining;
 
   tmrinfo("Entry\n");
@@ -360,10 +362,10 @@ static int cxd56_getstatus(FAR struct timer_lowerhalf_s *lower,
  *
  ****************************************************************************/
 
-static int cxd56_settimeout(FAR struct timer_lowerhalf_s *lower,
+static int cxd56_settimeout(struct timer_lowerhalf_s *lower,
                             uint32_t timeout)
 {
-  FAR struct cxd56_lowerhalf_s *priv = (FAR struct cxd56_lowerhalf_s *)lower;
+  struct cxd56_lowerhalf_s *priv = (struct cxd56_lowerhalf_s *)lower;
   uint32_t load;
 
   DEBUGASSERT(priv);
@@ -377,10 +379,10 @@ static int cxd56_settimeout(FAR struct timer_lowerhalf_s *lower,
 
   /* Can this timeout be represented? */
 
-  if (timeout < 1 || timeout > TIMER_MAXTIMEOUT)
+  if (timeout < 1 || timeout > CXD56_MAXTIMEOUT)
     {
-      tmrerr("ERROR: Cannot represent timeout=%lu > %lu\n", timeout,
-             TIMER_MAXTIMEOUT);
+      tmrerr("ERROR: Cannot represent timeout=%" PRIu32 " > %lu\n",
+             timeout, CXD56_MAXTIMEOUT);
       return -ERANGE;
     }
 
@@ -423,9 +425,9 @@ static int cxd56_settimeout(FAR struct timer_lowerhalf_s *lower,
  ****************************************************************************/
 
 static void cxd56_setcallback(struct timer_lowerhalf_s *lower,
-                              tccb_t callback, FAR void *arg)
+                              tccb_t callback, void *arg)
 {
-  FAR struct cxd56_lowerhalf_s *priv = (struct cxd56_lowerhalf_s *)lower;
+  struct cxd56_lowerhalf_s *priv = (struct cxd56_lowerhalf_s *)lower;
   irqstate_t flags;
 
   flags = enter_critical_section();
@@ -461,7 +463,7 @@ static void cxd56_setcallback(struct timer_lowerhalf_s *lower,
  *
  ****************************************************************************/
 
-static int cxd56_ioctl(FAR struct timer_lowerhalf_s *lower, int cmd,
+static int cxd56_ioctl(struct timer_lowerhalf_s *lower, int cmd,
                        unsigned long arg)
 {
   int ret = -ENOTTY;
@@ -479,11 +481,11 @@ static int cxd56_ioctl(FAR struct timer_lowerhalf_s *lower, int cmd,
 
     case TCIOC_SETHANDLER:
       {
-        FAR struct timer_sethandler_s *param;
+        struct timer_sethandler_s *param;
 
         /* Set user provided timeout callback function */
 
-        param = (FAR struct timer_sethandler_s *)((uintptr_t)arg);
+        param = (struct timer_sethandler_s *)((uintptr_t)arg);
 
         if (param != NULL)
           {
@@ -524,9 +526,9 @@ static int cxd56_ioctl(FAR struct timer_lowerhalf_s *lower, int cmd,
  *
  ****************************************************************************/
 
-void cxd56_timer_initialize(FAR const char *devpath, int timer)
+void cxd56_timer_initialize(const char *devpath, int timer)
 {
-  FAR struct cxd56_lowerhalf_s *priv = &g_tmrdevs[timer];
+  struct cxd56_lowerhalf_s *priv = &g_tmrdevs[timer];
   int irq;
 
   tmrinfo("Entry: devpath=%s\n", devpath);
@@ -552,7 +554,8 @@ void cxd56_timer_initialize(FAR const char *devpath, int timer)
         break;
 
       default:
-        ASSERT(0);
+        PANIC();
+        break;
     }
 
   priv->ops = &g_tmrops;
@@ -565,7 +568,7 @@ void cxd56_timer_initialize(FAR const char *devpath, int timer)
 
   /* Register the timer driver as /dev/timerX */
 
-  timer_register(devpath, (FAR struct timer_lowerhalf_s *)priv);
+  timer_register(devpath, (struct timer_lowerhalf_s *)priv);
 }
 
 #endif /* CONFIG_TIMER */

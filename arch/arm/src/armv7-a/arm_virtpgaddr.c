@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/armv7-a/arm_virtpgaddr.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -26,7 +28,7 @@
 
 #include "pgalloc.h"
 
-#if defined(CONFIG_MM_PGALLOC) && defined(CONFIG_ARCH_PGPOOL_MAPPING)
+#ifdef CONFIG_MM_PGALLOC
 
 /****************************************************************************
  * Public Functions
@@ -58,4 +60,4 @@ uintptr_t arm_virtpgaddr(uintptr_t paddr)
   return 0;
 }
 
-#endif /* CONFIG_MM_PGALLOC && CONFIG_ARCH_PGPOOL_MAPPING */
+#endif /* CONFIG_MM_PGALLOC */

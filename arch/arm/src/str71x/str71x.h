@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/str71x/str71x.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -156,6 +158,6 @@ struct spi_dev_s; /* Forward reference */
  *
  ****************************************************************************/
 
-FAR struct spi_dev_s *str71_spibus_initialize(int port);
+struct spi_dev_s *str71_spibus_initialize(int port);
 
 #endif /* __ARCH_ARM_SRC_STR71X_STR71X_H */

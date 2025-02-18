@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/dm320/dm320_framebuffer.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -35,7 +37,7 @@
 #include <nuttx/video/fb.h>
 #include <nuttx/nx/nxglib.h>
 
-#include "arm_arch.h"
+#include "arm_internal.h"
 #include "dm320_memorymap.h"
 #include "dm320_osd.h"
 
@@ -478,44 +480,44 @@ static void dm320_hwinitialize(void);
 /* Framebuffer interface methods */
 
 #ifndef CONFIG_DM320_VID0_DISABLE
-static int dm320_getvid0videoinfo(FAR struct fb_vtable_s *vtable,
-                                  FAR struct fb_videoinfo_s *vinfo);
-static int dm320_getvid0planeinfo(FAR struct fb_vtable_s *vtable,
+static int dm320_getvid0videoinfo(struct fb_vtable_s *vtable,
+                                  struct fb_videoinfo_s *vinfo);
+static int dm320_getvid0planeinfo(struct fb_vtable_s *vtable,
                                   int planeno,
-                                  FAR struct fb_planeinfo_s *pinfo);
+                                  struct fb_planeinfo_s *pinfo);
 #endif
 #ifndef CONFIG_DM320_VID1_DISABLE
-static int dm320_getvid1videoinfo(FAR struct fb_vtable_s *vtable,
-                                  FAR struct fb_videoinfo_s *vinfo);
-static int dm320_getvid1planeinfo(FAR struct fb_vtable_s *vtable,
+static int dm320_getvid1videoinfo(struct fb_vtable_s *vtable,
+                                  struct fb_videoinfo_s *vinfo);
+static int dm320_getvid1planeinfo(struct fb_vtable_s *vtable,
                                   int planeno,
-                                  FAR struct fb_planeinfo_s *pinfo);
+                                  struct fb_planeinfo_s *pinfo);
 #endif
 #ifndef CONFIG_DM320_OSD0_DISABLE
-static int dm320_getosd0videoinfo(FAR struct fb_vtable_s *vtable,
-                                  FAR struct fb_videoinfo_s *vinfo);
-static int dm320_getosd0planeinfo(FAR struct fb_vtable_s *vtable,
+static int dm320_getosd0videoinfo(struct fb_vtable_s *vtable,
+                                  struct fb_videoinfo_s *vinfo);
+static int dm320_getosd0planeinfo(struct fb_vtable_s *vtable,
                                   int planeno,
-                                  FAR struct fb_planeinfo_s *pinfo);
+                                  struct fb_planeinfo_s *pinfo);
 #endif
 #ifndef CONFIG_DM320_OSD1_DISABLE
-static int dm320_getosd1videoinfo(FAR struct fb_vtable_s *vtable,
-                                  FAR struct fb_videoinfo_s *vinfo);
-static int dm320_getosd1planeinfo(FAR struct fb_vtable_s *vtable,
+static int dm320_getosd1videoinfo(struct fb_vtable_s *vtable,
+                                  struct fb_videoinfo_s *vinfo);
+static int dm320_getosd1planeinfo(struct fb_vtable_s *vtable,
                                   int planeno,
-                                  FAR struct fb_planeinfo_s *pinfo);
+                                  struct fb_planeinfo_s *pinfo);
 #endif
 #if defined(CONFIG_FB_CMAP) && (!defined(CONFIG_DM320_OSD0_DISABLE) && !defined(CONFIG_DM320_OSD1_DISABLE))
-static int dm320_getcmap(FAR struct fb_vtable_s *vtable,
-                         FAR struct fb_cmap_s *cmap);
-static int dm320_putcmap(FAR struct fb_vtable_s *vtable,
-                         FAR const struct fb_cmap_s *cmap);
+static int dm320_getcmap(struct fb_vtable_s *vtable,
+                         struct fb_cmap_s *cmap);
+static int dm320_putcmap(struct fb_vtable_s *vtable,
+                         const struct fb_cmap_s *cmap);
 #endif
 #ifdef CONFIG_FB_HWCURSOR
-static int dm320_getcursor(FAR struct fb_vtable_s *vtable,
-                           FAR struct fb_cursorattrib_s *attrib);
-static int dm320_setcursor(FAR struct fb_vtable_s *vtable,
-                           FAR struct fb_setcursor_s *settings);
+static int dm320_getcursor(struct fb_vtable_s *vtable,
+                           struct fb_cursorattrib_s *attrib);
+static int dm320_setcursor(struct fb_vtable_s *vtable,
+                           struct fb_setcursor_s *settings);
 #endif
 
 /****************************************************************************
@@ -525,9 +527,9 @@ static int dm320_setcursor(FAR struct fb_vtable_s *vtable,
 /* These are the addresses of allocated framebuffer memory regions */
 
 #ifndef CONFIG_DM320_VID0_DISABLE
-static FAR void *g_vid0base = 0;
+static void *g_vid0base = 0;
 #ifndef CONFIG_DM320_DISABLE_PINGPONG
-static FAR void *g_vid0ppbase = 0;
+static void *g_vid0ppbase = 0;
 #endif
 
 static struct fb_vtable_s g_vid0vtable =
@@ -543,7 +545,7 @@ static struct fb_vtable_s g_vid0vtable =
 #endif
 
 #ifndef CONFIG_DM320_VID1_DISABLE
-static FAR void *g_vid1base = 0;
+static void *g_vid1base = 0;
 
 static struct fb_vtable_s g_vid1vtable =
 {
@@ -557,7 +559,7 @@ static struct fb_vtable_s g_vid1vtable =
 #endif
 
 #ifndef CONFIG_DM320_OSD0_DISABLE
-static FAR void *g_osd0base = 0;
+static void *g_osd0base = 0;
 static struct fb_vtable_s g_osd0vtable =
 {
   .getvideoinfo = dm320_getosd0videoinfo,
@@ -575,7 +577,7 @@ static struct fb_vtable_s g_osd0vtable =
 #endif
 
 #ifndef CONFIG_DM320_OSD1_DISABLE
-static FAR void *g_osd1base = 0;
+static void *g_osd1base = 0;
 static struct fb_vtable_s g_osd1vtable =
 {
   .getvideoinfo = dm320_getosd1videoinfo,
@@ -600,7 +602,7 @@ static inline void dm320_blankscreen(uint8_t *buffer, int len)
   memset(buffer, 0xff, len);
 }
 
-static inline uint32_t dm320_physaddr(FAR void *fb_vaddr)
+static inline uint32_t dm320_physaddr(void *fb_vaddr)
 {
   return (uint32_t)fb_vaddr - DM320_SDRAM_VADDR;
 }
@@ -677,10 +679,10 @@ static int dm320_allocvideomemory(void)
 {
 #ifndef CONFIG_DM320_VID0_DISABLE
 #ifndef CONFIG_DM320_DISABLE_PINGPONG
-  g_vid0base   = (FAR void *)kmm_malloc(2 * DM320_VID0_FBLEN);
-  g_vid0ppbase = (FAR char *)g_vid0base + DM320_VID0_FBLEN;
+  g_vid0base   = kmm_malloc(2 * DM320_VID0_FBLEN);
+  g_vid0ppbase = (char *)g_vid0base + DM320_VID0_FBLEN;
 #else
-  g_vid0base   = (FAR void *)kmm_malloc(DM320_VID0_FBLEN);
+  g_vid0base   = kmm_malloc(DM320_VID0_FBLEN);
 #endif
   if (!g_vid0base)
     {
@@ -689,7 +691,7 @@ static int dm320_allocvideomemory(void)
 #endif
 
 #ifndef CONFIG_DM320_VID1_DISABLE
-  g_vid1base = (FAR void *)kmm_malloc(DM320_VID1_FBLEN);
+  g_vid1base = kmm_malloc(DM320_VID1_FBLEN);
   if (!g_vid1base)
     {
       goto errout;
@@ -697,7 +699,7 @@ static int dm320_allocvideomemory(void)
 #endif
 
 #ifndef CONFIG_DM320_OSD0_DISABLE
-  g_osd0base = (FAR void *)kmm_malloc(DM320_OSD0_FBLEN);
+  g_osd0base = kmm_malloc(DM320_OSD0_FBLEN);
   if (!g_osd0base)
     {
       goto errout;
@@ -705,7 +707,7 @@ static int dm320_allocvideomemory(void)
 #endif
 
 #ifndef CONFIG_DM320_OSD1_DISABLE
-  g_osd1base = (FAR void *)kmm_malloc(DM320_OSD1_FBLEN);
+  g_osd1base = kmm_malloc(DM320_OSD1_FBLEN);
   if (!g_osd1base)
     {
       goto errout;
@@ -981,8 +983,8 @@ static void dm320_hwinitialize(void)
  ****************************************************************************/
 
 #ifndef CONFIG_DM320_VID0_DISABLE
-static int dm320_getvid0videoinfo(FAR struct fb_vtable_s *vtable,
-                                  FAR struct fb_videoinfo_s *vinfo)
+static int dm320_getvid0videoinfo(struct fb_vtable_s *vtable,
+                                  struct fb_videoinfo_s *vinfo)
 {
 #ifdef CONFIG_DEBUG_FEATURES
   if (!vtable || !vinfo)
@@ -1004,9 +1006,9 @@ static int dm320_getvid0videoinfo(FAR struct fb_vtable_s *vtable,
  ****************************************************************************/
 
 #ifndef CONFIG_DM320_VID0_DISABLE
-static int dm320_getvid0planeinfo(FAR struct fb_vtable_s *vtable,
+static int dm320_getvid0planeinfo(struct fb_vtable_s *vtable,
                                   int planeno,
-                                  FAR struct fb_planeinfo_s *pinfo)
+                                  struct fb_planeinfo_s *pinfo)
 {
 #ifdef CONFIG_DEBUG_FEATURES
   if (!vtable || !pinfo)
@@ -1029,8 +1031,8 @@ static int dm320_getvid0planeinfo(FAR struct fb_vtable_s *vtable,
  ****************************************************************************/
 
 #ifndef CONFIG_DM320_VID1_DISABLE
-static int dm320_getvid1videoinfo(FAR struct fb_vtable_s *vtable,
-                                  FAR struct fb_videoinfo_s *vinfo)
+static int dm320_getvid1videoinfo(struct fb_vtable_s *vtable,
+                                  struct fb_videoinfo_s *vinfo)
 {
 #ifdef CONFIG_DEBUG_FEATURES
   if (!vtable || !vinfo)
@@ -1052,9 +1054,9 @@ static int dm320_getvid1videoinfo(FAR struct fb_vtable_s *vtable,
  ****************************************************************************/
 
 #ifndef CONFIG_DM320_VID1_DISABLE
-static int dm320_getvid1planeinfo(FAR struct fb_vtable_s *vtable,
+static int dm320_getvid1planeinfo(struct fb_vtable_s *vtable,
                                   int planeno,
-                                  FAR struct fb_planeinfo_s *pinfo)
+                                  struct fb_planeinfo_s *pinfo)
 {
 #ifdef CONFIG_DEBUG_FEATURES
   if (!vtable || !pinfo)
@@ -1077,8 +1079,8 @@ static int dm320_getvid1planeinfo(FAR struct fb_vtable_s *vtable,
  ****************************************************************************/
 
 #ifndef CONFIG_DM320_OSD0_DISABLE
-static int dm320_getosd0videoinfo(FAR struct fb_vtable_s *vtable,
-                                  FAR struct fb_videoinfo_s *vinfo)
+static int dm320_getosd0videoinfo(struct fb_vtable_s *vtable,
+                                  struct fb_videoinfo_s *vinfo)
 {
 #ifdef CONFIG_DEBUG_FEATURES
   if (!vtable || !vinfo)
@@ -1104,9 +1106,9 @@ static int dm320_getosd0videoinfo(FAR struct fb_vtable_s *vtable,
  ****************************************************************************/
 
 #ifndef CONFIG_DM320_OSD0_DISABLE
-static int dm320_getosd0planeinfo(FAR struct fb_vtable_s *vtable,
+static int dm320_getosd0planeinfo(struct fb_vtable_s *vtable,
                                   int planeno,
-                                  FAR struct fb_planeinfo_s *pinfo)
+                                  struct fb_planeinfo_s *pinfo)
 {
 #ifdef CONFIG_DEBUG_FEATURES
   if (!vtable || !pinfo)
@@ -1129,8 +1131,8 @@ static int dm320_getosd0planeinfo(FAR struct fb_vtable_s *vtable,
  ****************************************************************************/
 
 #ifndef CONFIG_DM320_OSD1_DISABLE
-static int dm320_getosd1videoinfo(FAR struct fb_vtable_s *vtable,
-                                  FAR struct fb_videoinfo_s *vinfo)
+static int dm320_getosd1videoinfo(struct fb_vtable_s *vtable,
+                                  struct fb_videoinfo_s *vinfo)
 {
 #ifdef CONFIG_DEBUG_FEATURES
   if (!vtable || !vinfo)
@@ -1156,9 +1158,9 @@ static int dm320_getosd1videoinfo(FAR struct fb_vtable_s *vtable,
  ****************************************************************************/
 
 #ifndef CONFIG_DM320_OSD1_DISABLE
-static int dm320_getosd1planeinfo(FAR struct fb_vtable_s *vtable,
+static int dm320_getosd1planeinfo(struct fb_vtable_s *vtable,
                                   int planeno,
-                                  FAR struct fb_planeinfo_s *pinfo)
+                                  struct fb_planeinfo_s *pinfo)
 {
 #ifdef CONFIG_DEBUG_FEATURES
   if (!vtable || !pinfo)
@@ -1181,8 +1183,8 @@ static int dm320_getosd1planeinfo(FAR struct fb_vtable_s *vtable,
  ****************************************************************************/
 
 #if defined(CONFIG_FB_CMAP) && (!defined(CONFIG_DM320_OSD0_DISABLE) && !defined(CONFIG_DM320_OSD1_DISABLE))
-static int dm320_getcmap(FAR struct fb_vtable_s *vtable,
-                         FAR struct fb_cmap_s *cmap)
+static int dm320_getcmap(struct fb_vtable_s *vtable,
+                         struct fb_cmap_s *cmap)
 {
   /* I don't think the RAM clut is readable */
 
@@ -1195,8 +1197,8 @@ static int dm320_getcmap(FAR struct fb_vtable_s *vtable,
  ****************************************************************************/
 
 #if defined(CONFIG_FB_CMAP) && (!defined(CONFIG_DM320_OSD0_DISABLE) && !defined(CONFIG_DM320_OSD1_DISABLE))
-static int dm320_putcmap(FAR struct fb_vtable_s *vtable,
-                         FAR struct fb_cmap_s *cmap)
+static int dm320_putcmap(struct fb_vtable_s *vtable,
+                         struct fb_cmap_s *cmap)
 {
   irqstate_t flags;
   uint16_t regval;
@@ -1251,8 +1253,8 @@ static int dm320_putcmap(FAR struct fb_vtable_s *vtable,
  ****************************************************************************/
 
 #ifdef CONFIG_FB_HWCURSOR
-static int dm320_getcursor(FAR struct fb_vtable_s *vtable,
-                           FAR struct fb_cursorattrib_s *attrib)
+static int dm320_getcursor(struct fb_vtable_s *vtable,
+                           struct fb_cursorattrib_s *attrib)
 {
   irqstate_t flags;
 
@@ -1294,8 +1296,8 @@ static int dm320_getcursor(FAR struct fb_vtable_s *vtable,
  ****************************************************************************/
 
 #ifdef CONFIG_FB_HWCURSOR
-static int dm320_setcursor(FAR struct fb_vtable_s *vtable,
-                           FAR struct fb_setcursor_s *settings)
+static int dm320_setcursor(struct fb_vtable_s *vtable,
+                           struct fb_setcursor_s *settings)
 {
   irqstate_t flags;
   uint16_t regval;
@@ -1427,7 +1429,7 @@ int up_fbinitialize(int display)
  *
  ****************************************************************************/
 
-FAR struct fb_vtable_s *up_fbgetvplane(int display, int vplane)
+struct fb_vtable_s *up_fbgetvplane(int display, int vplane)
 {
   switch (vplane)
     {

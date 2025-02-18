@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/cxd56xx/drivers/audio/cxd56_audio_bca_reg.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -234,7 +236,7 @@ void cxd56_audio_bca_reg_en_bus_err_int(void);
 void cxd56_audio_bca_reg_dis_bus_err_int(void);
 
 void cxd56_audio_bca_reg_get_dma_mstate(cxd56_audio_dma_t handle,
-                                        FAR cxd56_audio_dma_mstate_t *state);
+                                        cxd56_audio_dma_mstate_t *state);
 
 uint32_t cxd56_audio_bca_reg_get_dma_done_state_mic(void);
 uint32_t cxd56_audio_bca_reg_get_dma_done_state_i2s1(void);

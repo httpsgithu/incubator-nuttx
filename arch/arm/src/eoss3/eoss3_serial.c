@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/eoss3/eoss3_serial.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -38,7 +40,6 @@
 #include <nuttx/irq.h>
 #include <nuttx/arch.h>
 #include <nuttx/init.h>
-#include <nuttx/power/pm.h>
 #include <nuttx/fs/ioctl.h>
 #include <nuttx/serial/serial.h>
 #include <nuttx/wqueue.h>
@@ -46,9 +47,7 @@
 #include <arch/board/board.h>
 
 #include "chip.h"
-#include "arm_arch.h"
 #include "arm_internal.h"
-
 #include "hardware/eoss3_uart.h"
 #include "hardware/eoss3_intr.h"
 #include "eoss3_lowputc.h"
@@ -78,7 +77,7 @@ static int  eoss3_setup(struct uart_dev_s *dev);
 static void eoss3_shutdown(struct uart_dev_s *dev);
 static int  eoss3_attach(struct uart_dev_s *dev);
 static void eoss3_detach(struct uart_dev_s *dev);
-static int  eoss3_interrupt(int irq, void *context, FAR void *arg);
+static int  eoss3_interrupt(int irq, void *context, void *arg);
 static int  eoss3_ioctl(struct file *filep, int cmd, unsigned long arg);
 static int  eoss3_receive(struct uart_dev_s *dev, unsigned int *status);
 static void eoss3_rxint(struct uart_dev_s *dev, bool enable);
@@ -195,7 +194,7 @@ static void eoss3_tx_work(void *arg)
   if (dev->xmit.head != dev->xmit.tail)
     {
       work_queue(HPWORK, &priv->work, eoss3_tx_work,
-                 (FAR void *)arg, 0);
+                 (void *)arg, 0);
     }
 
   leave_critical_section(flags);
@@ -315,13 +314,15 @@ static void eoss3_detach(struct uart_dev_s *dev)
  * Name: eoss3_interrupt
  *
  * Description:
- *   This is the common UART interrupt handler.  It should call
- *   uart_transmitchars or uart_receivechar to perform the appropriate data
- *   transfers.
+ *   This is the UART interrupt handler.  It will be invoked when an
+ *   interrupt is received on the 'irq'.  It should call uart_xmitchars or
+ *   uart_recvchars to perform the appropriate data transfers.  The
+ *   interrupt handling logic must be able to map the 'arg' to the
+ *   appropriate uart_dev_s structure in order to call these functions.
  *
  ****************************************************************************/
 
-static int eoss3_interrupt(int irq, void *context, FAR void *arg)
+static int eoss3_interrupt(int irq, void *context, void *arg)
 {
   struct uart_dev_s *dev = (struct uart_dev_s *)arg;
   uint32_t status;
@@ -493,7 +494,7 @@ static void eoss3_txint(struct uart_dev_s *dev, bool enable)
       if (work_available(&priv->work))
         {
           work_queue(HPWORK, &priv->work, eoss3_tx_work,
-                     (FAR void *)dev, 0);
+                     (void *)dev, 0);
         }
     }
 }
@@ -582,28 +583,16 @@ void arm_serialinit(void)
  *
  ****************************************************************************/
 
-int up_putc(int ch)
+void up_putc(int ch)
 {
 #ifdef CONFIG_UART_SERIAL_CONSOLE
   struct eoss3_uart_s *priv = (struct eoss3_uart_s *)g_uartport.priv;
   uint32_t ie;
 
   eoss3_disableuartint(priv, &ie);
-
-  /* Check for LF */
-
-  if (ch == '\n')
-    {
-      /* Add CR */
-
-      arm_lowputc('\r');
-    }
-
   arm_lowputc(ch);
   eoss3_restoreuartint(priv, ie);
 #endif
-
-  return ch;
 }
 
 #else /* USE_SERIALDRIVER */
@@ -616,21 +605,11 @@ int up_putc(int ch)
  *
  ****************************************************************************/
 
-int up_putc(int ch)
+void up_putc(int ch)
 {
-  /* Check for LF */
-
-  if (ch == '\n')
-    {
-      /* Add CR */
-
-      arm_lowputc('\r');
-    }
-
   /* Output the character */
 
   arm_lowputc(ch);
-  return ch;
 }
 
 #endif /* USE_SERIALDRIVER */

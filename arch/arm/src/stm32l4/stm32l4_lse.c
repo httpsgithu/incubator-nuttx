@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/stm32l4/stm32l4_lse.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -24,8 +26,7 @@
 
 #include <nuttx/config.h>
 
-#include "arm_arch.h"
-
+#include "arm_internal.h"
 #include "stm32l4_pwr.h"
 #include "stm32l4_rcc.h"
 #include "stm32l4_waste.h"
@@ -35,17 +36,17 @@
  ****************************************************************************/
 
 #ifdef CONFIG_STM32L4_RTC_LSECLOCK_START_DRV_CAPABILITY
-# if CONFIG_STM32L4_RTC_LSECLOCK_START_DRV_CAPABILITY < 0 || \
-     CONFIG_STM32L4_RTC_LSECLOCK_START_DRV_CAPABILITY > 3
-#  error "Invalid LSE drive capability setting"
-#endif
+#  if CONFIG_STM32L4_RTC_LSECLOCK_START_DRV_CAPABILITY < 0 || \
+      CONFIG_STM32L4_RTC_LSECLOCK_START_DRV_CAPABILITY > 3
+#    error "Invalid LSE drive capability setting"
+#  endif
 #endif
 
 #ifdef CONFIG_STM32L4_RTC_LSECLOCK_RUN_DRV_CAPABILITY
-# if CONFIG_STM32L4_RTC_LSECLOCK_RUN_DRV_CAPABILITY < 0 || \
-     CONFIG_STM32L4_RTC_LSECLOCK_RUN_DRV_CAPABILITY > 3
-#  error "Invalid LSE drive capability setting"
-#endif
+#  if CONFIG_STM32L4_RTC_LSECLOCK_RUN_DRV_CAPABILITY < 0 || \
+      CONFIG_STM32L4_RTC_LSECLOCK_RUN_DRV_CAPABILITY > 3
+#    error "Invalid LSE drive capability setting"
+#  endif
 #endif
 
 /****************************************************************************

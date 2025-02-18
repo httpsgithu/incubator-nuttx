@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/armv7-a/arm_head.S
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -24,28 +26,31 @@
 
 #include <nuttx/config.h>
 
+#include <arch/irq.h>
+
 #include "arm.h"
-#include "cp15.h"
 #include "sctlr.h"
 #include "mmu.h"
 #include "chip.h"
 #include "arm_internal.h"
 
-#ifndef CONFIG_PAGING
+#ifndef IDLE_STACK_BASE
+  #ifdef CONFIG_BOOT_SDRAM_DATA
+    #define IDLE_STACK_BASE IDLE_STACK_VBASE
+  #else
+    #define IDLE_STACK_BASE _ebss
+  #endif
+#endif
+
+#define IDLE_STACK_TOP  (IDLE_STACK_BASE + CONFIG_IDLETHREAD_STACKSIZE)
+
+#ifndef CONFIG_LEGACY_PAGING
 
 	.file	"arm_head.S"
 
 /****************************************************************************
  * Configuration
  ****************************************************************************/
-
-/* Hard-coded options */
-
-#undef CPU_ALIGNMENT_TRAP
-#undef CPU_CACHE_ROUND_ROBIN
-#undef CPU_DCACHE_DISABLE
-#undef CPU_ICACHE_DISABLE
-#undef CPU_AFE_ENABLE
 
 /* There are three operational memory configurations:
  *
@@ -168,14 +173,51 @@
  */
 
 	.text
+	.syntax	unified
+	.arm
 	.global	__start
 	.type	__start, #function
 
 __start:
-	/* Make sure that we are in SVC mode with IRQs and FIQs disabled */
+#if defined(CONFIG_SMP) && CONFIG_SMP_NCPUS > 1
+	/* Get cpuindex, cpu0 continue boot, others wait event from cpu0 */
 
-	mov		r0, #(PSR_MODE_SVC | PSR_I_BIT | PSR_F_BIT)
-	msr		cpsr_c, r0
+	mrc		CP15_MPIDR(r0)
+	and		r0, r0, #0x3
+	cmp		r0, #0
+	beq		__cpu0_start
+
+#ifdef CONFIG_ARMV7A_SMP_BUSY_WAIT
+	ldr		r2, =CONFIG_ARMV7A_SMP_BUSY_WAIT_FLAG_ADDR
+1:
+	ldr		r1, [r2, #0]
+	cmp		r1, #0
+	beq		1b
+#else
+	wfe
+#endif
+
+	cmp		r0, #1
+	beq		__cpu1_start
+#  if CONFIG_SMP_NCPUS > 2
+	cmp		r0, #2
+	beq		__cpu2_start
+#  endif
+#  if CONFIG_SMP_NCPUS > 3
+	cmp		r0, #3
+	beq		__cpu3_start
+#  endif
+#  if CONFIG_SMP_NCPUS > 4
+	cmp		r0, #4
+	beq		__cpu4_start
+#  endif
+
+__cpu0_start:
+#endif
+
+	/* Make sure that we are in SYS mode with IRQs and FIQs disabled */
+
+	cpsid		if, #PSR_MODE_SYS
 
 	/* The MMU and caches should be disabled */
 
@@ -183,6 +225,7 @@ __start:
 	bic		r0, r0, #(SCTLR_M | SCTLR_C)
 	bic		r0, r0, #(SCTLR_I)
 	mcr		CP15_SCTLR(r0)
+	isb
 
 	/* Clear the 16K level 1 page table */
 
@@ -327,11 +370,20 @@ __start:
 	 */
 
 	mov		r0, #0
+	mcr		CP15_TPIDRPRW(r0)	/* Initialize percpu reg TPIDRPRW */
+#ifdef CONFIG_ARM_HAVE_MPCORE
+	mcr		CP15_TLBIALLIS(r0)	/* Invalidate the entire unified TLB */
+	mcr		CP15_BPIALLIS(r0)	/* Invalidate entire branch prediction array */
+	mcr		CP15_ICIALLUIS(r0)	/* Invalidate I-cache */
+#else
 	mcr		CP15_TLBIALL(r0,c7)	/* Invalidate the entire unified TLB */
 	mcr		CP15_TLBIALL(r0,c6)
 	mcr		CP15_TLBIALL(r0,c5)
 	mcr		CP15_BPIALL(r0)		/* Invalidate entire branch prediction array */
 	mcr		CP15_ICIALLU(r0)	/* Invalidate I-cache */
+#endif
+
+	isb
 
 	/* Load the page table address.
 	 *
@@ -404,6 +456,7 @@ __start:
 	bic		r0, r0, #(SCTLR_SW | SCTLR_I   | SCTLR_V   | SCTLR_RR | SCTLR_HA)
 	bic		r0, r0, #(SCTLR_EE | SCTLR_TRE | SCTLR_AFE | SCTLR_TE)
 
+#ifndef CONFIG_SMP
 	/* Set bits to enable the MMU
 	 *
 	 *   SCTLR_M     Bit 0:  Enable the MMU
@@ -411,6 +464,8 @@ __start:
 	 */
 
 	orr		r0, r0, #(SCTLR_M)
+#endif
+
 #ifndef CONFIG_ARCH_CORTEXA5
 	orr		r0, r0, #(SCTLR_Z)
 #endif
@@ -424,7 +479,7 @@ __start:
 	orr		r0, r0, #(SCTLR_V)
 #endif
 
-#if defined(CPU_CACHE_ROUND_ROBIN) && !defined(CONFIG_ARCH_CORTEXA5)
+#if defined(CONFIG_ARMV7A_CACHE_ROUND_ROBIN) && !defined(CONFIG_ARCH_CORTEXA5)
 	/* Round Robin cache replacement
 	 *
 	 *   SCTLR_RR   Bit 14: The Cortex-A5 processor only supports a fixed random
@@ -438,7 +493,7 @@ __start:
 	 * after SMP cache coherency has been setup.
 	 */
 
-#if !defined(CPU_DCACHE_DISABLE) && !defined(CONFIG_SMP)
+#if !defined(CONFIG_ARMV7A_DCACHE_DISABLE) && !defined(CONFIG_SMP)
 	/* Dcache enable
 	 *
 	 *   SCTLR_C    Bit 2:  DCache enable
@@ -447,7 +502,7 @@ __start:
 	orr		r0, r0, #(SCTLR_C)
 #endif
 
-#ifndef CPU_ICACHE_DISABLE
+#if !defined(CONFIG_ARMV7A_ICACHE_DISABLE) && !defined(CONFIG_SMP)
 	/* Icache enable
 	 *
 	 *   SCTLR_I    Bit 12: ICache enable
@@ -456,7 +511,7 @@ __start:
 	orr		r0, r0, #(SCTLR_I)
 #endif
 
-#ifdef CPU_ALIGNMENT_TRAP
+#ifdef CONFIG_ARMV7A_ALIGNMENT_TRAP
 	/* Alignment abort enable
 	 *
 	 *   SCTLR_A    Bit 1:  Strict alignment enabled
@@ -474,7 +529,7 @@ __start:
 	orr		r0, r0, #(SCTLR_EE)
 #endif
 
-#ifdef CPU_AFE_ENABLE
+#ifdef CONFIG_ARMV7A_AFE_ENABLE
 	/* AP[0:2] Permissions model
 	 *
 	 *   SCTLR_AFE  Bit 29: Full, legacy access permissions behavior (reset value).
@@ -489,6 +544,7 @@ __start:
 	/* Then write the configured control register */
 
 	mcr		CP15_SCTLR(r0)			/* Write control reg */
+	isb
 	.rept		12				/* Cortex A8 wants lots of NOPs here */
 	nop
 	.endr
@@ -632,6 +688,15 @@ __start:
 
 	bl		arm_boot
 
+	/* finish busy wait */
+
+#ifdef CONFIG_ARMV7A_SMP_BUSY_WAIT
+	ldr		r0, =CONFIG_ARMV7A_SMP_BUSY_WAIT_FLAG_ADDR
+	mov		r1, #1
+	str		r1, [r0]
+	dsb		sy
+#endif
+
 	/* Finally branch to the OS entry point */
 
 	mov		lr, #0				/* LR = return address (none) */
@@ -720,13 +785,7 @@ arm_data_initialize:
 	.size	.Linitparms, . -.Linitparms
 
 .Lstackpointer:
-#ifdef CONFIG_BOOT_SDRAM_DATA
-	.long	IDLE_STACK_VBASE+CONFIG_IDLETHREAD_STACKSIZE
-#elif defined(CONFIG_SMP)
-	.long	_enoinit+CONFIG_IDLETHREAD_STACKSIZE
-#else
-	.long	_ebss+CONFIG_IDLETHREAD_STACKSIZE
-#endif
+	.long	IDLE_STACK_TOP
 	.size	.Lstackpointer, . -.Lstackpointer
 
 #ifdef CONFIG_BOOT_RUNFROMFLASH
@@ -754,13 +813,7 @@ arm_data_initialize:
 
 g_idle_topstack:
 
-#ifdef CONFIG_BOOT_SDRAM_DATA
-	.long	IDLE_STACK_VBASE+CONFIG_IDLETHREAD_STACKSIZE
-#elif defined(CONFIG_SMP)
-	.long	_enoinit+CONFIG_IDLETHREAD_STACKSIZE
-#else
-	.long	_ebss+CONFIG_IDLETHREAD_STACKSIZE
-#endif
+	.long	IDLE_STACK_TOP
 	.size	g_idle_topstack, .-g_idle_topstack
 	.end
 #endif

@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/s32k1xx/s32k148evb/src/s32k1xx_bringup.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -111,7 +113,7 @@ int s32k1xx_bringup(void)
 #endif
 
 #ifdef CONFIG_S32K1XX_PROGMEM
-  FAR struct mtd_dev_s *mtd;
+  struct mtd_dev_s *mtd;
 
   mtd = progmem_initialize();
   if (mtd == NULL)
@@ -154,21 +156,21 @@ int s32k1xx_bringup(void)
 
 #ifdef CONFIG_NETDEV_LATEINIT
 
-# ifdef CONFIG_S32K1XX_ENET
+#  ifdef CONFIG_S32K1XX_ENET
   s32k1xx_netinitialize(0);
-# endif
+#  endif
 
-# ifdef CONFIG_S32K1XX_FLEXCAN0
+#  ifdef CONFIG_S32K1XX_FLEXCAN0
   s32k1xx_caninitialize(0);
-# endif
+#  endif
 
-# ifdef CONFIG_S32K1XX_FLEXCAN1
+#  ifdef CONFIG_S32K1XX_FLEXCAN1
   s32k1xx_caninitialize(1);
-# endif
+#  endif
 
-# ifdef CONFIG_S32K1XX_FLEXCAN2
+#  ifdef CONFIG_S32K1XX_FLEXCAN2
   s32k1xx_caninitialize(2);
-# endif
+#  endif
 
 #endif
 

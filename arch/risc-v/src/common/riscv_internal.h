@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/risc-v/src/common/riscv_internal.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -18,8 +20,8 @@
  *
  ****************************************************************************/
 
-#ifndef __ARCH_RISCV_SRC_COMMON_UP_INTERNAL_H
-#define __ARCH_RISCV_SRC_COMMON_UP_INTERNAL_H
+#ifndef __ARCH_RISCV_SRC_COMMON_RISCV_INTERNAL_H
+#define __ARCH_RISCV_SRC_COMMON_RISCV_INTERNAL_H
 
 /****************************************************************************
  * Included Files
@@ -29,13 +31,38 @@
 
 #ifndef __ASSEMBLY__
 #  include <nuttx/compiler.h>
+#  include <nuttx/sched.h>
 #  include <sys/types.h>
 #  include <stdint.h>
+#  include <syscall.h>
 #endif
+
+#include <nuttx/irq.h>
+
+#include "riscv_common_memorymap.h"
 
 /****************************************************************************
  * Pre-processor Definitions
  ****************************************************************************/
+
+#if defined(CONFIG_ARCH_QPFPU)
+#  define FLOAD     __STR(flq)
+#  define FSTORE    __STR(fsq)
+#elif defined(CONFIG_ARCH_DPFPU)
+#  define FLOAD     __STR(fld)
+#  define FSTORE    __STR(fsd)
+#else
+#  define FLOAD     __STR(flw)
+#  define FSTORE    __STR(fsw)
+#endif
+
+#ifdef CONFIG_ARCH_RV32
+#  define REGLOAD   __STR(lw)
+#  define REGSTORE  __STR(sw)
+#else
+#  define REGLOAD   __STR(ld)
+#  define REGSTORE  __STR(sd)
+#endif
 
 /* This is the value used to mark the stack for subsequent stack monitoring
  * logic.
@@ -45,25 +72,20 @@
 #define INTSTACK_COLOR 0xdeadbeef
 #define HEAP_COLOR     'h'
 
-/* In the RISC_V model, the state is copied from the stack to the TCB, but
- * only a referenced is passed to get the state from the TCB.
- */
+/* RISC-V requires a 16-byte stack alignment. */
 
-#ifdef CONFIG_ARCH_RV64GC
-#define riscv_savestate(regs)    riscv_copystate(regs, (uint64_t*)CURRENT_REGS)
-#define riscv_restorestate(regs) (CURRENT_REGS = regs)
-#else
-#define riscv_savestate(regs)    riscv_copystate(regs, (uint32_t*)g_current_regs)
-#define riscv_restorestate(regs) (g_current_regs = regs)
-#endif
+#define STACK_ALIGNMENT     16
+#define STACK_FRAME_SIZE    __XSTR(STACK_ALIGNMENT)
 
-#define _START_TEXT  &_stext
-#define _END_TEXT    &_etext
-#define _START_BSS   &_sbss
-#define _END_BSS     &_ebss
-#define _DATA_INIT   &_eronly
-#define _START_DATA  &_sdata
-#define _END_DATA    &_edata
+/* Stack alignment macros */
+
+#define STACK_ALIGN_MASK    (STACK_ALIGNMENT - 1)
+#define STACK_ALIGN_DOWN(a) ((a) & ~STACK_ALIGN_MASK)
+#define STACK_ALIGN_UP(a)   (((a) + STACK_ALIGN_MASK) & ~STACK_ALIGN_MASK)
+
+/* Interrupt Stack macros */
+
+#define INT_STACK_SIZE  (STACK_ALIGN_DOWN(CONFIG_ARCH_INTERRUPTSTACK))
 
 /* Determine which (if any) console driver to use.  If a console is enabled
  * and no other console device is specified, then a serial console is
@@ -83,6 +105,69 @@
 #  endif
 #endif
 
+/* Return values from riscv_check_pmp_access */
+
+#define PMP_ACCESS_OFF      (0)     /* Access for area not set */
+#define PMP_ACCESS_DENIED   (-1)    /* Access set and denied */
+#define PMP_ACCESS_FULL     (1)     /* Access set and allowed */
+
+#ifndef __ASSEMBLY__
+
+/* Use ASM as rv64ilp32 compiler generated address is limited */
+
+static inline uint8_t getreg8(const volatile uintreg_t a)
+{
+  uint8_t v;
+  __asm__ __volatile__("lb %0, 0(%1)" : "=r" (v) : "r" (a));
+  return v;
+}
+
+static inline void putreg8(uint8_t v, const volatile uintreg_t a)
+{
+  __asm__ __volatile__("sb %0, 0(%1)" : : "r" (v), "r" (a));
+}
+
+static inline uint16_t getreg16(const volatile uintreg_t a)
+{
+  uint16_t v;
+  __asm__ __volatile__("lh %0, 0(%1)" : "=r" (v) : "r" (a));
+  return v;
+}
+
+static inline void putreg16(uint16_t v, const volatile uintreg_t a)
+{
+  __asm__ __volatile__("sh %0, 0(%1)" : : "r" (v), "r" (a));
+}
+
+static inline uint32_t getreg32(const volatile uintreg_t a)
+{
+  uint32_t v;
+  __asm__ __volatile__("lw %0, 0(%1)" : "=r" (v) : "r" (a));
+  return v;
+}
+
+static inline void putreg32(uint32_t v, const volatile uintreg_t a)
+{
+  __asm__ __volatile__("sw %0, 0(%1)" : : "r" (v), "r" (a));
+}
+
+static inline uint64_t getreg64(const volatile uintreg_t a)
+{
+  uint64_t v;
+  __asm__ __volatile__("ld %0, 0(%1)" : "=r" (v) : "r" (a));
+  return v;
+}
+
+static inline void putreg64(uint64_t v, const volatile uintreg_t a)
+{
+  __asm__ __volatile__("sd %0, 0(%1)" : : "r" (v), "r" (a));
+}
+
+#define riscv_append_pmp_region(a, b, s) \
+  riscv_config_pmp_region(riscv_next_free_pmp_region(), a, b, s)
+
+#endif
+
 /****************************************************************************
  * Public Types
  ****************************************************************************/
@@ -96,98 +181,127 @@ extern "C"
 #define EXTERN extern
 #endif
 
-#ifndef __ASSEMBLY__
-#ifdef CONFIG_ARCH_RV64GC
-#ifdef CONFIG_SMP
-EXTERN volatile uint64_t *g_current_regs[CONFIG_SMP_NCPUS];
-#  define CURRENT_REGS (g_current_regs[up_cpu_index()])
-#else
-EXTERN volatile uint64_t *g_current_regs[1];
-#  define CURRENT_REGS (g_current_regs[0])
-#endif
-EXTERN uintptr_t g_idle_topstack;
-#else
-EXTERN volatile uint32_t *g_current_regs;
-#  define CURRENT_REGS (g_current_regs)
-EXTERN uint32_t g_idle_topstack;
-#endif
-
-/* Address of the saved user stack pointer */
-
-#if CONFIG_ARCH_INTERRUPTSTACK > 15
-EXTERN uint32_t g_intstackalloc; /* Allocated stack base */
-EXTERN uint32_t g_intstacktop;   /* Initial top of interrupt stack */
-#endif
-
-/* These 'addresses' of these values are setup by the linker script.  They
- * are not actual uint32_t storage locations! They are only used meaningfully
- * in the following way:
- *
- *  - The linker script defines, for example, the symbol_sdata.
- *  - The declareion extern uint32_t _sdata; makes C happy.  C will believe
- *    that the value _sdata is the address of a uint32_t variable _data (it
- *    is not!).
- *  - We can recoved the linker value then by simply taking the address of
- *    of _data.  like:  uint32_t *pdata = &_sdata;
- */
-
-EXTERN uint32_t _stext;           /* Start of .text */
-EXTERN uint32_t _etext;           /* End_1 of .text + .rodata */
-EXTERN const uint32_t _eronly;    /* End+1 of read only section (.text + .rodata) */
-EXTERN uint32_t _sdata;           /* Start of .data */
-EXTERN uint32_t _edata;           /* End+1 of .data */
-EXTERN uint32_t _sbss;            /* Start of .bss */
-EXTERN uint32_t _ebss;            /* End+1 of .bss */
-
-#endif /* __ASSEMBLY__ */
-
 /****************************************************************************
 * Public Function Prototypes
   ***************************************************************************/
 
 #ifndef __ASSEMBLY__
+/* Atomic modification of registers */
+
+void modifyreg32(uintreg_t addr, uint32_t clearbits, uint32_t setbits);
 
 /* Memory allocation ********************************************************/
 
 #if CONFIG_MM_REGIONS > 1
 void riscv_addregion(void);
 #else
-# define riscv_addregion()
+#  define riscv_addregion()
 #endif
 
 /* IRQ initialization *******************************************************/
 
 void riscv_ack_irq(int irq);
 
-#ifdef CONFIG_ARCH_RV64GC
-void riscv_copystate(uint64_t *dest, uint64_t *src);
-void riscv_copyfullstate(uint64_t *dest, uint64_t *src);
-#else
-void riscv_copystate(uint32_t *dest, uint32_t *src);
-void riscv_copyfullstate(uint32_t *dest, uint32_t *src);
-#endif
-
 void riscv_sigdeliver(void);
 int riscv_swint(int irq, void *context, void *arg);
-uint32_t riscv_get_newintctx(void);
+uintptr_t riscv_get_newintctx(void);
+void riscv_set_idleintctx(void);
+void riscv_exception_attach(void);
 
 #ifdef CONFIG_ARCH_FPU
-#ifdef CONFIG_ARCH_RV64GC
-void riscv_savefpu(uint64_t *regs);
-void riscv_restorefpu(const uint64_t *regs);
-#else /* !CONFIG_ARCH_RV64GC */
-void riscv_savefpu(uint32_t *regs);
-void riscv_restorefpu(const uint32_t *regs);
-#endif /* CONFIG_ARCH_RV64GC */
+void riscv_fpuconfig(void);
+void riscv_savefpu(uintreg_t *regs, uintreg_t *fregs);
+void riscv_restorefpu(uintreg_t *regs, uintreg_t *fregs);
+
+/* Get FPU register save area */
+
+static inline uintreg_t *riscv_fpuregs(struct tcb_s *tcb)
+{
+#ifdef CONFIG_ARCH_LAZYFPU
+  /* With lazy FPU the registers are simply in tcb */
+
+  return tcb->xcp.fregs;
 #else
-#  define riscv_savefpu(regs)
-#  define riscv_restorefpu(regs)
+  /* Otherwise they are after the integer registers */
+
+  return (uintreg_t *)((uintptr_t)tcb->xcp.regs + INT_XCPT_SIZE);
+#endif
+}
+#else
+#  define riscv_fpuconfig()
+#  define riscv_savefpu(regs, fregs)
+#  define riscv_restorefpu(regs, fregs)
+#  define riscv_fpuregs(tcb)
+#endif
+
+#ifdef CONFIG_ARCH_RV_ISA_V
+void riscv_vpuconfig(void);
+void riscv_savevpu(uintptr_t *regs, uintptr_t *vregs);
+void riscv_restorevpu(uintptr_t *regs, uintptr_t *vregs);
+
+/* Get VPU register save area */
+
+static inline uintptr_t *riscv_vpuregs(struct tcb_s *tcb)
+{
+  return tcb->xcp.vregs;
+}
+#else
+#  define riscv_vpuconfig()
+#  define riscv_savevpu(regs, vregs)
+#  define riscv_restorevpu(regs, vregs)
+#  define riscv_vpuregs(tcb)
+#endif
+
+/* Save / restore context of task */
+
+static inline void riscv_savecontext(struct tcb_s *tcb)
+{
+#ifdef CONFIG_ARCH_FPU
+  /* Save current process FPU state to TCB */
+
+  riscv_savefpu(tcb->xcp.regs, riscv_fpuregs(tcb));
+#endif
+
+#ifdef CONFIG_ARCH_RV_ISA_V
+  /* Save current process VPU state to TCB */
+
+  riscv_savevpu(tcb->xcp.regs, riscv_vpuregs(tcb));
+#endif
+}
+
+static inline void riscv_restorecontext(struct tcb_s *tcb)
+{
+#ifdef CONFIG_ARCH_FPU
+  /* Restore FPU state for next process */
+
+  riscv_restorefpu(tcb->xcp.regs, riscv_fpuregs(tcb));
+#endif
+
+#ifdef CONFIG_ARCH_RV_ISA_V
+  /* Restore VPU state for next process */
+
+  riscv_restorevpu(tcb->xcp.regs, riscv_vpuregs(tcb));
+#endif
+
+#ifdef CONFIG_LIB_SYSCALL
+  /* Update current thread pointer */
+
+  __asm__ __volatile__("mv tp, %0" : : "r"(tcb));
+#endif
+}
+
+#ifdef CONFIG_ARCH_RISCV_INTXCPT_EXTENSIONS
+void riscv_initial_extctx_state(struct tcb_s *tcb);
 #endif
 
 /* RISC-V PMP Config ********************************************************/
 
-void riscv_config_pmp_region(uintptr_t region, uintptr_t attr,
-                             uintptr_t base, uintptr_t size);
+int riscv_config_pmp_region(uintptr_t region, uintptr_t attr,
+                            uintptr_t base, uintptr_t size);
+
+int riscv_check_pmp_access(uintptr_t attr, uintptr_t base, uintptr_t size);
+int riscv_configured_pmp_regions(void);
+int riscv_next_free_pmp_region(void);
 
 /* Power management *********************************************************/
 
@@ -195,6 +309,12 @@ void riscv_config_pmp_region(uintptr_t region, uintptr_t attr,
 void riscv_pminitialize(void);
 #else
 #  define riscv_pminitialize()
+#endif
+
+/* DMA **********************************************************************/
+
+#ifdef CONFIG_ARCH_DMA
+void weak_function riscv_dma_initialize(void);
 #endif
 
 /* Low level serial output **************************************************/
@@ -210,19 +330,122 @@ void riscv_serialinit(void);
 void riscv_earlyserialinit(void);
 #endif
 
-#ifdef CONFIG_RPMSG_UART
-void rpmsg_serialinit(void);
+/* Networking ***************************************************************/
+
+/* Defined in board/xyz_network.c for board-specific Ethernet
+ * implementations, or chip/xyx_ethernet.c for chip-specific Ethernet
+ * implementations.
+ */
+
+#if defined(CONFIG_NET) && !defined(CONFIG_NETDEV_LATEINIT)
+void riscv_netinitialize(void);
+#else
+#  define riscv_netinitialize()
 #endif
 
 /* Exception Handler ********************************************************/
 
-void riscv_exception(uint32_t mcause, uint32_t *regs);
+uintreg_t *riscv_doirq(int irq, uintreg_t *regs);
+int riscv_exception(int mcause, void *regs, void *args);
+int riscv_fillpage(int mcause, void *regs, void *args);
+int riscv_misaligned(int irq, void *context, void *arg);
 
 /* Debug ********************************************************************/
 
 #ifdef CONFIG_STACK_COLORATION
+size_t riscv_stack_check(uintptr_t alloc, size_t size);
 void riscv_stack_color(void *stackbase, size_t nbytes);
 #endif
+
+#ifdef CONFIG_SMP
+void riscv_cpu_boot(int cpu);
+int riscv_smp_call_handler(int irq, void *c, void *arg);
+#endif
+
+#ifdef CONFIG_ARCH_RV_CPUID_MAP
+/****************************************************************************
+ * Name: riscv_hartid_to_cpuid / riscv_cpuid_to_hartid
+ *
+ * Description:
+ *   CPU ID mapping functions for systems where physical hart IDs don't match
+ *   logical CPU IDs.
+ *
+ ****************************************************************************/
+
+int riscv_hartid_to_cpuid(int hart);
+int riscv_cpuid_to_hartid(int cpu);
+#else
+#define riscv_hartid_to_cpuid(hart) (hart)
+#define riscv_cpuid_to_hartid(cpu)  (cpu)
+#endif /* CONFIG_ARCH_RV_CPUID_MAP */
+
+/* If kernel runs in Supervisor mode, a system call trampoline is needed */
+
+#ifdef CONFIG_ARCH_USE_S_MODE
+void *riscv_perform_syscall(uintreg_t *regs);
+#endif
+
+/****************************************************************************
+ * Name: riscv_jump_to_user
+ *
+ * Description:
+ *   Routine to jump to user space, called when a user process is started and
+ *   the kernel is ready to give control to the user task in user space.
+ *
+ * Parameters:
+ *   entry - Process entry point.
+ *   a0    - Parameter 0 for the process.
+ *   a1    - Parameter 1 for the process.
+ *   a2    - Parameter 2 for the process.
+ *   sp    - User stack pointer.
+ *   regs  - Integer register save area to use.
+ *
+ * Returned Value:
+ *   None
+ *
+ ****************************************************************************/
+
+void riscv_jump_to_user(uintptr_t entry, uintreg_t a0, uintreg_t a1,
+                        uintreg_t a2, uintreg_t sp,
+                        uintreg_t *regs) noreturn_function;
+
+/* Context switching via system calls ***************************************/
+
+/****************************************************************************
+ * Name: riscv_fullcontextrestore
+ *
+ * Description:
+ *   Restores the full context.
+ *
+ * Returned Value:
+ *   None
+ *
+ ****************************************************************************/
+
+#define riscv_fullcontextrestore()    \
+  do                                  \
+    {                                 \
+      sys_call0(SYS_restore_context); \
+    }                                 \
+  while (1)
+
+/****************************************************************************
+ * Name: riscv_switchcontext
+ *
+ * Description:
+ *   Switches the context.
+ *
+ * Returned Value:
+ *   None
+ *
+ ****************************************************************************/
+
+#define riscv_switchcontext()        \
+  do                                 \
+    {                                \
+      sys_call0(SYS_switch_context); \
+    }                                \
+  while (0)
 
 #undef EXTERN
 #ifdef __cplusplus
@@ -230,4 +453,4 @@ void riscv_stack_color(void *stackbase, size_t nbytes);
 #endif
 #endif /* __ASSEMBLY__ */
 
-#endif /* __ARCH_RISCV_SRC_COMMON_UP_INTERNAL_H */
+#endif /* __ARCH_RISCV_SRC_COMMON_RISCV_INTERNAL_H */

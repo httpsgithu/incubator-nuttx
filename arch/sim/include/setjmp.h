@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/sim/include/setjmp.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -27,6 +29,7 @@
 
 #include <nuttx/config.h>
 #include <nuttx/compiler.h>
+#include <sys/types.h>
 
 /****************************************************************************
  * Pre-processor Definitions
@@ -37,10 +40,11 @@
 #if defined(CONFIG_HOST_X86_64) && !defined(CONFIG_SIM_M32)
   /* Storage order: %rbx, %rsp, %rbp, %r12, %r13, %r14, %r15, %rip */
 
-#  define XCPTCONTEXT_REGS    8
+#  define XCPTCONTEXT_REGS    9
 #  define XCPTCONTEXT_SIZE    (8 * XCPTCONTEXT_REGS)
 
 #  ifdef __ASSEMBLY__
+
 #    define JB_RBX            (0*8)
 #    define JB_RSP            (1*8)
 #    define JB_RBP            (2*8)
@@ -48,9 +52,11 @@
 #    define JB_R13            (4*8)
 #    define JB_R14            (5*8)
 #    define JB_R15            (6*8)
-#    define JB_RSI            (7*8)
+#    define JB_RIP            (7*8)
+#    define JB_FLAG           (8*8)
 
 #  else
+
 #    define JB_RBX            (0)
 #    define JB_RSP            (1)
 #    define JB_RBP            (2)
@@ -58,7 +64,8 @@
 #    define JB_R13            (4)
 #    define JB_R14            (5)
 #    define JB_R15            (6)
-#    define JB_RSI            (7)
+#    define JB_RIP            (7)
+#    define JB_FLAG           (8)
 
 #  endif /* __ASSEMBLY__ */
 
@@ -66,43 +73,84 @@
 
 #  define JB_FP               JB_RBP
 #  define JB_SP               JB_RSP
-#  define JB_PC               JB_RSI
+#  define JB_PC               JB_RIP
 
 #elif defined(CONFIG_HOST_X86) || defined(CONFIG_SIM_M32)
   /* Storage order: %ebx, %esi, %edi, %ebp, sp, and return PC */
 
-#  define XCPTCONTEXT_REGS    6
+#  define XCPTCONTEXT_REGS    (8)
 #  define XCPTCONTEXT_SIZE    (4 * XCPTCONTEXT_REGS)
 
 #  ifdef __ASSEMBLY__
+
 #    define JB_EBX            (0*4)
 #    define JB_ESI            (1*4)
 #    define JB_EDI            (2*4)
 #    define JB_EBP            (3*4)
-#    define JB_SP             (4*4)
-#    define JB_PC             (5*4)
+#    define JB_ESP            (4*4)
+#    define JB_EIP            (5*4)
+#    define JB_FLAG           (6*4)
+#    define JB_FLAG1          (7*4)
 
 #  else
+
 #    define JB_EBX            (0)
 #    define JB_ESI            (1)
 #    define JB_EDI            (2)
 #    define JB_EBP            (3)
-#    define JB_SP             (4)
-#    define JB_PC             (5)
+#    define JB_ESP            (4)
+#    define JB_EIP            (5)
+#    define JB_FLAG           (6)
+#    define JB_FLAG1          (7)
 
 #  endif /* __ASSEMBLY__ */
 
 /* Compatibility definitions */
 
 #  define JB_FP               JB_EBP
+#  define JB_SP               JB_ESP
+#  define JB_PC               JB_EIP
 
 #elif defined(CONFIG_HOST_ARM)
-#  define XCPTCONTEXT_REGS    16
+
+#  define XCPTCONTEXT_REGS    18
 #  define XCPTCONTEXT_SIZE    (4 * XCPTCONTEXT_REGS)
 
 #  define JB_FP               7
 #  define JB_SP               8
 #  define JB_PC               9
+#  define JB_FLAG             16
+#  define JB_FLAG1            17
+
+#elif defined(CONFIG_HOST_ARM64)
+
+#  define XCPTCONTEXT_REGS    33
+#  define XCPTCONTEXT_SIZE    (8 * XCPTCONTEXT_REGS)
+
+#  ifdef __ASSEMBLY__
+
+#    define JB_X19_X20        #0x00
+#    define JB_X21_X22        #0x10
+#    define JB_X23_X24        #0x20
+#    define JB_X25_X26        #0x30
+#    define JB_X27_X28        #0x40
+#    define JB_X29_XLR        #0x50
+#    define JB_XFP_XSP        #0x60
+
+#    define JB_D08_D09        #0x70
+#    define JB_D10_D11        #0x80
+#    define JB_D12_D13        #0x90
+#    define JB_D14_D15        #0xA0
+
+#  else
+
+#    define JB_PC             (11)
+#    define JB_FP             (12)
+#    define JB_SP             (13)
+#    define JB_FLAG           (32)
+
+#  endif /* __ASSEMBLY__ */
+
 #endif
 
 /****************************************************************************
@@ -111,13 +159,9 @@
 
 #ifndef __ASSEMBLY__
 
-#if defined(CONFIG_HOST_X86_64) && !defined(CONFIG_SIM_M32)
-typedef unsigned long xcpt_reg_t;
-#else
-typedef unsigned int xcpt_reg_t;
-#endif
-
+typedef size_t xcpt_reg_t;
 typedef xcpt_reg_t jmp_buf[XCPTCONTEXT_REGS];
+
 #endif
 
 /****************************************************************************

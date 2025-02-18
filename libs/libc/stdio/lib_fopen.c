@@ -1,6 +1,8 @@
 /****************************************************************************
  * libs/libc/stdio/lib_fopen.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -32,6 +34,10 @@
 #include <assert.h>
 #include <errno.h>
 
+#ifdef CONFIG_FDSAN
+#  include <android/fdsan.h>
+#endif
+
 #include "libc.h"
 
 /****************************************************************************
@@ -45,14 +51,11 @@
                             * or creating file */
 #define MODE_A    (1 << 2) /* Bit 2: "a{b|x|+}" open for writing, appending
                             * the to file */
-#define MODE_PLUS (1 << 3) /* Bit 3: "{r|w|a|b|x}+" open for update (reading
-                            * and writing) */
-#define MODE_B    (1 << 4) /* Bit 4: "{r|w|a|x|+}b" Binary mode */
-#define MODE_X    (1 << 5) /* Bit 5: "{r|w|a|b|+}x" Open exclusive mode */
-#define MODE_T    (1 << 6) /* Bit 6: "{r|w|a|+}t" Text mode */
 
 #define MODE_NONE 0        /* No access mode determined */
 #define MODE_MASK (MODE_R | MODE_W | MODE_A)
+
+#define FLAG_KEEP (O_TEXT | O_CLOEXEC | O_EXCL)
 
 /****************************************************************************
  * Public Functions
@@ -64,6 +67,7 @@
 
 FAR FILE *fdopen(int fd, FAR const char *mode)
 {
+  FAR struct streamlist *list = lib_get_streams();
   FAR FILE *filep = NULL;
   int oflags;
   int ret;
@@ -71,16 +75,86 @@ FAR FILE *fdopen(int fd, FAR const char *mode)
   /* Map the open mode string to open flags */
 
   oflags = lib_mode2oflags(mode);
-  if (oflags >= 0)
+  if (oflags < 0)
     {
-      ret = fs_fdopen(fd, oflags, NULL, &filep);
-      if (ret < 0)
-        {
-          set_errno(-ret);
-        }
+      return NULL;
     }
 
+  /* Allocate FILE structure */
+
+  if (fd >= 3)
+    {
+      filep = lib_zalloc(sizeof(FILE));
+      if (filep == NULL)
+        {
+          ret = -ENOMEM;
+          goto errout;
+        }
+
+      /* Add FILE structure to the stream list */
+
+      ret = nxmutex_lock(&list->sl_lock);
+      if (ret < 0)
+        {
+          lib_free(filep);
+          goto errout;
+        }
+
+      sq_addlast(&filep->fs_entry, &list->sl_queue);
+
+      nxmutex_unlock(&list->sl_lock);
+
+      /* Initialize the mutex the manages access to the buffer */
+
+      nxrmutex_init(&filep->fs_lock);
+
+#ifdef CONFIG_FDSAN
+      android_fdsan_exchange_owner_tag(fd, 0,
+          android_fdsan_create_owner_tag(ANDROID_FDSAN_OWNER_TYPE_FILE,
+                                        (uintptr_t)filep));
+#endif
+    }
+  else
+    {
+      filep = &list->sl_std[fd];
+    }
+
+#if !defined(CONFIG_STDIO_DISABLE_BUFFERING) && CONFIG_STDIO_BUFFER_SIZE > 0
+  /* Set up pointers */
+
+  filep->fs_bufstart = filep->fs_buffer;
+  filep->fs_bufend   = filep->fs_bufstart + CONFIG_STDIO_BUFFER_SIZE;
+  filep->fs_bufpos   = filep->fs_bufstart;
+  filep->fs_bufread  = filep->fs_bufstart;
+  filep->fs_flags    = __FS_FLAG_UBF; /* Fake setvbuf and fclose */
+
+#  ifdef CONFIG_STDIO_LINEBUFFER
+  /* Setup buffer flags */
+
+  filep->fs_flags   |= __FS_FLAG_LBF; /* Line buffering */
+
+#  endif /* CONFIG_STDIO_LINEBUFFER */
+#endif /* !CONFIG_STDIO_DISABLE_BUFFERING && CONFIG_STDIO_BUFFER_SIZE > 0 */
+
+  /* Save the file description and open flags.  Setting the
+   * file descriptor locks this stream.
+   */
+
+  filep->fs_cookie   = (FAR void *)(intptr_t)fd;
+  filep->fs_oflags   = oflags;
+
+  /* Assign custom callbacks to NULL. */
+
+  filep->fs_iofunc.read  = NULL;
+  filep->fs_iofunc.write = NULL;
+  filep->fs_iofunc.seek  = NULL;
+  filep->fs_iofunc.close = NULL;
+
   return filep;
+
+errout:
+  set_errno(-ret);
+  return NULL;
 }
 
 /****************************************************************************
@@ -92,7 +166,6 @@ FAR FILE *fopen(FAR const char *path, FAR const char *mode)
   FAR FILE *filep = NULL;
   int oflags;
   int fd;
-  int ret;
 
   /* Map the open mode string to open flags */
 
@@ -113,17 +186,14 @@ FAR FILE *fopen(FAR const char *path, FAR const char *mode)
 
   if (fd >= 0)
     {
-      ret = fs_fdopen(fd, oflags, NULL, &filep);
-      if (ret < 0)
+      filep = fdopen(fd, mode);
+      if (filep == NULL)
         {
           /* Don't forget to close the file descriptor if any other
            * failures are reported by fdopen().
            */
 
           close(fd);
-
-          set_errno(-ret);
-          filep = NULL;
         }
     }
 
@@ -152,14 +222,14 @@ int lib_mode2oflags(FAR const char *mode)
     {
       switch (*mode)
         {
-          /* Open for read access ("r{b|x|+}") */
+          /* Open for read access ("r{m|b|x|+}") */
 
           case 'r' :
             if (state == MODE_NONE)
               {
                 /* Open for read access */
 
-                oflags = O_RDOK;
+                oflags = O_RDOK | O_TEXT;
                 state  = MODE_R;
               }
             else
@@ -175,7 +245,7 @@ int lib_mode2oflags(FAR const char *mode)
               {
                 /* Open for write access, truncating any existing file */
 
-                oflags = (O_WROK | O_CREAT | O_TRUNC);
+                oflags = O_WROK | O_CREAT | O_TRUNC | O_TEXT;
                 state  = MODE_W;
               }
             else
@@ -191,7 +261,7 @@ int lib_mode2oflags(FAR const char *mode)
               {
                 /* Write to the end of the file */
 
-                oflags = O_WROK | O_CREAT | O_APPEND;
+                oflags = O_WROK | O_CREAT | O_APPEND | O_TEXT;
                 state  = MODE_A;
               }
             else
@@ -209,12 +279,11 @@ int lib_mode2oflags(FAR const char *mode)
                   {
                     /* Retain any binary and exclusive mode selections */
 
-                    oflags &= (O_BINARY | O_EXCL);
+                    oflags &= FLAG_KEEP;
 
                     /* Open for read/write access */
 
                     oflags |= O_RDWR;
-                    state  |= MODE_PLUS;
                  }
                  break;
 
@@ -222,14 +291,13 @@ int lib_mode2oflags(FAR const char *mode)
                   {
                     /* Retain any binary and exclusive mode selections */
 
-                    oflags &= (O_BINARY | O_EXCL);
+                    oflags &= FLAG_KEEP;
 
                     /* Open for write read/access, truncating any existing
                      * file.
                      */
 
-                    oflags |= (O_RDWR | O_CREAT | O_TRUNC);
-                    state  |= MODE_PLUS;
+                    oflags |= O_RDWR | O_CREAT | O_TRUNC;
                   }
                   break;
 
@@ -237,20 +305,27 @@ int lib_mode2oflags(FAR const char *mode)
                   {
                     /* Retain any binary and exclusive mode selections */
 
-                    oflags &= (O_BINARY | O_EXCL);
+                    oflags &= FLAG_KEEP;
 
                     /* Read from the beginning of the file; write to the
                      * end,
                      */
 
-                    oflags |= (O_RDWR | O_CREAT | O_APPEND);
-                    state  |= MODE_PLUS;
+                    oflags |= O_RDWR | O_CREAT | O_APPEND;
                   }
                   break;
 
                 default:
                   goto errout;
-                  break;
+              }
+            break;
+
+          /* Attempt to access the file using mmap. */
+
+          case 'm' :
+            if (state != MODE_R)
+              {
+                goto errout;
               }
             break;
 
@@ -261,8 +336,22 @@ int lib_mode2oflags(FAR const char *mode)
               {
                 /* The file is opened in binary mode */
 
-                oflags |= O_BINARY;
-                state  |= MODE_B;
+                oflags &= ~O_TEXT;
+              }
+            else
+              {
+                goto errout;
+              }
+            break;
+
+          /* Open for close on execute */
+
+          case 'e' :
+            if ((state & MODE_MASK) != MODE_NONE)
+              {
+                /* The file will be closed on execute */
+
+                oflags |= O_CLOEXEC;
               }
             else
               {
@@ -272,13 +361,12 @@ int lib_mode2oflags(FAR const char *mode)
 
           /* Open for exclusive access ("{r|w|a|b|+}x") */
 
-          case 'X' :
+          case 'x' :
             if ((state & MODE_MASK) != MODE_NONE)
               {
                 /* The file is opened in exclusive mode */
 
                 oflags |= O_EXCL;
-                state  |= MODE_X;
               }
             else
               {
@@ -294,7 +382,6 @@ int lib_mode2oflags(FAR const char *mode)
                 /* The file is opened in text mode */
 
                 oflags |= O_TEXT;
-                state  |= MODE_T;
               }
             else
               {
@@ -306,7 +393,6 @@ int lib_mode2oflags(FAR const char *mode)
 
           default:
             goto errout;
-            break;
         }
     }
 

@@ -1,6 +1,8 @@
 /****************************************************************************
  * include/nuttx/serial/serial.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -31,9 +33,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <errno.h>
-#ifdef CONFIG_SERIAL_TERMIOS
-#  include <termios.h>
-#endif
+#include <termios.h>
 
 #include <nuttx/fs/fs.h>
 #include <nuttx/semaphore.h>
@@ -89,6 +89,11 @@
 #define uart_txempty(dev)        dev->ops->txempty(dev)
 #define uart_send(dev,ch)        dev->ops->send(dev,ch)
 #define uart_receive(dev,s)      dev->ops->receive(dev,s)
+#define uart_recvbuf(dev,b,l)    dev->ops->recvbuf(dev,b,l)
+#define uart_sendbuf(dev,b,l)    dev->ops->sendbuf(dev,b,l)
+
+#define uart_release(dev)      \
+  ((dev)->ops->release ? (dev)->ops->release(dev) : -ENOSYS)
 
 #ifdef CONFIG_SERIAL_TXDMA
 #define uart_dmasend(dev)      \
@@ -122,7 +127,7 @@
 
 struct uart_buffer_s
 {
-  sem_t            sem;    /* Used to control exclusive access to the buffer */
+  mutex_t          lock;   /* Used to control exclusive access to the buffer */
   volatile int16_t head;   /* Index to the head [IN] index in the buffer */
   volatile int16_t tail;   /* Index to the tail [OUT] index in the buffer */
   int16_t          size;   /* The allocated size of the buffer */
@@ -256,6 +261,40 @@ struct uart_ops_s
    */
 
   CODE bool (*txempty)(FAR struct uart_dev_s *dev);
+
+  /* Call to release some resource about the device when device was close
+   * and unregistered.
+   */
+
+  CODE int (*release)(FAR struct uart_dev_s *dev);
+
+  /* Receive multiple bytes.
+   * Returns the actual number of characters received.
+   */
+
+  CODE ssize_t (*recvbuf)(FAR struct uart_dev_s *dev,
+                          FAR void *buf, size_t len);
+
+  /* This method will send multiple bytes.
+   * Returns the actual number of characters sent.
+   */
+
+  CODE ssize_t (*sendbuf)(FAR struct uart_dev_s *dev,
+                          FAR const void *buf, size_t len);
+};
+
+/* This structure is used for U(S)ART frame, overrun, parity and brk error
+ * counters. This way applications will know if the UART communition is
+ * having some trouble.
+ */
+
+struct serial_icounter_s
+{
+  uint32_t frame;
+  uint32_t overrun;
+  uint32_t parity;
+  uint32_t brk;
+  uint32_t buf_overrun;
 };
 
 /* This is the device structure used by the driver.  The caller of
@@ -273,30 +312,33 @@ struct uart_dev_s
   /* State data */
 
   uint8_t              open_count;   /* Number of times the device has been opened */
-  volatile bool        xmitwaiting;  /* true: User waiting for space in xmit.buffer */
-  volatile bool        recvwaiting;  /* true: User waiting for data in recv.buffer */
+  uint8_t              escape;       /* Number of the character to be escaped */
 #ifdef CONFIG_SERIAL_REMOVABLE
   volatile bool        disconnected; /* true: Removable device is not connected */
 #endif
   bool                 isconsole;    /* true: This is the serial console */
+  bool                 unlinked;     /* true: This device driver has been unlinked. */
 
-#ifdef CONFIG_SERIAL_TERMIOS
+#if defined(CONFIG_TTY_SIGINT) || defined(CONFIG_TTY_SIGTSTP) || \
+    defined(CONFIG_TTY_FORCE_PANIC) || defined(CONFIG_TTY_LAUNCH)
+  pid_t                pid;          /* Thread PID to receive signals (-1 if none) */
+#endif
+
+#ifdef CONFIG_TTY_FORCE_PANIC
+  int                  panic_count;
+#endif
+
   /* Terminal control flags */
 
   tcflag_t             tc_iflag;     /* Input modes */
   tcflag_t             tc_oflag;     /* Output modes */
   tcflag_t             tc_lflag;     /* Local modes */
-#if defined(CONFIG_TTY_SIGINT) || defined(CONFIG_TTY_SIGTSTP)
-  pid_t                pid;          /* Thread PID to receive signals (-1 if none) */
-#endif
-#endif
 
-  /* Semaphores */
+  /* Semaphores & mutex */
 
-  sem_t                closesem;     /* Locks out new open while close is in progress */
   sem_t                xmitsem;      /* Wakeup user waiting for space in xmit.buffer */
   sem_t                recvsem;      /* Wakeup user waiting for data in recv.buffer */
-  sem_t                pollsem;      /* Manages exclusive access to fds[] */
+  mutex_t              closelock;    /* Locks out new open while close is in progress */
 
   /* I/O buffers */
 
@@ -315,14 +357,20 @@ struct uart_dev_s
   /* Driver interface */
 
   FAR const struct uart_ops_s *ops;  /* Arch-specific operations */
-  FAR void            *priv;         /* Used by the arch-specific logic */
+  FAR void                    *priv; /* Used by the arch-specific logic */
 
   /* The following is a list if poll structures of threads waiting for
    * driver events. The 'struct pollfd' reference for each open is also
    * retained in the f_priv field of the 'struct file'.
    */
 
-  struct pollfd *fds[CONFIG_SERIAL_NPOLLWAITERS];
+#ifdef CONFIG_SERIAL_TERMIOS
+  uint8_t minrecv;                   /* Minimum received bytes */
+  uint8_t minread;                   /* c_cc[VMIN] */
+  uint8_t timeout;                   /* c_cc[VTIME] */
+#endif
+
+  FAR struct pollfd *fds[CONFIG_SERIAL_NPOLLWAITERS];
 };
 
 typedef struct uart_dev_s uart_dev_t;
@@ -368,7 +416,7 @@ int uart_register(FAR const char *path, FAR uart_dev_t *dev);
 void uart_xmitchars(FAR uart_dev_t *dev);
 
 /****************************************************************************
- * Name: uart_receivechars
+ * Name: uart_recvchars
  *
  * Description:
  *  This function is called from the UART interrupt handler when an interrupt
@@ -495,6 +543,43 @@ void uart_recvchars_done(FAR uart_dev_t *dev);
  ****************************************************************************/
 
 void uart_reset_sem(FAR uart_dev_t *dev);
+
+/****************************************************************************
+ * Name: uart_check_special
+ *
+ * Description:
+ *   Check if the SIGINT or SIGTSTP character is in the contiguous Rx DMA
+ *   buffer region.  The first signal associated with the first such
+ *   character is returned.
+ *
+ *   If there multiple such characters in the buffer, only the signal
+ *   associated with the first is returned (this a bug!)
+ *
+ * Returned Value:
+ *   0 if a signal-related character does not appear in the.  Otherwise,
+ *   SIGKILL or SIGTSTP may be returned to indicate the appropriate signal
+ *   action.
+ *
+ ****************************************************************************/
+
+#if defined(CONFIG_TTY_SIGINT) || defined(CONFIG_TTY_SIGTSTP) || \
+    defined(CONFIG_TTY_FORCE_PANIC) || defined(CONFIG_TTY_LAUNCH)
+int uart_check_special(FAR uart_dev_t *dev, FAR const char *buf,
+                       size_t size);
+#endif
+
+/****************************************************************************
+ * Name: uart_gdbstub_register
+ *
+ * Description:
+ *   Use the uart device to register gdbstub.
+ *   gdbstub run with serial interrupt.
+ *
+ ****************************************************************************/
+
+#ifdef CONFIG_SERIAL_GDBSTUB
+int uart_gdbstub_register(FAR uart_dev_t *dev, FAR const char *path);
+#endif
 
 #undef EXTERN
 #if defined(__cplusplus)

@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/stm32/common/include/stm32_tone.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -18,8 +20,8 @@
  *
  ****************************************************************************/
 
-#ifndef __STM32_TONE_H
-#define __STM32_TONE_H
+#ifndef __BOARDS_ARM_STM32_COMMON_INCLUDE_STM32_TONE_H
+#define __BOARDS_ARM_STM32_COMMON_INCLUDE_STM32_TONE_H
 
 /****************************************************************************
  * Included Files
@@ -73,4 +75,4 @@ int board_tone_initialize(int devno);
 }
 #endif
 
-#endif // __STM32_TONE_H
+#endif /* __BOARDS_ARM_STM32_COMMON_INCLUDE_STM32_TONE_H */

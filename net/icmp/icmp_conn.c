@@ -1,6 +1,8 @@
 /****************************************************************************
  * net/icmp/icmp_conn.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -31,15 +33,25 @@
 
 #include <arch/irq.h>
 
-#include <nuttx/semaphore.h>
+#include <nuttx/kmalloc.h>
+#include <nuttx/mutex.h>
 #include <nuttx/net/netconfig.h>
 #include <nuttx/net/net.h>
 #include <nuttx/net/netdev.h>
 
 #include "devif/devif.h"
 #include "icmp/icmp.h"
+#include "utils/utils.h"
 
 #ifdef CONFIG_NET_ICMP_SOCKET
+
+/****************************************************************************
+ * Pre-processor Definitions
+ ****************************************************************************/
+
+#ifndef CONFIG_NET_ICMP_MAX_CONNS
+#  define CONFIG_NET_ICMP_MAX_CONNS 0
+#endif
 
 /****************************************************************************
  * Private Data
@@ -47,12 +59,10 @@
 
 /* The array containing all IPPROTO_ICMP socket connections */
 
-static struct icmp_conn_s g_icmp_connections[CONFIG_NET_ICMP_NCONNS];
-
-/* A list of all free IPPROTO_ICMP socket connections */
-
-static dq_queue_t g_free_icmp_connections;
-static sem_t g_free_sem;
+NET_BUFPOOL_DECLARE(g_icmp_connections, sizeof(struct icmp_conn_s),
+                    CONFIG_NET_ICMP_PREALLOC_CONNS,
+                    CONFIG_NET_ICMP_ALLOC_CONNS, CONFIG_NET_ICMP_MAX_CONNS);
+static mutex_t g_free_lock = NXMUTEX_INITIALIZER;
 
 /* A list of all allocated IPPROTO_ICMP socket connections */
 
@@ -61,33 +71,6 @@ static dq_queue_t g_active_icmp_connections;
 /****************************************************************************
  * Public Functions
  ****************************************************************************/
-
-/****************************************************************************
- * Name: icmp_sock_initialize
- *
- * Description:
- *   Initialize the IPPROTO_ICMP socket connection structures.  Called once
- *   and only from the network initialization layer.
- *
- ****************************************************************************/
-
-void icmp_sock_initialize(void)
-{
-  int i;
-
-  /* Initialize the queues */
-
-  dq_init(&g_free_icmp_connections);
-  dq_init(&g_active_icmp_connections);
-  nxsem_init(&g_free_sem, 0, 1);
-
-  for (i = 0; i < CONFIG_NET_ICMP_NCONNS; i++)
-    {
-      /* Move the connection structure to the free list */
-
-      dq_addlast(&g_icmp_connections[i].node, &g_free_icmp_connections);
-    }
-}
 
 /****************************************************************************
  * Name: icmp_alloc
@@ -104,24 +87,20 @@ FAR struct icmp_conn_s *icmp_alloc(void)
   FAR struct icmp_conn_s *conn = NULL;
   int ret;
 
-  /* The free list is protected by a semaphore (that behaves like a mutex). */
+  /* The free list is protected by a mutex. */
 
-  ret = net_lockedwait(&g_free_sem);
+  ret = nxmutex_lock(&g_free_lock);
   if (ret >= 0)
     {
-      conn = (FAR struct icmp_conn_s *)dq_remfirst(&g_free_icmp_connections);
+      conn = NET_BUFPOOL_TRYALLOC(g_icmp_connections);
       if (conn != NULL)
         {
-          /* Clear the connection structure */
-
-          memset(conn, 0, sizeof(struct icmp_conn_s));
-
           /* Enqueue the connection into the active list */
 
-          dq_addlast(&conn->node, &g_active_icmp_connections);
+          dq_addlast(&conn->sconn.node, &g_active_icmp_connections);
         }
 
-      nxsem_post(&g_free_sem);
+      nxmutex_unlock(&g_free_lock);
     }
 
   return conn;
@@ -138,13 +117,13 @@ FAR struct icmp_conn_s *icmp_alloc(void)
 
 void icmp_free(FAR struct icmp_conn_s *conn)
 {
-  /* The free list is protected by a semaphore (that behaves like a mutex). */
+  /* The free list is protected by a mutex. */
 
   DEBUGASSERT(conn->crefs == 0);
 
-  /* Take the semaphore (perhaps waiting) */
+  /* Take the mutex (perhaps waiting) */
 
-  net_lockedwait_uninterruptible(&g_free_sem);
+  nxmutex_lock(&g_free_lock);
 
   /* Is this the last reference on the connection?  It might not be if the
    * socket was cloned.
@@ -160,13 +139,14 @@ void icmp_free(FAR struct icmp_conn_s *conn)
     {
       /* Remove the connection from the active list */
 
-      dq_rem(&conn->node, &g_active_icmp_connections);
+      dq_rem(&conn->sconn.node, &g_active_icmp_connections);
 
-      /* Free the connection */
+      /* Free the connection. */
 
-      dq_addlast(&conn->node, &g_free_icmp_connections);
-      nxsem_post(&g_free_sem);
+      NET_BUFPOOL_FREE(g_icmp_connections, conn);
     }
+
+  nxmutex_unlock(&g_free_lock);
 }
 
 /****************************************************************************
@@ -199,7 +179,7 @@ FAR struct icmp_conn_s *icmp_active(uint16_t id)
 
       /* Look at the next active connection */
 
-      conn = (FAR struct icmp_conn_s *)conn->node.flink;
+      conn = (FAR struct icmp_conn_s *)conn->sconn.node.flink;
     }
 
   return conn;
@@ -224,7 +204,7 @@ FAR struct icmp_conn_s *icmp_nextconn(FAR struct icmp_conn_s *conn)
     }
   else
     {
-      return (FAR struct icmp_conn_s *)conn->node.flink;
+      return (FAR struct icmp_conn_s *)conn->sconn.node.flink;
     }
 }
 
@@ -247,12 +227,46 @@ FAR struct icmp_conn_s *icmp_findconn(FAR struct net_driver_s *dev,
 
   for (conn = icmp_nextconn(NULL); conn != NULL; conn = icmp_nextconn(conn))
     {
-      if (conn->id == id && conn->dev == dev && conn->nreqs > 0)
+      if (conn->id == id && conn->dev == dev)
         {
           return conn;
         }
     }
 
   return conn;
+}
+
+/****************************************************************************
+ * Name: icmp_foreach
+ *
+ * Description:
+ *   Enumerate each ICMP connection structure. This function will terminate
+ *   when either (1) all connection have been enumerated or (2) when a
+ *   callback returns any non-zero value.
+ *
+ * Assumptions:
+ *   This function is called from network logic at with the network locked.
+ *
+ ****************************************************************************/
+
+int icmp_foreach(icmp_callback_t callback, FAR void *arg)
+{
+  FAR struct icmp_conn_s *conn;
+  int ret = 0;
+
+  if (callback != NULL)
+    {
+      for (conn = icmp_nextconn(NULL); conn != NULL;
+           conn = icmp_nextconn(conn))
+        {
+          ret = callback(conn, arg);
+          if (ret != 0)
+            {
+              break;
+            }
+        }
+    }
+
+  return ret;
 }
 #endif /* CONFIG_NET_ICMP */

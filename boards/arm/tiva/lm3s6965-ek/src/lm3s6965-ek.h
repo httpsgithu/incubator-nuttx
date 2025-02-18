@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/tiva/lm3s6965-ek/src/lm3s6965-ek.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -18,8 +20,8 @@
  *
  ****************************************************************************/
 
-#ifndef __BOARDS_ARM_TIVA_LM3S6965_EK_SRC_LM3S6965EK_H
-#define __BOARDS_ARM_TIVA_LM3S6965_EK_SRC_LM3S6965EK_H
+#ifndef __BOARDS_ARM_TIVA_LM3S6965_EK_SRC_LM3S6965_EK_H
+#define __BOARDS_ARM_TIVA_LM3S6965_EK_SRC_LM3S6965_EK_H
 
 /****************************************************************************
  * Included Files
@@ -134,4 +136,4 @@ int lm_bringup(void);
 void weak_function lm_ssidev_initialize(void);
 
 #endif /* __ASSEMBLY__ */
-#endif /* __BOARDS_ARM_TIVA_LM3S6965_EK_SRC_LM3S6965EK_H */
+#endif /* __BOARDS_ARM_TIVA_LM3S6965_EK_SRC_LM3S6965_EK_H */

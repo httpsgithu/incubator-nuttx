@@ -1,6 +1,8 @@
 /****************************************************************************
  * libs/libc/string/lib_strchrnul.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -26,6 +28,8 @@
 
 #include <string.h>
 
+#include "libc.h"
+
 /****************************************************************************
  * Public Functions
  ****************************************************************************/
@@ -39,16 +43,18 @@
  *   considered to be part of the string.
  *
  * Returned Value:
- *   Upon completion, strchrnull() returns a pointer to the byte, or a
+ *   Upon completion, strchrnul() returns a pointer to the byte, or a
  *   pointer to null if the byte was not found.
  *
  ****************************************************************************/
 
+#if !defined(CONFIG_LIBC_ARCH_STRCHRNUL) && defined(LIBC_BUILD_STRCHRNUL)
+#undef strchrnul /* See mm/README.txt */
 FAR char *strchrnul(FAR const char *s, int c)
 {
   if (s)
     {
-      while (*s && *s != c)
+      while (*s != '\0' && *s != c)
         {
           s++;
         }
@@ -56,3 +62,4 @@ FAR char *strchrnul(FAR const char *s, int c)
 
   return (FAR char *)s;
 }
+#endif

@@ -1,6 +1,8 @@
 /**************************************************************************
  * arch/z80/src/z8/z8_saveusercontext.S
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -43,8 +45,8 @@
  *
  * Description:
  *   Restore the task context that was previously saved via
- *   _z8_saveusercontext() or by interrupt handling.  Unlike the
- *   _z8_saveusercontext() counterpart, we do not know the context of the
+ *   _up_saveusercontext() or by interrupt handling.  Unlike the
+ *   _up_saveusercontext() counterpart, we do not know the context of the
  *   restored task and, hence, we must handle the worst case -- restore
  *   everythihng.
  *

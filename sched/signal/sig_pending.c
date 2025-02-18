@@ -1,6 +1,8 @@
 /****************************************************************************
  * sched/signal/sig_pending.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -42,7 +44,7 @@
  * Name: sigpending
  *
  * Description:
- *   This function returns the set of signals that are blocked from deliveryi
+ *   This function returns the set of signals that are blocked from delivery
  *   and that are pending for the calling process in the space pointed to by
  *   set.
  *
@@ -58,16 +60,13 @@
 
 int sigpending(FAR sigset_t *set)
 {
-  FAR struct tcb_s *rtcb = this_task();
-  int ret = ERROR;
-
   if (set)
     {
-      *set = nxsig_pendingset(rtcb);
-      ret = OK;
+      *set = nxsig_pendingset(NULL);
+      return OK;
     }
 
-  return ret;
+  return ERROR;
 }
 
 /****************************************************************************
@@ -80,14 +79,20 @@ int sigpending(FAR sigset_t *set)
 
 sigset_t nxsig_pendingset(FAR struct tcb_s *stcb)
 {
-  FAR struct task_group_s *group = stcb->group;
+  FAR struct task_group_s *group;
   sigset_t sigpendset;
   FAR sigpendq_t *sigpend;
   irqstate_t flags;
 
+  if (stcb == NULL)
+    {
+      stcb = this_task();
+    }
+
+  group = stcb->group;
   DEBUGASSERT(group);
 
-  sigpendset = NULL_SIGNAL_SET;
+  sigemptyset(&sigpendset);
 
   flags = enter_critical_section();
   for (sigpend = (FAR sigpendq_t *)group->tg_sigpendingq.head;

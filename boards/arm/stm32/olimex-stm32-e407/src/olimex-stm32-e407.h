@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/stm32/olimex-stm32-e407/src/olimex-stm32-e407.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -18,8 +20,8 @@
  *
  ****************************************************************************/
 
-#ifndef __BOARDS_ARM_STM32_OLIMEX_STM32_E407_SRC_H
-#define __BOARDS_ARM_STM32_OLIMEX_STM32_E407_SRC_H
+#ifndef __BOARDS_ARM_STM32_OLIMEX_STM32_E407_SRC_OLIMEX_STM32_E407_H
+#define __BOARDS_ARM_STM32_OLIMEX_STM32_E407_SRC_OLIMEX_STM32_E407_H
 
 /****************************************************************************
  * Included Files
@@ -29,6 +31,8 @@
 #include <nuttx/compiler.h>
 #include <stdint.h>
 #include <arch/stm32/chip.h>
+
+#include "stm32.h"
 
 /****************************************************************************
  * Pre-processor Definitions
@@ -321,7 +325,7 @@ int stm32_dac_setup(void);
  ****************************************************************************/
 
 #ifdef CONFIG_TIMER
-int stm32_timer_driver_setup(FAR const char *devpath, int timer);
+int stm32_timer_driver_setup(const char *devpath, int timer);
 #endif
 
 /****************************************************************************
@@ -341,4 +345,4 @@ int stm32_mrf24j40_initialize(void);
 #endif
 
 #endif /* __ASSEMBLY__ */
-#endif /* __BOARDS_ARM_STM32_OLIMEX_STM32_E407_SRC_INTERNAL_H */
+#endif /* __BOARDS_ARM_STM32_OLIMEX_STM32_E407_SRC_OLIMEX_STM32_E407_H */

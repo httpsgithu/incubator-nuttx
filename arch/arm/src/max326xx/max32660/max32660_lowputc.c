@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/max326xx/max32660/max32660_lowputc.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -30,9 +32,7 @@
 
 #include <nuttx/spinlock.h>
 
-#include "arm_arch.h"
 #include "arm_internal.h"
-
 #include "hardware/max326_memorymap.h"
 #include "hardware/max326_pinmux.h"
 #include "hardware/max326_uart.h"
@@ -88,6 +88,8 @@
  ****************************************************************************/
 
 #ifdef HAVE_UART_CONSOLE
+static spinlock_t g_max32660_lowputc_lock = SP_UNLOCKED;
+
 /* UART console configuration */
 
 static const struct uart_config_s g_console_config =
@@ -147,7 +149,7 @@ static const struct uart_config_s g_console_config =
 
 #ifdef HAVE_UART_DEVICE
 static void max326_setbaud(uintptr_t base,
-                           FAR const struct uart_config_s *config)
+                           const struct uart_config_s *config)
 {
   ub32_t div;
   ub32_t pclk;
@@ -279,7 +281,7 @@ void max326_lowsetup(void)
 
 #ifdef HAVE_UART_DEVICE
 void max326_uart_configure(uintptr_t base,
-                           FAR const struct uart_config_s *config)
+                           const struct uart_config_s *config)
 {
   uint32_t regval;
   uint32_t ctrl0;
@@ -429,31 +431,22 @@ void arm_lowputc(char ch)
 #ifdef HAVE_UART_CONSOLE
   irqstate_t flags;
 
-  for (; ; )
-    {
-      /* Wait for the transmit FIFO to be not full */
+  /* Disable interrupts so that the test and the transmission are
+   * atomic.
+   */
 
-      while ((getreg32(CONSOLE_BASE + MAX326_UART_STAT_OFFSET) &
-             UART_STAT_TXFULL) != 0)
-        {
-        }
+  flags = spin_lock_irqsave(&g_max32660_lowputc_lock);
 
-      /* Disable interrupts so that the test and the transmission are
-       * atomic.
-       */
+  /* Wait for the transmit FIFO to be not full */
 
-      flags = spin_lock_irqsave(NULL);
-      if ((getreg32(CONSOLE_BASE + MAX326_UART_STAT_OFFSET) &
-           UART_STAT_TXFULL) == 0)
-        {
-          /* Send the character */
+  while ((getreg32(CONSOLE_BASE + MAX326_UART_STAT_OFFSET) &
+          UART_STAT_TXFULL) != 0);
 
-          putreg32((uint32_t)ch, CONSOLE_BASE + MAX326_UART_FIFO_OFFSET);
-          spin_unlock_irqrestore(NULL, flags);
-          return;
-        }
+  /* Send the character */
 
-      spin_unlock_irqrestore(NULL, flags);
-    }
+  putreg32((uint32_t)ch, CONSOLE_BASE + MAX326_UART_FIFO_OFFSET);
+
+  spin_unlock_irqrestore(&g_max32660_lowputc_lock, flags);
+
 #endif
 }

@@ -1,6 +1,7 @@
-/************************************************************************************
+/****************************************************************************
  * include/nuttx/wireless/wireless.h
- * Wireless network IOCTL commands
+ *
+ * SPDX-License-Identifier: Apache-2.0
  *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -17,18 +18,18 @@
  * License for the specific language governing permissions and limitations
  * under the License.
  *
- ************************************************************************************/
+ ****************************************************************************/
 
-/* This file includes common definitions to be used in all wireless network drivers
- * (when applicable).
+/* This file includes common definitions to be used in all
+ * wireless network drivers (when applicable).
  */
 
 #ifndef __INCLUDE_NUTTX_WIRELESS_WIRELESS_H
 #define __INCLUDE_NUTTX_WIRELESS_WIRELESS_H
 
-/************************************************************************************
+/****************************************************************************
  * Included Files
- ************************************************************************************/
+ ****************************************************************************/
 
 #include <nuttx/config.h>
 
@@ -38,14 +39,14 @@
 #include <net/if.h>
 #include <nuttx/fs/ioctl.h>
 
-/************************************************************************************
+/****************************************************************************
  * Pre-processor Definitions
- ************************************************************************************/
+ ****************************************************************************/
 
-/* Network Driver IOCTL Commands ****************************************************/
+/* Network Driver IOCTL Commands ********************************************/
 
-/* Use of these IOCTL commands requires a socket descriptor created by the socket()
- * interface.
+/* Use of these IOCTL commands requires a socket descriptor created
+ * by the socket() interface.
  */
 
 /* Wireless identification */
@@ -138,45 +139,66 @@
 
 /* WPA2 : PMKSA cache management */
 
-#define SIOCSIWPMKSA        _WLIOC(0x0036)  /* PMKSA cache operation */
+#define SIOCSIWPMKSA        _WLIOC(0x0036)  /* set PMKSA cache */
+#define SIOCGIWPMKSA        _WLIOC(0x0037)  /* get PMKSA cache */
+
+/* -------------------- DEV PRIVATE IOCTL LIST -------------------- */
+
+/* These 32 ioctl are wireless device private, for 16 commands.
+ * Each driver is free to use them for whatever purpose it chooses,
+ * however the driver *must* export the description of those ioctls
+ * with SIOCGIWPRIV and *must* use arguments as defined below.
+ */
+
+#define SIOCIWFIRSTPRIV     _WLIOC(0x00e0)
+
+/* DTIM extension */
+
+#define SIOCSIWDTIM         (SIOCIWFIRSTPRIV + 0)       /* Set DTIM interval time */
+#define SIOCGIWDTIM         (SIOCIWFIRSTPRIV + 1)       /* Get DTIM interval time */
+
+/* power save mode extension */
+
+#define SIOCSIWPWSAVE       (SIOCIWFIRSTPRIV + 2)       /* Set power save mode */
+#define SIOCGIWPWSAVE       (SIOCIWFIRSTPRIV + 3)       /* Get power save mode */
 
 /* Country code extension */
 
-#define SIOCSIWCOUNTRY      _WLIOC(0x0037)  /* Country code extension */
+#define SIOCSIWCOUNTRY      (SIOCIWFIRSTPRIV + 4)       /* Set country code */
+#define SIOCGIWCOUNTRY      (SIOCIWFIRSTPRIV + 5)       /* Get country code */
 
-/* Device-specific network IOCTL commands *******************************************/
+/* WIFI / BT coexist type */
 
-#define WL_NETFIRST         0x0000          /* First network command */
-#define WL_NNETCMDS         0x0038          /* Number of network commands */
+#define SIOCSIWPTAPRIO      (SIOCIWFIRSTPRIV + 6)       /* Set PTA priority type */
+#define SIOCGIWPTAPRIO      (SIOCIWFIRSTPRIV + 7)       /* Get PTA priority type */
 
-/* Reserved for Bluetooth network devices (see bt_ioctls.h) */
+#define SIOCIWLASTPRIV      _WLIOC(0x00ff)
 
-#define WL_BLUETOOTHFIRST     (WL_NETFIRST + WL_NNETCMDS)
-#define WL_BLUETOOTHCMDS      (26)
-#define WL_IBLUETOOTHCMD(cmd) (_WLIOCVALID(cmd) && \
-                              _IOC_NR(cmd) >= WL_BLUETOOTHFIRST && \
-                              _IOC_NR(cmd) < (WL_BLUETOOTHFIRST + WL_BLUETOOTHCMDS))
+/* ------------------------- IOCTL STUFF ------------------------- */
 
-/* Reserved for IEEE802.15.4 wireless network devices
- * NOTE:  Not used.  Currently logic uses IOCTL commands from the IEEE802.15.4
- * character driver space.
- */
+/* The first and the last (range) */
 
-#define WL_802154FIRST        (WL_BLUETOOTHFIRST + WL_BLUETOOTHCMDS)
-#define WL_N802154CMDS        (3)
-#define WL_IS802154CMD(cmd)   (_WLIOCVALID(cmd) && \
-                               _IOC_NR(cmd) >= WL_802154FIRST && \
-                               _IOC_NR(cmd) < (WL_802154FIRST + WL_N802154CMDS))
+#define SIOCIWFIRST         _WLIOC(0x0000)  /* First network command */
+#define SIOCIWLAST          SIOCIWLASTPRIV  /* 0x8bff */
 
-/* Reserved for network packet radio network devices  */
+#define IW_IOCTL_IDX(cmd)   ((cmd) - SIOCIWFIRST)
 
-#define WL_PKTRADIOFIRST      (WL_802154FIRST + WL_N802154CMDS)
-#define WL_NPKTRADIOCMDS      (3)
-#define WL_ISPKTRADIOCMD(cmd) (_WLIOCVALID(cmd) && \
-                               _IOC_NR(cmd) >= WL_PKTRADIOFIRST && \
-                               _IOC_NR(cmd) < (WL_PKTRADIOFIRST + WL_NPKTRADIOCMDS))
+/* Odd : get (world access), even : set (root access) */
 
-/* ------------------------------ WIRELESS EVENTS --------------------------------- */
+#define IW_IS_SET(cmd)      (!((cmd) & 0x1))
+#define IW_IS_GET(cmd)      ((cmd) & 0x1)
+
+#define WL_IS80211POINTERCMD(cmd) ((cmd) == SIOCGIWSCAN || \
+                                   (cmd) == SIOCSIWSCAN || \
+                                   (cmd) == SIOCSIWCOUNTRY || \
+                                   (cmd) == SIOCGIWCOUNTRY || \
+                                   (cmd) == SIOCGIWRANGE || \
+                                   (cmd) == SIOCSIWENCODEEXT || \
+                                   (cmd) == SIOCGIWENCODEEXT || \
+                                   (cmd) == SIOCGIWESSID || \
+                                   (cmd) == SIOCSIWESSID)
+
+/* --------------------------- WIRELESS EVENTS --------------------------- */
 
 /* Those are *NOT* ioctls, do not issue request on them !!! */
 
@@ -219,7 +241,7 @@
 #define IWEVFIRST       0x8c00
 #define IW_EVENT_IDX(cmd) ((cmd) - IWEVFIRST)
 
-/* Other Common Wireless Definitions ************************************************/
+/* Other Common Wireless Definitions ****************************************/
 
 /* Maximum size of the ESSID and NICKN strings */
 
@@ -346,6 +368,7 @@
 #define IW_AUTH_WPA_VERSION_DISABLED 0x00000001
 #define IW_AUTH_WPA_VERSION_WPA      0x00000002
 #define IW_AUTH_WPA_VERSION_WPA2     0x00000004
+#define IW_AUTH_WPA_VERSION_WPA3     0x00000008
 
 /* IW_AUTH_PAIRWISE_CIPHER and IW_AUTH_GROUP_CIPHER values (bit field) */
 
@@ -386,22 +409,30 @@
 #define IW_ENCODE_ALG_PMK            4
 #define IW_ENCODE_ALG_AES_CMAC       5
 
-/************************************************************************************
+/* IW_COEX_PTA_PRIORITY values */
+
+#define IW_PTA_PRIORITY_COEX_MAXIMIZED 0
+#define IW_PTA_PRIORITY_COEX_HIGH      1
+#define IW_PTA_PRIORITY_BALANCED       2
+#define IW_PTA_PRIORITY_WLAN_HIGH      3
+#define IW_PTA_PRIORITY_WLAN_MAXIMIZED 4
+
+/****************************************************************************
  * Public Types
- ************************************************************************************/
+ ****************************************************************************/
 
 /* TODO:
  *
- * - Add types for statistics (struct iw_statistics and related)
- * - Add struct iw_range for use with IOCTL commands that need exchange mode data
- *   that could not fit in iwreq.
+ * - Add struct iw_range for use with IOCTL commands that need exchange
+ *   mode data that could not fit in iwreq.
  * - Private IOCTL data support (struct iw_priv_arg)
  * - Quality
  * - WPA support.
  * - Wireless events.
  * - Various flag definitions.
  *
- * These future additions will all need to be compatible with BSD/Linux definitions.
+ * These future additions will all need to be compatible
+ * with BSD/Linux definitions.
  */
 
 /* Generic format for most parameters that fit in a int32_t */
@@ -414,8 +445,8 @@ struct iw_param
   uint16_t  flags;          /* Optional flags */
 };
 
-/* Large data reference.  For all data larger than 16 octets, we need to use a
- * pointer to memory allocated in user space.
+/* Large data reference.  For all data larger than 16 octets,
+ * we need to use a pointer to memory allocated in user space.
  */
 
 struct iw_point
@@ -443,15 +474,40 @@ struct iw_freq
 
 struct iw_quality
 {
-  uint8_t   qual;           /* link quality (%retries, SNR,
-                             * %missed beacons or better...) */
+  uint8_t   qual;           /* link quality (retries, SNR,
+                             * missed beacons or better...) */
   uint8_t   level;          /* signal level (dBm) */
   uint8_t   noise;          /* noise level (dBm) */
   uint8_t   updated;        /* Flags to know if updated */
 };
 
-/* This union defines the data payload of an ioctl, and is used in struct iwreq
- * below.
+/* Packet discarded in the wireless adapter due to
+ * "wireless" specific problems...
+ * Note : the list of counter and statistics in net_device_stats
+ * is already pretty exhaustive, and you should use that first.
+ * This is only additional stats...
+ */
+
+struct iw_discarded
+{
+  uint32_t nwid;      /* Rx : Wrong nwid/essid */
+  uint32_t code;      /* Rx : Unable to code/decode (WEP) */
+  uint32_t fragment;  /* Rx : Can't perform MAC reassembly */
+  uint32_t retries;   /* Tx : Max MAC retries num reached */
+  uint32_t misc;      /* Others cases */
+};
+
+/* Packet/Time period missed in the wireless adapter due to
+ * "wireless" specific problems...
+ */
+
+struct iw_missed
+{
+  uint32_t beacon;    /* Missed beacons/superframe */
+};
+
+/* This union defines the data payload of an ioctl
+ * and is used in struct iwreq below.
  */
 
 union iwreq_data
@@ -481,8 +537,9 @@ union iwreq_data
   struct iw_point data;     /* Other large parameters */
 };
 
-/* This is the structure used to exchange data in wireless IOCTLs.  This structure
- * is the same as 'struct ifreq', but defined for use with wireless IOCTLs.
+/* This is the structure used to exchange data in wireless IOCTLs.
+ * This structure is the same as 'struct ifreq', but defined for
+ * use with wireless IOCTLs.
  */
 
 struct iwreq
@@ -569,6 +626,21 @@ struct  iw_scan_req
   uint32_t max_channel_time; /* in TU */
 
   struct iw_freq  channel_list[IW_MAX_FREQUENCIES];
+};
+
+/* Wireless statistics */
+
+struct iw_statistics
+{
+  uint16_t status;              /* Status
+                                 * - device dependent for now
+                                 */
+
+  struct iw_quality qual;       /* Quality of the link
+                                 * (instant/mean/max)
+                                 */
+  struct iw_discarded discard;  /* Packet discarded counts */
+  struct iw_missed miss;        /* Packet missed counts */
 };
 
 /* A Wireless Event. Contains basically the same data as the ioctl...

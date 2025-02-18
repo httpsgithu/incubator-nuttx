@@ -1,6 +1,8 @@
 ############################################################################
 # boards/arm/imxrt/imxrt1064-evk/src/Makefile
 #
+# SPDX-License-Identifier: Apache-2.0
+#
 # Licensed to the Apache Software Foundation (ASF) under one or more
 # contributor license agreements.  See the NOTICE file distributed with
 # this work for additional information regarding copyright ownership.  The
@@ -84,6 +86,18 @@ endif
 
 ifeq ($(CONFIG_IMXRT_FLEXSPI),y)
 CSRCS += imxrt_flexspi_nor.c
+endif
+
+ifeq ($(CONFIG_IMXRT_PROGMEM),y)
+CSRCS += imxrt_progmem.c
+endif
+
+ifeq ($(CONFIG_BOARDCTL_RESET),y)
+CSRCS += imxrt_reset.c
+endif
+
+ifeq ($(CONFIG_BOARDCTL_BOOT_IMAGE),y)
+CSRCS += imxrt_boot_image.c
 endif
 
 include $(TOPDIR)/boards/Board.mk

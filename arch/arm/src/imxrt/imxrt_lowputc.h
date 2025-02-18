@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/imxrt/imxrt_lowputc.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -18,8 +20,8 @@
  *
  ****************************************************************************/
 
-#ifndef __ARCH_ARM_SRC_IMXRT_LOWPUTC_H
-#define __ARCH_ARM_SRC_IMXRT_LOWPUTC_H
+#ifndef __ARCH_ARM_SRC_IMXRT_IMXRT_LOWPUTC_H
+#define __ARCH_ARM_SRC_IMXRT_IMXRT_LOWPUTC_H
 
 /****************************************************************************
  * Included Files
@@ -39,6 +41,15 @@
 /****************************************************************************
  * Public Types
  ****************************************************************************/
+
+#undef EXTERN
+#if defined(__cplusplus)
+#define EXTERN extern "C"
+extern "C"
+{
+#else
+#define EXTERN extern
+#endif
 
 #ifdef HAVE_LPUART_DEVICE
 /* This structure describes the configuration of an UART */
@@ -83,7 +94,7 @@ void imxrt_lowsetup(void);
 
 #ifdef HAVE_LPUART_DEVICE
 int imxrt_lpuart_configure(uint32_t base,
-                           FAR const struct uart_config_s *config);
+                           const struct uart_config_s *config);
 #endif
 
 /****************************************************************************
@@ -100,6 +111,11 @@ int imxrt_lpuart_configure(uint32_t base,
 void imxrt_lowputc(int ch);
 #else
 #  define imxrt_lowputc(ch)
+#endif
+
+#undef EXTERN
+#ifdef __cplusplus
+}
 #endif
 
 #endif /* __ARCH_ARM_SRC_IMXRT_LOWPUTC_H */

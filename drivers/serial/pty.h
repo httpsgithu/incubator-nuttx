@@ -1,6 +1,8 @@
 /****************************************************************************
  * drivers/serial/pty.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -26,6 +28,7 @@
  ****************************************************************************/
 
 #include <nuttx/config.h>
+#include <stdint.h>
 
 /****************************************************************************
  * Public Function Prototypes
@@ -46,37 +49,35 @@ extern "C"
  *   De-allocate a PTY minor number.
  *
  * Assumptions:
- *   Caller hold the px_exclsem
+ *   Caller hold the px_excllock
  *
  ****************************************************************************/
 
 #ifdef CONFIG_PSEUDOTERM_SUSV1
 void ptmx_minor_free(uint8_t minor);
+#else
+#  define ptmx_minor_free(minor)
 #endif
 
 /****************************************************************************
- * Name: pty_register
+ * Name: pty_register2
  *
  * Description:
- *   Create and register PTY master and slave devices.  The master device
- *   will be registered at /dev/ptyN and slave at /dev/pts/N where N is
- *   the provided minor number.
- *
- *   The slave side of the interface is always locked initially.  The
- *   master must call unlockpt() before the slave device can be opened.
+ *   Create and register PTY master and slave devices.  The slave side of
+ *   the interface is always locked initially.  The master must call
+ *   unlockpt() before the slave device can be opened.
  *
  * Input Parameters:
  *   minor - The number that qualifies the naming of the created devices.
+ *   susv1 - select SUSv1 or BSD behaviour
  *
  * Returned Value:
- *   Zero (OK) is returned on success; a negated errno value is returned on
- *   any failure.
+ *   0 is returned on success; otherwise, the negative error code return
+ *   appropriately.
  *
  ****************************************************************************/
 
-#ifdef CONFIG_PSEUDOTERM_SUSV1
-int pty_register(int minor);
-#endif
+int pty_register2(int minor, bool susv1);
 
 #undef EXTERN
 #ifdef __cplusplus

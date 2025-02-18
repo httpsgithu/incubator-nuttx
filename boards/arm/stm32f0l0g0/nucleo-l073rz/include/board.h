@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/stm32f0l0g0/nucleo-l073rz/include/board.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -167,20 +169,20 @@
 
 /* I2C */
 
-#define GPIO_I2C1_SCL GPIO_I2C1_SCL_2 /* D15 - PB8 */
-#define GPIO_I2C1_SDA GPIO_I2C1_SDA_2 /* D14 - PB9 */
+#define GPIO_I2C1_SCL  (GPIO_I2C1_SCL_2|GPIO_SPEED_LOW)     /* D15 - PB8 */
+#define GPIO_I2C1_SDA  (GPIO_I2C1_SDA_2|GPIO_SPEED_LOW)     /* D14 - PB9 */
 
 /* SPI1 */
 
-#define GPIO_SPI1_MISO GPIO_SPI1_MISO_2 /* D12 - PA6 */
-#define GPIO_SPI1_MOSI GPIO_SPI1_MOSI_2 /* D11 - PA7 */
-#define GPIO_SPI1_SCK  GPIO_SPI1_SCK_1  /* D13 - PA5 */
+#define GPIO_SPI1_MISO (GPIO_SPI1_MISO_2|GPIO_SPEED_MEDIUM) /* D12 - PA6 */
+#define GPIO_SPI1_MOSI (GPIO_SPI1_MOSI_2|GPIO_SPEED_MEDIUM) /* D11 - PA7 */
+#define GPIO_SPI1_SCK  (GPIO_SPI1_SCK_1|GPIO_SPEED_MEDIUM)  /* D13 - PA5 */
 
 /* SPI2 */
 
-#define GPIO_SPI2_MISO GPIO_SPI2_MISO_1 /* PB14 */
-#define GPIO_SPI2_MOSI GPIO_SPI2_MOSI_1 /* PB15 */
-#define GPIO_SPI2_SCK  GPIO_SPI2_SCK_1  /* PB10 */
+#define GPIO_SPI2_MISO (GPIO_SPI2_MISO_1|GPIO_SPEED_MEDIUM) /* PB14 */
+#define GPIO_SPI2_MOSI (GPIO_SPI2_MOSI_1|GPIO_SPEED_MEDIUM) /* PB15 */
+#define GPIO_SPI2_SCK  (GPIO_SPI2_SCK_1|GPIO_SPEED_MEDIUM)  /* PB10 */
 
 /* USART */
 
@@ -189,8 +191,8 @@
  * USART2_TX - PA2
  */
 
-#define GPIO_USART2_RX GPIO_USART2_RX_1 /* PA3 */
-#define GPIO_USART2_TX GPIO_USART2_TX_1 /* PA2 */
+#define GPIO_USART2_RX (GPIO_USART2_RX_1|GPIO_SPEED_HIGH)   /* PA3 */
+#define GPIO_USART2_TX (GPIO_USART2_TX_1|GPIO_SPEED_HIGH)   /* PA2 */
 
 /* DMA channels *************************************************************/
 

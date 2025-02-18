@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/kinetis/kinetis_usbotg.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -49,6 +51,6 @@ struct usbotg_bdtentry_s
  ****************************************************************************/
 
 struct usbdev_s;
-int kinetis_usbpullup(FAR struct usbdev_s *dev,  bool enable);
-void kinetis_usbsuspend(FAR struct usbdev_s *dev, bool resume);
+int kinetis_usbpullup(struct usbdev_s *dev,  bool enable);
+void kinetis_usbsuspend(struct usbdev_s *dev, bool resume);
 #endif /* __ARCH_ARM_SRC_KINETIS_KINETIS_USBOTG_H */

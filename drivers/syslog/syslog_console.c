@@ -1,6 +1,8 @@
 /****************************************************************************
  * drivers/syslog/syslog_console.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -42,8 +44,6 @@ static ssize_t syslog_console_read(FAR struct file *filep, FAR char *buffer,
                                    size_t buflen);
 static ssize_t syslog_console_write(FAR struct file *filep,
                                     FAR const char *buffer, size_t buflen);
-static int     syslog_console_ioctl(FAR struct file *filep, int cmd,
-                                    unsigned long arg);
 
 /****************************************************************************
  * Private Data
@@ -55,24 +55,11 @@ static const struct file_operations g_consoleops =
   NULL,                 /* close */
   syslog_console_read,  /* read */
   syslog_console_write, /* write */
-  NULL,                 /* seek */
-  syslog_console_ioctl, /* ioctl */
-  NULL                  /* poll */
 };
 
 /****************************************************************************
  * Private Functions
  ****************************************************************************/
-
-/****************************************************************************
- * Name: syslog_console_ioctl
- ****************************************************************************/
-
-static int syslog_console_ioctl(FAR struct file *filep, int cmd,
-                                unsigned long arg)
-{
-  return -ENOTTY;
-}
 
 /****************************************************************************
  * Name: syslog_console_read

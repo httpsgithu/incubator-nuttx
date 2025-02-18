@@ -1,6 +1,8 @@
 /****************************************************************************
  * tools/cxd56/clefia.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -391,7 +393,7 @@ struct cipher *cipher_init(uint8_t * key, uint8_t * iv)
 {
   struct cipher *c;
 
-  c = (struct cipher *)malloc(sizeof(*c));
+  c = malloc(sizeof(*c));
   if (!c)
     {
       return NULL;

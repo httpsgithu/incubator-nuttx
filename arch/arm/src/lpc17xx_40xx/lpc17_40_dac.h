@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/lpc17xx_40xx/lpc17_40_dac.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -62,7 +64,7 @@ extern "C"
  ****************************************************************************/
 
 #ifdef CONFIG_LPC17_40_DAC
-FAR struct dac_dev_s *lpc17_40_dacinitialize(void);
+struct dac_dev_s *lpc17_40_dacinitialize(void);
 #endif
 
 #ifdef __cplusplus

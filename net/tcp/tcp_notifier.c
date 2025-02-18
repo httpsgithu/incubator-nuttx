@@ -1,6 +1,8 @@
 /****************************************************************************
  * net/tcp/tcp_notifier.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -83,7 +85,7 @@ int tcp_readahead_notifier_setup(worker_t worker,
       return 0;
     }
 
-  /* Otherwise, this is just a simple wrapper around work_notifer_setup(). */
+  /* Otherwise, this is just a simple wrapper around work_notifier_setup(). */
 
   info.evtype    = WORK_TCP_READAHEAD;
   info.qid       = LPWORK;
@@ -139,7 +141,7 @@ int tcp_writebuffer_notifier_setup(worker_t worker,
       return 0;
     }
 
-  /* Otherwise, this is just a simple wrapper around work_notifer_setup(). */
+  /* Otherwise, this is just a simple wrapper around work_notifier_setup(). */
 
   info.evtype    = WORK_TCP_WRITEBUFFER;
   info.qid       = LPWORK;
@@ -192,7 +194,7 @@ int tcp_disconnect_notifier_setup(worker_t worker,
       return 0;
     }
 
-  /* Otherwise, this is just a simple wrapper around work_notifer_setup(). */
+  /* Otherwise, this is just a simple wrapper around work_notifier_setup(). */
 
   info.evtype    = WORK_TCP_DISCONNECT;
   info.qid       = LPWORK;
@@ -217,16 +219,15 @@ int tcp_disconnect_notifier_setup(worker_t worker,
  *         tcp_readahead_notifier_setup().
  *
  * Returned Value:
- *   Zero (OK) is returned on success; a negated errno value is returned on
- *   any failure.
+ *   None.
  *
  ****************************************************************************/
 
-int tcp_notifier_teardown(int key)
+void tcp_notifier_teardown(int key)
 {
   /* This is just a simple wrapper around work_notifier_teardown(). */
 
-  return work_notifier_teardown(key);
+  work_notifier_teardown(key);
 }
 
 /****************************************************************************

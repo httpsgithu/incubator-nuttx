@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/risc-v/src/bl602/bl602_os_hal.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -48,6 +50,7 @@
 #include <syslog.h>
 
 #include <nuttx/config.h>
+#include <nuttx/arch.h>
 #include <nuttx/irq.h>
 #include <nuttx/kthread.h>
 #include <nuttx/mqueue.h>
@@ -55,6 +58,7 @@
 #include <nuttx/pthread.h>
 #include <nuttx/wqueue.h>
 #include <nuttx/signal.h>
+#include <nuttx/mutex.h>
 #include <nuttx/semaphore.h>
 
 #include <bl602_netdev.h>
@@ -324,7 +328,7 @@ int bl_os_task_create(const char *name,
                       uint32_t prio,
                       void *task_handle)
 {
-  return nxtask_create(name, prio, stack_depth, entry, (char **)&param);
+  return kthread_create(name, prio, stack_depth, entry, (char **)&param);
 }
 
 /****************************************************************************
@@ -340,9 +344,9 @@ int bl_os_task_create(const char *name,
 
 void bl_os_task_delete(void *task_handle)
 {
-  pid_t task = (int)task_handle;
+  pid_t pid = (pid_t)((uintptr_t)task_handle);
 
-  task_delete((pid_t)task);
+  task_delete(pid);
 }
 
 /****************************************************************************
@@ -358,7 +362,9 @@ void bl_os_task_delete(void *task_handle)
 
 void *bl_os_task_get_current_task(void)
 {
-  return (void *)0;
+  pid_t pid = nxsched_getpid();
+
+  return (void *)((uintptr_t)pid);
 }
 
 /****************************************************************************
@@ -685,8 +691,7 @@ void *bl_os_mq_creat(uint32_t queue_len, uint32_t item_size)
   struct mq_adpt *mq_adpt;
   int ret;
 
-  mq_adpt = (struct mq_adpt *)kmm_malloc(sizeof(struct mq_adpt));
-
+  mq_adpt = kmm_malloc(sizeof(struct mq_adpt));
   if (!mq_adpt)
     {
       wlerr("ERROR: Failed to kmm_malloc\n");
@@ -928,13 +933,10 @@ static void bl_os_timer_callback(wdparm_t arg)
 
 void *bl_os_timer_create(void *func, void *argv)
 {
-  struct timer_adpt *timer;
-
-  timer = (struct timer_adpt *)kmm_malloc(sizeof(struct timer_adpt));
-
+  struct timer_adpt *timer = kmm_malloc(sizeof(struct timer_adpt));
   if (!timer)
     {
-      assert(0);
+      ASSERT(0);
     }
 
   memset((void *)timer, 0, sizeof(struct timer_adpt));
@@ -990,7 +992,6 @@ int bl_os_timer_start_once(void *timerid, long t_sec, long t_nsec)
 {
   struct timer_adpt *timer;
   struct timespec reltime;
-  int32_t tick;
 
   timer = (struct timer_adpt *)timerid;
 
@@ -1002,10 +1003,8 @@ int bl_os_timer_start_once(void *timerid, long t_sec, long t_nsec)
   reltime.tv_nsec = t_nsec;
   reltime.tv_sec = t_sec;
 
-  clock_time2ticks(&reltime, &tick);
-
   timer->mode = BL_OS_TIEMR_ONCE;
-  timer->delay = tick;
+  timer->delay = clock_time2ticks(&reltime);
 
   return wd_start(&timer->wdog,
                   timer->delay,
@@ -1028,7 +1027,6 @@ int bl_os_timer_start_periodic(void *timerid, long t_sec, long t_nsec)
 {
   struct timer_adpt *timer;
   struct timespec reltime;
-  int32_t tick;
 
   timer = (struct timer_adpt *)timerid;
 
@@ -1040,10 +1038,8 @@ int bl_os_timer_start_periodic(void *timerid, long t_sec, long t_nsec)
   reltime.tv_nsec = t_nsec;
   reltime.tv_sec = t_sec;
 
-  clock_time2ticks(&reltime, &tick);
-
   timer->mode = BL_OS_TIEMR_CYCLE;
-  timer->delay = tick;
+  timer->delay = clock_time2ticks(&reltime);
 
   return wd_start(&timer->wdog,
                   timer->delay,
@@ -1064,12 +1060,10 @@ int bl_os_timer_start_periodic(void *timerid, long t_sec, long t_nsec)
 
 void *bl_os_workqueue_create(void)
 {
-  struct work_s *work = NULL;
-  work = (struct work_s *)kmm_calloc(1, sizeof(struct work_s));
-
+  struct work_s *work = kmm_calloc(1, sizeof(struct work_s));
   if (!work)
     {
-      assert(0);
+      ASSERT(0);
     }
 
   return (void *)work;
@@ -1101,7 +1095,7 @@ int bl_os_workqueue_submit_hpwork(void *work,
       return -EINVAL;
     }
 
-  return work_queue(OS_HPWORK, work, (worker_t)worker, argv, tick);
+  return work_queue(OS_HPWORK, work, worker, argv, tick);
 }
 
 /****************************************************************************
@@ -1130,7 +1124,7 @@ int bl_os_workqueue_submit_lpwork(void *work,
       return -EINVAL;
     }
 
-  return work_queue(OS_LPWORK, work, (worker_t)worker, argv, tick);
+  return work_queue(OS_LPWORK, work, worker, argv, tick);
 }
 
 /****************************************************************************
@@ -1147,7 +1141,7 @@ int bl_os_workqueue_submit_lpwork(void *work,
 uint64_t bl_os_clock_gettime_ms(void)
 {
   struct timespec ts;
-  clock_gettime(CLOCK_REALTIME, &ts);
+  clock_systime_timespec(&ts);
   return ts.tv_sec * 1000 + ts.tv_nsec / 1000000;
 }
 
@@ -1212,11 +1206,11 @@ void bl_os_irq_attach(int32_t n, void *f, void *arg)
 
   wlinfo("INFO: n=%ld f=%p arg=%p\n", n, f, arg);
 
-  adapter = (struct irq_adpt *)kmm_malloc(sizeof(struct irq_adpt));
+  adapter = kmm_malloc(sizeof(struct irq_adpt));
 
   if (!adapter)
     {
-      DEBUGASSERT(0);
+      DEBUGPANIC();
     }
 
   adapter->func = f;
@@ -1226,7 +1220,7 @@ void bl_os_irq_attach(int32_t n, void *f, void *arg)
 
   if (ret != OK)
     {
-      DEBUGASSERT(0);
+      DEBUGPANIC();
     }
 }
 
@@ -1279,26 +1273,26 @@ void bl_os_irq_disable(int32_t n)
 void *bl_os_mutex_create(void)
 {
   int ret;
-  sem_t *sem;
+  mutex_t *mutex;
   int tmp;
 
-  tmp = sizeof(sem_t);
-  sem = (sem_t *)kmm_malloc(tmp);
-  if (!sem)
+  tmp = sizeof(mutex_t);
+  mutex = kmm_malloc(tmp);
+  if (!mutex)
     {
       wlerr("ERROR: Failed to alloc %d memory\n", tmp);
       return NULL;
     }
 
-  ret = nxsem_init(sem, 0, 1);
+  ret = nxmutex_init(mutex);
   if (ret)
     {
-      wlerr("ERROR: Failed to initialize sem error=%d\n", ret);
-      kmm_free(sem);
+      wlerr("ERROR: Failed to initialize mutex error=%d\n", ret);
+      kmm_free(mutex);
       return NULL;
     }
 
-  return sem;
+  return mutex;
 }
 
 /****************************************************************************
@@ -1317,10 +1311,10 @@ void *bl_os_mutex_create(void)
 
 void bl_os_mutex_delete(void *mutex_data)
 {
-  sem_t *sem = (sem_t *)mutex_data;
+  mutex_t *mutex = (mutex_t *)mutex_data;
 
-  nxsem_destroy(sem);
-  kmm_free(sem);
+  nxmutex_destroy(mutex);
+  kmm_free(mutex);
 }
 
 /****************************************************************************
@@ -1340,12 +1334,12 @@ void bl_os_mutex_delete(void *mutex_data)
 int32_t bl_os_mutex_lock(void *mutex_data)
 {
   int ret;
-  sem_t *sem = (sem_t *)mutex_data;
+  mutex_t *mutex = (mutex_t *)mutex_data;
 
-  ret = nxsem_wait(sem);
+  ret = nxmutex_lock(mutex);
   if (ret)
     {
-      wlerr("ERROR: Failed to wait sem\n");
+      wlerr("ERROR: Failed to wait mutex\n");
     }
 
   return bl_os_errno_trans(ret);
@@ -1368,12 +1362,12 @@ int32_t bl_os_mutex_lock(void *mutex_data)
 int32_t bl_os_mutex_unlock(void *mutex_data)
 {
   int ret;
-  sem_t *sem = (sem_t *)mutex_data;
+  mutex_t *mutex = (mutex_t *)mutex_data;
 
-  ret = nxsem_post(sem);
+  ret = nxmutex_unlock(mutex);
   if (ret)
     {
-      wlerr("ERROR: Failed to post sem error=%d\n", ret);
+      wlerr("ERROR: Failed to unlock error=%d\n", ret);
     }
 
   return bl_os_errno_trans(ret);
@@ -1401,7 +1395,7 @@ void *bl_os_sem_create(uint32_t init)
   int tmp;
 
   tmp = sizeof(sem_t);
-  sem = (sem_t *)kmm_malloc(tmp);
+  sem = kmm_malloc(tmp);
   if (!sem)
     {
       wlerr("ERROR: Failed to alloc %d memory\n", tmp);
@@ -1459,7 +1453,6 @@ void bl_os_sem_delete(void *semphr)
 int32_t bl_os_sem_take(void *semphr, uint32_t ticks)
 {
   int ret;
-  struct timespec timeout;
   sem_t *sem = (sem_t *)semphr;
 
   if (ticks == BL_OS_WAITING_FOREVER)
@@ -1472,19 +1465,7 @@ int32_t bl_os_sem_take(void *semphr, uint32_t ticks)
     }
   else
     {
-      ret = clock_gettime(CLOCK_REALTIME, &timeout);
-      if (ret < 0)
-        {
-          wlerr("ERROR: Failed to get time\n");
-          return false;
-        }
-
-      if (ticks)
-        {
-          bl_os_update_time(&timeout, ticks);
-        }
-
-      ret = nxsem_timedwait(sem, &timeout);
+      ret = nxsem_tickwait(sem, ticks);
       if (ret)
         {
           wlerr("ERROR: Failed to wait sem in %lu ticks\n", ticks);

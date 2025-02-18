@@ -1,6 +1,8 @@
 /****************************************************************************
  * fs/procfs/fs_skeleton.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -42,9 +44,9 @@
 #include <nuttx/kmalloc.h>
 #include <nuttx/fs/fs.h>
 #include <nuttx/fs/procfs.h>
-#include <nuttx/fs/dirent.h>
 
 #include <arch/irq.h>
+#include "fs_heap.h"
 
 #if !defined(CONFIG_DISABLE_MOUNTPOINT) && defined(CONFIG_FS_PROCFS)
 
@@ -100,9 +102,10 @@ static int     skel_dup(FAR const struct file *oldp,
                  FAR struct file *newp);
 
 static int     skel_opendir(FAR const char *relpath,
-                 FAR struct fs_dirent_s *dir);
+                 FAR struct fs_dirent_s **dir);
 static int     skel_closedir(FAR struct fs_dirent_s *dir);
-static int     skel_readdir(FAR struct fs_dirent_s *dir);
+static int     skel_readdir(FAR struct fs_dirent_s *dir,
+                            FAR struct dirent *entry);
 static int     skel_rewinddir(FAR struct fs_dirent_s *dir);
 
 static int     skel_stat(FAR const char *relpath, FAR struct stat *buf);
@@ -133,6 +136,7 @@ const struct procfs_operations skel_procfsoperations =
 #else
   skel_write,      /* write */
 #endif
+  NULL,            /* poll */
 
   skel_dup,        /* dup */
 
@@ -173,7 +177,7 @@ static int skel_open(FAR struct file *filep, FAR const char *relpath,
 
   /* Allocate the open file structure */
 
-  priv = (FAR struct skel_file_s *)kmm_zalloc(sizeof(struct skel_file_s));
+  priv = fs_heap_zalloc(sizeof(struct skel_file_s));
   if (!priv)
     {
       ferr("ERROR: Failed to allocate file attributes\n");
@@ -205,7 +209,7 @@ static int skel_close(FAR struct file *filep)
 
   /* Release the file attributes structure */
 
-  kmm_free(priv);
+  fs_heap_free(priv);
   filep->f_priv = NULL;
   return OK;
 }
@@ -312,7 +316,7 @@ static int skel_dup(FAR const struct file *oldp, FAR struct file *newp)
 
   /* Allocate a new container to hold the task and attribute selection */
 
-  newpriv = (FAR struct skel_file_s *)kmm_zalloc(sizeof(struct skel_file_s));
+  newpriv = fs_heap_zalloc(sizeof(struct skel_file_s));
   if (!newpriv)
     {
       ferr("ERROR: Failed to allocate file attributes\n");
@@ -337,19 +341,20 @@ static int skel_dup(FAR const struct file *oldp, FAR struct file *newp)
  *
  ****************************************************************************/
 
-static int skel_opendir(FAR const char *relpath, FAR struct fs_dirent_s *dir)
+static int skel_opendir(FAR const char *relpath,
+                        FAR struct fs_dirent_s **dir)
 {
   FAR struct skel_level1_s *level1;
 
   finfo("relpath: \"%s\"\n", relpath ? relpath : "NULL");
-  DEBUGASSERT(relpath && dir && !dir->u.procfs);
+  DEBUGASSERT(relpath);
 
   /* The path refers to the 1st level sbdirectory.  Allocate the level1
    * dirent structure.
    */
 
   level1 = (FAR struct skel_level1_s *)
-     kmm_zalloc(sizeof(struct skel_level1_s));
+     fs_heap_zalloc(sizeof(struct skel_level1_s));
 
   if (!level1)
     {
@@ -365,7 +370,7 @@ static int skel_opendir(FAR const char *relpath, FAR struct fs_dirent_s *dir)
   level1->base.nentries = 0;
   level1->base.index    = 0;
 
-  dir->u.procfs = (FAR void *) level1;
+  *dir = (FAR struct fs_dirent_s *)level1;
   return OK;
 }
 
@@ -378,17 +383,8 @@ static int skel_opendir(FAR const char *relpath, FAR struct fs_dirent_s *dir)
 
 static int skel_closedir(FAR struct fs_dirent_s *dir)
 {
-  FAR struct skel_level1_s *priv;
-
-  DEBUGASSERT(dir && dir->u.procfs);
-  priv = dir->u.procfs;
-
-  if (priv)
-    {
-      kmm_free(priv);
-    }
-
-  dir->u.procfs = NULL;
+  DEBUGASSERT(dir);
+  fs_heap_free(dir);
   return OK;
 }
 
@@ -399,15 +395,16 @@ static int skel_closedir(FAR struct fs_dirent_s *dir)
  *
  ****************************************************************************/
 
-static int skel_readdir(FAR struct fs_dirent_s *dir)
+static int skel_readdir(FAR struct fs_dirent_s *dir,
+                        FAR struct dirent *entry)
 {
   FAR struct skel_level1_s *level1;
-  char  filename[16];
+  char filename[16];
   int index;
   int ret;
 
-  DEBUGASSERT(dir && dir->u.procfs);
-  level1 = dir->u.procfs;
+  DEBUGASSERT(dir);
+  level1 = (FAR struct skel_level1_s *)dir;
 
   /* TODO:  Perform device specific readdir function here.  This may
    *        or may not involve validating the nentries variable
@@ -435,12 +432,12 @@ static int skel_readdir(FAR struct fs_dirent_s *dir)
 
       /* TODO:  Add device specific entries */
 
-      strcpy(filename, "dummy");
+      strlcpy(filename, "dummy", sizeof(filename));
 
       /* TODO:  Specify the type of entry */
 
-      dir->fd_dir.d_type = DTYPE_FILE;
-      strncpy(dir->fd_dir.d_name, filename, NAME_MAX);
+      entry->d_type = DTYPE_FILE;
+      strlcpy(entry->d_name, filename, sizeof(entry->d_name));
 
       /* Set up the next directory entry offset.  NOTE that we could use the
        * standard f_pos instead of our own private index.
@@ -464,8 +461,8 @@ static int skel_rewinddir(FAR struct fs_dirent_s *dir)
 {
   FAR struct skel_level1_s *priv;
 
-  DEBUGASSERT(dir && dir->u.procfs);
-  priv = dir->u.procfs;
+  DEBUGASSERT(dir);
+  priv = (FAR struct skel_level1_s *)dir;
 
   priv->base.index = 0;
   return OK;

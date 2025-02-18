@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/z80/include/irq.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -31,5 +33,40 @@
 
 #include <nuttx/irq.h>
 #include <arch/chip/irq.h>
+
+/****************************************************************************
+ * Public Function Prototypes
+ ****************************************************************************/
+
+#ifdef __cplusplus
+#define EXTERN extern "C"
+extern "C"
+{
+#else
+#define EXTERN extern
+#endif
+
+/* Return the current value of the stack pointer */
+
+uintptr_t up_getsp(void);
+
+/****************************************************************************
+ * Name: up_getusrpc
+ ****************************************************************************/
+
+#define up_getusrpc(regs) \
+    (((FAR chipreg_t *)((regs) ? (regs) : up_current_regs()))[XCPT_PC])
+
+/****************************************************************************
+ * Name: up_getusrsp
+ ****************************************************************************/
+
+#define up_getusrsp(regs) \
+    ((uintptr_t)((FAR chipreg_t*)(regs))[XCPT_SP])
+
+#undef EXTERN
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* __ARCH_Z80_INCLUDE_IRQ_H */

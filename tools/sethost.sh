@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 # tools/sethost.sh
 #
+# SPDX-License-Identifier: Apache-2.0
+#
 # Licensed to the Apache Software Foundation (ASF) under one or more
 # contributor license agreements.  See the NOTICE file distributed with
 # this work for additional information regarding copyright ownership.  The
@@ -79,6 +81,7 @@ done
 #   Cygwin: CYGWIN_NT-10.0-WOW
 #   Linux: Linux
 #   MSYS: MINGW32_NT-6.2
+#   MSYS2: MSYS_NT-6.3-9600
 #   BSD: FreeBSD, OpenBSD, NetBSD, *BSD
 
 if [ -z "$host" ]; then
@@ -98,10 +101,32 @@ if [ -z "$host" ]; then
       host=windows
       wenv=msys
       ;;
+    MSYS*)
+      host=windows
+      wenv=msys
+      ;;
     *)
       # Assume linux as a fallback
 
       host=linux
+      ;;
+  esac
+fi
+
+# Detect Host CPU type.
+# At least MacOS and Linux can have x86_64 and arm based hosts.
+
+if [ -z "$cpu" ]; then
+  case $(uname -m) in
+    arm64)
+      cpu=arm64
+      ;;
+    aarch64)
+      cpu=arm64
+      ;;
+    *)
+      # Assume x86_64 as default
+      cpu=x86_64
       ;;
   esac
 fi
@@ -146,6 +171,11 @@ if [ "X$host" == "Xlinux" -o "X$host" == "Xmacos" -o "X$host" == "Xbsd" ]; then
     kconfig-tweak --file $nuttx/.config --disable CONFIG_HOST_BSD
     kconfig-tweak --file $nuttx/.config --enable CONFIG_HOST_LINUX
 
+    if [ "X$cpu" == "Xarm64" ]; then
+      echo "  Select CONFIG_HOST_ARM64=y"
+      kconfig-tweak --file $nuttx/.config --enable CONFIG_HOST_ARM64
+    fi
+
   elif [ "X$host" == "Xbsd" ]; then
     echo "  Select CONFIG_HOST_BSD=y"
     kconfig-tweak --file $nuttx/.config --disable CONFIG_HOST_MACOS
@@ -157,6 +187,11 @@ if [ "X$host" == "Xlinux" -o "X$host" == "Xmacos" -o "X$host" == "Xbsd" ]; then
     kconfig-tweak --file $nuttx/.config --disable CONFIG_HOST_LINUX
     kconfig-tweak --file $nuttx/.config --disable CONFIG_HOST_BSD
     kconfig-tweak --file $nuttx/.config --enable CONFIG_HOST_MACOS
+
+    if [ "X$cpu" == "Xarm64" ]; then
+      echo "  Select CONFIG_HOST_ARM64=y"
+      kconfig-tweak --file $nuttx/.config --enable CONFIG_HOST_ARM64
+    fi
   fi
 
   # Enable the System V ABI
@@ -185,6 +220,7 @@ else
       kconfig-tweak --file $nuttx/.config --enable CONFIG_WINDOWS_MSYS
     else
       echo "  Select CONFIG_WINDOWS_NATIVE=y"
+      kconfig-tweak --file $nuttx/.config --enable CONFIG_EXPERIMENTAL
       kconfig-tweak --file $nuttx/.config --enable CONFIG_WINDOWS_NATIVE
     fi
   fi

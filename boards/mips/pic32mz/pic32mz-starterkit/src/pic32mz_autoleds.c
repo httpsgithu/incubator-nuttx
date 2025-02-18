@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/mips/pic32mz/pic32mz-starterkit/src/pic32mz_autoleds.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -31,9 +33,7 @@
 #include <nuttx/board.h>
 #include <arch/board/board.h>
 
-#include "mips_arch.h"
 #include "mips_internal.h"
-
 #include "pic32mz_gpio.h"
 #include "pic32mz-starterkit.h"
 
@@ -126,7 +126,7 @@ static const struct led_setting_s g_ledoffvalues[LED_NVALUES] =
  * Name: pic32mz_setleds
  ****************************************************************************/
 
-static void pic32mz_setleds(FAR const struct led_setting_s *setting)
+static void pic32mz_setleds(const struct led_setting_s *setting)
 {
   if (setting->led1 != LED_NC)
     {

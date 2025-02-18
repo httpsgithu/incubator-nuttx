@@ -1,6 +1,8 @@
 ############################################################################
 # boards/sim/sim/sim/scripts/Make.defs
 #
+# SPDX-License-Identifier: Apache-2.0
+#
 # Licensed to the Apache Software Foundation (ASF) under one or more
 # contributor license agreements.  See the NOTICE file distributed with
 # this work for additional information regarding copyright ownership.  The
@@ -18,7 +20,7 @@
 #
 ############################################################################
 
-include $(TOPDIR)/.config
+-include $(TOPDIR)/.config
 include $(TOPDIR)/tools/Config.mk
 
 # NuttX is sometimes built as a native target.
@@ -38,47 +40,151 @@ include $(TOPDIR)/tools/Config.mk
 
 ARCHDEFINES += -U_AIX -U_WIN32 -U__APPLE__ -U__FreeBSD__
 ARCHDEFINES += -U__NetBSD__ -U__linux__ -U__sun__ -U__unix__
+ARCHDEFINES += -U__ENVIRONMENT_MAC_OS_X_VERSION_MIN_REQUIRED__
 
 ifeq ($(CONFIG_DEBUG_SYMBOLS),y)
-  ARCHOPTIMIZATION = -g
+  ARCHOPTIMIZATION += $(CONFIG_DEBUG_SYMBOLS_LEVEL)
+endif
+
+ifeq ($(CONFIG_DEBUG_CUSTOMOPT),y)
+  ARCHOPTIMIZATION += $(CONFIG_DEBUG_OPTLEVEL)
+else ifeq ($(CONFIG_DEBUG_FULLOPT),y)
+  ARCHOPTIMIZATION += -O2
 endif
 
 ifneq ($(CONFIG_DEBUG_NOOPT),y)
-  ARCHOPTIMIZATION += -O2 -fno-strict-aliasing
+  ARCHOPTIMIZATION += -fno-strict-aliasing
+endif
+
+ifeq ($(CONFIG_FRAME_POINTER),y)
+  ARCHOPTIMIZATION += -fno-omit-frame-pointer -fno-optimize-sibling-calls
+else
+  ARCHOPTIMIZATION += -fomit-frame-pointer
 endif
 
 ifeq ($(CONFIG_STACK_CANARIES),y)
   ARCHOPTIMIZATION += -fstack-protector-all
 endif
 
-ifeq ($(CONFIG_ARCH_COVERAGE),y)
-  ARCHOPTIMIZATION += -fprofile-arcs -ftest-coverage
+ifeq ($(CONFIG_STACK_USAGE),y)
+  ARCHOPTIMIZATION += -fstack-usage
 endif
 
-ARCHCPUFLAGS = -fno-builtin
-ARCHCPUFLAGSXX = -fno-builtin -nostdinc++
-ifeq ($(CONFIG_CXX_EXCEPTION),)
-  ARCHCPUFLAGSXX += -fno-exceptions -fcheck-new
+ifneq ($(CONFIG_STACK_USAGE_WARNING),0)
+  ARCHOPTIMIZATION += -Wstack-usage=$(CONFIG_STACK_USAGE_WARNING)
 endif
-ARCHPICFLAGS = -fpic
-ARCHWARNINGS = -Wall -Wstrict-prototypes -Wshadow -Wundef
-ARCHWARNINGSXX = -Wall -Wshadow -Wundef
+
+ifeq ($(CONFIG_COVERAGE_ALL),y)
+  ifeq ($(CONFIG_ARCH_TOOLCHAIN_GCC),y)
+    ARCHOPTIMIZATION += -fprofile-arcs -ftest-coverage -fno-inline
+  else ifeq ($(CONFIG_ARCH_TOOLCHAIN_CLANG),y)
+    ARCHOPTIMIZATION += -fprofile-instr-generate -fcoverage-mapping
+  endif
+endif
+
+ifneq ($(CONFIG_PROFILE_ALL)$(CONFIG_SIM_PROFILE),)
+  ARCHOPTIMIZATION += -pg
+endif
+
+ifeq ($(CONFIG_SIM_ASAN),y)
+  ARCHOPTIMIZATION += -fsanitize=address -fsanitize-address-use-after-scope
+  ARCHOPTIMIZATION += -fsanitize=pointer-compare -fsanitize=pointer-subtract
+else ifeq ($(CONFIG_MM_KASAN_INSTRUMENT_ALL),y)
+  ARCHOPTIMIZATION += -fsanitize=kernel-address
+endif
+
+ifeq ($(CONFIG_MM_KASAN_GLOBAL),y)
+  ARCHOPTIMIZATION += --param asan-globals=1
+endif
+
+ifeq ($(CONFIG_SIM_UBSAN),y)
+  ARCHOPTIMIZATION += -fsanitize=undefined
+else
+  ifeq ($(CONFIG_MM_UBSAN_ALL),y)
+    ARCHOPTIMIZATION += $(CONFIG_MM_UBSAN_OPTION)
+  endif
+
+  ifeq ($(CONFIG_MM_UBSAN_TRAP_ON_ERROR),y)
+    ARCHOPTIMIZATION += -fsanitize-undefined-trap-on-error
+  endif
+endif
+
+ifeq ($(CONFIG_ARCH_INSTRUMENT_ALL),y)
+  ARCHOPTIMIZATION += -finstrument-functions
+endif
+
+# Add -fno-common because macOS "ld -r" doesn't seem to pick objects
+# for common symbols.
+ARCHCFLAGS += -fno-common
+ARCHCXXFLAGS += -fno-common
 
 # Add -fvisibility=hidden
 # Because we don't want export nuttx's symbols to share libraries
 
-ARCHCPUFLAGS += -fvisibility=hidden
-ARCHCPUFLAGSXX += -fvisibility=hidden
+ARCHCFLAGS += -fvisibility=hidden
+ARCHCXXFLAGS += -fvisibility=hidden
 
-# Add -fno-common because macOS "ld -r" doesn't seem to pick objects
-# for common symbols.
-ARCHCPUFLAGS += -fno-common
-ARCHCPUFLAGSXX += -fno-common
+ARCHCFLAGS += -ffunction-sections -fdata-sections
+ARCHCXXFLAGS += -ffunction-sections -fdata-sections
+
+ARCHCFLAGS += -Wall -Wstrict-prototypes -Wshadow -Wundef -Wno-attributes -Wno-unknown-pragmas
+ARCHCXXFLAGS += -Wall -Wshadow -Wundef -Wno-attributes -Wno-unknown-pragmas
+
+ifneq ($(CONFIG_LIBCXXTOOLCHAIN),y)
+  ARCHCXXFLAGS += -nostdinc++
+endif
+
+ifneq ($(CONFIG_CXX_STANDARD),)
+  ARCHCXXFLAGS += -std=$(CONFIG_CXX_STANDARD)
+endif
+
+ifeq ($(CONFIG_CXX_EXCEPTION),)
+  ARCHCXXFLAGS += -fno-exceptions -fcheck-new
+endif
+ifeq ($(CONFIG_CXX_RTTI),)
+  ARCHCXXFLAGS += -fno-rtti
+endif
 
 ifeq ($(CONFIG_SIM_M32),y)
-  ARCHCPUFLAGS += -m32
-  ARCHCPUFLAGSXX += -m32
+  ARCHCFLAGS += -m32
+  ARCHCXXFLAGS += -m32
+else
+  ARCHCFLAGS += -fno-pic
+  ARCHCXXFLAGS += -fno-pic
+  ifneq ($(CONFIG_HOST_MACOS),y)
+    ARCHCFLAGS += -mcmodel=medium
+    ARCHCXXFLAGS += -mcmodel=medium
+  endif
 endif
+
+# LLVM style architecture flags
+
+ifeq ($(CONFIG_HOST_X86_64),y)
+  ifeq ($(CONFIG_SIM_M32),y)
+    LLVM_ARCHTYPE := x86
+    LLVM_CPUTYPE := i686
+  else
+    LLVM_ARCHTYPE := x86_64
+    LLVM_CPUTYPE := skylake
+  endif
+else ifeq ($(CONFIG_HOST_X86_32),y)
+  LLVM_ARCHTYPE := x86
+  LLVM_CPUTYPE := i686
+else ifeq ($(CONFIG_HOST_ARM64),y)
+  LLVM_ARCHTYPE := aarch64
+  LLVM_CPUTYPE := cortex-a53
+else ifeq ($(CONFIG_HOST_ARM),y)
+  LLVM_ARCHTYPE := arm
+  LLVM_CPUTYPE := cortex-a9
+endif
+
+ifeq ($(CONFIG_HOST_LINUX),y)
+  LLVM_ABITYPE := sysv
+else ifeq ($(CONFIG_HOST_MACOS),y)
+  LLVM_ABITYPE := sysv
+endif
+
+ARCHPICFLAGS = -fpic
 
 CC = $(CROSSDEV)cc
 CXX = $(CROSSDEV)c++
@@ -86,7 +192,7 @@ CPP = $(CROSSDEV)cc -E -P -x c
 LD = $(CROSSDEV)ld
 ifeq ($(CONFIG_HOST_MACOS),y)
 STRIP = $(CROSSDEV)strip
-AR = $(TOPDIR)/tools/macar-rcs.sh
+AR = $(TOPDIR)/tools/macar-qcs.sh
 else
 STRIP = $(CROSSDEV)strip --strip-unneeded
 AR = $(CROSSDEV)ar rcs
@@ -95,29 +201,33 @@ NM = $(CROSSDEV)nm
 OBJCOPY = $(CROSSDEV)objcopy
 OBJDUMP = $(CROSSDEV)objdump
 
-# Note: -fshort-wchar for the case where NuttX and the host OS have
-# different wchar_t. On NuttX, it's uint16_t. On macOS, it's 32-bit.
-CFLAGS := $(ARCHWARNINGS) $(ARCHOPTIMIZATION) \
-   $(ARCHCPUFLAGS) $(ARCHINCLUDES) $(ARCHDEFINES) $(EXTRAFLAGS) -pipe \
-   -fshort-wchar
-CXXFLAGS := $(ARCHWARNINGSXX) $(ARCHOPTIMIZATION) \
-   $(ARCHCPUFLAGSXX) $(ARCHXXINCLUDES) $(ARCHDEFINES) $(EXTRAFLAGS) -pipe \
-   -fshort-wchar
-CPPFLAGS := $(ARCHINCLUDES) $(ARCHDEFINES) $(EXTRAFLAGS) \
-   -fshort-wchar
+# Zig toolchain
+
+include $(TOPDIR)/tools/Zig.defs
+
+# Rust toolchain
+
+include $(TOPDIR)/tools/Rust.defs
+
+# LDC (LLVM D Compiler) toolchain
+
+include $(TOPDIR)/tools/D.defs
+
+# Swift 6 toolchain
+
+include $(TOPDIR)/tools/Swift.defs
+
+CFLAGS := $(ARCHOPTIMIZATION) $(ARCHCFLAGS) $(ARCHINCLUDES) $(ARCHDEFINES) $(EXTRAFLAGS)
+CXXFLAGS := $(ARCHOPTIMIZATION) $(ARCHCXXFLAGS) $(ARCHXXINCLUDES) $(ARCHDEFINES) $(EXTRAFLAGS)
+
+CPPFLAGS := $(ARCHINCLUDES) $(ARCHDEFINES) $(EXTRAFLAGS)
 AFLAGS := $(CFLAGS) -D__ASSEMBLY__
 
-ifeq ($(CONFIG_LIBCXX),y)
-  # Why c++17?
-  #  * libcxx seems to require c++11.
-  #  * The compiler defaults varies:
-  #      clang/macOS (from xcode): 199711L
-  #      gcc/ubuntu:               201402L
-  #  * There is a precedent to use c++14.
-  #    (boards/arm/stm32l4/nucleo-l476rg/scripts/Make.defs)
-  #  * libs/libxx/libcxx/src/barrier.cpp depends on aligned new
-  CXXFLAGS += -std=c++17
+ifeq ($(CONFIG_HOST_LINUX),y)
+  LDLINKFLAGS += -z noexecstack
+endif
 
+ifeq ($(CONFIG_LIBCXX),y)
   ifeq ($(CONFIG_HOST_MACOS),y)
     # macOS uses libc++abi
     CXXFLAGS += -DLIBCXX_BUILDING_LIBCXXABI
@@ -127,24 +237,19 @@ ifeq ($(CONFIG_LIBCXX),y)
     # XXX what to do for windows?
     CXXFLAGS += -D__GLIBCXX__
   endif
-endif
 
-ifeq ($(CONFIG_SIM_ASAN),y)
-  CFLAGS += -fsanitize=address -fno-omit-frame-pointer
-  CXXFLAGS += -fsanitize=address -fno-omit-frame-pointer
-else ifeq ($(CONFIG_MM_KASAN),y)
-  CFLAGS += -fsanitize=kernel-address
-  CXXFLAGS += -fsanitize=kernel-address
-endif
-
-ifeq ($(CONFIG_SIM_UBSAN),y)
-  CFLAGS += -fsanitize=undefined -fno-omit-frame-pointer
-  CXXFLAGS += -fsanitize=undefined -fno-omit-frame-pointer
+  # Disable availability macros.
+  # The availability on Host OS is not likely appropriate for NuttX.
+  #
+  # Note: When compiling NuttX apps, we undefine __APPLE__.
+  # It makes libcxx __availability header unhappy.
+  # https://github.com/llvm/llvm-project/blob/2e2999cd44f6ec9a5e396fa0113497ea82582f69/libcxx/include/__availability#L258
+  CXXFLAGS += -D_LIBCPP_DISABLE_AVAILABILITY
 endif
 
 # Loadable module definitions
+CMODULEFLAGS = $(CFLAGS) -fvisibility=hidden
 
-CMODULEFLAGS = $(CFLAGS)
 # -fno-pic to avoid GOT relocations
 CMODULEFLAGS += -fno-pic
 ifeq ($(CONFIG_LIBC_ARCH_ELF_64BIT),y)
@@ -161,12 +266,9 @@ endif
 # not available on NuttX.
 CMODULEFLAGS += -fno-stack-protector
 
-LDMODULEFLAGS = -r -e module_initialize
-ifeq ($(CONFIG_CYGWIN_WINTOOL),y)
-  LDMODULEFLAGS += -T "${shell cygpath -w $(TOPDIR)/libs/libc/modlib/gnu-elf.ld}"
-else
-  LDMODULEFLAGS += -T $(TOPDIR)/libs/libc/modlib/gnu-elf.ld
-endif
+LDMODULEFLAGS = -r
+LDMODULEFLAGS += -T $(call CONVERT_PATH,$(TOPDIR)/libs/libc/modlib/gnu-elf.ld)
+SHMODULEFLAGS = -shared -Bsymbolic -G -Bdynamic
 
 # NuttX modules are ELF binaries.
 # Non-ELF platforms like macOS need to use a separate ELF toolchain.
@@ -179,42 +281,70 @@ endif
 
 # ELF module definitions
 
-CELFFLAGS = $(CFLAGS)
-CXXELFFLAGS = $(CXXFLAGS)
+CELFFLAGS = $(CFLAGS) -fvisibility=hidden
+CXXELFFLAGS = $(CXXFLAGS) -fvisibility=hidden
 # -fno-pic to avoid GOT relocations
 CELFFLAGS += -fno-pic
 CXXELFFLAGS += -fno-pic
-
-LDELFFLAGS = -r -e main
-ifeq ($(CONFIG_CYGWIN_WINTOOL),y)
-  LDELFFLAGS += -T "${shell cygpath -w $(BOARD_DIR)$(DELIM)scripts$(DELIM)gnu-elf.ld}"
-else
-  LDELFFLAGS += -T $(BOARD_DIR)$(DELIM)scripts$(DELIM)gnu-elf.ld
+ifeq ($(CONFIG_LIBC_ARCH_ELF_64BIT),y)
+  # See the comment on CMODULEFLAGS above.
+  CELFFLAGS += -mcmodel=large
+  CXXELFFLAGS += -mcmodel=large
 endif
 
-ifeq ($(CONFIG_DEBUG_SYMBOLS),y)
-  CCLINKFLAGS += -g
+LDELFFLAGS = -r -e main --gc-sections
+LDELFFLAGS += -T $(call CONVERT_PATH,$(TOPDIR)/libs/libc/modlib/gnu-elf.ld)
+
+ifeq ($(CONFIG_HOST_MACOS),y)
+  LDFLAGS += -Wl,-dead_strip
+else
+  LDFLAGS += -Wl,--gc-sections
+
+  # Let the symbol table link from 0x40000000
+  # which is more convenient for debugging.
+  LDFLAGS += -Wl,-Ttext-segment=0x40000000
+endif
+
+ifeq ($(CONFIG_DEBUG_LINK_MAP),y)
+  ifeq ($(CONFIG_HOST_MACOS),)
+    LDFLAGS += -Wl,-Map=$(TOPDIR)/nuttx.map
+  endif
+endif
+
+SHCCFLAGS = -fPIC -fPIE -fvisibility=default
+SHMODULEFLAGS = -shared -Bsymbolic -Bdynamic -G
+
+ifeq ($(CONFIG_DEBUG_LINK_MAP),y)
+  ifeq ($(CONFIG_HOST_MACOS),)
+    LDFLAGS += -Wl,-Map=$(TOPDIR)/nuttx.map
+  endif
 endif
 
 ifeq ($(CONFIG_SIM_M32),y)
   LDLINKFLAGS += -melf_i386
-  CCLINKFLAGS += -m32
   LDFLAGS += -m32
   LDMODULEFLAGS += -melf_i386
+  SHMODULEFLAGS += -melf_i386
   LDELFFLAGS += -melf_i386
-  HOSTLDFLAGS += -m32
+else ifeq ($(CONFIG_HOST_MACOS),)
+  # To compile 64-bit Sim, adding no-pie is necessary to prevent linking errors
+  # but this may cause other issues on Ubuntu 20.
+  ARCHCFLAGS += -no-pie
+  ARCHPICFLAGS += -no-pie
+  LDFLAGS += -Wl,-no-pie
 endif
 
-ifeq ($(CONFIG_SIM_ASAN),y)
-  CCLINKFLAGS += -fsanitize=address -fno-omit-frame-pointer
-else ifeq ($(CONFIG_MM_KASAN),y)
-  CCLINKFLAGS += -fsanitize=kernel-address
+ifeq ($(CONFIG_HOST_LINUX),y)
+  define POSTBUILD
+  	$(Q)echo "Pac SIM with dynamic libs..";
+  	@ rm -rf sim-pac;
+  	@ mkdir -p sim-pac/libs;
+  	@ cp nuttx sim-pac/nuttx;
+  	@ ldd sim-pac/nuttx | grep "=> /" | awk '{print $$3}' | xargs -I '{}' cp -v '{}' sim-pac/libs;
+  	@ readelf -l nuttx | grep "program interpreter" | awk -F':' '{print $$2}'| cut -d"]" -f1 | xargs -I '{}' cp -v '{}' sim-pac;
+  	@ cp $(TOPDIR)/tools/simlaunch.sh sim-pac;
+  	@ tar -czf nuttx.tgz sim-pac;
+  	$(Q)echo "SIM elf with dynamic libs archive in nuttx.tgz"
+  	@ rm -rf sim-pac;
+  endef
 endif
-
-ifeq ($(CONFIG_SIM_UBSAN),y)
-  CCLINKFLAGS += -fsanitize=undefined -fno-omit-frame-pointer
-endif
-
-
-HOSTCFLAGS = $(ARCHWARNINGS) $(ARCHOPTIMIZATION) \
-   $(ARCHCPUFLAGS) $(HOSTINCLUDES) $(EXTRAFLAGS) -D__SIM__ -pipe

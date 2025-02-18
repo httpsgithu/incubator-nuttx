@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/tiva/tm4c123g-launchpad/src/tm4c123g-launchpad.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -234,6 +236,18 @@ int tm4c_adc_setup(void);
 #endif
 
 /****************************************************************************
+ * Name: tm4c_can_setup
+ *
+ * Description:
+ *   Initialize CAN modules and register the CAN driver.
+ *
+ ****************************************************************************/
+
+#ifdef CONFIG_TIVA_CAN
+int tm4c_can_setup(void);
+#endif
+
+/****************************************************************************
  * Name: tm4c_at24_automount
  *
  * Description:
@@ -266,7 +280,7 @@ int tiva_timer_configure(void);
  ****************************************************************************/
 
 #ifdef CONFIG_CAN_MCP2515
-int tiva_mcp2515initialize(FAR const char *devpath);
+int tiva_mcp2515initialize(const char *devpath);
 #endif
 
 #endif /* __ASSEMBLY__ */

@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/stm32/stm32.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -57,7 +59,9 @@
 #include "stm32_i2s.h"
 #include "stm32_tim.h"
 #include "stm32_uart.h"
-#include "stm32_usbdev.h"
+#if defined(CONFIG_USBDEV) && defined(CONFIG_STM32_USB)
+#  include "stm32_usbdev.h"
+#endif
 #include "stm32_wdg.h"
 #include "stm32_lowputc.h"
 #include "stm32_eth.h"

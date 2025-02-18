@@ -1,6 +1,8 @@
 /****************************************************************************
  * net/icmp/icmp_poll.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -66,13 +68,12 @@ void icmp_poll(FAR struct net_driver_s *dev, FAR struct icmp_conn_s *conn)
 
   /* Setup for the application callback */
 
-  dev->d_appdata = &dev->d_buf[NET_LL_HDRLEN(dev) + IPICMP_HDRLEN];
-  dev->d_len     = 0;
-  dev->d_sndlen  = 0;
+  dev->d_len    = 0;
+  dev->d_sndlen = 0;
 
   /* Perform the application callback */
 
-  devif_conn_event(dev, conn, ICMP_POLL, conn->list);
+  devif_conn_event(dev, ICMP_POLL, conn->sconn.list);
 }
 
 #endif /* CONFIG_NET && CONFIG_NET_ICMP && CONFIG_NET_ICMP_SOCKET */

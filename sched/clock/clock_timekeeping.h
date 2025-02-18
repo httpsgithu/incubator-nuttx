@@ -1,6 +1,8 @@
 /****************************************************************************
  * sched/clock/clock_timekeeping.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -37,10 +39,10 @@
  ****************************************************************************/
 
 int clock_timekeeping_get_wall_time(FAR struct timespec *ts);
-int clock_timekeeping_set_wall_time(FAR struct timespec *ts);
+int clock_timekeeping_set_wall_time(FAR const struct timespec *ts);
 
 void clock_update_wall_time(void);
 
-void clock_inittimekeeping(void);
+void clock_inittimekeeping(FAR const struct timespec *tp);
 
 #endif /* __SCHED_CLOCK_CLOCK_TIMEKEEPING_H */

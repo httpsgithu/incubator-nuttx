@@ -1,6 +1,8 @@
 /****************************************************************************
  * sched/pthread/pthread_setschedparam.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -91,7 +93,7 @@ int pthread_setschedparam(pthread_t thread, int policy,
 {
   int ret;
 
-  sinfo("thread ID=%d policy=%d param=0x%p\n", thread, policy, param);
+  sinfo("thread ID=%d policy=%d param=%p\n", thread, policy, param);
 
   /* Let nxsched_set_scheduler do all of the work */
 

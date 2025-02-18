@@ -1,6 +1,8 @@
 /****************************************************************************
  * net/netdev/netdev.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -31,6 +33,7 @@
 #include <stdbool.h>
 
 #include <nuttx/net/ip.h>
+#include <nuttx/net/netdev.h>
 
 #ifdef CONFIG_NETDOWN_NOTIFIER
 #  include <nuttx/wqueue.h>
@@ -89,17 +92,6 @@ typedef int (*netdev_callback_t)(FAR struct net_driver_s *dev,
 /****************************************************************************
  * Public Function Prototypes
  ****************************************************************************/
-
-/****************************************************************************
- * Name: netdev_ifup / netdev_ifdown
- *
- * Description:
- *   Bring the interface up/down
- *
- ****************************************************************************/
-
-void netdev_ifup(FAR struct net_driver_s *dev);
-void netdev_ifdown(FAR struct net_driver_s *dev);
 
 /****************************************************************************
  * Name: netdev_verify
@@ -285,48 +277,6 @@ FAR struct net_driver_s *netdev_findbyindex(int ifindex);
 
 #ifdef CONFIG_NETDEV_IFINDEX
 int netdev_nextindex(int ifindex);
-#endif
-
-/****************************************************************************
- * Name: netdev_indextoname
- *
- * Description:
- *   The if_indextoname() function maps an interface index to its
- *   corresponding name.
- *
- * Input Parameters:
- *   ifname  - Points to a buffer of at least IF_NAMESIZE bytes.
- *             if_indextoname() will place in this buffer the name of the
- *             interface with index ifindex.
- *
- * Returned Value:
- *   If ifindex is an interface index, then the function will return zero
- *   (OK). Otherwise, the function returns a negated errno value;
- *
- ****************************************************************************/
-
-#ifdef CONFIG_NETDEV_IFINDEX
-int netdev_indextoname(unsigned int ifindex, FAR char *ifname);
-#endif
-
-/****************************************************************************
- * Name: netdev_nametoindex
- *
- * Description:
- *   The if_nametoindex() function returns the interface index corresponding
- *   to name ifname.
- *
- * Input Parameters:
- *   ifname - The interface name
- *
- * Returned Value:
- *   The corresponding index if ifname is the name of an interface;
- *   otherwise, a negated errno value is returned.
- *
- ****************************************************************************/
-
-#ifdef CONFIG_NETDEV_IFINDEX
-unsigned int netdev_nametoindex(FAR const char *ifname);
 #endif
 
 /****************************************************************************
@@ -520,13 +470,12 @@ int netdown_notifier_setup(worker_t worker, FAR struct net_driver_s *dev,
  *         netdown_notifier_setup().
  *
  * Returned Value:
- *   Zero (OK) is returned on success; a negated errno value is returned on
- *   any failure.
+ *   None.
  *
  ****************************************************************************/
 
 #ifdef CONFIG_NETDOWN_NOTIFIER
-int netdown_notifier_teardown(int key);
+void netdown_notifier_teardown(int key);
 #endif
 
 /****************************************************************************
@@ -546,6 +495,42 @@ int netdown_notifier_teardown(int key);
 
 #ifdef CONFIG_NETDOWN_NOTIFIER
 void netdown_notifier_signal(FAR struct net_driver_s *dev);
+#endif
+
+/****************************************************************************
+ * Name: netdev_ipv6_addmcastmac/removemcastmac
+ *
+ * Description:
+ *   Add / Remove an MAC address corresponds to the IPv6 address to / from
+ *   the device's MAC filter table.
+ *
+ * Input Parameters:
+ *   dev  - The device driver structure to be modified
+ *   addr - The IPv6 address whose related MAC will be added or removed
+ *
+ * Returned Value:
+ *   None
+ *
+ * Assumptions:
+ *   The caller has locked the network.
+ *
+ ****************************************************************************/
+
+#ifdef CONFIG_NET_ICMPv6
+void netdev_ipv6_addmcastmac(FAR struct net_driver_s *dev,
+                             const net_ipv6addr_t addr);
+void netdev_ipv6_removemcastmac(FAR struct net_driver_s *dev,
+                                const net_ipv6addr_t addr);
+#else
+#  define netdev_ipv6_addmcastmac(dev,addr)
+#  define netdev_ipv6_removemcastmac(dev,addr)
+#endif
+
+#ifdef CONFIG_NETDEV_RSS
+void netdev_notify_recvcpu(FAR struct net_driver_s *dev,
+                           int cpu, uint8_t domain,
+                           FAR const void *src_addr, uint16_t src_port,
+                           FAR const void *dst_addr, uint16_t dst_port);
 #endif
 
 #undef EXTERN

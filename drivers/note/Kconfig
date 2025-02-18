@@ -3,20 +3,42 @@
 # see the file kconfig-language.txt in the NuttX tools repository.
 #
 
-menuconfig DRIVER_NOTE
+config DRIVERS_NOTE
 	bool "Note Driver Support"
 	depends on SCHED_INSTRUMENTATION
 	default n
 
-if DRIVER_NOTE
+if DRIVERS_NOTE
 
-choice
-	prompt "Note driver selection"
-	default DRIVER_NOTERAM
+config DRIVERS_NOTE_MAX
+	int "Maximum number of sched_note drivers"
+	default 1
+	---help---
+		sched_note supports the maximum number of drivers
 
-config DRIVER_NOTERAM
+config DRIVERS_NOTE_TASKNAME_BUFSIZE
+	int "Note task name buffer size"
+	default 256 if TASK_NAME_SIZE > 0
+	default 0 if TASK_NAME_SIZE = 0
+	---help---
+		The size of the in-memory task name buffer (in bytes).
+		The buffer is used to hold the name of the task during instrumentation.
+		Trace dump can find and show a task name corresponding to given pid in
+		the instrumentation data by using this buffer.
+		If 0 is specified, this feature is disabled and trace dump shows only
+		the name of the newly created task.
+
+config DRIVERS_NOTECTL
+	bool "Scheduler instrumentation filter control driver"
+	default n
+	depends on SCHED_INSTRUMENTATION_FILTER
+	---help---
+		If this option is selected, the instrumentation filter control device
+		/dev/notectl is provided.
+
+config DRIVERS_NOTERAM
 	bool "Note RAM driver"
-	depends on !SCHED_INSTRUMENTATION_CSECTION && (!SCHED_INSTRUMENTATION_SPINLOCK || !SMP)
+	default y
 	---help---
 		If this option is selected, then in-memory buffering logic is
 		enabled to capture scheduler instrumentation data.  This has
@@ -34,61 +56,118 @@ config DRIVER_NOTERAM
 		buffer.
 
 		NOTE: This option is not available if critical sections are being
-		monitor (nor if spinlocks are being monitored in SMP configuration)
+		monitored (nor if spinlocks are being monitored in SMP configuration)
 		because there would be a logical error in the design in those cases.
 		That error is that these interfaces call enter_ and leave_critical_section
-		(and which us spinlocks in SMP mode).  That means that each call to
+		(which use spinlocks in SMP mode).  That means that each call to
 		sched_note_get() causes several additional entries to be added from
 		the note buffer in order to remove one entry.
 
-config DRIVER_NOTEARCH
-	bool "Note Arch driver"
-	---help---
-		The note driver is provided by arch specific code.
+if DRIVERS_NOTERAM
 
-config DRIVER_NOTELOG
-	bool "Note syslog driver"
-	select SCHED_INSTRUMENTATION_EXTERNAL
-	---help---
-		The note driver output to syslog.
-
-endchoice
-
-config DRIVER_NOTERAM_BUFSIZE
+config DRIVERS_NOTERAM_BUFSIZE
 	int "Note RAM buffer size"
-	depends on DRIVER_NOTERAM
 	default 2048
 	---help---
 		The size of the in-memory, circular instrumentation buffer (in bytes).
 
-config DRIVER_NOTERAM_TASKNAME_BUFSIZE
-	int "Note RAM task name buffer size"
-	depends on DRIVER_NOTERAM
-	default 256 if TASK_NAME_SIZE > 0
-	default 0 if TASK_NAME_SIZE = 0
+config DRIVERS_NOTERAM_SECTION
+	string "Note RAM section"
 	---help---
-		The size of the in-memory task name buffer (in bytes).
-		The buffer is used to hold the name of the task during instrumentation.
-		Trace dump can find and show a task name corresponding to given pid in
-		the instrumentation data by using this buffer.
-		If 0 is specified, this feature is disabled and trace dump shows only
-		the name of the newly created task.
+		Enable section information.
 
-config DRIVER_NOTERAM_DEFAULT_NOOVERWRITE
+config DRIVERS_NOTERAM_DEFAULT_NOOVERWRITE
 	bool "Disable overwrite by default"
-	depends on DRIVER_NOTERAM
 	default n
 	---help---
 		Disables overwriting old notes in the circular buffer when the buffer
 		is full by default. This is useful to keep instrumentation data of the
 		beginning of a system boot.
 
-config DRIVER_NOTECTL
-	bool "Scheduler instrumentation filter control driver"
+config DRIVERS_NOTERAM_CRASH_DUMP
+	bool "Dump noteram buffer on panic"
 	default n
-	depends on SCHED_INSTRUMENTATION_FILTER
 	---help---
-		If this option is selected, the instrumentation filter control device
-		/dev/notectl is provided.
+		If this option is enabled, dump all contents when a crash occurs.
+
+endif # DRIVERS_NOTERAM
+
+config DRIVERS_NOTE_STRIP_FORMAT
+	bool "Strip sched_note_printf format string"
+	---help---
+		Strip sched_note_printf format string.
+
+config DRIVERS_NOTELOWEROUT
+	bool "Note lower output"
+	default n
+	---help---
+		Note uses lower output.
+
+config DRIVERS_NOTEFILE
+	bool "Note file driver"
+	---help---
+		The Note driver output to file.
+
+config DRIVERS_NOTEFILE_PATH
+	string "Note file path"
+	depends on DRIVERS_NOTEFILE
+	default "/dev/ttyS1"
+	---help---
+		The Note driver output to file path.
+
+config DRIVERS_NOTELOG
+	bool "Note syslog driver"
+	---help---
+		The Note driver output to syslog.
+
+config DRIVERS_NOTESNAP
+	bool "Last scheduling information"
+	default n
+	---help---
+		Record the last scheduling information.
+
+if DRIVERS_NOTESNAP
+config DRIVERS_NOTESNAP_NBUFFERS
+	int "Number of last scheduling information buffers"
+	default 128
+	---help---
+		Number of last scheduling information buffers.
+endif
+
+config DRIVERS_NOTERPMSG_SERVER
+	bool "Enable RPMSG server for NOTE"
+	default n
+	depends on RPTUN
+	---help---
+		Use rpmsg to receive message from remote proc.
+
+config DRIVERS_NOTERPMSG
+	bool "Note to RPMSG"
+	depends on RPTUN
+	depends on SCHED_WORKQUEUE
+	default n
+	---help---
+		Use the rpmsg as a Note output device, send message to remote proc.
+
+if DRIVERS_NOTERPMSG
+
+config DRIVERS_NOTERPMSG_BUFSIZE
+	int "Note RPMSG client buffer size"
+	default 1024
+	---help---
+		The size of the client buffer (in bytes)
+
+config DRIVERS_NOTERPMSG_SERVER_NAME
+	string "The name of Note Rpmsg Server"
+	default "ap"
+	---help---
+		The proc name of rpmsg server. Client sends message to
+		specified name of remote proc.
+
+config DRIVERS_NOTERPMSG_WORK_DELAY
+	int "NOTE RPMSG work delay(ms)"
+	default 100
 
 endif
+
+endif # DRIVERS_NOTE

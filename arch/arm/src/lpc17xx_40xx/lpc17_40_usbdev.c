@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/lpc17xx_40xx/lpc17_40_usbdev.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -42,9 +44,7 @@
 #include <nuttx/irq.h>
 #include <arch/board/board.h>
 
-#include "arm_arch.h"
 #include "arm_internal.h"
-
 #include "chip.h"
 #include "hardware/lpc17_40_usb.h"
 #include "hardware/lpc17_40_syscon.h"
@@ -367,8 +367,8 @@ static void lpc17_40_checkreg(uint32_t addr, uint32_t val, bool iswrite);
 static uint32_t lpc17_40_getreg(uint32_t addr);
 static void lpc17_40_putreg(uint32_t val, uint32_t addr);
 #else
-# define lpc17_40_getreg(addr)     getreg32(addr)
-# define lpc17_40_putreg(val,addr) putreg32(val,addr)
+#  define lpc17_40_getreg(addr)     getreg32(addr)
+#  define lpc17_40_putreg(val,addr) putreg32(val,addr)
 #endif
 
 /* Command operations *******************************************************/
@@ -377,10 +377,10 @@ static uint32_t lpc17_40_usbcmd(uint16_t cmd, uint8_t data);
 
 /* Request queue operations *************************************************/
 
-static FAR
-struct lpc17_40_req_s *lpc17_40_rqdequeue(FAR struct lpc17_40_ep_s *privep);
-static void lpc17_40_rqenqueue(FAR struct lpc17_40_ep_s *privep,
-              FAR struct lpc17_40_req_s *req);
+static
+struct lpc17_40_req_s *lpc17_40_rqdequeue(struct lpc17_40_ep_s *privep);
+static void lpc17_40_rqenqueue(struct lpc17_40_ep_s *privep,
+              struct lpc17_40_req_s *req);
 
 /* Low level data transfers and request operations **************************/
 
@@ -415,7 +415,7 @@ static inline
 void lpc17_40_ep0dataoutinterrupt(struct lpc17_40_usbdev_s *priv);
 static inline
 void lpc17_40_ep0dataininterrupt(struct lpc17_40_usbdev_s *priv);
-static int lpc17_40_usbinterrupt(int irq, FAR void *context, FAR void *arg);
+static int lpc17_40_usbinterrupt(int irq, void *context, void *arg);
 
 #ifdef CONFIG_LPC17_40_USBDEV_DMA
 static int  lpc17_40_dmasetup(struct lpc17_40_usbdev_s *priv, uint8_t epphy,
@@ -427,30 +427,29 @@ static void lpc17_40_dmadisable(uint8_t epphy);
 
 /* Endpoint operations ******************************************************/
 
-static int  lpc17_40_epconfigure(FAR struct usbdev_ep_s *ep,
+static int  lpc17_40_epconfigure(struct usbdev_ep_s *ep,
               const struct usb_epdesc_s *desc, bool last);
-static int  lpc17_40_epdisable(FAR struct usbdev_ep_s *ep);
-static FAR
-struct usbdev_req_s *lpc17_40_epallocreq(FAR struct usbdev_ep_s *ep);
-static void lpc17_40_epfreereq(FAR struct usbdev_ep_s *ep,
-              FAR struct usbdev_req_s *);
+static int  lpc17_40_epdisable(struct usbdev_ep_s *ep);
+static struct usbdev_req_s *lpc17_40_epallocreq(struct usbdev_ep_s *ep);
+static void lpc17_40_epfreereq(struct usbdev_ep_s *ep,
+              struct usbdev_req_s *);
 #ifdef CONFIG_USBDEV_DMA
-static FAR void *lpc17_40_epallocbuffer(FAR struct usbdev_ep_s *ep,
+static void *lpc17_40_epallocbuffer(struct usbdev_ep_s *ep,
               uint16_t nbytes);
-static void lpc17_40_epfreebuffer(FAR struct usbdev_ep_s *ep, void *buf);
+static void lpc17_40_epfreebuffer(struct usbdev_ep_s *ep, void *buf);
 #endif
-static int  lpc17_40_epsubmit(FAR struct usbdev_ep_s *ep,
+static int  lpc17_40_epsubmit(struct usbdev_ep_s *ep,
               struct usbdev_req_s *req);
-static int  lpc17_40_epcancel(FAR struct usbdev_ep_s *ep,
+static int  lpc17_40_epcancel(struct usbdev_ep_s *ep,
               struct usbdev_req_s *req);
-static int  lpc17_40_epstall(FAR struct usbdev_ep_s *ep, bool resume);
+static int  lpc17_40_epstall(struct usbdev_ep_s *ep, bool resume);
 
 /* USB device controller operations *****************************************/
 
-static FAR struct usbdev_ep_s *lpc17_40_allocep(FAR struct usbdev_s *dev,
+static struct usbdev_ep_s *lpc17_40_allocep(struct usbdev_s *dev,
               uint8_t epno, bool in, uint8_t eptype);
-static void lpc17_40_freeep(FAR struct usbdev_s *dev,
-                            FAR struct usbdev_ep_s *ep);
+static void lpc17_40_freeep(struct usbdev_s *dev,
+                            struct usbdev_ep_s *ep);
 static int  lpc17_40_getframe(struct usbdev_s *dev);
 static int  lpc17_40_wakeup(struct usbdev_s *dev);
 static int  lpc17_40_selfpowered(struct usbdev_s *dev, bool selfpowered);
@@ -812,10 +811,10 @@ static uint32_t lpc17_40_usbcmd(uint16_t cmd, uint8_t data)
  *
  ****************************************************************************/
 
-static FAR
-struct lpc17_40_req_s *lpc17_40_rqdequeue(FAR struct lpc17_40_ep_s *privep)
+static
+struct lpc17_40_req_s *lpc17_40_rqdequeue(struct lpc17_40_ep_s *privep)
 {
-  FAR struct lpc17_40_req_s *ret = privep->head;
+  struct lpc17_40_req_s *ret = privep->head;
 
   if (ret)
     {
@@ -839,8 +838,8 @@ struct lpc17_40_req_s *lpc17_40_rqdequeue(FAR struct lpc17_40_ep_s *privep)
  *
  ****************************************************************************/
 
-static void lpc17_40_rqenqueue(FAR struct lpc17_40_ep_s *privep,
-                              FAR struct lpc17_40_req_s *req)
+static void lpc17_40_rqenqueue(struct lpc17_40_ep_s *privep,
+                               struct lpc17_40_req_s *req)
 {
   req->flink = NULL;
   if (!privep->head)
@@ -1101,7 +1100,7 @@ static int lpc17_40_wrrequest(struct lpc17_40_ep_s *privep)
       return OK;
     }
 
-  uinfo("epphy=%d req=%p: len=%d xfrd=%d nullpkt=%d\n",
+  uinfo("epphy=%d req=%p: len=%zu xfrd=%zu nullpkt=%d\n",
         privep->epphy, privreq, privreq->req.len, privreq->req.xfrd,
         privep->txnullpkt);
 
@@ -1211,7 +1210,7 @@ static int lpc17_40_rdrequest(struct lpc17_40_ep_s *privep)
       return OK;
     }
 
-  uinfo("len=%d xfrd=%d nullpkt=%d\n",
+  uinfo("len=%zu xfrd=%zu nullpkt=%d\n",
         privreq->req.len, privreq->req.xfrd, privep->txnullpkt);
 
   /* Ignore any attempt to receive a zero length packet */
@@ -2117,7 +2116,7 @@ void lpc17_40_ep0dataininterrupt(struct lpc17_40_usbdev_s *priv)
  *
  ****************************************************************************/
 
-static int lpc17_40_usbinterrupt(int irq, FAR void *context, FAR void *arg)
+static int lpc17_40_usbinterrupt(int irq, void *context, void *arg)
 {
   struct lpc17_40_usbdev_s *priv = &g_usbdev;
   struct lpc17_40_ep_s *privep ;
@@ -2604,7 +2603,7 @@ static void lpc17_40_dmarestart(uint8_t epphy, uint32_t descndx)
 
   /* Clear DMA descriptor status */
 
-  USB_DmaDesc[descndx].status = 0;
+  g_usbddesc[descndx].status = 0;
 
   /* Enable DMA transfer on the endpoint */
 
@@ -2658,11 +2657,11 @@ static void lpc17_40_dmadisable(uint8_t epphy)
  *
  ****************************************************************************/
 
-static int lpc17_40_epconfigure(FAR struct usbdev_ep_s *ep,
-                               FAR const struct usb_epdesc_s *desc,
-                               bool last)
+static int lpc17_40_epconfigure(struct usbdev_ep_s *ep,
+                                const struct usb_epdesc_s *desc,
+                                bool last)
 {
-  FAR struct lpc17_40_ep_s *privep = (FAR struct lpc17_40_ep_s *)ep;
+  struct lpc17_40_ep_s *privep = (struct lpc17_40_ep_s *)ep;
   uint32_t inten;
 
   usbtrace(TRACE_EPCONFIGURE, privep->epphy);
@@ -2709,9 +2708,9 @@ static int lpc17_40_epconfigure(FAR struct usbdev_ep_s *ep,
  *
  ****************************************************************************/
 
-static int lpc17_40_epdisable(FAR struct usbdev_ep_s *ep)
+static int lpc17_40_epdisable(struct usbdev_ep_s *ep)
 {
-  FAR struct lpc17_40_ep_s *privep = (FAR struct lpc17_40_ep_s *)ep;
+  struct lpc17_40_ep_s *privep = (struct lpc17_40_ep_s *)ep;
   irqstate_t flags;
   uint32_t mask = (1 << privep->epphy);
   uint32_t regval;
@@ -2755,10 +2754,9 @@ static int lpc17_40_epdisable(FAR struct usbdev_ep_s *ep)
  *
  ****************************************************************************/
 
-static FAR
-struct usbdev_req_s *lpc17_40_epallocreq(FAR struct usbdev_ep_s *ep)
+static struct usbdev_req_s *lpc17_40_epallocreq(struct usbdev_ep_s *ep)
 {
-  FAR struct lpc17_40_req_s *privreq;
+  struct lpc17_40_req_s *privreq;
 
 #ifdef CONFIG_DEBUG_USB
   if (!ep)
@@ -2768,9 +2766,9 @@ struct usbdev_req_s *lpc17_40_epallocreq(FAR struct usbdev_ep_s *ep)
     }
 #endif
 
-  usbtrace(TRACE_EPALLOCREQ, ((FAR struct lpc17_40_ep_s *)ep)->epphy);
+  usbtrace(TRACE_EPALLOCREQ, ((struct lpc17_40_ep_s *)ep)->epphy);
 
-  privreq = (FAR struct lpc17_40_req_s *)
+  privreq = (struct lpc17_40_req_s *)
                    kmm_malloc(sizeof(struct lpc17_40_req_s));
   if (!privreq)
     {
@@ -2790,10 +2788,10 @@ struct usbdev_req_s *lpc17_40_epallocreq(FAR struct usbdev_ep_s *ep)
  *
  ****************************************************************************/
 
-static void lpc17_40_epfreereq(FAR struct usbdev_ep_s *ep,
-                               FAR struct usbdev_req_s *req)
+static void lpc17_40_epfreereq(struct usbdev_ep_s *ep,
+                               struct usbdev_req_s *req)
 {
-  FAR struct lpc17_40_req_s *privreq = (FAR struct lpc17_40_req_s *)req;
+  struct lpc17_40_req_s *privreq = (struct lpc17_40_req_s *)req;
 
 #ifdef CONFIG_DEBUG_USB
   if (!ep || !req)
@@ -2803,7 +2801,7 @@ static void lpc17_40_epfreereq(FAR struct usbdev_ep_s *ep,
     }
 #endif
 
-  usbtrace(TRACE_EPFREEREQ, ((FAR struct lpc17_40_ep_s *)ep)->epphy);
+  usbtrace(TRACE_EPFREEREQ, ((struct lpc17_40_ep_s *)ep)->epphy);
 
   kmm_free(privreq);
 }
@@ -2817,12 +2815,12 @@ static void lpc17_40_epfreereq(FAR struct usbdev_ep_s *ep,
  ****************************************************************************/
 
 #ifdef CONFIG_USBDEV_DMA
-static FAR void *lpc17_40_epallocbuffer(FAR struct usbdev_ep_s *ep,
-                                        uint16_t nbytes)
+static void *lpc17_40_epallocbuffer(struct usbdev_ep_s *ep,
+                                    uint16_t nbytes)
 {
 #if defined(CONFIG_LPC17_40_USBDEV_DMA)
 
-  FAR struct lpc17_40_ep_s *privep = (FAR struct lpc17_40_ep_s *)ep;
+  struct lpc17_40_ep_s *privep = (struct lpc17_40_ep_s *)ep;
   int descndx;
 
   usbtrace(TRACE_EPALLOCBUFFER, privep->epphy);
@@ -2859,12 +2857,12 @@ static FAR void *lpc17_40_epallocbuffer(FAR struct usbdev_ep_s *ep,
  ****************************************************************************/
 
 #ifdef CONFIG_USBDEV_DMA
-static void lpc17_40_epfreebuffer(FAR struct usbdev_ep_s *ep,
-                                  FAR void *buf)
+static void lpc17_40_epfreebuffer(struct usbdev_ep_s *ep,
+                                  void *buf)
 {
 #if defined(CONFIG_LPC17_40_USBDEV_DMA)
 
-  FAR struct lpc17_40_ep_s *privep = (FAR struct lpc17_40_ep_s *)ep;
+  struct lpc17_40_ep_s *privep = (struct lpc17_40_ep_s *)ep;
 
   usbtrace(TRACE_EPFREEBUFFER, privep->epphy);
 
@@ -2900,12 +2898,12 @@ static void lpc17_40_epfreebuffer(FAR struct usbdev_ep_s *ep,
  *
  ****************************************************************************/
 
-static int lpc17_40_epsubmit(FAR struct usbdev_ep_s *ep,
-                             FAR struct usbdev_req_s *req)
+static int lpc17_40_epsubmit(struct usbdev_ep_s *ep,
+                             struct usbdev_req_s *req)
 {
-  FAR struct lpc17_40_req_s *privreq = (FAR struct lpc17_40_req_s *)req;
-  FAR struct lpc17_40_ep_s *privep = (FAR struct lpc17_40_ep_s *)ep;
-  FAR struct lpc17_40_usbdev_s *priv;
+  struct lpc17_40_req_s *privreq = (struct lpc17_40_req_s *)req;
+  struct lpc17_40_ep_s *privep = (struct lpc17_40_ep_s *)ep;
+  struct lpc17_40_usbdev_s *priv;
   irqstate_t flags;
   int ret = OK;
 
@@ -2991,10 +2989,10 @@ static int lpc17_40_epsubmit(FAR struct usbdev_ep_s *ep,
  *
  ****************************************************************************/
 
-static int lpc17_40_epcancel(FAR struct usbdev_ep_s *ep,
-                             FAR struct usbdev_req_s *req)
+static int lpc17_40_epcancel(struct usbdev_ep_s *ep,
+                             struct usbdev_req_s *req)
 {
-  FAR struct lpc17_40_ep_s *privep = (FAR struct lpc17_40_ep_s *)ep;
+  struct lpc17_40_ep_s *privep = (struct lpc17_40_ep_s *)ep;
   irqstate_t flags;
 
 #ifdef CONFIG_DEBUG_USB
@@ -3021,9 +3019,9 @@ static int lpc17_40_epcancel(FAR struct usbdev_ep_s *ep,
  *
  ****************************************************************************/
 
-static int lpc17_40_epstall(FAR struct usbdev_ep_s *ep, bool resume)
+static int lpc17_40_epstall(struct usbdev_ep_s *ep, bool resume)
 {
-  FAR struct lpc17_40_ep_s *privep = (FAR struct lpc17_40_ep_s *)ep;
+  struct lpc17_40_ep_s *privep = (struct lpc17_40_ep_s *)ep;
   irqstate_t flags;
 
   /* STALL or RESUME the endpoint */
@@ -3065,11 +3063,11 @@ static int lpc17_40_epstall(FAR struct usbdev_ep_s *ep, bool resume)
  *
  ****************************************************************************/
 
-static FAR struct usbdev_ep_s *lpc17_40_allocep(FAR struct usbdev_s *dev,
-                                                uint8_t eplog,
-                                                bool in, uint8_t eptype)
+static struct usbdev_ep_s *lpc17_40_allocep(struct usbdev_s *dev,
+                                            uint8_t eplog,
+                                            bool in, uint8_t eptype)
 {
-  FAR struct lpc17_40_usbdev_s *priv = (FAR struct lpc17_40_usbdev_s *)dev;
+  struct lpc17_40_usbdev_s *priv = (struct lpc17_40_usbdev_s *)dev;
   uint32_t epset = LPC17_40_EPALLSET & ~LPC17_40_EPCTRLSET;
   irqstate_t flags;
   int epndx = 0;
@@ -3191,11 +3189,11 @@ static FAR struct usbdev_ep_s *lpc17_40_allocep(FAR struct usbdev_s *dev,
  *
  ****************************************************************************/
 
-static void lpc17_40_freeep(FAR struct usbdev_s *dev,
-                            FAR struct usbdev_ep_s *ep)
+static void lpc17_40_freeep(struct usbdev_s *dev,
+                            struct usbdev_ep_s *ep)
 {
-  FAR struct lpc17_40_usbdev_s *priv = (FAR struct lpc17_40_usbdev_s *)dev;
-  FAR struct lpc17_40_ep_s *privep = (FAR struct lpc17_40_ep_s *)ep;
+  struct lpc17_40_usbdev_s *priv = (struct lpc17_40_usbdev_s *)dev;
+  struct lpc17_40_ep_s *privep = (struct lpc17_40_ep_s *)ep;
   irqstate_t flags;
 
   usbtrace(TRACE_DEVFREEEP, (uint16_t)privep->epphy);
@@ -3221,7 +3219,7 @@ static void lpc17_40_freeep(FAR struct usbdev_s *dev,
 static int lpc17_40_getframe(struct usbdev_s *dev)
 {
 #ifdef CONFIG_LPC17_40_USBDEV_FRAME_INTERRUPT
-  FAR struct lpc17_40_usbdev_s *priv = (FAR struct lpc17_40_usbdev_s *)dev;
+  struct lpc17_40_usbdev_s *priv = (struct lpc17_40_usbdev_s *)dev;
 
   /* Return last valid value of SOF read by the interrupt handler */
 
@@ -3271,7 +3269,7 @@ static int lpc17_40_wakeup(struct usbdev_s *dev)
 
 static int lpc17_40_selfpowered(struct usbdev_s *dev, bool selfpowered)
 {
-  FAR struct lpc17_40_usbdev_s *priv = (FAR struct lpc17_40_usbdev_s *)dev;
+  struct lpc17_40_usbdev_s *priv = (struct lpc17_40_usbdev_s *)dev;
 
   usbtrace(TRACE_DEVSELFPOWERED, (uint16_t)selfpowered);
 
@@ -3361,7 +3359,9 @@ void arm_usbinitialize(void)
 #ifndef CONFIG_LPC17_40_USBDEV_NOVBUS
   lpc17_40_configgpio(GPIO_USB_VBUS);    /* VBUS status input */
 #endif
+#ifndef CONFIG_LPC17_40_USBDEV_NOSOFTCONNECT
   lpc17_40_configgpio(GPIO_USB_CONNECT); /* SoftConnect control signal */
+#endif
 #ifndef CONFIG_LPC17_40_USBDEV_NOLED
   lpc17_40_configgpio(GPIO_USB_UPLED);   /* GoodLink LED control signal */
 #endif

@@ -1,6 +1,8 @@
 /****************************************************************************
  * net/bluetooth/bluetooth_container.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -134,8 +136,8 @@ FAR struct bluetooth_container_s *bluetooth_container_allocate(void)
   net_lock();
   if (g_free_container != NULL)
     {
-      container         = g_free_container;
-      g_free_container  = container->bn_flink;
+      container        = g_free_container;
+      g_free_container = container->bn_flink;
       pool             = BLUETOOTH_POOL_PREALLOCATED;
       net_unlock();
     }
@@ -143,8 +145,8 @@ FAR struct bluetooth_container_s *bluetooth_container_allocate(void)
     {
       net_unlock();
       container = (FAR struct bluetooth_container_s *)
-        kmm_malloc((sizeof (struct bluetooth_container_s)));
-      pool     = BLUETOOTH_POOL_DYNAMIC;
+        kmm_malloc((sizeof(struct bluetooth_container_s)));
+      pool = BLUETOOTH_POOL_DYNAMIC;
     }
 
   /* We have successfully allocated memory from some source? */

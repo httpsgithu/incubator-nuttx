@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/kl/hardware/k25z128_pinmux.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -18,8 +20,8 @@
  *
  ****************************************************************************/
 
-#ifndef __ARCH_ARM_SRC_KINETIS_KINETIS_KL25PINMUX_H
-#define __ARCH_ARM_SRC_KINETIS_KINETIS_KL25PINMUX_H
+#ifndef __ARCH_ARM_SRC_KL_HARDWARE_K25Z128_PINMUX_H
+#define __ARCH_ARM_SRC_KL_HARDWARE_K25Z128_PINMUX_H
 
 /****************************************************************************
  * Included Files
@@ -324,4 +326,4 @@
  * Public Functions Prototypes
  ****************************************************************************/
 
-#endif /* __ARCH_ARM_SRC_KL_HARDWARE_K25PINMUX_H */
+#endif /* __ARCH_ARM_SRC_KL_HARDWARE_K25Z128_PINMUX_H */

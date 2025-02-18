@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/stm32/nucleo-f429zi/src/stm32_boot.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -29,7 +31,7 @@
 #include <nuttx/board.h>
 #include <arch/board/board.h>
 
-#include "arm_arch.h"
+#include "arm_internal.h"
 #include "nucleo-144.h"
 
 /****************************************************************************
@@ -55,7 +57,7 @@ void stm32_boardinitialize(void)
   board_autoled_initialize();
 #endif
 
-#if defined(CONFIG_STM32F4_OTGFS) || defined(CONFIG_STM32F4_HOST)
+#if defined(CONFIG_STM32_OTGFS) || defined(CONFIG_STM32_HOST)
   stm32_usbinitialize();
 #endif
 

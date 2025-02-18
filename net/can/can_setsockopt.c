@@ -1,6 +1,8 @@
 /****************************************************************************
  * net/can/can_setsockopt.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -30,8 +32,6 @@
 #include <assert.h>
 #include <debug.h>
 
-#include <netpacket/can.h>
-
 #include <nuttx/net/net.h>
 #include <nuttx/net/can.h>
 
@@ -53,11 +53,12 @@
  *   'option' argument to the value pointed to by the 'value' argument for
  *   the socket specified by the 'psock' argument.
  *
- *   See <netinet/can.h> for the a complete list of values of CAN protocol
+ *   See <nuttx/can.h> for the a complete list of values of CAN protocol
  *   options.
  *
  * Input Parameters:
  *   psock     Socket structure of socket to operate on
+ *   level     Protocol level to set the option
  *   option    identifies the option to set
  *   value     Points to the argument value
  *   value_len The length of the argument value
@@ -69,15 +70,21 @@
  *
  ****************************************************************************/
 
-int can_setsockopt(FAR struct socket *psock, int option,
+int can_setsockopt(FAR struct socket *psock, int level, int option,
                    FAR const void *value, socklen_t value_len)
 {
   FAR struct can_conn_s *conn;
   int ret = OK;
   int count = 0;
 
-  DEBUGASSERT(psock != NULL && value != NULL && psock->s_conn != NULL);
-  conn = (FAR struct can_conn_s *)psock->s_conn;
+  DEBUGASSERT(value_len == 0 || value != NULL);
+
+  conn = psock->s_conn;
+
+  if (level != SOL_CAN_RAW)
+    {
+      return -ENOPROTOOPT;
+    }
 
   if (psock->s_type != SOCK_RAW)
     {
@@ -104,67 +111,100 @@ int can_setsockopt(FAR struct socket *psock, int option,
           }
         else
           {
-        count = value_len / sizeof(struct can_filter);
+            int i;
 
-        for (int i = 0; i < count; i++)
-          {
-        conn->filters[i] = ((struct can_filter *)value)[i];
-          }
+            count = value_len / sizeof(struct can_filter);
 
-        conn->filter_count = count;
+            for (i = 0; i < count; i++)
+              {
+                conn->filters[i] = ((struct can_filter *)value)[i];
+              }
+
+            conn->filter_count = count;
 
             ret = OK;
           }
         break;
 
+#ifdef CONFIG_NET_CAN_ERRORS
       case CAN_RAW_ERR_FILTER:
-        break;
-
-      case CAN_RAW_LOOPBACK:
-        if (value_len != sizeof(conn->loopback))
+        if (value_len != sizeof(can_err_mask_t))
           {
             return -EINVAL;
           }
 
-        conn->loopback = *(FAR int32_t *)value;
-
+        conn->err_mask = *(FAR can_err_mask_t *)value & CAN_ERR_MASK;
         break;
-
-      case CAN_RAW_RECV_OWN_MSGS:
-        if (value_len != sizeof(conn->recv_own_msgs))
-          {
-            return -EINVAL;
-          }
-
-        conn->recv_own_msgs = *(FAR int32_t *)value;
-
-        break;
-
-#ifdef CONFIG_NET_CAN_CANFD
-      case CAN_RAW_FD_FRAMES:
-        if (value_len != sizeof(conn->fd_frames))
-          {
-            return -EINVAL;
-          }
-
-          conn->fd_frames = *(FAR int32_t *)value;
-
-          break;
 #endif
 
-      case CAN_RAW_JOIN_FILTERS:
-        break;
-
+      case CAN_RAW_LOOPBACK:
+      case CAN_RAW_RECV_OWN_MSGS:
+#ifdef CONFIG_NET_CAN_CANFD
+      case CAN_RAW_FD_FRAMES:
+#endif
 #ifdef CONFIG_NET_CAN_RAW_TX_DEADLINE
       case CAN_RAW_TX_DEADLINE:
-        if (value_len != sizeof(conn->tx_deadline))
+#endif
+        /* Verify that option is the size of an 'int'.  Should also check
+         * that 'value' is properly aligned for an 'int'
+         */
+
+        if (value_len != sizeof(int))
           {
             return -EINVAL;
           }
 
-        conn->tx_deadline = *(FAR int32_t *)value;
+        /* Lock the network so that we have exclusive access to the socket
+         * options.
+         */
 
+        net_lock();
+
+        /* Set or clear the option bit */
+
+        if (*(FAR int *)value)
+          {
+            _SO_SETOPT(conn->sconn.s_options, option);
+          }
+        else
+          {
+            _SO_CLROPT(conn->sconn.s_options, option);
+          }
+
+        net_unlock();
         break;
+
+#if CONFIG_NET_RECV_BUFSIZE > 0
+      case SO_RCVBUF:
+        {
+          int buffersize;
+
+          /* Verify that option is the size of an 'int'.  Should also check
+           * that 'value' is properly aligned for an 'int'
+           */
+
+          if (value_len != sizeof(int))
+            {
+              return -EINVAL;
+            }
+
+          /* Get the value.  Is the option being set or cleared? */
+
+          buffersize = *(FAR int *)value;
+          if (buffersize < 0)
+            {
+              return -EINVAL;
+            }
+
+#if CONFIG_NET_MAX_RECV_BUFSIZE > 0
+          buffersize = MIN(buffersize, CONFIG_NET_MAX_RECV_BUFSIZE);
+#endif
+
+          conn->recv_buffnum = (buffersize + CONFIG_IOB_BUFSIZE - 1)
+                              / CONFIG_IOB_BUFSIZE;
+
+          break;
+        }
 #endif
 
       default:

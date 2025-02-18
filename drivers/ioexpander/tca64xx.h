@@ -1,6 +1,8 @@
 /****************************************************************************
  * drivers/ioexpander/tca64xx.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -34,7 +36,7 @@
 
 #include <nuttx/wdog.h>
 #include <nuttx/clock.h>
-#include <nuttx/semaphore.h>
+#include <nuttx/mutex.h>
 #include <nuttx/wqueue.h>
 #include <nuttx/ioexpander/ioexpander.h>
 #include <nuttx/ioexpander/tca64xx.h>
@@ -204,7 +206,7 @@ struct tca64_dev_s
   FAR struct tca64_config_s *config; /* Board configuration data */
   FAR struct i2c_master_s *i2c;      /* Saved I2C driver instance */
   uint8_t part;                      /* TCA64xx part ID (see enum tca64xx_part_e) */
-  sem_t exclsem;                     /* Mutual exclusion */
+  mutex_t lock;                      /* Mutual exclusion */
 
 #ifdef CONFIG_IOEXPANDER_INT_ENABLE
 #ifdef CONFIG_TCA64XX_INT_POLL

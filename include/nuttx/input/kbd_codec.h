@@ -1,6 +1,7 @@
 /****************************************************************************
  * include/nuttx/input/kbd_codec.h
- * Serialize and marshaling keyboard data and events
+ *
+ * SPDX-License-Identifier: Apache-2.0
  *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -28,8 +29,6 @@
 
 #include <nuttx/config.h>
 #include <nuttx/streams.h>
-
-#ifdef CONFIG_LIBC_KBDCODEC
 
 /****************************************************************************
  * Pre-processor Definitions
@@ -196,6 +195,8 @@ struct kbd_getstate_s
  * Public Function Prototypes
  ****************************************************************************/
 
+#ifdef CONFIG_LIBC_KBDCODEC
+
 #ifdef __cplusplus
 extern "C"
 {
@@ -223,7 +224,7 @@ extern "C"
  *
  ****************************************************************************/
 
-#define kbd_press(ch, stream) (stream)->put((stream), (int)(ch))
+#define kbd_press(ch, stream) lib_stream_putc(stream, ch)
 
 /****************************************************************************
  * Name: kbd_release

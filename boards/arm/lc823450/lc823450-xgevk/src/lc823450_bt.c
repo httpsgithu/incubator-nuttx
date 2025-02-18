@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/lc823450/lc823450-xgevk/src/lc823450_bt.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -31,9 +33,7 @@
 #include <arch/board/board.h>
 
 #include "chip.h"
-#include "arm_arch.h"
 #include "arm_internal.h"
-
 #include "lc823450_gpio.h"
 #include "lc823450-xgevk.h"
 

@@ -1,6 +1,8 @@
 /****************************************************************************
  * drivers/sensors/msa301.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -28,8 +30,11 @@
 #include <assert.h>
 #include <stdlib.h>
 #include <stdio.h>
+
+#include <nuttx/arch.h>
 #include <nuttx/kmalloc.h>
 #include <nuttx/signal.h>
+#include <nuttx/mutex.h>
 #include <nuttx/fs/fs.h>
 #include <nuttx/i2c/i2c_master.h>
 #include <nuttx/sensors/msa301.h>
@@ -46,7 +51,7 @@ struct msa301_dev_s
   uint8_t                        addr; /* I2C address */
   msa301_range_t                 range;
   FAR const struct msa301_ops_s *ops;
-  sem_t                          exclsem;
+  mutex_t                        lock;
   struct msa301_sensor_data_s    sensor_data; /* Sensor data container     */
 };
 
@@ -99,9 +104,8 @@ static int     msa301_ioctl(FAR struct file *filep, int cmd,
 
 /* Common Register Function */
 
-static int msa301_register(FAR const char *               devpath,
-                           FAR struct i2c_master_s *      i2c,
-                           uint8_t                        addr,
+static int msa301_register(FAR const char *devpath,
+                           FAR struct i2c_master_s *i2c, uint8_t addr,
                            FAR const struct msa301_ops_s *ops);
 
 /****************************************************************************
@@ -110,17 +114,12 @@ static int msa301_register(FAR const char *               devpath,
 
 static const struct file_operations g_fops =
 {
-  msa301_open,
-  msa301_close,
-  msa301_read,
-  msa301_write,
-  NULL,
-  msa301_ioctl,
-  NULL
-#  ifndef CONFIG_DISABLE_PSEUDOFS_OPERATIONS
-  ,
-  NULL
-#  endif
+  msa301_open,     /* open */
+  msa301_close,    /* close */
+  msa301_read,     /* read */
+  msa301_write,    /* write */
+  NULL,            /* seek */
+  msa301_ioctl,    /* ioctl */
 };
 
 static const struct msa301_ops_s g_msa301_sensor_ops =
@@ -408,7 +407,7 @@ static int msa301_sensor_stop(FAR struct msa301_dev_s *priv)
 
   msa301_set_powermode(priv, MSA301_SUSPENDMODE);
 
-  sninfo("Stoping....");
+  sninfo("Stopping....");
 
   return OK;
 }
@@ -484,15 +483,13 @@ static int msa301_open(FAR struct file *filep)
   FAR struct inode *       inode;
   FAR struct msa301_dev_s *priv;
 
-  DEBUGASSERT(filep != NULL);
   inode = filep->f_inode;
 
-  DEBUGASSERT(inode != NULL);
-  priv = (FAR struct msa301_dev_s *)inode->i_private;
+  priv = inode->i_private;
 
   DEBUGASSERT(priv != NULL);
 
-  nxsem_wait(&priv->exclsem);
+  nxmutex_lock(&priv->lock);
 
   priv->ops->start(priv);
 
@@ -512,17 +509,15 @@ static int msa301_close(FAR struct file *filep)
   FAR struct inode *       inode;
   FAR struct msa301_dev_s *priv;
 
-  DEBUGASSERT(filep != NULL);
   inode = filep->f_inode;
 
-  DEBUGASSERT(inode != NULL);
-  priv = (FAR struct msa301_dev_s *)inode->i_private;
+  priv = inode->i_private;
 
   DEBUGASSERT(priv != NULL);
 
   priv->ops->stop(priv);
 
-  nxsem_post(&priv->exclsem);
+  nxmutex_unlock(&priv->lock);
 
   return OK;
 }
@@ -544,11 +539,9 @@ static ssize_t msa301_read(FAR struct file *filep,
 
   /* Sanity check */
 
-  DEBUGASSERT(filep != NULL);
   inode = filep->f_inode;
 
-  DEBUGASSERT(inode != NULL);
-  priv = (FAR struct msa301_dev_s *)inode->i_private;
+  priv = inode->i_private;
 
   DEBUGASSERT(priv != NULL);
   DEBUGASSERT(buffer != NULL);
@@ -598,11 +591,9 @@ static int msa301_ioctl(FAR struct file *filep, int cmd, unsigned long arg)
 
   /* Sanity check */
 
-  DEBUGASSERT(filep != NULL);
   inode = filep->f_inode;
 
-  DEBUGASSERT(inode != NULL);
-  priv = (FAR struct msa301_dev_s *)inode->i_private;
+  priv = inode->i_private;
 
   DEBUGASSERT(priv != NULL);
 
@@ -656,9 +647,8 @@ static int msa301_ioctl(FAR struct file *filep, int cmd, unsigned long arg)
  *
  ****************************************************************************/
 
-static int msa301_register(FAR const char *               devpath,
-                           FAR struct i2c_master_s *      i2c,
-                           uint8_t                        addr,
+static int msa301_register(FAR const char *devpath,
+                           FAR struct i2c_master_s *i2c, uint8_t addr,
                            FAR const struct msa301_ops_s *ops)
 {
   FAR struct msa301_dev_s *priv;
@@ -672,7 +662,7 @@ static int msa301_register(FAR const char *               devpath,
 
   /* Initialize the device's structure */
 
-  priv = (FAR struct msa301_dev_s *)kmm_malloc(sizeof(*priv));
+  priv = kmm_malloc(sizeof(*priv));
   if (priv == NULL)
     {
       snerr("ERROR: Failed to allocate instance\n");
@@ -703,7 +693,7 @@ static int msa301_register(FAR const char *               devpath,
       return ret;
     }
 
-  nxsem_init(&priv->exclsem, 0, 1);
+  nxmutex_init(&priv->lock);
 
   /* Register the character driver */
 
@@ -711,7 +701,7 @@ static int msa301_register(FAR const char *               devpath,
   if (ret < 0)
     {
       snerr("ERROR: Failed to register driver: %d\n", ret);
-      nxsem_destroy(&priv->exclsem);
+      nxmutex_destroy(&priv->lock);
       kmm_free(priv);
       return ret;
     }
@@ -743,8 +733,8 @@ static int msa301_register(FAR const char *               devpath,
 int msa301_sensor_register(FAR const char *         devpath,
                            FAR struct i2c_master_s *i2c)
 {
-  return msa301_register(devpath, i2c,
-            MSA301_ACCEL_ADDR0, &g_msa301_sensor_ops);
+  return msa301_register(devpath, i2c, MSA301_ACCEL_ADDR0,
+                         &g_msa301_sensor_ops);
 }
 
 #endif /* CONFIG_I2C && CONFIG_SENSORS_MSA301 */

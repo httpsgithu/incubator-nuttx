@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/stm32/stm32f37xxx_rcc.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -519,16 +521,16 @@ static void stm32_stdclockconfig(void)
 
   /* If this is a value-line part and we are using the HSE as the PLL */
 
-# if (STM32_CFGR_PLLXTPRE >> 17) != (STM32_CFGR2_PREDIV & 1)
-#  error STM32_CFGR_PLLXTPRE must match the LSB of STM32_CFGR2_PREDIV
-# endif
+#  if (STM32_CFGR_PLLXTPRE >> 17) != (STM32_CFGR2_PREDIV & 1)
+#    error STM32_CFGR_PLLXTPRE must match the LSB of STM32_CFGR2_PREDIV
+#  endif
 
   /* Set the HSE prescaler */
 
   regval = STM32_CFGR2_PREDIV;
   putreg32(regval, STM32_RCC_CFGR2);
 
-# endif
+#endif
 
   /* Enable FLASH prefetch buffer and set FLASH wait states */
 

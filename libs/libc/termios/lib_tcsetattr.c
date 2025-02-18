@@ -1,6 +1,8 @@
 /****************************************************************************
  * libs/libc/termios/lib_tcsetattr.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -93,5 +95,5 @@ int tcsetattr(int fd, int options, FAR const struct termios *termiosp)
       tcflush(fd, TCIFLUSH);
     }
 
-  return ioctl(fd, TCSETS, (unsigned long)termiosp);
+  return ioctl(fd, TCSETS, (unsigned long)(uintptr_t)termiosp);
 }

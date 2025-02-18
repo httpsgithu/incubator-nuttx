@@ -1,6 +1,8 @@
 /****************************************************************************
  * include/nuttx/i2c/i2c_slave.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -20,6 +22,30 @@
 
 #ifndef __INCLUDE_NUTTX_I2C_I2C_SLAVE_H
 #define __INCLUDE_NUTTX_I2C_I2C_SLAVE_H
+
+/****************************************************************************
+ * Using I2C slave mode:
+ *
+ * After I2C slave mode is initialized by calling an architecture defined
+ * initialization function, the hardware will monitor the I2C bus waiting
+ * for messages with this device's address.
+ *
+ * Before I2C data can be received, the I2CS_READ macro should be called
+ * to register a buffer where the received data will be stored, and a
+ * callback function should be registered with either (not both) the
+ * I2CS_REGISTERCALLBACK macro.  When the data is received (via an I2C
+ * write message) it will be written to the supplied buffer and the callback
+ * function will be called.
+ *
+ * The I2C_WRITE macro is used to register a buffer with data to be
+ * sent when the master next issues an I2C read message.  There is no
+ * specific notification that the data has been read, but since usual
+ * I2C operation is for the master to transmit a message indicating
+ * the desired data before reading, the slave should register the
+ * return data in the callback function and preserve it until the next
+ * callback it received.
+ *
+ ****************************************************************************/
 
 /****************************************************************************
  * Included Files
@@ -90,10 +116,8 @@
  * Name: I2CS_WRITE
  *
  * Description:
- *   Send a block of data on I2C using the previously selected I2C
- *   frequency and slave address. Each write operational will be an 'atomic'
- *   operation in the sense that any other I2C actions will be serialized
- *   and pend until this write completes. Required.
+ *   Send a block of data on I2C to the next master to issue an I2C read
+ *   transaction to this slave. Required.
  *
  * Input Parameters:
  *   dev    - Device-specific state data
@@ -112,10 +136,10 @@
  * Name: I2CS_READ
  *
  * Description:
- *   Receive a block of data from I2C using the previously selected I2C
- *   frequency and slave address. Each read operational will be an 'atomic'
- *   operation in the sense that any other I2C actions will be serialized
- *   and pend until this read completes. Required.
+ *   Register a buffer to receive the data from the next I2C write
+ *   transaction addressed to this slave.  The callback function supplied
+ *   by the I2CS_REGISTERCALLBACK macro will be called once the buffer
+ *   has been filled.  Required.
  *
  * Input Parameters:
  *   dev    - Device-specific state data
@@ -149,21 +173,72 @@
 #define I2CS_REGISTERCALLBACK(d,c,a) ((d)->ops->registercallback(d,c,a))
 
 /****************************************************************************
+ * Name: I2CS_SETUP
+ *
+ * Description:
+ *   I2c slave initialize.
+ *
+ * Input Parameters:
+ *   dev   - Device-specific state data
+ *
+ * Returned Value:
+ *   Zero (OK) on success; a negated errno value on failure.
+ *
+ ****************************************************************************/
+
+#define I2CS_SETUP(d) ((d)->ops->setup(d))
+
+/****************************************************************************
+ * Name: I2CS_SHUTDOWN
+ *
+ * Description:
+ *   I2c slave uninitialize.
+ *
+ * Input Parameters:
+ *   dev   - Device-specific state data
+ *
+ * Returned Value:
+ *   Zero (OK) on success; a negated errno value on failure.
+ *
+ ****************************************************************************/
+
+#define I2CS_SHUTDOWN(d) ((d)->ops->shutdown(d))
+
+/****************************************************************************
  * Public Types
  ****************************************************************************/
+
+typedef enum i2c_slave_complete_e
+{
+  I2CS_RX_COMPLETE = 0,
+  I2CS_TX_COMPLETE
+} i2c_slave_complete_t;
+
+/* The callback function */
+
+typedef CODE int (i2c_slave_callback_t)(FAR void *arg,
+                                        i2c_slave_complete_t state,
+                                        size_t len);
 
 /* The I2C vtable */
 
 struct i2c_slave_s;
 struct i2c_slaveops_s
 {
-  int (*setownaddress)(FAR struct i2c_slave_s *dev, int addr, int nbits);
-  int (*write)(FAR struct i2c_slave_s *dev, FAR const uint8_t *buffer,
-        int buflen);
-  int (*read)(FAR struct i2c_slave_s *dev, FAR uint8_t *buffer,
-        int buflen);
-  int (*registercallback)(FAR struct i2c_slave_s *dev,
-        int (*callback)(FAR void *arg), FAR void *arg);
+  CODE int (*setownaddress)(FAR struct i2c_slave_s *dev, int addr,
+                            int nbits);
+
+  CODE int (*write)(FAR struct i2c_slave_s *dev, FAR const uint8_t *buffer,
+                    int buflen);
+
+  CODE int (*read)(FAR struct i2c_slave_s *dev, FAR uint8_t *buffer,
+                   int buflen);
+
+  CODE int (*registercallback)(FAR struct i2c_slave_s *dev,
+                               FAR i2c_slave_callback_t *callback,
+                               FAR void *arg);
+  CODE int (*setup)(FAR struct i2c_slave_s *dev);
+  CODE int (*shutdown)(FAR struct i2c_slave_s *dev);
 };
 
 /* I2C private data.  This structure only defines the initial fields of the
@@ -173,7 +248,7 @@ struct i2c_slaveops_s
 
 struct i2c_slave_s
 {
-  const struct i2c_slaveops_s *ops; /* I2C vtable */
+  FAR const struct i2c_slaveops_s *ops; /* I2C vtable */
 };
 
 /****************************************************************************
@@ -187,6 +262,33 @@ extern "C"
 {
 #else
 #define EXTERN extern
+#endif
+
+#ifdef CONFIG_I2C_SLAVE_DRIVER
+
+/****************************************************************************
+ * Name: i2c_slave_register
+ *
+ * Description:
+ *   Register the I2C Slave character device driver as 'devpath'.
+ *
+ * Input Parameters:
+ *   dev   - An instance of the I2C Slave interface to use to communicate
+ *           with the I2C Slave device
+ *   bus   - The I2C Slave bus number. This will be used as the I2C device
+ *           minor number. The I2C Slave character device will be
+ *           registered as /dev/i2cslvN where N is the minor number
+ *   addr  - I2C Slave address
+ *   nbits - The number of address bits provided (7 or 10)
+ *
+ * Returned Value:
+ *   Zero (OK) on success; a negated errno value on failure.
+ *
+ ****************************************************************************/
+
+int i2c_slave_register(FAR struct i2c_slave_s *dev, int bus, int addr,
+                       int nbit);
+
 #endif
 
 #undef EXTERN

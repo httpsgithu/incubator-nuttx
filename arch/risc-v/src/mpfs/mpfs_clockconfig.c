@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/risc-v/src/mpfs/mpfs_clockconfig.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -33,7 +35,7 @@
 #include <arch/board/board_liberodefs.h>
 
 #include "mpfs_clockconfig.h"
-#include "riscv_arch.h"
+#include "riscv_internal.h"
 #include "hardware/mpfs_sysreg.h"
 #include "hardware/mpfs_sgmii.h"
 
@@ -570,8 +572,6 @@ static void mpfs_sgmii_setup(void)
           putreg32(0x7f, MPFS_CFG_DDR_SGMII_PHY_DYN_CNTL);
         }
     }
-
-  mpfs_pll_config();
 }
 
 /****************************************************************************

@@ -1,13 +1,10 @@
 /****************************************************************************
  * arch/arm/src/samv7/sam_oneshot.c
  *
- *   Copyright (C) 2015 Gregory Nutt. All rights reserved.
- *   Author: Gregory Nutt <gnutt@nuttx.org>
- *
- * The Atmel sample code has a BSD compatible license that requires this
- * copyright notice:
- *
- *   Copyright (c) 2011, Atmel Corporation
+ * SPDX-License-Identifier: BSD-3-Clause
+ * SPDX-FileCopyrightText: 2015 Gregory Nutt. All rights reserved.
+ * SPDX-FileCopyrightText: 2011 Atmel Corporation
+ * SPDX-FileContributor: Gregory Nutt <gnutt@nuttx.org>
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -101,7 +98,7 @@ static void sam_oneshot_handler(TC_HANDLE tch, void *arg, uint32_t sr)
    * Disable the TC now and disable any further interrupts.
    */
 
-  sam_tc_attach(oneshot->tch, NULL, NULL, 0);
+  sam_tc_detach(oneshot->tch);
   sam_tc_stop(oneshot->tch);
 
   /* The timer is no longer running */
@@ -158,7 +155,7 @@ int sam_oneshot_initialize(struct sam_oneshot_s *oneshot, int chan,
 
   /* Get the TC frequency the corresponds to the requested resolution */
 
-  frequency = USEC_PER_SEC / (uint32_t)resolution;
+  frequency = USEC_PER_SEC / resolution;
 
   /* The pre-calculate values to use when we start the timer */
 
@@ -321,14 +318,13 @@ int sam_oneshot_start(struct sam_oneshot_s *oneshot,
 
   /* Set up to receive the callback when the interrupt occurs */
 
-  sam_tc_attach(oneshot->tch, sam_oneshot_handler, oneshot,
-                TC_INT_CPCS);
+  sam_tc_attach(oneshot->tch, sam_oneshot_handler, oneshot, TC_INT_CPCS);
 
   /* Set RC so that an event will be triggered when TC_CV register counts
    * up to RC.
    */
 
-  sam_tc_setregister(oneshot->tch, TC_REGC, (uint32_t)regval);
+  sam_tc_setregister(oneshot->tch, TC_REGC, regval);
 
   /* Start the counter */
 
@@ -400,8 +396,8 @@ int sam_oneshot_cancel(struct sam_oneshot_s *oneshot,
   uint64_t usec;
   uint64_t sec;
   uint64_t nsec;
-  uint32_t count;
-  uint32_t rc;
+  uint16_t count;
+  uint16_t rc;
 
   /* Was the timer running? */
 
@@ -451,7 +447,7 @@ int sam_oneshot_cancel(struct sam_oneshot_s *oneshot,
 
   /* Now we can disable the interrupt and stop the timer. */
 
-  sam_tc_attach(oneshot->tch, NULL, NULL, 0);
+  sam_tc_detach(oneshot->tch);
   sam_tc_stop(oneshot->tch);
 
   oneshot->running = false;

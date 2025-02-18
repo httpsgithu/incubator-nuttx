@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/z80/z80/z80sim/src/z80_serial.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -36,7 +38,6 @@
 #include <nuttx/arch.h>
 #include <nuttx/serial/serial.h>
 
-#include "z80_arch.h"
 #include "z80_internal.h"
 
 #ifdef USE_SERIALDRIVER
@@ -91,8 +92,6 @@ static char g_uarttxbuffer[CONFIG_UART_TXBUFSIZE];
 static uart_dev_t g_uartport =
 {
   0,                        /* open_count */
-  false,                    /* xmitwaiting */
-  false,                    /* recvwaiting */
   true,                     /* isconsole */
   { 1 },                    /* closesem */
   { 0 },                    /* xmitsem */
@@ -321,7 +320,7 @@ void z80_serial_initialize(void)
  *
  ****************************************************************************/
 
-int up_putc(int ch)
+void up_putc(int ch)
 {
   z80_lowputc(ch);
   return 0;

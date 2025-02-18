@@ -1,6 +1,8 @@
 /****************************************************************************
  * sched/environ/env_release.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -61,23 +63,31 @@
 
 void env_release(FAR struct task_group_s *group)
 {
-  DEBUGASSERT(group != NULL);
+  int i;
 
-  /* Free any allocate environment strings */
+  DEBUGASSERT(group != NULL);
 
   if (group->tg_envp)
     {
+      /* Free any allocate environment strings */
+
+      for (i = 0; group->tg_envp[i] != NULL; i++)
+        {
+          group_free(group, group->tg_envp[i]);
+        }
+
       /* Free the environment */
 
-      kumm_free(group->tg_envp);
+      group_free(group, group->tg_envp);
     }
 
   /* In any event, make sure that all environment-related variables in the
    * task group structure are reset to initial values.
    */
 
-  group->tg_envsize = 0;
-  group->tg_envp = NULL;
+  group->tg_envp  = NULL;
+  group->tg_envpc = 0;
+  group->tg_envc  = 0;
 }
 
 #endif /* CONFIG_DISABLE_ENVIRON */

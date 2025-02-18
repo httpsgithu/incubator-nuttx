@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/samv7/sam_config.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -18,8 +20,8 @@
  *
  ****************************************************************************/
 
-#ifndef __ARCH_ARM_SRC_SAMV7_SAMV7_CONFIG_H
-#define __ARCH_ARM_SRC_SAMV7_SAMV7_CONFIG_H
+#ifndef __ARCH_ARM_SRC_SAMV7_SAM_CONFIG_H
+#define __ARCH_ARM_SRC_SAMV7_SAM_CONFIG_H
 
 /****************************************************************************
  * Included Files
@@ -97,28 +99,6 @@
 
 /* USARTs *******************************************************************/
 
-/* If the USART is not being used as a UART or for SPI, then it really isn't
- * enabled for our purposes.
- */
-
-#if !defined(CONFIG_USART0_SERIALDRIVER) && !defined(CONFIG_USART0_ISSPI)
-#  undef CONFIG_SAMV7_USART0
-#  undef CONFIG_USART0_SERIAL_CONSOLE
-#  undef CONFIG_USART0_IFLOWCONTROL
-#endif
-
-#if !defined(CONFIG_USART1_SERIALDRIVER) && !defined(CONFIG_USART1_ISSPI)
-#  undef CONFIG_SAMV7_USART1
-#  undef CONFIG_USART1_SERIAL_CONSOLE
-#  undef CONFIG_USART1_IFLOWCONTROL
-#endif
-
-#if !defined(CONFIG_USART2_SERIALDRIVER) && !defined(CONFIG_USART2_ISSPI)
-#  undef CONFIG_SAMV7_USART2
-#  undef CONFIG_USART2_SERIAL_CONSOLE
-#  undef CONFIG_USART2_IFLOWCONTROL
-#endif
-
 /* Don't enable USARTs not supported by the chip. */
 
 #if SAMV7_NUSART < 1
@@ -154,14 +134,22 @@
 #undef CONFIG_UART3_IFLOWCONTROL
 #undef CONFIG_UART4_IFLOWCONTROL
 
-/* Hardware flow control requires using a DMAC channel (not yet supported) */
+/* Hardware flow control requires using a DMAC channel (not yet supported).
+ * However CONFIG_SERIAL_IFLOWCONTROL is also used for USB CDC/ACM flow
+ * control which is supported, therefore the warning flag should be raised
+ * only if flowcontrol is configured for USART drivers.
+ */
 
 #ifdef CONFIG_SERIAL_IFLOWCONTROL
-#  warning XDMAC support is required for RTS hardware flow control
-#  undef CONFIG_SERIAL_IFLOWCONTROL
-#  undef CONFIG_USART0_IFLOWCONTROL
-#  undef CONFIG_USART1_IFLOWCONTROL
-#  undef CONFIG_USART2_IFLOWCONTROL
+#  if defined(CONFIG_USART0_IFLOWCONTROL) || \
+      defined(CONFIG_USART1_IFLOWCONTROL) || \
+      defined(CONFIG_USART2_IFLOWCONTROL)
+#    warning XDMAC support is required for RTS hardware flow control
+#    undef CONFIG_USART0_IFLOWCONTROL
+#    undef CONFIG_USART1_IFLOWCONTROL
+#    undef CONFIG_USART2_IFLOWCONTROL
+#    undef CONFIG_SERIAL_IFLOWCONTROL
+#  endif
 #endif
 
 /* Serial Console ***********************************************************/
@@ -330,4 +318,4 @@
  * Public Functions Prototypes
  ****************************************************************************/
 
-#endif /* __ARCH_ARM_SRC_SAMV7_SAMV7_CONFIG_H */
+#endif /* __ARCH_ARM_SRC_SAMV7_SAM_CONFIG_H */

@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/stm32f7/hardware/stm32f76xx77xx_dma.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -18,8 +20,8 @@
  *
  ****************************************************************************/
 
-#ifndef __ARCH_ARM_SRC_STM32F7_HARDWARE_STM32F76XXX77XX_DMA_H
-#define __ARCH_ARM_SRC_STM32F7_HARDWARE_STM32F76XXX77XX_DMA_H
+#ifndef __ARCH_ARM_SRC_STM32F7_HARDWARE_STM32F76XX77XX_DMA_H
+#define __ARCH_ARM_SRC_STM32F7_HARDWARE_STM32F76XX77XX_DMA_H
 
 /****************************************************************************
  * Included Files
@@ -584,4 +586,4 @@
 #define DMAMAP_SDMMC2_2            STM32_DMA_MAP(DMA2,DMA_STREAM5,DMA_CHAN11)
 
 #endif /* CONFIG_STM32F7_STM32F76XX || CONFIG_STM32F7_STM32F77XX */
-#endif /* __ARCH_ARM_SRC_STM32F7_HARDWARE_STM32F76XXX77XX_DMA_H */
+#endif /* __ARCH_ARM_SRC_STM32F7_HARDWARE_STM32F76XX77XX_DMA_H */

@@ -1,6 +1,8 @@
 /****************************************************************************
  * mm/mm_heap/mm_mallinfo.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -24,13 +26,92 @@
 
 #include <nuttx/config.h>
 
-#include <malloc.h>
 #include <assert.h>
 #include <debug.h>
 
 #include <nuttx/mm/mm.h>
 
 #include "mm_heap/mm.h"
+
+/****************************************************************************
+ * Private Types
+ ****************************************************************************/
+
+struct mm_mallinfo_handler_s
+{
+  FAR const struct malltask *task;
+  FAR struct mallinfo_task *info;
+};
+
+/****************************************************************************
+ * Private Functions
+ ****************************************************************************/
+
+static void mallinfo_handler(FAR struct mm_allocnode_s *node, FAR void *arg)
+{
+  FAR struct mallinfo *info = arg;
+  size_t nodesize = MM_SIZEOF_NODE(node);
+
+  minfo("node=%p size=%zu preceding=%u (%c)\n",
+        node, nodesize, (unsigned int)node->preceding,
+        MM_NODE_IS_ALLOC(node) ? 'A' : 'F');
+
+  /* Check if the node corresponds to an allocated memory chunk */
+
+  if (MM_NODE_IS_ALLOC(node))
+    {
+      DEBUGASSERT(nodesize >= MM_SIZEOF_ALLOCNODE);
+      info->aordblks++;
+      info->uordblks += nodesize;
+    }
+  else
+    {
+      FAR struct mm_freenode_s *fnode = (FAR void *)node;
+
+      DEBUGASSERT(nodesize >= MM_MIN_CHUNK);
+      DEBUGASSERT(fnode->blink->flink == fnode);
+      DEBUGASSERT(MM_SIZEOF_NODE(fnode->blink) <= nodesize);
+      DEBUGASSERT(fnode->flink == NULL ||
+                  fnode->flink->blink == fnode);
+      DEBUGASSERT(fnode->flink == NULL ||
+                  MM_SIZEOF_NODE(fnode->flink) == 0 ||
+                  MM_SIZEOF_NODE(fnode->flink) >= nodesize);
+
+      info->ordblks++;
+      info->fordblks += nodesize;
+      if (node->size > (size_t)info->mxordblk)
+        {
+          info->mxordblk = nodesize;
+        }
+    }
+}
+
+static void mallinfo_task_handler(FAR struct mm_allocnode_s *node,
+                                  FAR void *arg)
+{
+  FAR struct mm_mallinfo_handler_s *handler = arg;
+  FAR const struct malltask *task = handler->task;
+  FAR struct mallinfo_task *info = handler->info;
+  size_t nodesize = MM_SIZEOF_NODE(node);
+
+  /* Check if the node corresponds to an allocated memory chunk */
+
+  if (MM_NODE_IS_ALLOC(node))
+    {
+      DEBUGASSERT(nodesize >= MM_SIZEOF_ALLOCNODE);
+      if ((MM_DUMP_ASSIGN(task, node) || MM_DUMP_ALLOC(task, node) ||
+           MM_DUMP_LEAK(task, node)) && MM_DUMP_SEQNO(task, node))
+        {
+          info->aordblks++;
+          info->uordblks += nodesize;
+        }
+    }
+  else if (task->pid == PID_MM_FREE)
+    {
+      info->aordblks++;
+      info->uordblks += nodesize;
+    }
+}
 
 /****************************************************************************
  * Public Functions
@@ -44,97 +125,94 @@
  *
  ****************************************************************************/
 
-int mm_mallinfo(FAR struct mm_heap_s *heap, FAR struct mallinfo *info)
+struct mallinfo mm_mallinfo(FAR struct mm_heap_s *heap)
 {
-  FAR struct mm_allocnode_s *node;
-  FAR struct mm_allocnode_s *prev;
-  size_t mxordblk = 0;
-  int    ordblks  = 0;  /* Number of non-inuse chunks */
-  int    aordblks = 0;  /* Number of inuse chunks */
-  size_t uordblks = 0;  /* Total allocated space */
-  size_t fordblks = 0;  /* Total non-inuse space */
-#if CONFIG_MM_REGIONS > 1
-  int region;
-#else
-# define region 0
+  struct mallinfo info;
+#ifdef CONFIG_MM_HEAP_MEMPOOL
+  struct mallinfo poolinfo;
 #endif
 
-  DEBUGASSERT(info);
+  memset(&info, 0, sizeof(info));
+  mm_foreach(heap, mallinfo_handler, &info);
+  info.arena = heap->mm_heapsize;
+  info.arena += sizeof(struct mm_heap_s);
+  info.uordblks += sizeof(struct mm_heap_s);
+  info.usmblks = heap->mm_maxused + sizeof(struct mm_heap_s);
 
-  /* Visit each region */
+#ifdef CONFIG_MM_HEAP_MEMPOOL
+  poolinfo = mempool_multiple_mallinfo(heap->mm_mpool);
 
-#if CONFIG_MM_REGIONS > 1
-  for (region = 0; region < heap->mm_nregions; region++)
+  info.uordblks -= poolinfo.fordblks;
+  info.fordblks += poolinfo.fordblks;
 #endif
+
+  DEBUGASSERT(info.uordblks + info.fordblks == info.arena);
+
+  return info;
+}
+
+/****************************************************************************
+ * Name: mm_mallinfo_task
+ *
+ * Description:
+ *   mallinfo returns a copy of updated current heap information for task
+ *   with pid.
+ *
+ ****************************************************************************/
+
+struct mallinfo_task mm_mallinfo_task(FAR struct mm_heap_s *heap,
+                                      FAR const struct malltask *task)
+{
+  struct mm_mallinfo_handler_s handle;
+  struct mallinfo_task info =
     {
-      prev = NULL;
+      0, 0
+    };
 
-      /* Visit each node in the region
-       * Retake the semaphore for each region to reduce latencies
-       */
+#ifdef CONFIG_MM_HEAP_MEMPOOL
+  info = mempool_multiple_info_task(heap->mm_mpool, task);
+#endif
 
-      DEBUGVERIFY(mm_takesemaphore(heap));
+  handle.task = task;
+  handle.info = &info;
+  mm_foreach(heap, mallinfo_task_handler, &handle);
 
-      for (node = heap->mm_heapstart[region];
-           node < heap->mm_heapend[region];
-           node = (FAR struct mm_allocnode_s *)
-                  ((FAR char *)node + node->size))
+  return info;
+}
+
+/****************************************************************************
+ * Name: mm_heapfree
+ *
+ * Description:
+ *   Return the total free size (in bytes) in the heap
+ *
+ ****************************************************************************/
+
+size_t mm_heapfree(FAR struct mm_heap_s *heap)
+{
+  return heap->mm_heapsize - heap->mm_curused;
+}
+
+/****************************************************************************
+ * Name: mm_heapfree_largest
+ *
+ * Description:
+ *   Return the largest chunk of contiguous memory in the heap
+ *
+ ****************************************************************************/
+
+size_t mm_heapfree_largest(FAR struct mm_heap_s *heap)
+{
+  FAR struct mm_freenode_s *node;
+  for (node = heap->mm_nodelist[MM_NNODES - 1].blink; node;
+       node = node->blink)
+    {
+      size_t nodesize = MM_SIZEOF_NODE(node);
+      if (nodesize != 0)
         {
-          minfo("region=%d node=%p size=%u preceding=%u (%c)\n",
-                region, node, (unsigned int)node->size,
-                (unsigned int)(node->preceding & ~MM_ALLOC_BIT),
-                (node->preceding & MM_ALLOC_BIT) ? 'A' : 'F');
-
-          /* Check if the node corresponds to an allocated memory chunk */
-
-          if ((node->preceding & MM_ALLOC_BIT) != 0)
-            {
-              DEBUGASSERT(node->size >= SIZEOF_MM_ALLOCNODE);
-              aordblks++;
-              uordblks += node->size;
-            }
-          else
-            {
-              FAR struct mm_freenode_s *fnode = (FAR void *)node;
-
-              DEBUGASSERT(node->size >= SIZEOF_MM_FREENODE);
-              DEBUGASSERT(fnode->blink->flink == fnode);
-              DEBUGASSERT(fnode->blink->size <= fnode->size);
-              DEBUGASSERT(fnode->flink == NULL ||
-                          fnode->flink->blink == fnode);
-              DEBUGASSERT(fnode->flink == NULL ||
-                          fnode->flink->size == 0 ||
-                          fnode->flink->size >= fnode->size);
-              ordblks++;
-              fordblks += node->size;
-              if (node->size > mxordblk)
-                {
-                  mxordblk = node->size;
-                }
-            }
-
-          DEBUGASSERT(prev == NULL ||
-                      prev->size == (node->preceding & ~MM_ALLOC_BIT));
-          prev = node;
+          return nodesize;
         }
-
-      minfo("region=%d node=%p heapend=%p\n",
-            region, node, heap->mm_heapend[region]);
-      DEBUGASSERT(node == heap->mm_heapend[region]);
-
-      mm_givesemaphore(heap);
-
-      uordblks += SIZEOF_MM_ALLOCNODE; /* account for the tail node */
     }
-#undef region
 
-  DEBUGASSERT(uordblks + fordblks == heap->mm_heapsize);
-
-  info->arena    = heap->mm_heapsize;
-  info->ordblks  = ordblks;
-  info->aordblks = aordblks;
-  info->mxordblk = mxordblk;
-  info->uordblks = uordblks;
-  info->fordblks = fordblks;
-  return OK;
+  return 0;
 }

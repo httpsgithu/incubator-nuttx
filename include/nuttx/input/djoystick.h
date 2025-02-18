@@ -1,6 +1,8 @@
 /****************************************************************************
  * include/nuttx/input/djoystick.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -220,12 +222,6 @@ struct djoy_lowerhalf_s
   CODE void (*dl_enable)(FAR const struct djoy_lowerhalf_s *lower,
                          djoy_buttonset_t press, djoy_buttonset_t release,
                          djoy_interrupt_t handler, FAR void *arg);
-
-  /* Allow for storing implementation specific data to support cases where
-   * their may be more than one joystick
-   */
-
-  FAR void *config;
 };
 
 /****************************************************************************

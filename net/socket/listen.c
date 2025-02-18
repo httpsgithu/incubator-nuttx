@@ -1,6 +1,8 @@
 /****************************************************************************
  * net/socket/listen.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -82,16 +84,24 @@ int psock_listen(FAR struct socket *psock, int backlog)
 
   /* Let the address family's listen() method handle the operation */
 
-  DEBUGASSERT(psock->s_sockif != NULL && psock->s_sockif->si_listen != NULL);
-  ret = psock->s_sockif->si_listen(psock, backlog);
-  if (ret < 0)
+  DEBUGASSERT(psock->s_sockif != NULL);
+  if (psock->s_sockif->si_listen == NULL)
     {
-      nerr("ERROR: si_listen failed: %d\n", ret);
-      return ret;
+      return -EOPNOTSUPP;
     }
 
-  psock->s_flags |= _SF_LISTENING;
-  return OK;
+  ret = psock->s_sockif->si_listen(psock, backlog);
+  if (ret >= 0)
+    {
+      FAR struct socket_conn_s *conn = psock->s_conn;
+      conn->s_flags |= _SF_LISTENING;
+    }
+  else
+    {
+      nerr("ERROR: si_listen failed: %d\n", ret);
+    }
+
+  return ret;
 }
 
 /****************************************************************************
@@ -129,43 +139,29 @@ int psock_listen(FAR struct socket *psock, int backlog)
 
 int listen(int sockfd, int backlog)
 {
-  FAR struct socket *psock = sockfd_socket(sockfd);
+  FAR struct socket *psock;
   FAR struct file *filep;
-  int errcode;
   int ret;
 
-  /* Verify that the sockfd corresponds to valid, allocated socket */
+  /* Get the underlying socket structure */
 
-  if (psock == NULL || psock->s_conn == NULL)
-    {
-      /* It is not a valid socket description.  Distinguish between the
-       * cases where sockfd is a just invalid and when it is a valid file
-       * descriptor used in the wrong context.
-       */
-
-      if (fs_getfilep(sockfd, &filep) == 0)
-        {
-          errcode = ENOTSOCK;
-        }
-      else
-        {
-          errcode = EBADF;
-        }
-
-      _SO_SETERRNO(psock, errcode);
-      return ERROR;
-    }
+  ret = sockfd_socket(sockfd, &filep, &psock);
 
   /* The let psock_listen to the work. If psock_listen() fails, it will have
    * set the errno variable.
    */
 
-  ret = psock_listen(psock, backlog);
-  if (ret < 0)
+  if (ret == OK)
     {
-      _SO_SETERRNO(psock, -ret);
-      return ERROR;
+      ret = psock_listen(psock, backlog);
+      fs_putfilep(filep);
     }
 
-  return OK;
+  if (ret < 0)
+    {
+      set_errno(-ret);
+      ret = ERROR;
+    }
+
+  return ret;
 }

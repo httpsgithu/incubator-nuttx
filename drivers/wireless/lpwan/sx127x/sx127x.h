@@ -1,6 +1,8 @@
 /****************************************************************************
  * drivers/wireless/lpwan/sx127x/sx127x.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -18,8 +20,8 @@
  *
  ****************************************************************************/
 
-#ifndef __DRIVERS_WIRELESS_LPWAN_SX127X_H
-#define __DRIVERS_WIRELESS_LPWAN_SX127X_H
+#ifndef __DRIVERS_WIRELESS_LPWAN_SX127X_SX127X_H
+#define __DRIVERS_WIRELESS_LPWAN_SX127X_SX127X_H
 
 /****************************************************************************
  * Included Files
@@ -834,4 +836,4 @@
   }
 #endif
 
-#endif /* __DRIVERS_WIRELESS_LPWAN_SX127X_H */
+#endif /* __DRIVERS_WIRELESS_LPWAN_SX127X_SX127X_H */

@@ -1,35 +1,22 @@
 /****************************************************************************
  * net/usrsock/usrsock_sockif.c
  *
- *  Copyright (C) 2017 Haltian Ltd. All rights reserved.
- *  Author: Jussi Kivilinna <jussi.kivilinna@haltian.com>
+ * SPDX-License-Identifier: Apache-2.0
  *
- * Redistribution and use in source and binary forms, with or without
- * modification, are permitted provided that the following conditions
- * are met:
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.  The
+ * ASF licenses this file to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance with the
+ * License.  You may obtain a copy of the License at
  *
- * 1. Redistributions of source code must retain the above copyright
- *    notice, this list of conditions and the following disclaimer.
- * 2. Redistributions in binary form must reproduce the above copyright
- *    notice, this list of conditions and the following disclaimer in
- *    the documentation and/or other materials provided with the
- *    distribution.
- * 3. Neither the name NuttX nor the names of its contributors may be
- *    used to endorse or promote products derived from this software
- *    without specific prior written permission.
+ *   http://www.apache.org/licenses/LICENSE-2.0
  *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
- * "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
- * LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS
- * FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE
- * COPYRIGHT OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT,
- * INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING,
- * BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS
- * OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED
- * AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
- * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN
- * ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
- * POSSIBILITY OF SUCH DAMAGE.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.  See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
  *
  ****************************************************************************/
 
@@ -56,8 +43,7 @@
  * Private Function Prototypes
  ****************************************************************************/
 
-static int        usrsock_sockif_setup(FAR struct socket *psock,
-                                       int protocol);
+static int        usrsock_sockif_setup(FAR struct socket *psock);
 static sockcaps_t usrsock_sockif_sockcaps(FAR struct socket *psock);
 static void       usrsock_sockif_addref(FAR struct socket *psock);
 static int        usrsock_sockif_close(FAR struct socket *psock);
@@ -81,10 +67,13 @@ const struct sock_intf_s g_usrsock_sockif =
   usrsock_sendmsg,            /* si_sendmsg */
   usrsock_recvmsg,            /* si_recvmsg */
   usrsock_sockif_close,       /* si_close */
-#ifdef CONFIG_NET_SENDFILE
-  NULL,                       /* si_sendfile */
+  usrsock_ioctl,              /* si_ioctl */
+  NULL,                       /* si_socketpair */
+  usrsock_shutdown            /* si_shutdown */
+#ifdef CONFIG_NET_SOCKOPTS
+  , usrsock_getsockopt        /* si_getsockopt */
+  , usrsock_setsockopt        /* si_setsockopt */
 #endif
-  usrsock_ioctl               /* si_ioctl */
 };
 
 /****************************************************************************
@@ -102,7 +91,6 @@ const struct sock_intf_s g_usrsock_sockif =
  * Input Parameters:
  *   psock    - A pointer to a user allocated socket structure to be
  *              initialized.
- *   protocol - (see sys/socket.h)
  *
  * Returned Value:
  *   Zero (OK) is returned on success.  Otherwise, a negated errno value is
@@ -110,51 +98,15 @@ const struct sock_intf_s g_usrsock_sockif =
  *
  ****************************************************************************/
 
-static int usrsock_sockif_setup(FAR struct socket *psock, int protocol)
+static int usrsock_sockif_setup(FAR struct socket *psock)
 {
-  int domain = psock->s_domain;
-  int type = psock->s_type;
   int ret;
 
-#ifdef CONFIG_NET_USRSOCK_NO_INET
-  if (domain == PF_INET)
+  if (psock->s_domain != PF_INET && psock->s_domain != PF_INET6 &&
+      psock->s_domain != PF_NETLINK)
     {
-      return -ENETDOWN;
-    }
-#endif
-
-#ifdef CONFIG_NET_USRSOCK_NO_INET6
-  if (domain == PF_INET6)
-    {
-      return -ENETDOWN;
-    }
-#endif
-
-  if (domain == PF_INET || domain == PF_INET6)
-    {
-#ifndef CONFIG_NET_USRSOCK_UDP
-      if (type == SOCK_DGRAM)
-        {
-          return -ENETDOWN;
-        }
-#endif
-
-#ifndef CONFIG_NET_USRSOCK_TCP
-      if (type == SOCK_STREAM)
-        {
-          return -ENETDOWN;
-        }
-#endif
-    }
-  else
-    {
-#ifndef CONFIG_NET_USRSOCK_OTHER
-      return -ENETDOWN;
-#endif
-    }
-
-  psock->s_type = PF_UNSPEC;
-  psock->s_conn = NULL;
+      return -ENOTSUP; /* Only ipv4, ipv6 and netlink support the offload */
+    };
 
   /* Let the user socket logic handle the setup...
    *
@@ -165,7 +117,8 @@ static int usrsock_sockif_setup(FAR struct socket *psock, int protocol)
    * to open socket with kernel networking stack in this case.
    */
 
-  ret = usrsock_socket(domain, type, protocol, psock);
+  ret = usrsock_socket(psock->s_domain, psock->s_type, psock->s_proto,
+                       psock);
   if (ret == -ENETDOWN)
     {
       nwarn("WARNING: usrsock daemon is not running\n");
@@ -212,8 +165,6 @@ static sockcaps_t usrsock_sockif_sockcaps(FAR struct socket *psock)
 static void usrsock_sockif_addref(FAR struct socket *psock)
 {
   FAR struct usrsock_conn_s *conn;
-
-  DEBUGASSERT(psock != NULL && psock->s_conn != NULL);
 
   conn = psock->s_conn;
   DEBUGASSERT(conn->crefs > 0 && conn->crefs < 255);

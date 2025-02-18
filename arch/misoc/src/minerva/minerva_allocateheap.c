@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/misoc/src/minerva/minerva_allocateheap.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -52,25 +54,9 @@
  *
  ****************************************************************************/
 
-void up_allocate_heap(FAR void **heap_start, size_t * heap_size)
+void up_allocate_heap(void **heap_start, size_t * heap_size)
 {
   board_autoled_on(LED_HEAPALLOCATE);
-  *heap_start = (FAR void *)g_idle_topstack;
+  *heap_start = (void *)g_idle_topstack;
   *heap_size = CONFIG_RAM_END - g_idle_topstack;
 }
-
-/****************************************************************************
- * Name: minerva_add_region
- *
- * Description:
- *   Memory may be added in non-contiguous chunks.  Additional chunks are
- *   added by calling this function.
- *
- ****************************************************************************/
-
-#if CONFIG_MM_REGIONS > 1
-void minerva_add_region(void)
-{
-#  warning Missing logic
-}
-#endif

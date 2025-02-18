@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/stm32/stm32f103-minimum/src/stm32_hyt271.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -31,13 +33,14 @@
 #include <debug.h>
 
 #include <nuttx/board.h>
+#include <nuttx/signal.h>
 #include <arch/board/board.h>
 #ifdef CONFIG_SENSORS_HYT271
-# include <nuttx/sensors/hyt271.h>
+#  include <nuttx/sensors/hyt271.h>
 #endif
 
 #include "chip.h"
-#include "arm_arch.h"
+#include "arm_internal.h"
 #include "stm32_i2c.h"
 #include "stm32f103_minimum.h"
 
@@ -71,7 +74,7 @@ struct stm32_i2c_bus_s
  * Private Function Prototypes
  ****************************************************************************/
 
-static int stm32_i2c_power_reset(FAR struct hyt271_bus_s *bus);
+static int stm32_i2c_power_reset(struct hyt271_bus_s *bus);
 
 /****************************************************************************
  * Private Data
@@ -99,10 +102,10 @@ static struct stm32_i2c_bus_s g_bus =
  * Name: stm32_i2c_power_reset
  ****************************************************************************/
 
-static int stm32_i2c_power_reset(FAR struct hyt271_bus_s *bus)
+static int stm32_i2c_power_reset(struct hyt271_bus_s *bus)
 {
   volatile int n;
-  FAR struct stm32_i2c_bus_s *priv = (FAR struct stm32_i2c_bus_s *)bus;
+  struct stm32_i2c_bus_s *priv = (struct stm32_i2c_bus_s *)bus;
 
   if (priv->busnr != BOARD_HYT271_NBUS)
     {
@@ -110,7 +113,7 @@ static int stm32_i2c_power_reset(FAR struct hyt271_bus_s *bus)
     }
 
   stm32_gpiowrite(BOARD_HYT271_POWOUT, false);
-  usleep(250000);
+  nxsig_usleep(250000);
   stm32_gpiowrite(BOARD_HYT271_POWOUT, true);
 
   while (1)
@@ -155,7 +158,7 @@ int stm32_hyt271initialize(int devno)
   int n;
   int ret;
   int ndevices = 0;
-  FAR struct i2c_master_s *i2c;
+  struct i2c_master_s *i2c;
 
   iinfo("Setup gpios for bus power handling on I2C%d\n", BOARD_HYT271_NBUS);
   stm32_configgpio(BOARD_HYT271_POWIN);

@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/stm32/stm32_comp_v1.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -156,26 +158,26 @@ struct stm32_comp_s
 
 /* COMP Register access */
 
-static inline void comp_modify_csr(FAR struct stm32_comp_s *priv,
+static inline void comp_modify_csr(struct stm32_comp_s *priv,
                                    uint32_t clearbits, uint32_t setbits);
-static inline uint32_t comp_getreg_csr(FAR struct stm32_comp_s *priv);
-static inline void comp_putreg_csr(FAR struct stm32_comp_s *priv,
+static inline uint32_t comp_getreg_csr(struct stm32_comp_s *priv);
+static inline void comp_putreg_csr(struct stm32_comp_s *priv,
                                    uint32_t value);
-static bool stm32_complock_get(FAR struct stm32_comp_s *priv);
-static int stm32_complock(FAR struct stm32_comp_s *priv, bool lock);
+static bool stm32_complock_get(struct stm32_comp_s *priv);
+static int stm32_complock(struct stm32_comp_s *priv, bool lock);
 
 /* COMP Driver Methods */
 
-static void comp_shutdown(FAR struct comp_dev_s *dev);
-static int comp_setup(FAR struct comp_dev_s *dev);
-static int comp_read(FAR struct comp_dev_s *dev);
-static int comp_ioctl(FAR struct comp_dev_s *dev, int cmd,
+static void comp_shutdown(struct comp_dev_s *dev);
+static int comp_setup(struct comp_dev_s *dev);
+static int comp_read(struct comp_dev_s *dev);
+static int comp_ioctl(struct comp_dev_s *dev, int cmd,
                       unsigned long arg);
 
 /* Initialization */
 
-static int stm32_compconfig(FAR struct stm32_comp_s *priv);
-static int stm32_compenable(FAR struct stm32_comp_s *priv, bool enable);
+static int stm32_compconfig(struct stm32_comp_s *priv);
+static int stm32_compenable(struct stm32_comp_s *priv, bool enable);
 
 /****************************************************************************
  * Private Data
@@ -363,7 +365,7 @@ static struct comp_dev_s g_comp7dev =
  *
  ****************************************************************************/
 
-static inline void comp_modify_csr(FAR struct stm32_comp_s *priv,
+static inline void comp_modify_csr(struct stm32_comp_s *priv,
                                    uint32_t clearbits, uint32_t setbits)
 {
   uint32_t csr = priv->csr;
@@ -385,7 +387,7 @@ static inline void comp_modify_csr(FAR struct stm32_comp_s *priv,
  *
  ****************************************************************************/
 
-static inline uint32_t comp_getreg_csr(FAR struct stm32_comp_s *priv)
+static inline uint32_t comp_getreg_csr(struct stm32_comp_s *priv)
 {
   uint32_t csr = priv->csr;
 
@@ -407,7 +409,7 @@ static inline uint32_t comp_getreg_csr(FAR struct stm32_comp_s *priv)
  *
  ****************************************************************************/
 
-static inline void comp_putreg_csr(FAR struct stm32_comp_s *priv,
+static inline void comp_putreg_csr(struct stm32_comp_s *priv,
                                    uint32_t value)
 {
   uint32_t csr = priv->csr;
@@ -429,7 +431,7 @@ static inline void comp_putreg_csr(FAR struct stm32_comp_s *priv,
  *
  ****************************************************************************/
 
-static bool stm32_complock_get(FAR struct stm32_comp_s *priv)
+static bool stm32_complock_get(struct stm32_comp_s *priv)
 {
   uint32_t regval;
 
@@ -453,7 +455,7 @@ static bool stm32_complock_get(FAR struct stm32_comp_s *priv)
  *
  ****************************************************************************/
 
-static int stm32_complock(FAR struct stm32_comp_s *priv, bool lock)
+static int stm32_complock(struct stm32_comp_s *priv, bool lock)
 {
   bool current;
 
@@ -497,7 +499,7 @@ static int stm32_complock(FAR struct stm32_comp_s *priv, bool lock)
  *
  ****************************************************************************/
 
-static int stm32_compconfig(FAR struct stm32_comp_s *priv)
+static int stm32_compconfig(struct stm32_comp_s *priv)
 {
   uint32_t regval = 0;
   int index;
@@ -834,7 +836,7 @@ static int stm32_compconfig(FAR struct stm32_comp_s *priv)
  *
  ****************************************************************************/
 
-static int stm32_compenable(FAR struct stm32_comp_s *priv, bool enable)
+static int stm32_compenable(struct stm32_comp_s *priv, bool enable)
 {
   bool lock;
 
@@ -882,7 +884,7 @@ static int stm32_compenable(FAR struct stm32_comp_s *priv, bool enable)
  *
  ****************************************************************************/
 
-static int comp_setup(FAR struct comp_dev_s *dev)
+static int comp_setup(struct comp_dev_s *dev)
 {
 #warning "Missing logic"
 
@@ -904,7 +906,7 @@ static int comp_setup(FAR struct comp_dev_s *dev)
  *
  ****************************************************************************/
 
-static void comp_shutdown(FAR struct comp_dev_s *dev)
+static void comp_shutdown(struct comp_dev_s *dev)
 {
 #warning "Missing logic"
 }
@@ -923,9 +925,9 @@ static void comp_shutdown(FAR struct comp_dev_s *dev)
  *
  ****************************************************************************/
 
-static int comp_read(FAR struct comp_dev_s *dev)
+static int comp_read(struct comp_dev_s *dev)
 {
-  FAR struct stm32_comp_s *priv;
+  struct stm32_comp_s *priv;
   uint32_t regval;
 
   priv = dev->ad_priv;
@@ -950,7 +952,7 @@ static int comp_read(FAR struct comp_dev_s *dev)
  *
  ****************************************************************************/
 
-static int comp_ioctl(FAR struct comp_dev_s *dev, int cmd, unsigned long arg)
+static int comp_ioctl(struct comp_dev_s *dev, int cmd, unsigned long arg)
 {
 #warning "Missing logic"
   return -ENOTTY;
@@ -978,10 +980,10 @@ static int comp_ioctl(FAR struct comp_dev_s *dev, int cmd, unsigned long arg)
  *
  ****************************************************************************/
 
-FAR struct comp_dev_s *stm32_compinitialize(int intf)
+struct comp_dev_s *stm32_compinitialize(int intf)
 {
-  FAR struct comp_dev_s   *dev;
-  FAR struct stm32_comp_s *comp;
+  struct comp_dev_s   *dev;
+  struct stm32_comp_s *comp;
   int ret;
 
   switch (intf)

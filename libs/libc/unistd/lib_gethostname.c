@@ -1,10 +1,11 @@
 /****************************************************************************
  * libs/libc/unistd/lib_gethostname.c
  *
- *   Copyright (C) 2015 Stavros Polymenis. All rights reserved.
- *   Copyright (C) 2015, 2016 Gregory Nutt. All rights reserved.
- *   Author: Stavros Polymenis <sp@orbitalfox.com>
- *           Gregory Nutt <gnutt@nuttx.org>
+ * SPDX-License-Identifier: BSD-3-Clause
+ * SPDX-FileCopyrightText: 2015 Stavros Polymenis. All rights reserved.
+ * SPDX-FileCopyrightText: 2015, 2016 Gregory Nutt. All rights reserved.
+ * SPDX-FileContributor: Stavros Polymenis <sp@orbitalfox.com>
+ * SPDX-FileContributor: Gregory Nutt <gnutt@nuttx.org>
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -111,7 +112,7 @@ int gethostname(FAR char *name, size_t namelen)
    */
 
   flags = enter_critical_section();
-  strncpy(name, g_hostname, namelen);
+  strlcpy(name, g_hostname, namelen);
   leave_critical_section(flags);
 
   return 0;

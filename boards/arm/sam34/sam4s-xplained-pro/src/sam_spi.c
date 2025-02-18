@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/sam34/sam4s-xplained-pro/src/sam_spi.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  *  Licensed to the Apache Software Foundation (ASF) under one or more
  *  contributor license agreements.  See the NOTICE file distributed with
  *  this work for additional information regarding copyright ownership.  The
@@ -32,7 +34,7 @@
 #include <nuttx/spi/spi.h>
 #include <arch/board/board.h>
 
-#include "arm_arch.h"
+#include "arm_internal.h"
 #include "chip.h"
 #include "sam_gpio.h"
 #include "sam_spi.h"
@@ -150,7 +152,7 @@ void sam_spi0select(uint32_t devid, bool selected)
  ****************************************************************************/
 
 #ifdef CONFIG_SAM34_SPI0
-uint8_t sam_spi0status(FAR struct spi_dev_s *dev, uint32_t devid)
+uint8_t sam_spi0status(struct spi_dev_s *dev, uint32_t devid)
 {
   return SPI_STATUS_PRESENT;
 }
@@ -158,7 +160,7 @@ uint8_t sam_spi0status(FAR struct spi_dev_s *dev, uint32_t devid)
 
 int sam_sdinitialize(int port, int minor)
 {
-  FAR struct spi_dev_s *spi;
+  struct spi_dev_s *spi;
   int ret;
 
   /* Get the SPI driver instance for the SD chip select */

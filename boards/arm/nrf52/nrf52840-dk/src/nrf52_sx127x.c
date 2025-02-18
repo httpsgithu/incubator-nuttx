@@ -1,6 +1,7 @@
 /****************************************************************************
  * boards/arm/nrf52/nrf52840-dk/src/nrf52_sx127x.c
- * This logic is specific for the RFM98 modules (433MHz)
+ *
+ * SPDX-License-Identifier: Apache-2.0
  *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -58,7 +59,7 @@ static void sx127x_chip_reset(void);
 static int sx127x_opmode_change(int opmode);
 static int sx127x_freq_select(uint32_t freq);
 static int sx127x_pa_select(bool enable);
-static int sx127x_irq0_attach(xcpt_t isr, FAR void *arg);
+static int sx127x_irq0_attach(xcpt_t isr, void *arg);
 
 /****************************************************************************
  * Private Data
@@ -82,14 +83,13 @@ struct sx127x_lower_s lower =
  * Name: sx127x_irq0_attach
  ****************************************************************************/
 
-static int sx127x_irq0_attach(xcpt_t isr, FAR void *arg)
+static int sx127x_irq0_attach(xcpt_t isr, void *arg)
 {
   wlinfo("Attach DIO0 IRQ\n");
 
   /* IRQ on rising edge */
 
-  nrf52_gpiote_set_ch_event(GPIO_SX127X_DIO0, 0, true, false, isr, arg);
-  return OK;
+  return nrf52_gpiote_set_event(GPIO_SX127X_DIO0, true, false, isr, arg);
 }
 
 /****************************************************************************
@@ -177,7 +177,7 @@ static int sx127x_pa_select(bool enable)
 
 int nrf52_lpwaninitialize(void)
 {
-  FAR struct spi_dev_s *spidev;
+  struct spi_dev_s *spidev;
   int ret = OK;
 
   wlinfo("Register the sx127x module\n");

@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/imx1/imx_boot.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -27,7 +29,6 @@
 
 #include "chip.h"
 #include "arm_internal.h"
-#include "arm_arch.h"
 
 #include <nuttx/board.h>
 
@@ -51,8 +52,8 @@ struct section_mapping_s
  * Public Data
  ****************************************************************************/
 
-extern uint32_t _vector_start; /* Beginning of vector block */
-extern uint32_t _vector_end;   /* End+1 of vector block */
+extern uint8_t _vector_start; /* Beginning of vector block */
+extern uint8_t _vector_end;   /* End+1 of vector block */
 
 /****************************************************************************
  * Private Data
@@ -172,8 +173,8 @@ static void up_copyvectorblock(void)
    */
 
 #if !defined(CONFIG_BOOT_RUNFROMFLASH) && !defined(CONFIG_BOOT_COPYTORAM)
-  uint32_t *src  = (uint32_t *)&_vector_start;
-  uint32_t *end  = (uint32_t *)&_vector_end;
+  uint32_t *src  = (uint32_t *)_vector_start;
+  uint32_t *end  = (uint32_t *)_vector_end;
   uint32_t *dest = (uint32_t *)VECTOR_BASE;
 
   while (src < end)

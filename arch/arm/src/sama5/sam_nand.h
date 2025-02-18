@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/sama5/sam_nand.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -33,9 +35,9 @@
 #include <debug.h>
 
 #include <nuttx/mtd/nand_raw.h>
-#include <nuttx/semaphore.h>
+#include <nuttx/mutex.h>
 
-#include "arm_arch.h"
+#include "arm_internal.h"
 #include "chip.h"
 #include "hardware/sam_hsmc.h"
 
@@ -321,7 +323,7 @@ struct sam_nand_s
 {
   bool initialized;          /* True:  One time initialization is complete */
 #if NAND_NBANKS > 1
-  sem_t exclsem;             /* Enforce exclusive access to the SMC hardware */
+  mutex_t lock;              /* Enforce exclusive access to the SMC hardware */
 #endif
 
   /* Dynamic state */

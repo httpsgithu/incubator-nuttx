@@ -1,6 +1,8 @@
 /****************************************************************************
  * libs/libc/unistd/lib_utimes.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -22,8 +24,11 @@
  * Included Files
  ****************************************************************************/
 
+#include <errno.h>
 #include <sys/stat.h>
 #include <sys/time.h>
+
+#include "libc.h"
 
 /****************************************************************************
  * Public Functions
@@ -44,4 +49,29 @@ int utimes(FAR const char *path, const struct timeval tv[2])
   times[1].tv_nsec = tv[1].tv_usec * 1000;
 
   return utimens(path, times);
+}
+
+int futimesat(int dirfd, FAR const char *path, const struct timeval tv[2])
+{
+  FAR char *fullpath;
+  int ret;
+
+  fullpath = lib_get_pathbuffer();
+  if (fullpath == NULL)
+    {
+      set_errno(ENOMEM);
+      return ERROR;
+    }
+
+  ret = lib_getfullpath(dirfd, path, fullpath, PATH_MAX);
+  if (ret < 0)
+    {
+      lib_put_pathbuffer(fullpath);
+      set_errno(-ret);
+      return ERROR;
+    }
+
+  ret = utimes(fullpath, tv);
+  lib_put_pathbuffer(fullpath);
+  return ret;
 }

@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/renesas/src/rx65n/rx65n_sci.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -18,8 +20,8 @@
  *
  ****************************************************************************/
 
-#ifndef __ARCH_RENESAS_SRC_RX65N_SCI_H
-#define __ARCH_RENESAS_SRC_RX65N_SCI_H
+#ifndef __ARCH_RENESAS_SRC_RX65N_RX65N_SCI_H
+#define __ARCH_RENESAS_SRC_RX65N_RX65N_SCI_H
 
 /****************************************************************************
  * Pre-processor Definitions
@@ -1380,4 +1382,4 @@ void r_sci12_start(void);
 
 void r_sci12_stop(void);
 
-#endif /* __ARCH_RENESAS_SRC_RX65N_SCI_H */
+#endif /* __ARCH_RENESAS_SRC_RX65N_RX65N_SCI_H */

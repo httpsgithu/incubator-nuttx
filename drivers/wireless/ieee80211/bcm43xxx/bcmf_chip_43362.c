@@ -1,6 +1,8 @@
 /****************************************************************************
  * drivers/wireless/ieee80211/bcm43xxx/bcmf_chip_43362.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -25,7 +27,7 @@
 #include <nuttx/config.h>
 #include <stdint.h>
 
-#include "bcmf_sdio.h"
+#include "bcmf_interface.h"
 
 /****************************************************************************
  * Pre-processor Definitions
@@ -45,10 +47,11 @@ extern const uint8_t bcm43362_firmware_image[];
 extern const unsigned int bcm43362_firmware_image_len;
 #endif
 
-const struct bcmf_sdio_chip bcmf_43362_config_sdio =
+const struct bcmf_chip_data bcmf_43362_config_data =
 {
   /* General chip stats */
 
+  .ram_base = 0,
   .ram_size = 0x3c000,
 
   /* Backplane architecture */

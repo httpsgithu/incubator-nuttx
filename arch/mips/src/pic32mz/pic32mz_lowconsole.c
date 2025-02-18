@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/mips/src/pic32mz/pic32mz_lowconsole.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -29,9 +31,7 @@
 
 #include <arch/irq.h>
 
-#include "mips_arch.h"
 #include "mips_internal.h"
-
 #include "pic32mz_config.h"
 #include "hardware/pic32mz_uart.h"
 #include "hardware/pic32mz_pps.h"
@@ -319,7 +319,7 @@ void pic32mz_consoleinit(void)
 
   /* Setup up pin selection registers for all configured UARTs.  The board.h
    * header file must provide these definitions to select the correct pin
-   * configuration for each enabled UARt.
+   * configuration for each enabled UART.
    */
 
 #ifdef CONFIG_PIC32MZ_UART1
@@ -460,14 +460,14 @@ void pic32mz_consoleinit(void)
 }
 
 /****************************************************************************
- * Name: up_lowputc
+ * Name: mips_lowputc
  *
  * Description:
  *   Output one byte on the serial console.
  *
  ****************************************************************************/
 
-void up_lowputc(char ch)
+void mips_lowputc(char ch)
 {
 #ifdef HAVE_SERIAL_CONSOLE
   /* Wait for the transmit buffer not full */

@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/sam34/sam4cm_cpustart.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -36,7 +38,6 @@
 #include <nuttx/sched_note.h>
 
 #include "nvic.h"
-#include "arm_arch.h"
 #include "sched/sched.h"
 #include "init/init.h"
 #include "arm_internal.h"
@@ -64,8 +65,8 @@
  * Public Data
  ****************************************************************************/
 
-volatile static spinlock_t g_cpu1_boot;
-extern int arm_pause_handler(int irq, void *c, FAR void *arg);
+static volatile bool g_cpu1_boot;
+extern int sam4cm_smp_call_handler(int irq, void *c, void *arg);
 
 /****************************************************************************
  * Public Functions
@@ -92,14 +93,14 @@ static void cpu1_boot(void)
   putreg32(0, 0x48018008);
   while ((getreg32(0x4801800c) & 0x01) != 0);
 
-  cpu = up_cpu_index();
+  cpu = this_cpu();
   DPRINTF("cpu = %d\n", cpu);
 
   if (cpu == 1)
     {
       /* Use CPU0 vectors */
 
-      putreg32((uint32_t)&_stext, NVIC_VECTAB);
+      putreg32((uint32_t)_stext, NVIC_VECTAB);
       sam_ipc1_enableclk();
 
       /* Clear : write-only */
@@ -109,11 +110,11 @@ static void cpu1_boot(void)
       /* Enable : write-only */
 
       putreg32(0x1, SAM_IPC1_IECR);
-      irq_attach(SAM_IRQ_IPC1, arm_pause_handler, NULL);
-      up_enable_irq(SAM_IRQ_IPC1);
+      irq_attach(SAM_IRQ_SMP_CALL1, sam4cm_smp_call_handler, NULL);
+      up_enable_irq(SAM_IRQ_SMP_CALL1);
     }
 
-  spin_unlock(&g_cpu1_boot);
+  g_cpu1_boot = true;
 
 #ifdef CONFIG_SCHED_INSTRUMENTATION
   /* Notify that this CPU has started */
@@ -205,10 +206,8 @@ int up_cpu_start(int cpu)
   /* Copy initial vectors for CPU1 */
 
   putreg32((uint32_t)tcb->stack_base_ptr +
-           tcb->adj_stack_size, CPU1_VECTOR_ISTACK);
+                     tcb->adj_stack_size, CPU1_VECTOR_ISTACK);
   putreg32((uint32_t)cpu1_boot, CPU1_VECTOR_RESETV);
-
-  spin_lock(&g_cpu1_boot);
 
   /* Unreset coprocessor */
 
@@ -219,14 +218,12 @@ int up_cpu_start(int cpu)
   sam_ipc0_enableclk();
   putreg32(0x1, SAM_IPC0_ICCR); /* clear : write-only */
   putreg32(0x1, SAM_IPC0_IECR); /* enable : write-only */
-  irq_attach(SAM_IRQ_IPC0, arm_pause_handler, NULL);
-  up_enable_irq(SAM_IRQ_IPC0);
+  irq_attach(SAM_IRQ_SMP_CALL0, sam4cm_smp_call_handler, NULL);
+  up_enable_irq(SAM_IRQ_SMP_CALL0);
 
-  spin_lock(&g_cpu1_boot);
+  while (!g_cpu1_boot);
 
   /* CPU1 boot done */
-
-  spin_unlock(&g_cpu1_boot);
 
   return 0;
 }

@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/imx1/imx_serial.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -41,7 +43,6 @@
 #include <arch/board/board.h>
 
 #include "chip.h"
-#include "arm_arch.h"
 #include "imx_gpio.h"
 #include "arm_internal.h"
 
@@ -96,7 +97,7 @@ static int  up_setup(struct uart_dev_s *dev);
 static void up_shutdown(struct uart_dev_s *dev);
 static int  up_attach(struct uart_dev_s *dev);
 static void up_detach(struct uart_dev_s *dev);
-static int  up_interrupt(int irq, void *context, FAR void *arg);
+static int  up_interrupt(int irq, void *context, void *arg);
 static int  up_ioctl(struct file *filep, int cmd, unsigned long arg);
 static int  up_receive(struct uart_dev_s *dev, unsigned int *status);
 static void up_rxint(struct uart_dev_s *dev, bool enable);
@@ -252,107 +253,107 @@ static struct uart_dev_s g_uart3port =
 /* Now, which one with be tty0/console and which tty1 and tty2? */
 
 #if defined(CONFIG_UART1_SERIAL_CONSOLE) && defined(CONFIG_IMX1_UART1)
-# define CONSOLE_DEV     g_uart1port /* UART1 is /dev/console */
-# undef  CONFIG_UART2_SERIAL_CONSOLE
-# undef  CONFIG_UART3_SERIAL_CONSOLE
-# define TTYS0_DEV       g_uart1port /* UART1 is /dev/ttyS0 */
-# if defined(CONFIG_IMX1_UART2)
-#   define TTYS1_DEV     g_uart2port /* UART2 is /dev/ttyS1 */
-#   if defined(CONFIG_IMX1_UART3)
-#     define TTYS2_DEV   g_uart3port /* UART3 is /dev/ttyS2 */
-#   else
-#     undef TTYS2_DEV                /* No /dev/ttyS2 */
-#   endif
-# elif defined(CONFIG_IMX1_UART3)
-#   define TTYS1_DEV     g_uart3port /* UART3 is /dev/ttyS1 */
-#   undef  TTYS2_DEV                 /* No /dev/ttyS2 */
-# else
-#   undef  TTYS1_DEV                 /* No /dev/ttyS1 */
-#   undef  TTYS2_DEV                 /* No /dev/ttyS2 */
-# endif
-
-#elif defined(CONFIG_UART2_SERIAL_CONSOLE) && defined(CONFIG_IMX1_UART2)
-# define CONSOLE_DEV     g_uart2port  /* UART2 is /dev/console */
-# undef  CONFIG_UART1_SERIAL_CONSOLE
-# undef  CONFIG_UART3_SERIAL_CONSOLE
-# define TTYS0_DEV       g_uart2port  /* UART2 is /dev/ttyS0 */
-# if defined(CONFIG_IMX1_UART1)
-#   define TTYS1_DEV     g_uart1port  /* UART1 is /dev/ttyS1 */
-#   if defined(CONFIG_IMX1_UART3)
-#     define TTYS2_DEV   g_uart3port  /* UART3 is /dev/ttyS2 */
-#   else
-#     undef TTYS2_DEV                 /* No /dev/ttyS2 */
-#   endif
-# elif defined(CONFIG_IMX1_UART3)
-#   define TTYS1_DEV     g_uart3port  /* UART3 is /dev/ttyS1 */
-# else
-#   undef TTYS1_DEV                   /* No /dev/ttyS1 */
-#   undef TTYS2_DEV                   /* No /dev/ttyS2 */
-# endif
-
-#elif defined(CONFIG_UART3_SERIAL_CONSOLE) && defined(CONFIG_IMX1_UART3)
-# define CONSOLE_DEV     g_uart3port  /* UART3 is /dev/console */
-# undef CONFIG_UART1_SERIAL_CONSOLE
-# undef CONFIG_UART2_SERIAL_CONSOLE
-# define TTYS0_DEV       g_uart3port  /* UART3 is /dev/ttyS0 */
-# if defined(CONFIG_IMX1_UART1)
-#   define TTYS1_DEV     g_uart1port  /* UART1 is /dev/ttyS1 */
-#   if defined(CONFIG_IMX1_UART2)
-#     define TTYS2_DEV   g_uart2port  /* UART2 is /dev/ttyS2 */
-#   else
-#     undef TTYS2_DEV                 /* No /dev/ttyS2 */
-#   endif
-# elif defined(CONFIG_IMX1_UART2)
-#   define TTYS1_DEV     g_uart2port  /* UART2 is /dev/ttyS1 */
-#   undef  TTYS2_DEV                  /* No /dev/ttyS2 */
-# else
-#   undef  TTYS1_DEV                  /* No /dev/ttyS1 */
-#   undef  TTYS2_DEV                  /* No /dev/ttyS2 */
-# endif
-
-#else
-# undef CONSOLE_DEV     g_uart1port   /* No /dev/console */
-# undef CONFIG_UART1_SERIAL_CONSOLE
-# undef CONFIG_UART2_SERIAL_CONSOLE
-# undef CONFIG_UART3_SERIAL_CONSOLE
-
-# if defined(CONFIG_IMX1_UART1)
-#  define TTYS0_DEV       g_uart1port /* UART1 is /dev/ttyS0 */
+#  define CONSOLE_DEV   g_uart1port /* UART1 is /dev/console */
+#  undef  CONFIG_UART2_SERIAL_CONSOLE
+#  undef  CONFIG_UART3_SERIAL_CONSOLE
+#  define TTYS0_DEV     g_uart1port /* UART1 is /dev/ttyS0 */
 #  if defined(CONFIG_IMX1_UART2)
-#    define TTYS1_DEV     g_uart2port /* UART2 is /dev/ttyS1 */
+#    define TTYS1_DEV   g_uart2port /* UART2 is /dev/ttyS1 */
 #    if defined(CONFIG_IMX1_UART3)
-#     define TTYS2_DEV   g_uart3port  /* UART3 is /dev/ttyS2 */
+#      define TTYS2_DEV g_uart3port /* UART3 is /dev/ttyS2 */
 #    else
-#     undef TTYS2_DEV                 /* No /dev/ttyS2 */
+#      undef TTYS2_DEV              /* No /dev/ttyS2 */
 #    endif
 #  elif defined(CONFIG_IMX1_UART3)
-#    define TTYS1_DEV     g_uart3port /* UART3 is /dev/ttyS1 */
-#    undef TTYS2_DEV                  /* No /dev/ttyS2 */
+#    define TTYS1_DEV   g_uart3port /* UART3 is /dev/ttyS1 */
+#    undef  TTYS2_DEV               /* No /dev/ttyS2 */
 #  else
-#    undef TTYS1_DEV                  /* No /dev/ttyS1 */
-#    undef TTYS2_DEV                  /* No /dev/ttyS2 */
+#    undef  TTYS1_DEV               /* No /dev/ttyS1 */
+#    undef  TTYS2_DEV               /* No /dev/ttyS2 */
 #  endif
 
-# elif defined(CONFIG_IMX1_UART2)
-#  define TTYS0_DEV       g_uart2port /* UART2 is /dev/ttyS0 */
-#  undef  TTYS2_DEV                   /* No /dev/ttyS2 */
-#  if defined(CONFIG_IMX1_UART3)
-#    define TTYS1_DEV     g_uart2port /* UART2 is /dev/ttyS1 */
+#elif defined(CONFIG_UART2_SERIAL_CONSOLE) && defined(CONFIG_IMX1_UART2)
+#  define CONSOLE_DEV   g_uart2port /* UART2 is /dev/console */
+#  undef  CONFIG_UART1_SERIAL_CONSOLE
+#  undef  CONFIG_UART3_SERIAL_CONSOLE
+#  define TTYS0_DEV     g_uart2port /* UART2 is /dev/ttyS0 */
+#  if defined(CONFIG_IMX1_UART1)
+#    define TTYS1_DEV   g_uart1port /* UART1 is /dev/ttyS1 */
+#    if defined(CONFIG_IMX1_UART3)
+#      define TTYS2_DEV g_uart3port /* UART3 is /dev/ttyS2 */
+#    else
+#      undef TTYS2_DEV              /* No /dev/ttyS2 */
+#    endif
+#  elif defined(CONFIG_IMX1_UART3)
+#    define TTYS1_DEV   g_uart3port /* UART3 is /dev/ttyS1 */
 #  else
-#    undef TTYS1_DEV                  /* No /dev/ttyS1 */
+#    undef TTYS1_DEV                /* No /dev/ttyS1 */
+#    undef TTYS2_DEV                /* No /dev/ttyS2 */
 #  endif
 
-# elif defined(CONFIG_IMX1_UART3)
-#  define TTYS0_DEV       g_uart3port /* UART3 is /dev/ttyS0 */
-#  undef  TTYS1_DEV                   /* No /dev/ttyS1 */
-#  undef  TTYS2_DEV                   /* No /dev/ttyS2 */
+#elif defined(CONFIG_UART3_SERIAL_CONSOLE) && defined(CONFIG_IMX1_UART3)
+#  define CONSOLE_DEV   g_uart3port /* UART3 is /dev/console */
+#  undef CONFIG_UART1_SERIAL_CONSOLE
+#  undef CONFIG_UART2_SERIAL_CONSOLE
+#  define TTYS0_DEV     g_uart3port /* UART3 is /dev/ttyS0 */
+#  if defined(CONFIG_IMX1_UART1)
+#    define TTYS1_DEV   g_uart1port /* UART1 is /dev/ttyS1 */
+#    if defined(CONFIG_IMX1_UART2)
+#      define TTYS2_DEV g_uart2port /* UART2 is /dev/ttyS2 */
+#    else
+#      undef TTYS2_DEV              /* No /dev/ttyS2 */
+#    endif
+#  elif defined(CONFIG_IMX1_UART2)
+#    define TTYS1_DEV   g_uart2port /* UART2 is /dev/ttyS1 */
+#    undef  TTYS2_DEV               /* No /dev/ttyS2 */
+#  else
+#    undef  TTYS1_DEV               /* No /dev/ttyS1 */
+#    undef  TTYS2_DEV               /* No /dev/ttyS2 */
+#  endif
 
-# else
-#  error "No UARTs enabled"
-#  undef  TTYS0_DEV                   /* No /dev/ttyS0 */
-#  undef  TTYS1_DEV                   /* No /dev/ttyS1 */
-#  undef  TTYS2_DEV                   /* No /dev/ttyS2 */
-# endif
+#else
+#  undef CONSOLE_DEV    g_uart1port   /* No /dev/console */
+#  undef CONFIG_UART1_SERIAL_CONSOLE
+#  undef CONFIG_UART2_SERIAL_CONSOLE
+#  undef CONFIG_UART3_SERIAL_CONSOLE
+
+#  if defined(CONFIG_IMX1_UART1)
+#    define TTYS0_DEV   g_uart1port /* UART1 is /dev/ttyS0 */
+#    if defined(CONFIG_IMX1_UART2)
+#      define TTYS1_DEV g_uart2port /* UART2 is /dev/ttyS1 */
+#    if defined(CONFIG_IMX1_UART3)
+#      define TTYS2_DEV g_uart3port /* UART3 is /dev/ttyS2 */
+#    else
+#      undef TTYS2_DEV              /* No /dev/ttyS2 */
+#    endif
+#  elif defined(CONFIG_IMX1_UART3)
+#    define TTYS1_DEV   g_uart3port /* UART3 is /dev/ttyS1 */
+#    undef TTYS2_DEV                /* No /dev/ttyS2 */
+#  else
+#    undef TTYS1_DEV                /* No /dev/ttyS1 */
+#    undef TTYS2_DEV                /* No /dev/ttyS2 */
+#  endif
+
+#  elif defined(CONFIG_IMX1_UART2)
+#    define TTYS0_DEV   g_uart2port /* UART2 is /dev/ttyS0 */
+#    undef  TTYS2_DEV               /* No /dev/ttyS2 */
+#    if defined(CONFIG_IMX1_UART3)
+#      define TTYS1_DEV g_uart2port /* UART2 is /dev/ttyS1 */
+#    else
+#      undef TTYS1_DEV              /* No /dev/ttyS1 */
+#    endif
+
+#  elif defined(CONFIG_IMX1_UART3)
+#    define TTYS0_DEV   g_uart3port /* UART3 is /dev/ttyS0 */
+#    undef  TTYS1_DEV               /* No /dev/ttyS1 */
+#    undef  TTYS2_DEV               /* No /dev/ttyS2 */
+
+#  else
+#    error "No UARTs enabled"
+#    undef  TTYS0_DEV               /* No /dev/ttyS0 */
+#    undef  TTYS1_DEV               /* No /dev/ttyS1 */
+#    undef  TTYS2_DEV               /* No /dev/ttyS2 */
+#  endif
 #endif
 
 /****************************************************************************
@@ -803,16 +804,15 @@ static void up_detach(struct uart_dev_s *dev)
  * Name: up_interrupt (and front-ends)
  *
  * Description:
- *   This is the UART interrupt handler.  It will be invoked
- *   when an interrupt received on the 'irq'  It should call
- *   uart_transmitchars or uart_receivechar to perform the
- *   appropriate data transfers.  The interrupt handling logic\
- *   must be able to map the 'irq' number into the appropriate
- *   uart_dev_s structure in order to call these functions.
+ *   This is the UART interrupt handler.  It will be invoked when an
+ *   interrupt is received on the 'irq'.  It should call uart_xmitchars or
+ *   uart_recvchars to perform the appropriate data transfers.  The
+ *   interrupt handling logic must be able to map the 'arg' to the
+ *   appropriate uart_dev_s structure in order to call these functions.
  *
  ****************************************************************************/
 
-static int up_interrupt(int irq, void *context, FAR void *arg)
+static int up_interrupt(int irq, void *context, void *arg)
 {
   struct uart_dev_s *dev = (struct uart_dev_s *)arg;
   struct up_dev_s *priv;
@@ -1142,12 +1142,12 @@ void arm_serialinit(void)
 
 #ifdef TTYS0_DEV
   uart_register("/dev/ttyS0", &TTYS0_DEV);
-# ifdef TTYS1_DEV
+#  ifdef TTYS1_DEV
   uart_register("/dev/ttyS1", &TTYS1_DEV);
-#  ifdef TTYS2_DEV
+#    ifdef TTYS2_DEV
   uart_register("/dev/ttyS2", &TTYS2_DEV);
+#    endif
 #  endif
-# endif
 #endif
 }
 
@@ -1160,7 +1160,7 @@ void arm_serialinit(void)
  *
  ****************************************************************************/
 
-int up_putc(int ch)
+void up_putc(int ch)
 {
   struct up_dev_s *priv = (struct up_dev_s *)CONSOLE_DEV.priv;
   uint32_t ier;
@@ -1168,20 +1168,9 @@ int up_putc(int ch)
   up_disableuartint(priv, &ier);
   up_waittxready(priv);
 
-  /* Check for LF */
-
-  if (ch == '\n')
-    {
-      /* Add CR */
-
-      up_serialout(priv, UART_TXD0, (uint32_t)'\r');
-      up_waittxready(priv);
-    }
-
   up_serialout(priv, UART_TXD0, (uint32_t)ch);
   up_waittxready(priv);
   up_restoreuartint(priv, ier);
-  return ch;
 }
 
 #else /* USE_SERIALDRIVER */
@@ -1223,22 +1212,10 @@ static inline void up_waittxready(void)
  * Public Functions
  ****************************************************************************/
 
-int up_putc(int ch)
+void up_putc(int ch)
 {
   up_waittxready();
-
-  /* Check for LF */
-
-  if (ch == '\n')
-    {
-      /* Add CR */
-
-      putreg32((uint16_t)'\r', IMX_REGISTER_BASE + UART_TXD0);
-      up_waittxready();
-    }
-
   putreg32((uint16_t)ch, IMX_REGISTER_BASE + UART_TXD0);
-  return ch;
 }
 
 #endif /* USE_SERIALDRIVER */

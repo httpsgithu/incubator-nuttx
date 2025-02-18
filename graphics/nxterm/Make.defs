@@ -1,6 +1,8 @@
 ############################################################################
 # graphics/nxterm/Make.defs
 #
+# SPDX-License-Identifier: Apache-2.0
+#
 # Licensed to the Apache Software Foundation (ASF) under one or more
 # contributor license agreements.  See the NOTICE file distributed with
 # this work for additional information regarding copyright ownership.  The
@@ -32,12 +34,8 @@ ifeq ($(CONFIG_NXTERM_NXKBDIN),y)
 CSRCS += nxterm_kbdin.c
 endif
 
-ifeq ($(CONFIG_DEBUG_GRAPHICS),y)
-CSRCS += nxterm_sem.c
-endif
-
 DEPPATH += --dep-path nxterm
-CFLAGS += ${shell $(INCDIR) "$(CC)" $(TOPDIR)/graphics/nxterm}
+CFLAGS += ${INCDIR_PREFIX}$(TOPDIR)/graphics/nxterm
 VPATH += :nxterm
 
 endif

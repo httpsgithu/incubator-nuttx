@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/max326xx/max32660/max32660_clockconfig.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -18,8 +20,8 @@
  *
  ****************************************************************************/
 
-#ifndef __ARCH_ARM_SRC_MAX326XX_MAX_32660_MAX32660_CLOCKCONFIG_H
-#define __ARCH_ARM_SRC_MAX326XX_MAX_32660_MAX32660_CLOCKCONFIG_H
+#ifndef __ARCH_ARM_SRC_MAX326XX_MAX32660_MAX32660_CLOCKCONFIG_H
+#define __ARCH_ARM_SRC_MAX326XX_MAX32660_MAX32660_CLOCKCONFIG_H
 
 /****************************************************************************
  * Included Files
@@ -81,4 +83,4 @@ extern "C"
 }
 #endif
 
-#endif /* __ARCH_ARM_SRC_MAX326XX_MAX_32660_MAX32660_CLOCKCONFIG_H */
+#endif /* __ARCH_ARM_SRC_MAX326XX_MAX32660_MAX32660_CLOCKCONFIG_H */

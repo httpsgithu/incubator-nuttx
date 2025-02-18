@@ -1,6 +1,8 @@
 /****************************************************************************
  * net/netdev/netdev_lladdrsize.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -115,16 +117,6 @@ int netdev_lladdrsize(FAR struct net_driver_s *dev)
 #endif
 
 #ifdef CONFIG_NET_6LOWPAN
-#ifdef CONFIG_WIRELESS_BLUETOOTH
-      case NET_LL_BLUETOOTH:
-        {
-          /* 6LoWPAN can be configured to use either extended or short
-           * addressing.
-           */
-
-          return BLUETOOTH_HDRLEN;
-        }
-#endif /* CONFIG_WIRELESS_BLUETOOTH */
 
 #ifdef CONFIG_WIRELESS_IEEE802154
       case NET_LL_IEEE802154:
@@ -141,11 +133,11 @@ int netdev_lladdrsize(FAR struct net_driver_s *dev)
         }
 #endif /* CONFIG_WIRELESS_IEEE802154 */
 
-#if defined(CONFIG_WIRELESS_PKTRADIO) || defined(CONFIG_NET_BLUETOOTH)
+#if defined(CONFIG_WIRELESS_PKTRADIO) || defined(CONFIG_WIRELESS_BLUETOOTH)
 #ifdef CONFIG_WIRELESS_PKTRADIO
       case NET_LL_PKTRADIO:
 #endif
-#ifdef CONFIG_NET_BLUETOOTH
+#ifdef CONFIG_WIRELESS_BLUETOOTH
       case NET_LL_BLUETOOTH:
 #endif
         {
@@ -153,7 +145,7 @@ int netdev_lladdrsize(FAR struct net_driver_s *dev)
 
            return netdev_pktradio_addrlen(dev);
         }
-#endif /* CONFIG_WIRELESS_PKTRADIO || CONFIG_NET_BLUETOOTH */
+#endif /* CONFIG_WIRELESS_PKTRADIO || CONFIG_WIRELESS_BLUETOOTH */
 #endif /* CONFIG_NET_6LOWPAN */
 
        default:

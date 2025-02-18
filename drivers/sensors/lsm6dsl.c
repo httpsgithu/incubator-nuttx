@@ -1,17 +1,13 @@
 /****************************************************************************
  * drivers/sensors/lsm6dsl.c
  *
- *   Copyright (C) 2018 Inc. All rights reserved.
- *   Author: Ben vd Veen <disruptivesolutionsnl@gmail.com>
- *   Alias: DisruptiveNL
- *
- * Based on:
- *
- *   Copyright (C) 2016 Omni Hoverboards Inc. All rights reserved.
- *   Author: Paul Alexander Patience <paul-a.patience@polymtl.ca>
- *
- *   Copyright (C) 2016, 2019 Gregory Nutt. All rights reserved.
- *   Author: Gregory Nutt <gnutt@nuttx.org>
+ * SPDX-License-Identifier: BSD-3-Clause
+ * SPDX-FileCopyrightText: 2018 Inc. All rights reserved.
+ * SPDX-FileCopyrightText: 2016 Omni Hoverboards Inc. All rights reserved.
+ * SPDX-FileCopyrightText: 2016, 2019 Gregory Nutt. All rights reserved.
+ * SPDX-FileContributor: Ben vd Veen <disruptivesolutionsnl@gmail.com>
+ * SPDX-FileContributor: Paul Alexander Patience <paul-a.patience@polymtl.ca>
+ * SPDX-FileContributor: Gregory Nutt <gnutt@nuttx.org>
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -107,10 +103,8 @@ static int lsm6dsl_selftest(FAR struct lsm6dsl_dev_s *priv, uint32_t mode);
 
 /* Character Driver Methods */
 
-static int lsm6dsl_open(FAR struct file *filep);
-static int lsm6dsl_close(FAR struct file *filep);
-static ssize_t lsm6dsl_read(FAR struct file *filep,
-                            FAR char *buffer, size_t buflen);
+static ssize_t lsm6dsl_read(FAR struct file *filep, FAR char *buffer,
+                            size_t buflen);
 static ssize_t lsm6dsl_write(FAR struct file *filep,
                              FAR const char *buffer, size_t buflen);
 static int lsm6dsl_ioctl(FAR struct file *filep, int cmd,
@@ -134,16 +128,12 @@ static double g_gyrofactor = 0;
 
 static const struct file_operations g_fops =
 {
-  lsm6dsl_open,
-  lsm6dsl_close,
-  lsm6dsl_read,
-  lsm6dsl_write,
-  NULL,
-  lsm6dsl_ioctl,
-  NULL
-#ifndef CONFIG_DISABLE_PSEUDOFS_OPERATIONS
-  , NULL
-#  endif
+  NULL,            /* open */
+  NULL,            /* close */
+  lsm6dsl_read,    /* read */
+  lsm6dsl_write,   /* write */
+  NULL,            /* seek */
+  lsm6dsl_ioctl,   /* ioctl */
 };
 
 static const struct lsm6dsl_ops_s g_lsm6dsl_sensor_ops =
@@ -957,33 +947,6 @@ static int lsm6dsl_sensor_read(FAR struct lsm6dsl_dev_s *priv,
 }
 
 /****************************************************************************
- * Name: lsm6dsl_open
- *
- * Description:
- *   This method is called when the device is opened.
- *
- ****************************************************************************/
-
-static int lsm6dsl_open(FAR struct file *filep)
-{
-  sninfo("Device LSM6DSL opened!!\n");
-  return OK;
-}
-
-/****************************************************************************
- * Name: lsm6dsl_close
- *
- * Description:
- *   This method is called when the device is closed.
- *
- ****************************************************************************/
-
-static int lsm6dsl_close(FAR struct file *filep)
-{
-  return OK;
-}
-
-/****************************************************************************
  * Name: lsm6dsl_read
  *
  * Description:
@@ -1010,11 +973,9 @@ static ssize_t lsm6dsl_read(FAR struct file *filep,
 
   /* Sanity check */
 
-  DEBUGASSERT(filep != NULL);
   inode = filep->f_inode;
 
-  DEBUGASSERT(inode != NULL);
-  priv = (FAR struct lsm6dsl_dev_s *)inode->i_private;
+  priv = inode->i_private;
 
   DEBUGASSERT(priv != NULL);
   DEBUGASSERT(priv->datareg == LSM6DSL_OUTX_L_G_SHIFT ||
@@ -1132,11 +1093,9 @@ static int lsm6dsl_ioctl(FAR struct file *filep, int cmd, unsigned long arg)
 
   /* Sanity check */
 
-  DEBUGASSERT(filep != NULL);
   inode = filep->f_inode;
 
-  DEBUGASSERT(inode != NULL);
-  priv = (FAR struct lsm6dsl_dev_s *)inode->i_private;
+  priv = inode->i_private;
 
   DEBUGASSERT(priv != NULL);
 
@@ -1217,7 +1176,7 @@ static int lsm6dsl_register(FAR const char *devpath,
 
   /* Initialize the device's structure */
 
-  priv = (FAR struct lsm6dsl_dev_s *)kmm_malloc(sizeof(*priv));
+  priv = kmm_malloc(sizeof(*priv));
   if (priv == NULL)
     {
       snerr("ERROR: Failed to allocate instance\n");

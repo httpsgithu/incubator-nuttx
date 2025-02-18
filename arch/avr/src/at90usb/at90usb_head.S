@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/avr32/src/at90usb/at90usb_head.S
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -58,7 +60,7 @@
 	.global	_edata				/* End of .data section in RAM */
 	.global	_eronly				/* Start of .data section in FLASH */
 	.global	_enoinit			/* End of uninitialized data.  Defined by ld.script */
-	.global	up_lowinit			/* Perform low level initialization */
+	.global	avr_lowinit			/* Perform low level initialization */
 	.global	nx_start			/* NuttX entry point */
 
 	.global	vectortab
@@ -239,7 +241,7 @@ __do_clear_bss:
 
 	/* Perform any low-level initialization */
 
-	call	up_lowinit
+	call	avr_lowinit
 
 	/* Now start NuttX */
 

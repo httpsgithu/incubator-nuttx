@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/lpc17xx_40xx/lpc17_40_gpdma.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -39,7 +41,7 @@
 #ifdef CONFIG_LPC17_40_GPDMA
 /* DMA_HANDLE is an opaque reference to an allocated DMA channel */
 
-typedef FAR void *DMA_HANDLE;
+typedef void *DMA_HANDLE;
 
 /* dma_callback_t a function pointer provided to lpc17_40_dmastart.  This
  * function is called at the completion of the DMA transfer.  'arg' is the

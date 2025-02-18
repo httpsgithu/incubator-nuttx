@@ -1,6 +1,8 @@
 /****************************************************************************
  * libs/libc/machine/xtensa/arch_strncpy.S
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -26,6 +28,10 @@
 
 #include <arch/chip/core-isa.h>
 #include <arch/xtensa/xtensa_abi.h>
+
+#include "libc.h"
+
+#ifdef LIBC_BUILD_STRNCPY
 
 /****************************************************************************
  * Public Functions
@@ -67,9 +73,9 @@ __strncpy_aux:
   RET(16)
 
   .align  4
-  .global strncpy
-  .type strncpy, @function
-strncpy:
+  .global ARCH_LIBCFUN(strncpy)
+  .type ARCH_LIBCFUN(strncpy), @function
+ARCH_LIBCFUN(strncpy):
   ENTRY(16)
   /* a2 = dst, a3 = src */
 
@@ -89,7 +95,6 @@ strncpy:
   bnone a10, a8, .Laligned
 
   j .Ldstunaligned
-
 
 /* Fill the dst with zeros -- n is at least 1.  */
 
@@ -147,7 +152,6 @@ strncpy:
   beqz    a4, 2b    # if n is zero
   addi    a10, a10, 2 # advance dst pointer
   j .Lfillaligned
-
 
 /* dst is word-aligned; src is word-aligned; n is at least 1.  */
 
@@ -262,4 +266,6 @@ strncpy:
 3:  RET(16)
 .end schedule
 
-  .size strncpy, . - strncpy
+  .size ARCH_LIBCFUN(strncpy), . - ARCH_LIBCFUN(strncpy)
+
+#endif

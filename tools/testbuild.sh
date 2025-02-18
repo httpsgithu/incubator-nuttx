@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 # tools/testbuild.sh
 #
+# SPDX-License-Identifier: Apache-2.0
+#
 # Licensed to the Apache Software Foundation (ASF) under one or more
 # contributor license agreements.  See the NOTICE file distributed with
 # this work for additional information regarding copyright ownership.  The
@@ -31,11 +33,15 @@ EXTRA_FLAGS="EXTRAFLAGS="
 MAKE=make
 unset testfile
 unset HOPTION
+unset STORE
 unset JOPTION
 PRINTLISTONLY=0
 GITCLEAN=0
 SAVEARTIFACTS=0
 CHECKCLEAN=1
+CODECHECKER=0
+NINJACMAKE=0
+RUN=0
 
 case $(uname -s) in
   Darwin*)
@@ -47,6 +53,9 @@ case $(uname -s) in
   MINGW32*)
     HOST=MinGw
     ;;
+  MSYS*)
+    HOST=Msys
+    ;;
   *)
 
     # Assume linux as a fallback
@@ -56,10 +65,11 @@ esac
 
 function showusage {
   echo ""
-  echo "USAGE: $progname [-l|m|c|g|n] [-d] [-e <extraflags>] [-x] [-j <ncpus>] [-a <appsdir>] [-t <topdir>] [-p] [-G] <testlist-file>"
-  echo "       $progname -h"
+  echo "USAGE: $progname -h [-l|m|c|g|n] [-d] [-e <extraflags>] [-x] [-j <ncpus>] [-a <appsdir>] [-t <topdir>] [-p]"
+  echo "       [-A] [-C] [-G] [-N] [-R] [-S] [--codechecker] <testlist-file>"
   echo ""
   echo "Where:"
+  echo "  -h will show this help test and terminate"
   echo "  -l|m|c|g|n selects Linux (l), macOS (m), Cygwin (c),"
   echo "     MSYS/MSYS2 (g) or Windows native (n). Default Linux"
   echo "  -d enables script debug output"
@@ -77,7 +87,10 @@ function showusage {
   echo "       * This assumes that only nuttx and apps repos need to be cleaned."
   echo "       * If the tree has files not managed by git, they will be removed"
   echo "         as well."
-  echo "  -h will show this help test and terminate"
+  echo "  -N Use CMake with Ninja as the backend."
+  echo "  -R execute \"run\" script in the config directories if exists."
+  echo "  -S Adds the nxtmpdir folder for third-party packages."
+  echo "  --codechecker enables CodeChecker statically analyze the code."
   echo "  <testlist-file> selects the list of configurations to test.  No default"
   echo ""
   echo "Your PATH variable must include the path to both the build tools and the"
@@ -128,6 +141,18 @@ while [ ! -z "$1" ]; do
   -C )
     CHECKCLEAN=0
     ;;
+  -N )
+    NINJACMAKE=1
+    ;;
+  -R )
+    RUN=1
+    ;;
+  -S )
+    STORE+=" $1"
+    ;;
+  --codechecker )
+    CODECHECKER=1
+    ;;
   -h )
     showusage
     ;;
@@ -167,15 +192,90 @@ fi
 
 export APPSDIR
 
-testlist=`grep -v -E "^(-|#)" $testfile || true`
+testlist=`grep -v -E "^(-|#)|^[C|c][M|m][A|a][K|k][E|e]" $testfile || true`
 blacklist=`grep "^-" $testfile || true`
 
+if [ ${NINJACMAKE} -eq 1 ]; then
+  cmakelist=`grep "^[C|c][M|m][A|a][K|k][E|e]" $testfile | cut -d',' -f2 || true`
+fi
+
 cd $nuttx || { echo "ERROR: failed to CD to $nuttx"; exit 1; }
+
+function exportandimport {
+  # Do nothing until we finish to build the nuttx.
+  if [ ! -f nuttx ]; then
+    return $fail
+  fi
+
+  # If CONFIG_BUILD_KERNEL=y does not exist in .config, do nothing
+  if ! grep CONFIG_BUILD_KERNEL=y .config 1>/dev/null; then
+    return $fail
+  fi
+
+  if ! ${MAKE} export ${JOPTION} 1>/dev/null; then
+    fail=1
+    return $fail
+  fi
+
+  pushd ../apps/
+
+  if ! ./tools/mkimport.sh -z -x ../nuttx/nuttx-export-*.tar.gz 1>/dev/null; then
+    fail=1
+    popd
+    return $fail
+  fi
+
+  if ! ${MAKE} import ${JOPTION} 1>/dev/null; then
+    fail=1
+  fi
+  popd
+  return $fail
+}
+
+function compressartifacts {
+  local target_path=$1
+  local target_name=$2
+
+  pushd $target_path >/dev/null
+
+  tar zcf ${target_name}.tar.gz ${target_name}
+  rm -rf ${target_name}
+
+  popd >/dev/null
+}
 
 function makefunc {
   if ! ${MAKE} ${MAKE_FLAGS} "${EXTRA_FLAGS}" ${JOPTION} $@ 1>/dev/null; then
     fail=1
+  else
+    exportandimport
   fi
+
+  return $fail
+}
+
+function checkfunc {
+  build_cmd="${MAKE} ${MAKE_FLAGS} \"${EXTRA_FLAGS}\" ${JOPTION} 1>/dev/null"
+
+  local config_sub_path=$(echo "$config" | sed "s/:/\//")
+  local sub_target_name=${config_sub_path#$(dirname "${config_sub_path}")/}
+  local codechecker_dir=${ARTIFACTDIR}/codechecker_logs/${config_sub_path}
+
+  mkdir -p "${codechecker_dir}"
+
+  echo "    Checking NuttX by Codechecker..."
+  CodeChecker check -b "${build_cmd}" -o "${codechecker_dir}/logs" -e sensitive --ctu
+  codecheck_ret=$?
+  echo "    Storing analysis result to CodeChecker..."
+  echo "      Generating HTML report..."
+  CodeChecker parse --export html --output "${codechecker_dir}/html" "${codechecker_dir}/logs" 1>/dev/null
+  echo "      Compressing logs..."
+  compressartifacts "$(dirname "${codechecker_dir}")" "${sub_target_name}"
+
+# If you need to stop CI, uncomment the following line.
+#  if [ $codecheck_ret -ne 0 ]; then
+#    fail=1
+#  fi
 
   return $fail
 }
@@ -184,15 +284,15 @@ function makefunc {
 
 function distclean {
   echo "  Cleaning..."
-  if [ -f .config ]; then
-    if [ ${GITCLEAN} -eq 1 ]; then
+  if [ -f .config ] || [ -f build/.config ]; then
+    if [ ${GITCLEAN} -eq 1 ] || [ ! -z ${cmake} ]; then
       git -C $nuttx clean -xfdq
       git -C $APPSDIR clean -xfdq
     else
       makefunc distclean
 
       # Remove .version manually because this file is shipped with
-      # the release package and then distclean has to keep it
+      # the release package and then distclean has to keep it.
 
       rm -f .version
 
@@ -218,18 +318,17 @@ function distclean {
 
 # Configure for the next build
 
-function configure {
-  echo "  Configuring..."
-  if ! ./tools/configure.sh ${HOPTION} $config ${JOPTION} 1>/dev/null; then
+function configure_default {
+  if ! ./tools/configure.sh ${HOPTION} ${STORE} $config ${JOPTION} 1>/dev/null; then
     fail=1
   fi
 
   if [ "X$toolchain" != "X" ]; then
-    setting=`grep _TOOLCHAIN_ $nuttx/.config | grep -v CONFIG_ARCH_TOOLCHAIN_* | grep =y`
-    varname=`echo $setting | cut -d'=' -f1`
-    if [ ! -z "$varname" ]; then
-      echo "  Disabling $varname"
-      kconfig-tweak --file $nuttx/.config -d $varname
+    setting=`grep _TOOLCHAIN_ $nuttx/.config | grep -v CONFIG_TOOLCHAIN_WINDOWS | grep -v CONFIG_ARCH_TOOLCHAIN_* | grep =y`
+    original_toolchain=`echo $setting | cut -d'=' -f1`
+    if [ ! -z "$original_toolchain" ]; then
+      echo "  Disabling $original_toolchain"
+      kconfig-tweak --file $nuttx/.config -d $original_toolchain
     fi
 
     echo "  Enabling $toolchain"
@@ -241,17 +340,81 @@ function configure {
   return $fail
 }
 
+function configure_cmake {
+  if ! cmake -B build -DBOARD_CONFIG=$config -GNinja 1>/dev/null; then
+    cmake -B build -DBOARD_CONFIG=$config -GNinja
+    fail=1
+  fi
+
+  if [ "X$toolchain" != "X" ]; then
+    setting=`grep _TOOLCHAIN_ $nuttx/build/.config | grep -v CONFIG_TOOLCHAIN_WINDOWS | grep -v CONFIG_ARCH_TOOLCHAIN_* | grep =y`
+    original_toolchain=`echo $setting | cut -d'=' -f1`
+    if [ ! -z "$original_toolchain" ]; then
+      echo "  Disabling $original_toolchain"
+      kconfig-tweak --file $nuttx/build/.config -d $original_toolchain
+    fi
+
+    echo "  Enabling $toolchain"
+    kconfig-tweak --file $nuttx/build/.config -e $toolchain
+  fi
+
+  return $fail
+}
+
+function configure {
+  echo "  Configuring..."
+  if [ ! -z ${cmake} ]; then
+    configure_cmake
+  else
+    configure_default
+  fi
+}
+
 # Perform the next build
 
-function build {
-  echo "  Building NuttX..."
-  makefunc
+function build_default {
+  if [ "${CODECHECKER}" -eq 1 ]; then
+    checkfunc
+  else
+    makefunc
+  fi
+
   if [ ${SAVEARTIFACTS} -eq 1 ]; then
     artifactconfigdir=$ARTIFACTDIR/$(echo $config | sed "s/:/\//")/
     mkdir -p $artifactconfigdir
     xargs -I "{}" cp "{}" $artifactconfigdir < $nuttx/nuttx.manifest
   fi
 
+  return $fail
+}
+
+function build_cmake {
+  if ! cmake --build build 1>/dev/null; then
+    cmake --build build
+    fail=1
+  fi
+
+  if [ ${SAVEARTIFACTS} -eq 1 ]; then
+    artifactconfigdir=$ARTIFACTDIR/$(echo $config | sed "s/:/\//")/
+    mkdir -p $artifactconfigdir
+    cd $nuttx/build
+    xargs -I "{}" cp "{}" $artifactconfigdir < $nuttx/build/nuttx.manifest
+    cd $nuttx
+  fi
+
+  return $fail
+}
+
+function build {
+  echo "  Building NuttX..."
+  if [ ! -z ${cmake} ]; then
+    build_cmake
+  else
+    build_default
+  fi
+}
+
+function refresh_default {
   # Ensure defconfig in the canonical form
 
   if ! ./tools/refresh.sh --silent $config; then
@@ -276,6 +439,69 @@ function build {
   return $fail
 }
 
+function refresh_cmake {
+  # Ensure defconfig in the canonical form
+
+  if [ "X$toolchain" != "X" ]; then
+    if [ ! -z "$original_toolchain" ]; then
+      kconfig-tweak --file $nuttx/build/.config -e $original_toolchain
+    fi
+
+    kconfig-tweak --file $nuttx/build/.config -d $toolchain
+  fi
+
+  if ! cmake --build build -t refreshsilent 1>/dev/null; then
+    cmake --build build -t refreshsilent
+    fail=1
+  fi
+
+  rm -rf build
+
+  # Ensure nuttx and apps directory in clean state
+
+  if [ ${CHECKCLEAN} -ne 0 ]; then
+    if [ -d $nuttx/.git ] || [ -d $APPSDIR/.git ]; then
+      if [[ -n $(git -C $nuttx status -s) ]]; then
+        git -C $nuttx status
+        fail=1
+      fi
+      if [[ -n $(git -C $APPSDIR status -s) ]]; then
+        git -C $APPSDIR status
+        fail=1
+      fi
+    fi
+  fi
+
+  # Use -f option twice to remove git sub-repository
+
+  git -C $nuttx clean -f -xfdq
+  git -C $APPSDIR clean -f -xfdq
+
+  return $fail
+}
+
+function refresh {
+  # Ensure defconfig in the canonical form
+
+  if [ ! -z ${cmake} ]; then
+    refresh_cmake
+  else
+    refresh_default
+  fi
+}
+
+function run {
+  if [ ${RUN} -ne 0 ] && [ -z ${cmake} ]; then
+    run_script="$path/run"
+    if [ -x $run_script ]; then
+      echo "  Running NuttX..."
+      if ! $run_script; then
+        fail=1
+      fi
+    fi
+  fi
+  return $fail
+}
 # Coordinate the steps for the next build test
 
 function dotest {
@@ -283,12 +509,23 @@ function dotest {
   config=`echo $1 | cut -d',' -f1`
   check=${HOST},${config/\//:}
 
+  skip=0
   for re in $blacklist; do
     if [[ "${check}" =~ ${re:1}$ ]]; then
       echo "Skipping: $1"
-      return
+      skip=1
     fi
   done
+
+  unset cmake
+  if [ ${NINJACMAKE} -eq 1 ]; then
+    for l in $cmakelist; do
+      if [[ "${config/\//:}" == "${l}" ]]; then
+        echo "Cmake in present: $1"
+        cmake=1
+      fi
+    done
+  fi
 
   echo "Configuration/Tool: $1"
   if [ ${PRINTLISTONLY} -eq 1 ]; then
@@ -317,6 +554,7 @@ function dotest {
   fi
 
   unset toolchain
+  unset original_toolchain
   if [ "X$config" != "X$1" ]; then
     toolchain=`echo $1 | cut -d',' -f2`
     if [ -z "$toolchain" ]; then
@@ -325,11 +563,17 @@ function dotest {
   fi
 
   # Perform the build test
-
+  echo $(date '+%Y-%m-%d %H:%M:%S')
   echo "------------------------------------------------------------------------------------"
   distclean
-  configure
-  build
+  if [ ${skip} -ne 1 ]; then
+    configure
+    build
+    run
+    refresh
+  else
+    echo "  Skipping: $1"
+  fi
 }
 
 # Perform the build test for each entry in the test list file

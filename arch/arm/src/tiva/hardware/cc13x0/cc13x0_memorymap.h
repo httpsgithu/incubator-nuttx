@@ -1,14 +1,10 @@
 /****************************************************************************
  * arch/arm/src/tiva/hardware/cc13x0/cc13x0_memorymap.h
  *
- *   Copyright (C) 2018 Gregory Nutt. All rights reserved.
- *   Author: Gregory Nutt <gnutt@nuttx.org>
- *
- * Technical content derives from a TI header file that has a compatible
- * BSD license:
- *
- *   Copyright (c) 2015-2017, Texas Instruments Incorporated
- *   All rights reserved.
+ * SPDX-License-Identifier: BSD-3-Clause
+ * SPDX-FileCopyrightText: 2018 Gregory Nutt. All rights reserved.
+ * SPDX-FileCopyrightText: 2015-2017, Texas Instruments Incorporated
+ * SPDX-FileContributor: Gregory Nutt <gnutt@nuttx.org>
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -39,8 +35,8 @@
  *
  ****************************************************************************/
 
-#ifndef __ARCH_ARM_SRC_TIVA_HARDWARE_C13X0_C13X0_MEMORYMAP_H
-#define __ARCH_ARM_SRC_TIVA_HARDWARE_C13X0_C13X0_MEMORYMAP_H
+#ifndef __ARCH_ARM_SRC_TIVA_HARDWARE_CC13X0_CC13X0_MEMORYMAP_H
+#define __ARCH_ARM_SRC_TIVA_HARDWARE_CC13X0_CC13X0_MEMORYMAP_H
 
 /****************************************************************************
  * Pre-processor Definitions
@@ -159,4 +155,4 @@
 #define TIVA_CPU_TIPROP_BASE          0xe00fe000 /* CPU_TIPROP */
 #define TIVA_CPU_ROM_TABLE_BASE       0xe00ff000 /* CPU_ROM_TABLE */
 
-#endif /* __ARCH_ARM_SRC_TIVA_HARDWARE_C13X0_C13X0_MEMORYMAP_H */
+#endif /* __ARCH_ARM_SRC_TIVA_HARDWARE_CC13X0_CC13X0_MEMORYMAP_H */

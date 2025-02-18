@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/stm32l4/stm32l4_can.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -113,7 +115,7 @@ extern "C"
  ****************************************************************************/
 
 struct can_dev_s;
-FAR struct can_dev_s *stm32l4can_initialize(int port);
+struct can_dev_s *stm32l4can_initialize(int port);
 
 #undef EXTERN
 #if defined(__cplusplus)

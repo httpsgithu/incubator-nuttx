@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/z80/include/z180/irq.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -74,10 +76,10 @@
 /* INT0
  *
  * INT0 (only) has 3 different software programmable interrupt response
- * modes—Mode 0, Mode 1 and Mode 2.
+ * modes: Mode 0, Mode 1 and Mode 2.
  *
  * - INT0 Mode 0. During the interrupt acknowledge cycle, an instruction
- *   is fetched from the data bus (DO–D7) at the rising edge of T3.
+ *   is fetched from the data bus (DO-D7) at the rising edge of T3.
  *
  * - INT0 Mode 1. The PC is stacked and instruction execution restarts at
  *   logical address 0x0038.
@@ -172,12 +174,6 @@ struct xcptcontext
   /* Register save area */
 
   chipreg_t regs[XCPTCONTEXT_REGS];
-
-  /* The following function pointer is non-zero if there
-   * are pending signals to be processed.
-   */
-
-  CODE void *sigdeliver; /* Actual type is sig_deliver_t */
 
   /* The following retains that state during signal execution
    *

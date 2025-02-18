@@ -1,6 +1,8 @@
 /****************************************************************************
  * drivers/sensors/hdc1008.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -31,10 +33,12 @@
 #include <time.h>
 
 #include <nuttx/kmalloc.h>
+#include <nuttx/mutex.h>
 #include <nuttx/fs/fs.h>
 #include <nuttx/i2c/i2c_master.h>
 #include <nuttx/sensors/hdc1008.h>
 #include <nuttx/random.h>
+#include <nuttx/signal.h>
 
 #if defined(CONFIG_I2C) && defined(CONFIG_SENSORS_HDC1008)
 
@@ -110,7 +114,7 @@ struct hdc1008_dev_s
 #ifndef CONFIG_DISABLE_PSEUDOFS_OPERATIONS
   int16_t crefs;                /* Number of open references */
 #endif
-  sem_t devsem;
+  mutex_t devlock;
 };
 
 /****************************************************************************
@@ -159,7 +163,11 @@ static const struct file_operations g_hdc1008fops =
   hdc1008_write,    /* write */
   NULL,             /* seek */
   hdc1008_ioctl,    /* ioctl */
-  NULL              /* poll */
+  NULL,             /* mmap */
+  NULL,             /* truncate */
+  NULL,             /* poll */
+  NULL,             /* readv */
+  NULL              /* writev */
 #ifndef CONFIG_DISABLE_PSEUDOFS_OPERATIONS
   , hdc1008_unlink  /* unlink */
 #endif
@@ -512,12 +520,11 @@ static int hdc1008_putreg(FAR struct hdc1008_dev_s *priv, uint8_t regaddr,
 #ifndef CONFIG_DISABLE_PSEUDOFS_OPERATIONS
 static int hdc1008_open(FAR struct file *filep)
 {
-  FAR struct inode *inode         = filep->f_inode;
-  FAR struct hdc1008_dev_s *priv  =
-    (FAR struct hdc1008_dev_s *)inode->i_private;
+  FAR struct inode *inode        = filep->f_inode;
+  FAR struct hdc1008_dev_s *priv = inode->i_private;
   int ret;
 
-  ret = nxsem_wait_uninterruptible(&priv->devsem);
+  ret = nxmutex_lock(&priv->devlock);
   if (ret < 0)
     {
       return ret;
@@ -528,8 +535,7 @@ static int hdc1008_open(FAR struct file *filep)
   ++priv->crefs;
   DEBUGASSERT(priv->crefs > 0);
 
-  nxsem_post(&priv->devsem);
-
+  nxmutex_unlock(&priv->devlock);
   return 0;
 }
 #endif
@@ -545,12 +551,11 @@ static int hdc1008_open(FAR struct file *filep)
 #ifndef CONFIG_DISABLE_PSEUDOFS_OPERATIONS
 static int hdc1008_close(FAR struct file *filep)
 {
-  FAR struct inode *inode         = filep->f_inode;
-  FAR struct hdc1008_dev_s *priv  =
-    (FAR struct hdc1008_dev_s *)inode->i_private;
+  FAR struct inode *inode        = filep->f_inode;
+  FAR struct hdc1008_dev_s *priv = inode->i_private;
   int ret;
 
-  ret = nxsem_wait_uninterruptible(&priv->devsem);
+  ret = nxmutex_lock(&priv->devlock);
   if (ret < 0)
     {
       return ret;
@@ -567,12 +572,12 @@ static int hdc1008_close(FAR struct file *filep)
 
   if ((priv->crefs <= 0) && priv->unlinked)
     {
-      nxsem_destroy(&priv->devsem);
+      nxmutex_destroy(&priv->devlock);
       kmm_free(priv);
       return OK;
     }
 
-  nxsem_post(&priv->devsem);
+  nxmutex_unlock(&priv->devlock);
   return OK;
 }
 #endif
@@ -588,14 +593,11 @@ static int hdc1008_close(FAR struct file *filep)
 static ssize_t hdc1008_read(FAR struct file *filep, FAR char *buffer,
                             size_t buflen)
 {
-  FAR struct inode *inode         = filep->f_inode;
-  FAR struct hdc1008_dev_s *priv  =
-    (FAR struct hdc1008_dev_s *)inode->i_private;
+  FAR struct inode *inode        = filep->f_inode;
+  FAR struct hdc1008_dev_s *priv = inode->i_private;
   int ret;
   int len = 0;
   struct hdc1008_conv_data_s data;
-
-  DEBUGASSERT(filep != NULL);
 
   /* Sanity check of input buffer argument */
 
@@ -606,7 +608,7 @@ static ssize_t hdc1008_read(FAR struct file *filep, FAR char *buffer,
 
   /* Get exclusive access */
 
-  ret = nxsem_wait_uninterruptible(&priv->devsem);
+  ret = nxmutex_lock(&priv->devlock);
   if (ret < 0)
     {
       return (ssize_t)ret;
@@ -617,7 +619,7 @@ static ssize_t hdc1008_read(FAR struct file *filep, FAR char *buffer,
     {
       /* The driver is unliked, access is not allowed */
 
-      nxsem_post(&priv->devsem);
+      nxmutex_unlock(&priv->devlock);
       return -ENODEV;
     }
 #endif
@@ -625,13 +627,13 @@ static ssize_t hdc1008_read(FAR struct file *filep, FAR char *buffer,
   ret = hdc1008_measure_current_mode(priv, &data);
   if (ret < 0)
     {
-      nxsem_post(&priv->devsem);
+      nxmutex_unlock(&priv->devlock);
       return ret;
     }
 
   if (priv->mode == HDC1008_MEAS_TEMPERATURE)
     {
-      len = snprintf(buffer, buflen, "%d.%d", data.temperature / 100,
+      len = snprintf(buffer, buflen, "%d.%02d", data.temperature / 100,
                      data.temperature % 100);
     }
   else if (priv->mode == HDC1008_MEAS_HUMIDITY)
@@ -641,18 +643,17 @@ static ssize_t hdc1008_read(FAR struct file *filep, FAR char *buffer,
     }
   else if (priv->mode == HDC1008_MEAS_T_AND_RH)
     {
-      len = snprintf(buffer, buflen, "%d.%d %d.%d",
+      len = snprintf(buffer, buflen, "%d.%02d %d.%d",
                      data.temperature / 100, data.temperature % 100,
                      data.humidity / 10, data.humidity % 10);
     }
   else
     {
-      nxsem_post(&priv->devsem);
+      nxmutex_unlock(&priv->devlock);
       return -EINVAL;
     }
 
-  nxsem_post(&priv->devsem);
-
+  nxmutex_unlock(&priv->devlock);
   return len;
 }
 
@@ -737,14 +738,13 @@ static ssize_t hdc1008_write(FAR struct file *filep, FAR const char *buffer,
 
 static int hdc1008_ioctl(FAR struct file *filep, int cmd, unsigned long arg)
 {
-  FAR struct inode *inode         = filep->f_inode;
-  FAR struct hdc1008_dev_s *priv  =
-    (FAR struct hdc1008_dev_s *)inode->i_private;
+  FAR struct inode *inode        = filep->f_inode;
+  FAR struct hdc1008_dev_s *priv = inode->i_private;
   int ret;
 
   /* Get exclusive access */
 
-  ret = nxsem_wait_uninterruptible(&priv->devsem);
+  ret = nxmutex_lock(&priv->devlock);
   if (ret < 0)
     {
       return (ssize_t)ret;
@@ -755,7 +755,7 @@ static int hdc1008_ioctl(FAR struct file *filep, int cmd, unsigned long arg)
     {
       /* The driver is unliked, access is not allowed */
 
-      nxsem_post(&priv->devsem);
+      nxmutex_unlock(&priv->devlock);
       return -ENODEV;
     }
 #endif
@@ -803,7 +803,7 @@ static int hdc1008_ioctl(FAR struct file *filep, int cmd, unsigned long arg)
           ret = hdc1008_getreg(priv, HDC1008_REG_CONFIGURATION, &reg);
           if (ret >= 0)
             {
-              *(uint16_t *)arg = reg;
+              *(FAR uint16_t *)arg = reg;
             }
 
           hdc1008_dbg("read config ret: %d\n", ret);
@@ -828,8 +828,7 @@ static int hdc1008_ioctl(FAR struct file *filep, int cmd, unsigned long arg)
         }
     }
 
-  nxsem_post(&priv->devsem);
-
+  nxmutex_unlock(&priv->devlock);
   return ret;
 }
 
@@ -848,9 +847,9 @@ static int hdc1008_unlink(FAR struct inode *inode)
   int ret;
 
   DEBUGASSERT((inode != NULL) && (inode->i_private != NULL));
-  priv = (FAR struct hdc1008_dev_s *)inode->i_private;
+  priv = inode->i_private;
 
-  ret = nxsem_wait_uninterruptible(&priv->devsem);
+  ret = nxmutex_lock(&priv->devlock);
   if (ret < 0)
     {
       return ret;
@@ -860,7 +859,7 @@ static int hdc1008_unlink(FAR struct inode *inode)
 
   if (priv->crefs <= 0)
     {
-      nxsem_destroy(&priv->devsem);
+      nxmutex_destroy(&priv->devlock);
       kmm_free(priv);
       return OK;
     }
@@ -870,7 +869,7 @@ static int hdc1008_unlink(FAR struct inode *inode)
    */
 
   priv->unlinked = true;
-  nxsem_post(&priv->devsem);
+  nxmutex_unlock(&priv->devlock);
   return OK;
 }
 #endif
@@ -949,7 +948,7 @@ int hdc1008_register(FAR const char *devpath, FAR struct i2c_master_s *i2c,
   /* Initialize the driver structure */
 
   priv =
-    (FAR struct hdc1008_dev_s *)kmm_zalloc(sizeof(struct hdc1008_dev_s));
+    kmm_zalloc(sizeof(struct hdc1008_dev_s));
 
   if (priv == NULL)
     {
@@ -960,7 +959,7 @@ int hdc1008_register(FAR const char *devpath, FAR struct i2c_master_s *i2c,
   priv->i2c = i2c;
   priv->addr = addr;
 
-  nxsem_init(&priv->devsem, 0, 1);
+  nxmutex_init(&priv->devlock);
 
   /* Register the driver */
 
@@ -968,8 +967,9 @@ int hdc1008_register(FAR const char *devpath, FAR struct i2c_master_s *i2c,
   if (ret < 0)
     {
       snerr("ERROR: Failed to register driver: %d\n", ret);
-      nxsem_destroy(&priv->devsem);
+      nxmutex_destroy(&priv->devlock);
       kmm_free(priv);
+      return ret;
     }
 
   sninfo("driver registered\n");
@@ -986,7 +986,7 @@ int hdc1008_register(FAR const char *devpath, FAR struct i2c_master_s *i2c,
   if (ret < 0)
     {
       snerr("ERROR: failed to read default configuration\n");
-      nxsem_destroy(&priv->devsem);
+      nxmutex_destroy(&priv->devlock);
       kmm_free(priv);
       return ret;
     }
@@ -998,7 +998,7 @@ int hdc1008_register(FAR const char *devpath, FAR struct i2c_master_s *i2c,
   if (ret < 0)
     {
       snerr("ERROR: failed to set default configuration: %d\n", ret);
-      nxsem_destroy(&priv->devsem);
+      nxmutex_destroy(&priv->devlock);
       kmm_free(priv);
       return ret;
     }

@@ -1,6 +1,8 @@
 /****************************************************************************
  * drivers/video/isx012.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -30,6 +32,7 @@
 #include <errno.h>
 #include <debug.h>
 
+#include <nuttx/mutex.h>
 #include <nuttx/arch.h>
 #include <nuttx/signal.h>
 #include <nuttx/fs/fs.h>
@@ -138,7 +141,23 @@
 #define VALIDATE_VALUE(val, min, max, step) (((val >= min) && \
                                               (val <= max) && \
                                               (((val - min) % step) == 0) ? \
-                                              OK : -EINVAL))
+                                              OK : -ERANGE))
+
+#define ISX012_CHIPID_L (0x0000c460)
+#define ISX012_CHIPID_H (0x00005516)
+
+#define BASE_HSIZE_FOR_CLIP_OFFSET (2592)
+#define BASE_VSIZE_FOR_CLIP_OFFSET (1944)
+
+#define ZOOM_UNIT        (0x0100)
+#define CLIP_OFFSET_UNIT (0x0010)
+#define CLIP_SIZE_UNIT   (8)
+#define RESCALE_FOR_CLIP(v, a, b)  (((v) * (a)) / (b))
+
+/* The number of whole image splits for spot position decision. */
+
+#define ISX012_SPOT_POSITION_SPLIT_NUM_X (9)
+#define ISX012_SPOT_POSITION_SPLIT_NUM_Y (7)
 
 /****************************************************************************
  * Private Types
@@ -163,13 +182,26 @@ struct isx012_reg_s
 
 typedef struct isx012_reg_s isx012_reg_t;
 
+struct isx012_rect_s
+{
+  int32_t left;
+  int32_t top;
+  uint32_t width;
+  uint32_t height;
+};
+
+typedef struct isx012_rect_s isx012_rect_t;
+
 struct isx012_dev_s
 {
+  struct imgsensor_s      sensor;
+  mutex_t                 i2c_lock;
   FAR struct i2c_master_s *i2c;        /* I2C interface */
-  uint8_t                 i2c_addr;    /* I2C address */
-  int                     i2c_freq;    /* Frequency */
+  struct i2c_config_s     i2c_cfg;     /* I2C config */
   isx012_state_t          state;       /* ISX012 status */
   uint8_t                 mode;        /* ISX012 mode */
+  isx012_rect_t           clip_video;  /* Clip information for VIDEO */
+  isx012_rect_t           clip_still;  /* Clip information for STILL */
 };
 
 typedef struct isx012_dev_s isx012_dev_t;
@@ -182,62 +214,63 @@ typedef struct isx012_dev_s isx012_dev_t;
 
 /* register operations */
 
-static uint16_t isx012_getreg(isx012_dev_t *priv,
+static uint16_t isx012_getreg(FAR isx012_dev_t *priv,
                               uint16_t regaddr, uint16_t regsize);
-static int     isx012_putreg(isx012_dev_t *priv, uint16_t regaddr,
-                             uint16_t regval, uint16_t regsize);
-static int     isx012_putreglist(isx012_dev_t *priv,
+static int     isx012_putreg(FAR isx012_dev_t *priv, uint16_t regaddr,
+                             uint32_t regval, uint16_t regsize);
+static int     isx012_putreglist(FAR isx012_dev_t *priv,
                          FAR const isx012_reg_t *reglist, size_t nentries);
 #ifdef ISX012_CHECK_IN_DETAIL
-static int     isx012_putregs(isx012_dev_t *priv, uint16_t regaddr,
-                              uint8_t *regvals, uint8_t regsize);
 static int     isx012_chipid(FAR struct i2c_master_s *i2c);
 #endif
 
-static int isx012_chk_int_state(isx012_dev_t *priv,
+static int isx012_chk_int_state(FAR isx012_dev_t *priv,
                                 uint8_t  sts, uint32_t delay_time,
                                 uint32_t wait_time, uint32_t timeout);
-static int isx012_set_mode_param(isx012_dev_t *priv,
+static int isx012_set_mode_param(FAR isx012_dev_t *priv,
                                  imgsensor_stream_type_t type,
                                  uint8_t nr_fmt,
-                                 imgsensor_format_t *fmt,
-                                 imgsensor_interval_t *interval);
-static int isx012_change_camera_mode(isx012_dev_t *priv, uint8_t mode);
-static int isx012_change_device_state(isx012_dev_t *priv,
+                                 FAR imgsensor_format_t *fmt,
+                                 FAR imgsensor_interval_t *interval);
+static int isx012_change_camera_mode(FAR isx012_dev_t *priv, uint8_t mode);
+static int isx012_change_device_state(FAR isx012_dev_t *priv,
                                       isx012_state_t state);
 static int isx012_replace_frameinterval_to_regval
                 (FAR imgsensor_interval_t *interval);
-static int8_t isx012_get_maximum_fps
-                (uint8_t nr_datafmt,
-                 FAR imgsensor_format_t *datafmt);
+static int8_t isx012_get_maximum_fps(uint8_t nr_datafmt,
+                                     FAR imgsensor_format_t *datafmt);
 static int isx012_set_shd(FAR isx012_dev_t *priv);
 static bool is_movie_needed(uint8_t fmt, uint8_t fps);
 
 /* image sensor device operations interface */
 
-static int isx012_init(void);
-static int isx012_uninit(void);
-static int isx012_validate_frame_setting(imgsensor_stream_type_t type,
+static bool isx012_is_available(FAR struct imgsensor_s *sensor);
+static int isx012_init(FAR struct imgsensor_s *sensor);
+static int isx012_uninit(FAR struct imgsensor_s *sensor);
+static FAR const char *
+isx012_get_driver_name(FAR struct imgsensor_s *sensor);
+static int isx012_validate_frame_setting(FAR struct imgsensor_s *sensor,
+                                         imgsensor_stream_type_t type,
                                          uint8_t nr_datafmt,
                                          FAR imgsensor_format_t *datafmts,
                                          FAR imgsensor_interval_t *interval);
-static int isx012_start_capture(imgsensor_stream_type_t type,
+static int isx012_start_capture(FAR struct imgsensor_s *sensor,
+                                imgsensor_stream_type_t type,
                                 uint8_t nr_datafmt,
                                 FAR imgsensor_format_t *datafmts,
                                 FAR imgsensor_interval_t *interval);
-static int isx012_stop_capture(imgsensor_stream_type_t type);
-static int isx012_get_supported_value
-             (uint32_t id, FAR imgsensor_supported_value_t *value);
-static int isx012_get_value
-             (uint32_t id, uint32_t size, FAR imgsensor_value_t *value);
-static int isx012_set_value
-             (uint32_t id, uint32_t size, imgsensor_value_t value);
+static int isx012_stop_capture(FAR struct imgsensor_s *sensor,
+                               imgsensor_stream_type_t type);
+static int isx012_get_supported_value(FAR struct imgsensor_s *sensor,
+             uint32_t id, FAR imgsensor_supported_value_t *value);
+static int isx012_get_value(FAR struct imgsensor_s *sensor,
+             uint32_t id, uint32_t size, FAR imgsensor_value_t *value);
+static int isx012_set_value(FAR struct imgsensor_s *sensor,
+             uint32_t id, uint32_t size, imgsensor_value_t value);
 
 /****************************************************************************
  * Private Data
  ****************************************************************************/
-
-static isx012_dev_t   g_isx012_private;
 
 #ifndef ISX012_NOT_USE_NSTBY
 static const isx012_reg_t g_isx012_presleep[] =
@@ -292,6 +325,7 @@ static const isx012_reg_t g_isx012_def_init[] =
   {FASTMOVE_TIMEOUT,  0x2d, 0x01},
   {YGAMMA_MODE,       0x01, 0x01},
   {INT_QLTY2,         0x50, 0x01},
+  {JPEG_PRED_MODE,    0x00, 0x01},
 };
 
 #define ISX012_RESET_NENTRIES ARRAY_NENTRIES(g_isx012_def_init)
@@ -508,7 +542,7 @@ static const isx012_reg_t g_isx012_shd_wb[] =
 
 #define ISX012_SHD_WB_NENTRIES ARRAY_NENTRIES(g_isx012_shd_wb)
 
-static int32_t g_isx012_colorfx_actual[] =
+static const int32_t g_isx012_colorfx_actual[] =
 {
   IMGSENSOR_COLORFX_NONE,
   IMGSENSOR_COLORFX_BW,
@@ -519,7 +553,7 @@ static int32_t g_isx012_colorfx_actual[] =
   IMGSENSOR_COLORFX_PASTEL
 };
 
-static uint8_t g_isx012_colorfx_regval[] =
+static const uint8_t g_isx012_colorfx_regval[] =
 {
   REGVAL_EFFECT_NONE,
   REGVAL_EFFECT_MONOTONE,
@@ -530,7 +564,7 @@ static uint8_t g_isx012_colorfx_regval[] =
   REGVAL_EFFECT_PASTEL
 };
 
-static int32_t g_isx012_presetwb_actual[] =
+static const int32_t g_isx012_presetwb_actual[] =
 {
   IMGSENSOR_WHITE_BALANCE_AUTO,
   IMGSENSOR_WHITE_BALANCE_INCANDESCENT,
@@ -540,7 +574,7 @@ static int32_t g_isx012_presetwb_actual[] =
   IMGSENSOR_WHITE_BALANCE_SHADE
 };
 
-static uint8_t g_isx012_presetwb_regval[] =
+static const uint8_t g_isx012_presetwb_regval[] =
 {
   REGVAL_AWB_ATM,
   REGVAL_AWB_LIGHTBULB,
@@ -550,7 +584,7 @@ static uint8_t g_isx012_presetwb_regval[] =
   REGVAL_AWB_SHADE
 };
 
-static int32_t g_isx012_photometry_actual[] =
+static const int32_t g_isx012_photometry_actual[] =
 {
   IMGSENSOR_EXPOSURE_METERING_AVERAGE,
   IMGSENSOR_EXPOSURE_METERING_CENTER_WEIGHTED,
@@ -558,7 +592,7 @@ static int32_t g_isx012_photometry_actual[] =
   IMGSENSOR_EXPOSURE_METERING_MATRIX
 };
 
-static uint8_t g_isx012_photometry_regval[] =
+static const uint8_t g_isx012_photometry_regval[] =
 {
   REGVAL_PHOTOMETRY_AVERAGE,
   REGVAL_PHOTOMETRY_CENTERWEIGHT,
@@ -566,7 +600,7 @@ static uint8_t g_isx012_photometry_regval[] =
   REGVAL_PHOTOMETRY_MULTIPATTERN
 };
 
-static int32_t g_isx012_iso_actual[] =
+static const int32_t g_isx012_iso_actual[] =
 {
   25 * 1000,
   32 * 1000,
@@ -589,7 +623,7 @@ static int32_t g_isx012_iso_actual[] =
   1600 * 1000
 };
 
-static uint8_t g_isx012_iso_regval[] =
+static const uint8_t g_isx012_iso_regval[] =
 {
   REGVAL_ISO_25,
   REGVAL_ISO_32,
@@ -612,94 +646,105 @@ static uint8_t g_isx012_iso_regval[] =
   REGVAL_ISO_1600
 };
 
-static struct imgsensor_ops_s g_isx012_ops =
+static const struct imgsensor_ops_s g_isx012_ops =
 {
-  .init                   = isx012_init,
-  .uninit                 = isx012_uninit,
-  .validate_frame_setting = isx012_validate_frame_setting,
-  .start_capture          = isx012_start_capture,
-  .stop_capture           = isx012_stop_capture,
-  .get_supported_value    = isx012_get_supported_value,
-  .get_value              = isx012_get_value,
-  .set_value              = isx012_set_value,
+  isx012_is_available,                  /* is HW available */
+  isx012_init,                          /* init */
+  isx012_uninit,                        /* uninit */
+  isx012_get_driver_name,               /* get driver name */
+  isx012_validate_frame_setting,        /* validate_frame_setting */
+  isx012_start_capture,                 /* start_capture */
+  isx012_stop_capture,                  /* stop_capture */
+  NULL,                                 /* get_frame_interval */
+  isx012_get_supported_value,           /* get_supported_value */
+  isx012_get_value,                     /* get_value */
+  isx012_set_value                      /* set_value */
+};
+
+static isx012_dev_t g_isx012_private =
+{
+  {
+    &g_isx012_ops,
+  },
+  NXMUTEX_INITIALIZER,
 };
 
 /****************************************************************************
  * Private Functions
  ****************************************************************************/
 
-static uint16_t isx012_getreg(isx012_dev_t *priv,
+static uint16_t isx012_getreg(FAR isx012_dev_t *priv,
                               uint16_t regaddr, uint16_t regsize)
 {
-  struct i2c_config_s config;
-  volatile uint16_t regval = 0;
-  volatile uint8_t buffer[2];
+  uint16_t regval = 0;
+  uint8_t buffer[2];
   int ret;
 
-  /* Set up the I2C configuration */
-
-  config.frequency = priv->i2c_freq;
-  config.address   = priv->i2c_addr;
-  config.addrlen   = 7;
   buffer[0] = regaddr >> 8;
   buffer[1] = regaddr & 0xff;
 
+  nxmutex_lock(&priv->i2c_lock);
+
   /* Write the register address */
 
-  ret = i2c_write(priv->i2c, &config, (uint8_t *)buffer, 2);
+  ret = i2c_write(priv->i2c, &priv->i2c_cfg, (FAR uint8_t *)buffer, 2);
   if (ret < 0)
     {
       verr("i2c_write failed: %d\n", ret);
-      return 0;
     }
-
-  /* Restart and read 16bits from the register */
-
-  ret = i2c_read(priv->i2c, &config, (uint8_t *)buffer, regsize);
-  if (ret < 0)
+  else
     {
-      verr("i2c_read failed: %d\n", ret);
-      return 0;
+      /* Restart and read 16bits from the register */
+
+      ret = i2c_read(priv->i2c, &priv->i2c_cfg,
+                     (FAR uint8_t *)buffer, regsize);
+      if (ret < 0)
+        {
+          verr("i2c_read failed: %d\n", ret);
+        }
     }
 
-  memcpy((uint8_t *)&regval, (uint8_t *)buffer, regsize);
+  nxmutex_unlock(&priv->i2c_lock);
+
+  if (ret >= 0)
+    {
+      memcpy((FAR uint8_t *)&regval, (FAR uint8_t *)buffer, regsize);
+    }
 
   return regval;
 }
 
-static int isx012_putreg(isx012_dev_t *priv,
-                         uint16_t regaddr, uint16_t regval, uint16_t regsize)
+static int isx012_putreg(FAR isx012_dev_t *priv,
+                         uint16_t regaddr, uint32_t regval, uint16_t regsize)
 {
-  struct i2c_config_s config;
-  volatile uint8_t buffer[4];
+  uint8_t buffer[6];
   int ret;
 
-  /* Set up the I2C configuration */
-
-  config.frequency = priv->i2c_freq;
-  config.address   = priv->i2c_addr;
-  config.addrlen   = 7;
+  DEBUGASSERT(regsize <= 4);
 
   /* Set up for the transfer */
 
   buffer[0] = regaddr >> 8;   /* RegAddr Hi */
   buffer[1] = regaddr & 0xff; /* RegAddr Low */
 
-  memcpy((uint8_t *)&buffer[2], (uint8_t *)&regval, regsize);
+  memcpy((FAR uint8_t *)&buffer[2], (FAR uint8_t *)&regval, regsize);
+
+  nxmutex_lock(&priv->i2c_lock);
 
   /* And do it */
 
-  ret = i2c_write(priv->i2c, &config,
-                 (uint8_t *)buffer, regsize + 2);
+  ret = i2c_write(priv->i2c, &priv->i2c_cfg,
+                 (FAR uint8_t *)buffer, regsize + 2);
   if (ret < 0)
     {
       verr("i2c_write failed: %d\n", ret);
     }
 
+  nxmutex_unlock(&priv->i2c_lock);
   return ret;
 }
 
-static int isx012_putreglist(isx012_dev_t *priv,
+static int isx012_putreglist(FAR isx012_dev_t *priv,
                              FAR const isx012_reg_t *reglist,
                              size_t nentries)
 {
@@ -720,12 +765,12 @@ static int isx012_putreglist(isx012_dev_t *priv,
   return ret;
 }
 
-static int isx012_chk_int_state(isx012_dev_t *priv,
+static int isx012_chk_int_state(FAR isx012_dev_t *priv,
                                 uint8_t sts, uint32_t delay_time,
                                 uint32_t wait_time, uint32_t timeout)
 {
   int ret = 0;
-  volatile uint8_t data;
+  uint8_t data;
   uint32_t time = 0;
 
   nxsig_usleep(delay_time * 1000);
@@ -747,7 +792,7 @@ static int isx012_chk_int_state(isx012_dev_t *priv,
 }
 
 static int isx012_replace_fmt_to_regval(uint8_t nr_fmt,
-                                        imgsensor_format_t *fmt)
+                                        FAR imgsensor_format_t *fmt)
 {
   int ret;
 
@@ -806,11 +851,138 @@ static bool is_movie_needed(uint8_t fmt, uint8_t fps)
   return need;
 }
 
-static int isx012_set_mode_param(isx012_dev_t *priv,
+static void resize_for_clip(uint8_t nr_fmt,
+                            FAR imgsensor_format_t *fmt,
+                            FAR isx012_rect_t *clip,
+                            FAR uint16_t *w,
+                            FAR uint16_t *h,
+                            FAR uint16_t *s_w,
+                            FAR uint16_t *s_h)
+{
+  ASSERT(fmt && clip && w && h && s_w && s_h);
+
+  *w = (clip->width  == 0) ? fmt[IMGSENSOR_FMT_MAIN].width  : clip->width;
+  *h = (clip->height == 0) ? fmt[IMGSENSOR_FMT_MAIN].height : clip->height;
+
+  if (nr_fmt > 1)
+    {
+      *s_w = fmt[IMGSENSOR_FMT_SUB].width;
+      if (clip->width > 0)
+        {
+          *s_w = (uint32_t)*s_w * clip->width /
+                 fmt[IMGSENSOR_FMT_MAIN].width;
+        }
+
+      *s_h = fmt[IMGSENSOR_FMT_SUB].height;
+      if (clip->height > 0)
+        {
+          *s_h = (uint32_t)*s_h * clip->height /
+                 fmt[IMGSENSOR_FMT_MAIN].height;
+        }
+    }
+}
+
+static void calc_clip_regval(uint16_t pos,
+                             uint16_t clip_sz,
+                             uint16_t frm_sz,
+                             uint16_t basis_sz,
+                             FAR uint32_t *ratio,
+                             FAR int32_t  *offset)
+{
+  DEBUGASSERT(ratio && offset);
+
+  *ratio = ZOOM_UNIT;
+  *offset = 0;
+
+  if (clip_sz != 0)
+    {
+      /* Clip by setting zoom up. */
+
+      *ratio *= frm_sz;
+      *ratio /= clip_sz;
+
+      /* Applications' request pos means position from the upper left corner.
+       * On the other hand, ISX012's register means the center of the image,
+       * which has the maximum size of the sensor.
+       */
+
+      *offset = CLIP_OFFSET_UNIT;
+      *offset *= (int16_t)(pos + (clip_sz / 2) - (frm_sz / 2));
+      *offset *= basis_sz;
+      *offset /= (int32_t)frm_sz;
+    }
+}
+
+static bool is_clipped(FAR isx012_rect_t *clip)
+{
+  DEBUGASSERT(clip);
+
+  if ((clip->left   == 0) &&
+      (clip->top    == 0) &&
+      (clip->width  == 0) &&
+      (clip->height == 0))
+    {
+      return false;
+    }
+
+  return true;
+}
+
+static void activate_clip(FAR isx012_dev_t *priv,
+                          uint16_t w,
+                          uint16_t h,
+                          FAR isx012_rect_t *clip)
+{
+  uint8_t  hvfree = 0;
+  uint32_t r_x    = ZOOM_UNIT;
+  uint32_t r_y    = ZOOM_UNIT;
+  int32_t  x      = 0;
+  int32_t  y      = 0;
+
+  DEBUGASSERT(priv && clip);
+
+  if (is_clipped(clip))
+    {
+      hvfree = 1;
+
+      calc_clip_regval
+        (clip->left, clip->width,  w, BASE_HSIZE_FOR_CLIP_OFFSET, &r_x, &x);
+      calc_clip_regval
+        (clip->top,  clip->height, h, BASE_VSIZE_FOR_CLIP_OFFSET, &r_y, &y);
+
+      if (w * 3 > h * 4)
+        {
+          /* In case that aspect ratio is longer horizontally than 4:3,
+           * re-scaling vertical component setting.
+           */
+
+          r_y = RESCALE_FOR_CLIP(r_y, w * 3, h * 4);
+          y   = RESCALE_FOR_CLIP(y,   h * 4, w * 3);
+        }
+      else if (w * 3 < h * 4)
+        {
+          /* In case that aspect ratio is longer vertically than 4:3,
+           * re-scaling horizontal component setting.
+           */
+
+          r_x = RESCALE_FOR_CLIP(r_x, h * 4, w * 3);
+          x   = RESCALE_FOR_CLIP(x,   w * 3, h * 4);
+        }
+    }
+
+  isx012_putreg(priv, HVFREEZOOM, hvfree, 1);
+  isx012_putreg(priv, EZOOM_MAG,  ZOOM_UNIT,     sizeof(uint16_t));
+  isx012_putreg(priv, EZOOM_HMAG, (uint16_t)r_x, sizeof(uint16_t));
+  isx012_putreg(priv, EZOOM_VMAG, (uint16_t)r_y, sizeof(uint16_t));
+  isx012_putreg(priv, OFFSET_X, (int16_t)x, sizeof(int16_t));
+  isx012_putreg(priv, OFFSET_Y, (int16_t)y, sizeof(int16_t));
+}
+
+static int isx012_set_mode_param(FAR isx012_dev_t *priv,
                                  imgsensor_stream_type_t type,
                                  uint8_t nr_fmt,
-                                 imgsensor_format_t *fmt,
-                                 imgsensor_interval_t *interval)
+                                 FAR imgsensor_format_t *fmt,
+                                 FAR imgsensor_interval_t *interval)
 {
   int ret = 0;
   int fmt_val = isx012_replace_fmt_to_regval(nr_fmt, fmt);
@@ -820,8 +992,13 @@ static int isx012_set_mode_param(isx012_dev_t *priv,
   uint16_t smode_addr;
   uint16_t hsize_addr;
   uint16_t vsize_addr;
-  uint8_t  smode;
-  uint8_t  mode;
+  uint8_t smode;
+  uint8_t mode;
+  FAR isx012_rect_t *clip;
+  uint16_t w = 0;
+  uint16_t h = 0;
+  uint16_t s_w = 0;
+  uint16_t s_h = 0;
 
   /* Get register address for type  */
 
@@ -854,6 +1031,8 @@ static int isx012_set_mode_param(isx012_dev_t *priv,
           vsize_addr = VSIZE_MONI;
           mode       = REGVAL_MODESEL_MON;
         }
+
+      clip = &priv->clip_video;
     }
   else
     {
@@ -863,6 +1042,8 @@ static int isx012_set_mode_param(isx012_dev_t *priv,
       hsize_addr = HSIZE_CAP;
       vsize_addr = VSIZE_CAP;
       mode       = REGVAL_MODESEL_CAP;
+
+      clip = &priv->clip_still;
     }
 
   ret = isx012_putreg(priv, fps_addr, fps_val, sizeof(uint8_t));
@@ -902,19 +1083,19 @@ static int isx012_set_mode_param(isx012_dev_t *priv,
       return ret;
     }
 
-  ret = isx012_putreg(priv,
-                      hsize_addr,
-                      fmt[IMGSENSOR_FMT_MAIN].width,
-                      sizeof(uint16_t));
+  resize_for_clip(nr_fmt, fmt, clip, &w, &h, &s_w, &s_h);
+  activate_clip(priv,
+                fmt[IMGSENSOR_FMT_MAIN].width,
+                fmt[IMGSENSOR_FMT_MAIN].height,
+                clip);
+
+  ret = isx012_putreg(priv, hsize_addr, w, sizeof(uint16_t));
   if (ret < 0)
     {
       return ret;
     }
 
-  ret = isx012_putreg(priv,
-                      vsize_addr,
-                      fmt[IMGSENSOR_FMT_MAIN].height,
-                      sizeof(uint16_t));
+  ret = isx012_putreg(priv, vsize_addr, h, sizeof(uint16_t));
   if (ret < 0)
     {
       return ret;
@@ -922,19 +1103,13 @@ static int isx012_set_mode_param(isx012_dev_t *priv,
 
   if (fmt_val == REGVAL_OUTFMT_INTERLEAVE)
     {
-      ret = isx012_putreg(priv,
-                          HSIZE_TN,
-                          fmt[IMGSENSOR_FMT_SUB].width,
-                          sizeof(uint16_t));
+      ret = isx012_putreg(priv, HSIZE_TN, s_w, sizeof(uint16_t));
       if (ret < 0)
         {
           return ret;
         }
 
-      ret = isx012_putreg(priv,
-                          VSIZE_TN,
-                          fmt[IMGSENSOR_FMT_SUB].height,
-                          sizeof(uint16_t));
+      ret = isx012_putreg(priv, VSIZE_TN, s_h, sizeof(uint16_t));
       if (ret < 0)
         {
           return ret;
@@ -959,7 +1134,7 @@ static int isx012_set_mode_param(isx012_dev_t *priv,
  * isx012_change_camera_mode
  ****************************************************************************/
 
-static int isx012_change_camera_mode(isx012_dev_t *priv, uint8_t mode)
+static int isx012_change_camera_mode(FAR isx012_dev_t *priv, uint8_t mode)
 {
   int      ret = 0;
   uint16_t fmt_addr;
@@ -1070,7 +1245,7 @@ static int isx012_change_camera_mode(isx012_dev_t *priv, uint8_t mode)
  * isx012_change_device_state
  ****************************************************************************/
 
-static int isx012_change_device_state(isx012_dev_t *priv,
+static int isx012_change_device_state(FAR isx012_dev_t *priv,
                                       isx012_state_t state)
 {
   int ret = 0;
@@ -1148,7 +1323,7 @@ static int isx012_change_device_state(isx012_dev_t *priv,
   return OK;
 }
 
-int init_isx012(FAR struct isx012_dev_s *priv)
+int init_isx012(FAR isx012_dev_t *priv)
 {
   int ret;
 
@@ -1209,7 +1384,7 @@ int init_isx012(FAR struct isx012_dev_s *priv)
 #endif
 
   priv->state = STATE_ISX012_SLEEP;
-  priv->i2c_freq = I2CFREQ_FAST;
+  priv->i2c_cfg.frequency = I2CFREQ_FAST;
 
   /* initialize the isx012 hardware */
 
@@ -1234,10 +1409,33 @@ int init_isx012(FAR struct isx012_dev_s *priv)
   return ret;
 }
 
-static int isx012_init(void)
+static bool isx012_is_available(FAR struct imgsensor_s *sensor)
 {
-  FAR struct isx012_dev_s *priv = &g_isx012_private;
+  FAR isx012_dev_t *priv = (FAR isx012_dev_t *)sensor;
+  bool ret;
+
+  isx012_init(sensor);
+
+  /* Try to access via I2C.
+   * Select DEVICESTS register, which has positive value.
+   */
+
+  ret = (isx012_getreg(priv, DEVICESTS, 1) == DEVICESTS_SLEEP);
+
+  isx012_uninit(sensor);
+
+  return ret;
+}
+
+static int isx012_init(FAR struct imgsensor_s *sensor)
+{
+  FAR isx012_dev_t *priv = (FAR isx012_dev_t *)sensor;
   int ret = 0;
+
+  priv->i2c               = board_isx012_initialize();
+  priv->i2c_cfg.address   = ISX012_I2C_SLV_ADDR;
+  priv->i2c_cfg.addrlen   = 7;
+  priv->i2c_cfg.frequency = I2CFREQ_STANDARD;
 
   ret = board_isx012_power_on();
   if (ret < 0)
@@ -1258,9 +1456,9 @@ static int isx012_init(void)
   return ret;
 }
 
-static int isx012_uninit(void)
+static int isx012_uninit(FAR struct imgsensor_s *sensor)
 {
-  FAR struct isx012_dev_s *priv = &g_isx012_private;
+  FAR isx012_dev_t *priv = (FAR isx012_dev_t *)sensor;
 
   int ret = 0;
 
@@ -1278,10 +1476,17 @@ static int isx012_uninit(void)
       return ret;
     }
 
-  priv->i2c_freq = I2CFREQ_STANDARD;
-  priv->state    = STATE_ISX012_POWEROFF;
+  board_isx012_uninitialize(priv->i2c);
+
+  priv->i2c_cfg.frequency = I2CFREQ_STANDARD;
+  priv->state             = STATE_ISX012_POWEROFF;
 
   return ret;
+}
+
+static FAR const char *isx012_get_driver_name(FAR struct imgsensor_s *sensor)
+{
+  return "ISX012";
 }
 
 static int8_t isx012_get_maximum_fps(uint8_t nr_fmt,
@@ -1465,7 +1670,8 @@ static int isx012_replace_frameinterval_to_regval
     }
 }
 
-static int isx012_validate_frame_setting(imgsensor_stream_type_t type,
+static int isx012_validate_frame_setting(FAR struct imgsensor_s *sensor,
+                                         imgsensor_stream_type_t type,
                                          uint8_t nr_fmt,
                                          FAR imgsensor_format_t *fmt,
                                          FAR imgsensor_interval_t *interval)
@@ -1504,16 +1710,16 @@ static int isx012_validate_frame_setting(imgsensor_stream_type_t type,
   return OK;
 }
 
-static int isx012_start_capture(imgsensor_stream_type_t type,
+static int isx012_start_capture(FAR struct imgsensor_s *sensor,
+                                imgsensor_stream_type_t type,
                                 uint8_t nr_fmt,
                                 FAR imgsensor_format_t *fmt,
                                 FAR imgsensor_interval_t *interval)
 {
+  FAR isx012_dev_t *priv = (FAR isx012_dev_t *)sensor;
   int ret;
 
-  FAR struct isx012_dev_s *priv = &g_isx012_private;
-
-  ret = isx012_validate_frame_setting(type, nr_fmt, fmt, interval);
+  ret = isx012_validate_frame_setting(sensor, type, nr_fmt, fmt, interval);
   if (ret != OK)
     {
       return ret;
@@ -1522,18 +1728,19 @@ static int isx012_start_capture(imgsensor_stream_type_t type,
   return isx012_set_mode_param(priv, type, nr_fmt, fmt, interval);
 }
 
-static int isx012_stop_capture(imgsensor_stream_type_t type)
+static int isx012_stop_capture(FAR struct imgsensor_s *sensor,
+                               imgsensor_stream_type_t type)
 {
   return OK;
 }
 
-static int isx012_get_supported_value
-             (uint32_t id, FAR imgsensor_supported_value_t *value)
+static int isx012_get_supported_value(FAR struct imgsensor_s *sensor,
+             uint32_t id, FAR imgsensor_supported_value_t *value)
 {
   int ret = OK;
-  imgsensor_capability_range_t *range = &value->u.range;
-  imgsensor_capability_discrete_t *discrete = &value->u.discrete;
-  imgsensor_capability_elems_t *elems = &value->u.elems;
+  FAR imgsensor_capability_range_t *range = &value->u.range;
+  FAR imgsensor_capability_discrete_t *discrete = &value->u.discrete;
+  FAR imgsensor_capability_elems_t *elems = &value->u.elems;
 
   ASSERT(value);
 
@@ -1549,7 +1756,7 @@ static int isx012_get_supported_value
         break;
 
       case IMGSENSOR_ID_CONTRAST:
-        value->type          = IMGSENSOR_CTRL_TYPE_U8FIXEDPOINT_Q7;
+        value->type          = IMGSENSOR_CTRL_TYPE_INTEGER;
         range->minimum       = ISX012_MIN_CONTRAST;
         range->maximum       = ISX012_MAX_CONTRAST;
         range->step          = ISX012_STEP_CONTRAST;
@@ -1593,7 +1800,7 @@ static int isx012_get_supported_value
         break;
 
       case IMGSENSOR_ID_EXPOSURE:
-        value->type          = IMGSENSOR_CTRL_TYPE_INTEGER_TIMES_3;
+        value->type          = IMGSENSOR_CTRL_TYPE_INTEGER;
         range->minimum       = ISX012_MIN_EXPOSURE;
         range->maximum       = ISX012_MAX_EXPOSURE;
         range->step          = ISX012_STEP_EXPOSURE;
@@ -1692,6 +1899,15 @@ static int isx012_get_supported_value
 
         break;
 
+      case IMGSENSOR_ID_SPOT_POSITION:
+        value->type          = IMGSENSOR_CTRL_TYPE_INTEGER;
+        range->minimum       = ISX012_MIN_SPOTPOS;
+        range->maximum       = ISX012_MAX_SPOTPOS;
+        range->step          = ISX012_STEP_SPOTPOS;
+        range->default_value = ISX012_DEF_SPOTPOS;
+
+        break;
+
       case IMGSENSOR_ID_AUTO_N_PRESET_WB:
         value->type = IMGSENSOR_CTRL_TYPE_INTEGER_MENU;
         discrete->nr_values = ARRAY_NENTRIES(g_isx012_presetwb_actual);
@@ -1701,7 +1917,7 @@ static int isx012_get_supported_value
         break;
 
       case IMGSENSOR_ID_WIDE_DYNAMIC_RANGE:
-        value->type          = IMGSENSOR_CTRL_TYPE_BOOLEAN;
+        value->type          = IMGSENSOR_CTRL_TYPE_INTEGER;
         range->minimum       = ISX012_MIN_YGAMMA;
         range->maximum       = ISX012_MAX_YGAMMA;
         range->step          = ISX012_STEP_YGAMMA;
@@ -1771,17 +1987,83 @@ static int isx012_get_supported_value
   return ret;
 }
 
-static int isx012_get_value(uint32_t id,
-                            uint32_t size,
+static void get_current_framesize(FAR struct isx012_dev_s *priv,
+                                  FAR uint16_t *w,
+                                  FAR uint16_t *h)
+{
+  uint16_t w_addr = HSIZE_MONI;
+  uint16_t h_addr = VSIZE_MONI;
+
+  switch (priv->mode)
+    {
+      case REGVAL_MODESEL_MON:
+        w_addr = HSIZE_MONI;
+        h_addr = VSIZE_MONI;
+        break;
+
+      case REGVAL_MODESEL_MOV:
+        w_addr = HSIZE_MOVIE;
+        h_addr = VSIZE_MOVIE;
+        break;
+
+      case REGVAL_MODESEL_CAP:
+        w_addr = HSIZE_CAP;
+        h_addr = VSIZE_CAP;
+        break;
+
+      default:
+
+        /* It does not come here due to register specification. */
+
+        break;
+    }
+
+  *w = isx012_getreg(priv, w_addr, 2);
+  *h = isx012_getreg(priv, h_addr, 2);
+}
+
+static uint32_t restore_spot_position(uint8_t regval,
+                                      uint16_t w,
+                                      uint16_t split)
+{
+  return ((regval * w) / split + (w / split) / 2);
+}
+
+static int32_t get_spot_position(FAR struct isx012_dev_s *priv)
+{
+  uint16_t regval;
+  uint16_t reg_x;
+  uint16_t reg_y;
+  uint32_t x;
+  uint32_t y;
+  uint16_t w;
+  uint16_t h;
+
+  regval = isx012_getreg(priv, SPOT_FRM_NUM, 1);
+  reg_x = regval % ISX012_SPOT_POSITION_SPLIT_NUM_X;
+  reg_y = regval / ISX012_SPOT_POSITION_SPLIT_NUM_X;
+
+  get_current_framesize(priv, &w, &h);
+
+  x = restore_spot_position(reg_x, w, ISX012_SPOT_POSITION_SPLIT_NUM_X);
+  y = restore_spot_position(reg_y, h, ISX012_SPOT_POSITION_SPLIT_NUM_Y);
+
+  return (int32_t)((x << 16) | y);
+}
+
+static int isx012_get_value(FAR struct imgsensor_s *sensor,
+                            uint32_t id, uint32_t size,
                             FAR imgsensor_value_t *value)
 {
-  FAR struct isx012_dev_s *priv = &g_isx012_private;
-  uint16_t   readvalue;
-  uint8_t    cnt;
-  uint8_t    threea_enable;
-  uint16_t   read_src;
-  uint16_t   *read_dst;
-  int        ret = OK;
+  FAR isx012_dev_t *priv = (FAR isx012_dev_t *)sensor;
+  uint16_t      readvalue;
+  uint8_t       cnt;
+  uint8_t       threea_enable;
+  uint16_t      read_src;
+  FAR uint16_t *read_dst;
+  int           ret = OK;
+  uint16_t      exposure_time_lsb;
+  uint16_t      exposure_time_msb;
 
   ASSERT(value);
 
@@ -1942,6 +2224,21 @@ static int isx012_get_value(uint32_t id,
                                        ISX012_REG_EXPOSURETIME,
                                        ISX012_SIZE_EXPOSURETIME);
 
+        if (value->value32 == REGVAL_EXPOSURETIME_AUTO)
+          {
+            exposure_time_lsb = isx012_getreg
+                                (priv,
+                                 ISX012_REG_EXPOSUREAUTOVALUE_LSB,
+                                 ISX012_SIZE_EXPOSUREAUTOVALUE);
+            exposure_time_msb = isx012_getreg
+                                (priv,
+                                 ISX012_REG_EXPOSUREAUTOVALUE_MSB,
+                                 ISX012_SIZE_EXPOSUREAUTOVALUE);
+
+            value->value32 = (uint16_t)(((exposure_time_msb << 16)
+                                         | exposure_time_lsb)
+                                        / ISX012_UNIT_EXPOSURETIME_US);
+          }
         break;
 
       case IMGSENSOR_ID_AUTO_N_PRESET_WB:
@@ -1970,10 +2267,12 @@ static int isx012_get_value(uint32_t id,
         break;
 
       case IMGSENSOR_ID_ISO_SENSITIVITY:
-        readvalue = isx012_getreg(priv, ISX012_REG_ISO, ISX012_SIZE_ISO);
+        readvalue = isx012_getreg(priv,
+                                  ISX012_REG_ISOAUTOVALUE,
+                                  ISX012_SIZE_ISOAUTOVALUE);
 
         ret = -EINVAL;
-        for (cnt = 0; cnt < ARRAY_NENTRIES(g_isx012_presetwb_regval); cnt++)
+        for (cnt = 0; cnt < ARRAY_NENTRIES(g_isx012_iso_regval); cnt++)
           {
             if (g_isx012_iso_regval[cnt] == readvalue)
               {
@@ -2014,6 +2313,10 @@ static int isx012_get_value(uint32_t id,
               }
           }
 
+        break;
+
+      case IMGSENSOR_ID_SPOT_POSITION:
+        value->value32 = get_spot_position(priv);
         break;
 
       case IMGSENSOR_ID_3A_PARAMETER:
@@ -2084,18 +2387,86 @@ static int isx012_get_value(uint32_t id,
   return ret;
 }
 
-static int isx012_set_value(uint32_t id,
-                            uint32_t size,
-                            FAR imgsensor_value_t value)
+static bool validate_clip_setting(uint32_t sz, FAR uint32_t *clip)
 {
-  FAR struct isx012_dev_s *priv = &g_isx012_private;
-  int       ret = -EINVAL;
-  uint8_t   cnt;
-  uint16_t  *write_src;
-  uint16_t  write_dst;
-  uint16_t  regval;
-  uint16_t  exposure_time_lsb;
-  uint16_t  exposure_time_msb;
+  bool ret = false;
+  uint32_t w;
+  uint32_t h;
+
+  DEBUGASSERT(clip);
+
+  if (sz != IMGSENSOR_CLIP_NELEM * sizeof(uint32_t))
+    {
+      return ret;
+    }
+
+  w = clip[IMGSENSOR_CLIP_INDEX_WIDTH];
+  h = clip[IMGSENSOR_CLIP_INDEX_HEIGHT];
+
+  if ((w % CLIP_SIZE_UNIT == 0) && (h % CLIP_SIZE_UNIT == 0))
+    {
+      ret = true;
+    }
+
+  return ret;
+}
+
+static int set_clip(uint32_t size,
+                    FAR uint32_t *val,
+                    FAR isx012_rect_t *target)
+{
+  DEBUGASSERT(target);
+
+  if (!validate_clip_setting(size, val))
+    {
+      return -EINVAL;
+    }
+
+  target->left   = (int32_t)val[IMGSENSOR_CLIP_INDEX_LEFT];
+  target->top    = (int32_t)val[IMGSENSOR_CLIP_INDEX_TOP];
+  target->width  = val[IMGSENSOR_CLIP_INDEX_WIDTH];
+  target->height = val[IMGSENSOR_CLIP_INDEX_HEIGHT];
+
+  return OK;
+}
+
+static int set_spot_position(FAR struct isx012_dev_s *priv, int32_t val)
+{
+  uint16_t w;
+  uint16_t h;
+  uint16_t x = (uint16_t)(val >> 16);
+  uint16_t y = (uint16_t)(val & 0xffff);
+  uint8_t reg_x;
+  uint8_t reg_y;
+  uint8_t reg;
+
+  get_current_framesize(priv, &w, &h);
+
+  if ((x >= w) || (y >= h))
+    {
+      return -EINVAL;
+    }
+
+  reg_x = (x * ISX012_SPOT_POSITION_SPLIT_NUM_X) / w;
+  reg_y = (y * ISX012_SPOT_POSITION_SPLIT_NUM_Y) / h;
+
+  reg = reg_y * ISX012_SPOT_POSITION_SPLIT_NUM_X + reg_x;
+
+  return isx012_putreg(priv, SPOT_FRM_NUM, reg, 1);
+}
+
+static int isx012_set_value(FAR struct imgsensor_s *sensor,
+                            uint32_t id, uint32_t size,
+                            imgsensor_value_t value)
+{
+  FAR isx012_dev_t *priv = (FAR isx012_dev_t *)sensor;
+  int           ret = -EINVAL;
+  uint8_t       cnt;
+  FAR uint16_t *write_src;
+  uint16_t      write_dst;
+  uint16_t      regval;
+  uint16_t      exposure_time_lsb;
+  uint16_t      exposure_time_msb;
 
   switch (id)
     {
@@ -2521,8 +2892,7 @@ static int isx012_set_value(uint32_t id,
       case IMGSENSOR_ID_ISO_SENSITIVITY:
         for (cnt = 0; cnt < ARRAY_NENTRIES(g_isx012_iso_actual); cnt++)
           {
-            if (g_isx012_iso_actual[cnt]
-                 == value.value32)
+            if (g_isx012_iso_actual[cnt] == value.value32)
               {
                 ret = isx012_putreg(priv,
                                     ISX012_REG_ISO,
@@ -2571,8 +2941,7 @@ static int isx012_set_value(uint32_t id,
              cnt < ARRAY_NENTRIES(g_isx012_photometry_actual);
              cnt++)
           {
-            if (g_isx012_photometry_actual[cnt]
-                 == value.value32)
+            if (g_isx012_photometry_actual[cnt] == value.value32)
               {
                 ret = isx012_putreg(priv,
                                     ISX012_REG_PHOTOMETRY,
@@ -2582,6 +2951,19 @@ static int isx012_set_value(uint32_t id,
               }
           }
 
+        break;
+
+      case IMGSENSOR_ID_SPOT_POSITION:
+        ret = VALIDATE_VALUE(value.value32,
+                             ISX012_MIN_SPOTPOS,
+                             ISX012_MAX_SPOTPOS,
+                             ISX012_STEP_SPOTPOS);
+        if (ret != OK)
+          {
+            break;
+          }
+
+        ret = set_spot_position(priv, value.value32);
         break;
 
       case IMGSENSOR_ID_AUTO_N_PRESET_WB:
@@ -2664,6 +3046,16 @@ static int isx012_set_value(uint32_t id,
                             ISX012_REG_JPGQUALITY,
                             value.value32,
                             ISX012_SIZE_JPGQUALITY);
+        break;
+
+      case IMGSENSOR_ID_CLIP_VIDEO:
+        ret = set_clip(size, value.p_u32, &priv->clip_video);
+
+        break;
+
+      case IMGSENSOR_ID_CLIP_STILL:
+        ret = set_clip(size, value.p_u32, &priv->clip_still);
+
         break;
 
       default: /* Unsupported control id */
@@ -2870,24 +3262,23 @@ static int isx012_set_shd(FAR isx012_dev_t *priv)
  * Public Functions
  ****************************************************************************/
 
-int isx012_initialize(FAR struct i2c_master_s *i2c)
+int isx012_initialize(void)
 {
-  FAR struct isx012_dev_s *priv = &g_isx012_private;
+  FAR isx012_dev_t *priv = &g_isx012_private;
+  int ret;
 
-  /* Save i2c information */
+  /* Register image sensor operations variable */
 
-  priv->i2c        = i2c;
-  priv->i2c_addr   = ISX012_I2C_SLV_ADDR;
-  priv->i2c_freq   = I2CFREQ_STANDARD;
-
-  /* Regiser image sensor operations variable */
-
-  imgsensor_register(&g_isx012_ops);
+  ret = imgsensor_register(&priv->sensor);
+  if (ret != OK)
+    {
+      verr("Failed to register ops to video driver.\n");
+      return ret;
+    }
 
   /* Initialize other information */
 
-  priv->state      = STATE_ISX012_POWEROFF;
-
+  priv->state = STATE_ISX012_POWEROFF;
   return OK;
 }
 
@@ -2897,3 +3288,25 @@ int isx012_uninitialize(void)
 
   return OK;
 }
+
+#ifdef CONFIG_VIDEO_ISX012_REGDEBUG
+int isx012_read_register(uint16_t addr, FAR uint8_t *buf, uint8_t size)
+{
+  FAR isx012_dev_t *priv = &g_isx012_private;
+  uint16_t buf16;
+
+  if (buf == NULL)
+    {
+      return -EINVAL;
+    }
+
+  if (size > 2)
+    {
+      return -EINVAL;
+    }
+
+  buf16 = isx012_getreg(priv, addr, size);
+  memcpy(buf, &buf16, size);
+  return OK;
+}
+#endif

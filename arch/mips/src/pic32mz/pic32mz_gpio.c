@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/mips/src/pic32mz/pic32mz_gpio.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -30,10 +32,10 @@
 
 #include <nuttx/irq.h>
 #include <nuttx/arch.h>
+#include <nuttx/spinlock.h>
 #include <arch/board/board.h>
 
-#include "mips_arch.h"
-
+#include "mips_internal.h"
 #include "hardware/pic32mz_ioport.h"
 #include "pic32mz_gpio.h"
 
@@ -42,6 +44,12 @@
 /****************************************************************************
  * Pre-processor Definitions
  ****************************************************************************/
+
+/****************************************************************************
+ * Private Data
+ ****************************************************************************/
+
+static spinlock_t g_configgpio_lock = SP_UNLOCKED;
 
 /****************************************************************************
  * Public Data
@@ -160,6 +168,7 @@ int pic32mz_configgpio(pinset_t cfgset)
   unsigned int port = pic32mz_portno(cfgset);
   unsigned int pin  = pic32mz_pinno(cfgset);
   uint32_t     mask = (1 << pin);
+  irqstate_t   flags;
   uintptr_t    base;
 
   /* Verify that the port number is within range */
@@ -170,7 +179,7 @@ int pic32mz_configgpio(pinset_t cfgset)
 
       base = g_gpiobase[port];
 
-      sched_lock();
+      flags = spin_lock_irqsave(&g_configgpio_lock);
 
       /* Is Slew Rate control enabled? */
 
@@ -240,7 +249,7 @@ int pic32mz_configgpio(pinset_t cfgset)
             }
         }
 
-      sched_unlock();
+      spin_unlock_irqrestore(&g_configgpio_lock, flags);
       return OK;
     }
 
@@ -337,9 +346,8 @@ void pic32mz_dumpgpio(pinset_t pinset, const char *msg)
 
       /* The following requires exclusive access to the GPIO registers */
 
-      sched_lock();
       gpioinfo("IOPORT%c pinset: %04x base: %08x -- %s\n",
-               'A'+port, pinset, base, msg);
+               'A' + port, pinset, base, msg);
       gpioinfo("   TRIS: %08x   PORT: %08x    LAT: %08x    ODC: %08x\n",
                getreg32(base + PIC32MZ_IOPORT_TRIS_OFFSET),
                getreg32(base + PIC32MZ_IOPORT_PORT_OFFSET),
@@ -349,7 +357,6 @@ void pic32mz_dumpgpio(pinset_t pinset, const char *msg)
                getreg32(base + PIC32MZ_IOPORT_CNCON_OFFSET),
                getreg32(base + PIC32MZ_IOPORT_CNEN_OFFSET),
                getreg32(base + PIC32MZ_IOPORT_CNPU_OFFSET));
-      sched_unlock();
     }
 }
 #endif

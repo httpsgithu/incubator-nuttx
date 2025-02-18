@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/risc-v/src/bl602/bl602_tim_lowerhalf.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -18,8 +20,8 @@
  *
  ****************************************************************************/
 
-#ifndef __ARCH_RISCV_SRC_BL602_TIM_LOWERHALF_H
-#define __ARCH_RISCV_SRC_BL602_TIM_LOWERHALF_H
+#ifndef __ARCH_RISCV_SRC_BL602_BL602_TIM_LOWERHALF_H
+#define __ARCH_RISCV_SRC_BL602_BL602_TIM_LOWERHALF_H
 
 /****************************************************************************
  * Included Files
@@ -27,7 +29,6 @@
 
 #include <nuttx/config.h>
 
-#include "bl602_tim_lowerhalf.h"
 #include "bl602_tim.h"
 
 /****************************************************************************
@@ -40,4 +41,4 @@
 
 int bl602_timer_initialize(const char *devpath, int timer);
 
-#endif /* __ARCH_RISCV_SRC_BL602_TIM_LOWERHALF_H */
+#endif /* __ARCH_RISCV_SRC_BL602_BL602_TIM_LOWERHALF_H */

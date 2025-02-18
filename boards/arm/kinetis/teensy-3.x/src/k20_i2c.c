@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/kinetis/teensy-3.x/src/k20_i2c.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -31,7 +33,7 @@
 #include <nuttx/i2c/i2c_master.h>
 #include <arch/board/board.h>
 
-#include "arm_arch.h"
+#include "arm_internal.h"
 #include "chip.h"
 #include "kinetis.h"
 #include "kinetis_i2c.h"
@@ -53,7 +55,7 @@
 
 void kinetis_i2cdev_initialize(void)
 {
-  i2c_dev = NULL;
+  struct i2c_master_s *i2c_dev = NULL;
 
 #if defined(CONFIG_KINETIS_I2C0)
   i2c_dev = kinetis_i2cbus_initialize(0);

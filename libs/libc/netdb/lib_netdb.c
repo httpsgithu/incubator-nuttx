@@ -1,6 +1,8 @@
 /****************************************************************************
  * libs/libc/netdb/lib_netdb.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -28,8 +30,6 @@
 
 #include "netdb/lib_netdb.h"
 
-#ifdef CONFIG_LIBC_NETDB
-
 /****************************************************************************
  * Public Data
  ****************************************************************************/
@@ -48,7 +48,7 @@ int h_errno;
  * Public Functions
  ****************************************************************************/
 
-bool convert_hostent(const FAR struct hostent_s *in,
+bool convert_hostent(FAR const struct hostent_s *in,
                      int type, FAR struct hostent *out)
 {
   int i;
@@ -93,4 +93,3 @@ bool convert_hostent(const FAR struct hostent_s *in,
   return j != 0;
 }
 
-#endif /* CONFIG_LIBC_NETDB */

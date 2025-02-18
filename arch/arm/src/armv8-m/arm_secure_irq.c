@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/armv8-m/arm_secure_irq.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -30,10 +32,10 @@
 #include <nuttx/arch.h>
 #include <arch/irq.h>
 
-#include "arm_arch.h"
+#include "arm_internal.h"
 #include "nvic.h"
 
-#ifdef CONFIG_ARCH_HAVE_TRUSTZONE
+#if defined(CONFIG_ARCH_TRUSTZONE_SECURE)
 
 /****************************************************************************
  * Public Functions
@@ -49,19 +51,47 @@
 
 void up_secure_irq(int irq, bool secure)
 {
+  uint32_t keymask = 0;
+  uint32_t keyval = 0;
   uint32_t regaddr;
   uint32_t regval;
-  int shift;
+  uint32_t regbit;
 
-  DEBUGASSERT(irq >= NVIC_IRQ_FIRST && irq < NR_IRQS);
+  switch (irq)
+    {
+      case NVIC_IRQ_NMI:
+      case NVIC_IRQ_HARDFAULT:
+      case NVIC_IRQ_BUSFAULT:
+        regaddr = NVIC_AIRCR;
+        regbit  = NVIC_AIRCR_BFHFNMINS;
+        keymask = NVIC_AIRCR_VECTKEY_MASK;
+        keyval  = NVIC_AIRCR_VECTKEY;
+        break;
 
-  irq    -= NVIC_IRQ_FIRST;
-  regaddr = NVIC_IRQ_TARGET(irq);
+      case NVIC_IRQ_DBGMONITOR:
+        regaddr = NVIC_DAUTHCTRL;
+        regbit  = NVIC_DAUTHCTRL_SPIDENSEL;
+        break;
 
-  regval      = getreg32(regaddr);
-  shift       = irq & 0x1f;
-  regval     &= ~(1 << shift);
-  regval     |= !secure << shift;
+      default:
+        DEBUGASSERT(irq >= NVIC_IRQ_FIRST && irq < NR_IRQS);
+        irq    -= NVIC_IRQ_FIRST;
+        regaddr = NVIC_IRQ_TARGET(irq);
+        regbit  = 1 << (irq & 0x1f);
+        break;
+    }
+
+  regval = getreg32(regaddr);
+  if (secure)
+    {
+      regval &= ~regbit;
+    }
+  else
+    {
+      regval |= regbit;
+    }
+
+  regval = (regval & ~keymask) | keyval;
   putreg32(regval, regaddr);
 }
 
@@ -76,6 +106,12 @@ void up_secure_irq(int irq, bool secure)
 void up_secure_irq_all(bool secure)
 {
   int i;
+
+  modreg32((secure ? 0 : NVIC_AIRCR_BFHFNMINS) | NVIC_AIRCR_VECTKEY,
+           (NVIC_AIRCR_VECTKEY_MASK | NVIC_AIRCR_BFHFNMINS), NVIC_AIRCR);
+
+  modreg32(secure ? NVIC_DEMCR_SDME : 0,
+           NVIC_DEMCR_SDME, NVIC_DEMCR);
 
   for (i = 0; i <= NR_IRQS - NVIC_IRQ_FIRST; i += 32)
     {

@@ -1,6 +1,7 @@
 /****************************************************************************
  * wireless/bluetooth/bt_netdev.c
- * Network stack interface
+ *
+ * SPDX-License-Identifier: Apache-2.0
  *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -38,10 +39,8 @@
 #include <nuttx/spinlock.h>
 #include <nuttx/kmalloc.h>
 #include <nuttx/signal.h>
-#include <nuttx/wdog.h>
 #include <nuttx/wqueue.h>
 #include <nuttx/mm/iob.h>
-#include <nuttx/net/arp.h>
 #include <nuttx/net/netdev.h>
 #include <nuttx/net/radiodev.h>
 #include <nuttx/net/bluetooth.h>
@@ -78,12 +77,6 @@
 #  error CONFIG_IOB_BUFSIZE to small for max Bluetooth frame
 #endif
 
-/* TX poll delay = 1 seconds.
- * CLK_TCK is the number of clock ticks per second
- */
-
-#define TXPOLL_WDDELAY   (1*CLK_TCK)
-
 /****************************************************************************
  * Private Types
  ****************************************************************************/
@@ -110,9 +103,6 @@ struct btnet_driver_s
 
   /* For internal use by this driver */
 
-  sem_t bd_exclsem;                  /* Exclusive access to struct */
-  bool bd_bifup;                     /* true:ifup false:ifdown */
-  struct wdog_s bd_txpoll;           /* TX poll timer */
   struct work_s bd_pollwork;         /* Defer poll work to the work queue */
 
 #ifdef CONFIG_WIRELESS_BLUETOOTH_HOST
@@ -161,8 +151,6 @@ static void btnet_hci_received(FAR struct bt_buf_s *buf, FAR void *context);
 /* Common TX logic */
 
 static int  btnet_txpoll_callback(FAR struct net_driver_s *netdev);
-static void btnet_txpoll_work(FAR void *arg);
-static void btnet_txpoll_expiry(wdparm_t arg);
 
 /* NuttX callback functions */
 
@@ -308,21 +296,18 @@ static void btnet_l2cap_connected(FAR struct bt_conn_s *conn,
                                   FAR void *context, uint16_t cid)
 {
   wlinfo("Connected\n");
-#warning Missing logic
 }
 
 static void btnet_l2cap_disconnected(FAR struct bt_conn_s *conn,
                                      FAR void *context, uint16_t cid)
 {
   wlinfo("Disconnected\n");
-#warning Missing logic
 }
 
 static void btnet_l2cap_encrypt_change(FAR struct bt_conn_s *conn,
                                        FAR void *context, uint16_t cid)
 {
   wlinfo("Encryption change\n");
-#warning Missing logic
 }
 
 /****************************************************************************
@@ -361,7 +346,7 @@ static void btnet_l2cap_receive(FAR struct bt_conn_s *conn,
   /* Ignore the frame if the network is not up */
 
   priv = (FAR struct btnet_driver_s *)context;
-  if (!priv->bd_bifup)
+  if (!IFF_IS_RUNNING(priv->bd_dev.r_dev.d_flags))
     {
       wlwarn("WARNING: Dropped... Network is down\n");
       goto drop;
@@ -406,11 +391,11 @@ static void btnet_l2cap_receive(FAR struct bt_conn_s *conn,
        * io_offset should be a valid IPHC header.
        */
 
-      if ((iob->io_data[iob->io_offset] & SIXLOWPAN_DISPATCH_NALP_MASK) ==
-          SIXLOWPAN_DISPATCH_NALP)
+      if ((frame->io_data[frame->io_offset] &
+           SIXLOWPAN_DISPATCH_NALP_MASK) == SIXLOWPAN_DISPATCH_NALP)
         {
           wlwarn("WARNING: Dropped... Not a 6LoWPAN frame: %02x\n",
-                 iob->io_data[iob->io_offset]);
+                 frame->io_data[frame->io_offset]);
           ret = -EINVAL;
         }
       else
@@ -421,7 +406,7 @@ static void btnet_l2cap_receive(FAR struct bt_conn_s *conn,
 
           /* And give the packet to 6LoWPAN */
 
-          ret = sixlowpan_input(&priv->bd_dev, iob, (FAR void *)meta);
+          ret = sixlowpan_input(&priv->bd_dev, frame, (FAR void *)&meta);
         }
     }
 #endif
@@ -432,7 +417,7 @@ drop:
 
   if (ret < 0)
     {
-      iob_free(frame, IOBUSER_WIRELESS_BLUETOOTH);
+      iob_free(frame);
 
       /* Increment statistics */
 
@@ -475,14 +460,12 @@ static void btnet_hci_connected(FAR struct bt_conn_s *conn,
                                 FAR void *context)
 {
   wlinfo("Connected\n");
-#warning Missing logic
 }
 
 static void btnet_hci_disconnected(FAR struct bt_conn_s *conn,
                                    FAR void *context)
 {
   wlinfo("Disconnected\n");
-#warning Missing logic
 }
 #else
 
@@ -521,10 +504,12 @@ static void btnet_hci_received(FAR struct bt_buf_s *buf, FAR void *context)
   frame      = buf->frame;
   buf->frame = NULL;
 
+  net_lock();
+
   /* Ignore the frame if the network is not up */
 
   priv = (FAR struct btnet_driver_s *)context;
-  if (!priv->bd_bifup)
+  if (!IFF_IS_RUNNING(priv->bd_dev.r_dev.d_flags))
     {
       wlwarn("WARNING: Dropped... Network is down\n");
       goto drop;
@@ -566,8 +551,6 @@ static void btnet_hci_received(FAR struct bt_buf_s *buf, FAR void *context)
 
   /* Transfer the frame to the network logic */
 
-  net_lock();
-
 #ifdef CONFIG_NET_BLUETOOTH
   /* Invoke the PF_BLUETOOTH tap first.  If the frame matches
    * with a connected PF_BLUETOOTH socket, it will take the
@@ -583,7 +566,7 @@ drop:
 
   if (ret < 0)
     {
-      iob_free(frame, IOBUSER_WIRELESS_BLUETOOTH);
+      iob_free(frame);
 
       /* Increment statistics */
 
@@ -637,78 +620,6 @@ static int btnet_txpoll_callback(FAR struct net_driver_s *netdev)
 }
 
 /****************************************************************************
- * Name: btnet_txpoll_work
- *
- * Description:
- *   Perform periodic polling from the worker thread
- *
- * Input Parameters:
- *   arg - The argument passed when work_queue() as called.
- *
- * Returned Value:
- *   OK on success
- *
- * Assumptions:
- *   The network is locked.
- *
- ****************************************************************************/
-
-static void btnet_txpoll_work(FAR void *arg)
-{
-  FAR struct btnet_driver_s *priv = (FAR struct btnet_driver_s *)arg;
-
-  /* Lock the network and serialize driver operations if necessary.
-   * NOTE: Serialization is only required in the case where the driver work
-   * is performed on an LP worker thread and where more than one LP worker
-   * thread has been configured.
-   */
-
-  net_lock();
-
-#ifdef CONFIG_NET_6LOWPAN
-  /* Make sure the our single packet buffer is attached */
-
-  priv->bd_dev.r_dev.d_buf = g_iobuffer.rb_buf;
-#endif
-
-  /* Then perform the poll */
-
-  devif_timer(&priv->bd_dev.r_dev, TXPOLL_WDDELAY, btnet_txpoll_callback);
-
-  /* Setup the watchdog poll timer again */
-
-  wd_start(&priv->bd_txpoll, TXPOLL_WDDELAY,
-           btnet_txpoll_expiry, (wdparm_t)priv);
-  net_unlock();
-}
-
-/****************************************************************************
- * Name: btnet_txpoll_expiry
- *
- * Description:
- *   Periodic timer handler.  Called from the timer interrupt handler.
- *
- * Input Parameters:
- *   arg  - The argument
- *
- * Returned Value:
- *   None
- *
- * Assumptions:
- *   Global interrupts are disabled by the watchdog logic.
- *
- ****************************************************************************/
-
-static void btnet_txpoll_expiry(wdparm_t arg)
-{
-  FAR struct btnet_driver_s *priv = (FAR struct btnet_driver_s *)arg;
-
-  /* Schedule to perform the interrupt processing on the worker thread. */
-
-  work_queue(LPWORK, &priv->bd_pollwork, btnet_txpoll_work, priv, 0);
-}
-
-/****************************************************************************
  * Name: btnet_ifup
  *
  * Description:
@@ -727,8 +638,6 @@ static void btnet_txpoll_expiry(wdparm_t arg)
 
 static int btnet_ifup(FAR struct net_driver_s *netdev)
 {
-  FAR struct btnet_driver_s *priv =
-    (FAR struct btnet_driver_s *)netdev->d_private;
   int ret;
 
   /* Set the IP address based on the addressing assigned to the node */
@@ -754,14 +663,9 @@ static int btnet_ifup(FAR struct net_driver_s *netdev)
              netdev->d_mac.radio.nv_addr[4], netdev->d_mac.radio.nv_addr[5]);
 #endif
 
-      /* Set and activate a timer process */
-
-      wd_start(&priv->bd_txpoll, TXPOLL_WDDELAY,
-               btnet_txpoll_expiry, (wdparm_t)priv);
-
       /* The interface is now up */
 
-      priv->bd_bifup = true;
+      netdev_carrier_on(netdev);
       ret = OK;
     }
 
@@ -786,27 +690,7 @@ static int btnet_ifup(FAR struct net_driver_s *netdev)
 
 static int btnet_ifdown(FAR struct net_driver_s *netdev)
 {
-  FAR struct btnet_driver_s *priv =
-    (FAR struct btnet_driver_s *)netdev->d_private;
-  irqstate_t flags;
-
-  /* Disable interruption */
-
-  flags = spin_lock_irqsave(NULL);
-
-  /* Cancel the TX poll timer and TX timeout timers */
-
-  wd_cancel(&priv->bd_txpoll);
-
-  /* Put the EMAC in its reset, non-operational state.  This should be
-   * a known configuration that will guarantee the btnet_ifup() always
-   * successfully brings the interface back up.
-   */
-
-  /* Mark the device "down" */
-
-  priv->bd_bifup = false;
-  spin_unlock_irqrestore(NULL, flags);
+  netdev_carrier_off(netdev);
   return OK;
 }
 
@@ -831,8 +715,6 @@ static void btnet_txavail_work(FAR void *arg)
 {
   FAR struct btnet_driver_s *priv = (FAR struct btnet_driver_s *)arg;
 
-  wlinfo("ifup=%u\n", priv->bd_bifup);
-
   /* Lock the network and serialize driver operations if necessary.
    * NOTE: Serialization is only required in the case where the driver work
    * is performed on an LP worker thread and where more than one LP worker
@@ -843,7 +725,7 @@ static void btnet_txavail_work(FAR void *arg)
 
   /* Ignore the notification if the interface is not yet up */
 
-  if (priv->bd_bifup)
+  if (IFF_IS_RUNNING(priv->bd_dev.r_dev.d_flags))
     {
 #ifdef CONFIG_NET_6LOWPAN
       /* Make sure the our single packet buffer is attached */
@@ -1287,7 +1169,7 @@ int bt_netdev_register(FAR struct bt_driver_s *btdev)
 
   /* Get the interface structure associated with this interface number. */
 
-  priv = (FAR struct btnet_driver_s *)
+  btdev->bt_net = priv = (FAR struct btnet_driver_s *)
     kmm_zalloc(sizeof(struct btnet_driver_s));
 
   if (priv == NULL)
@@ -1340,10 +1222,6 @@ int bt_netdev_register(FAR struct bt_driver_s *btdev)
   bt_hci_cb_register(hcicb);
 #endif
 
-  /* Setup a locking semaphore for exclusive device driver access */
-
-  nxsem_init(&priv->bd_exclsem, 0, 1);
-
   /* Set the network mask. */
 
   btnet_netmask(netdev);
@@ -1363,10 +1241,10 @@ int bt_netdev_register(FAR struct bt_driver_s *btdev)
    * supported.
    */
 
-  ret = bt_driver_register(btdev);
+  ret = bt_driver_set(btdev);
   if (ret < 0)
     {
-      nerr("ERROR: bt_driver_register() failed: %d\n", ret);
+      nerr("ERROR: bt_driver_set() failed: %d\n", ret);
       goto errout;
     }
 
@@ -1398,6 +1276,10 @@ int bt_netdev_register(FAR struct bt_driver_s *btdev)
   priv->bd_dev.r_dev.d_buf = g_iobuffer.rb_buf;
 #endif
 
+#ifdef CONFIG_WIRELESS_BLUETOOTH_HOST
+  bt_add_services();
+#endif
+
   /* Register the network device with the OS so that socket IOCTLs can be
    * performed
    */
@@ -1412,13 +1294,63 @@ int bt_netdev_register(FAR struct bt_driver_s *btdev)
 
 errout:
 
-  /* Un-initialize semaphores */
-
-  nxsem_destroy(&priv->bd_exclsem);
+  btnet_ifdown(netdev);
+  bt_driver_unset(btdev);
 
   /* Free memory and return the error */
 
-  kmm_free(priv);
+  kmm_free(btdev->bt_net);
+  btdev->bt_net = NULL;
+  return ret;
+}
+
+/****************************************************************************
+ * Name: bt_netdev_unregister
+ *
+ * Description:
+ *   Unregister a network a driver registered by bt_netdev_register.
+ *
+ * Input Parameters:
+ *   btdev - An instance of the low-level driver interface structure.
+ *
+ * Returned Value:
+ *   Zero (OK) is returned on success.  Otherwise a negated errno value is
+ *   returned to indicate the nature of the failure.
+ *
+ ****************************************************************************/
+
+int bt_netdev_unregister(FAR struct bt_driver_s *btdev)
+{
+  int ret;
+  FAR struct btnet_driver_s *priv;
+
+  if (!btdev)
+    {
+      return -EINVAL;
+    }
+
+  priv = (FAR struct btnet_driver_s *)btdev->bt_net;
+  if (!priv)
+    {
+      nerr("ERROR: bt_driver_s is probably not registered\n");
+      return -EINVAL;
+    }
+
+  btnet_ifdown(&priv->bd_dev.r_dev);
+
+  ret = netdev_unregister(&priv->bd_dev.r_dev);
+  if (ret < 0)
+    {
+      nerr("ERROR: netdev_unregister bfailed: %d\n", ret);
+    }
+
+  bt_deinitialize();
+
+  bt_driver_unset(btdev);
+
+  kmm_free(btdev->bt_net);
+  btdev->bt_net = NULL;
+
   return ret;
 }
 

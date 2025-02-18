@@ -1,6 +1,8 @@
 /****************************************************************************
  * libs/libc/unistd/lib_setpriority.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -27,6 +29,10 @@
 
 #include <errno.h>
 #include <unistd.h>
+
+#include <nuttx/sched.h>
+
+#include <sys/resource.h>
 
 /****************************************************************************
  * Public Functions
@@ -58,9 +64,11 @@ int setpriority(int which, id_t who, int value)
   struct sched_param param;
   int ret;
 
+  UNUSED(which);
+
   if (who == 0)
     {
-      who = getpid();
+      who = _SCHED_GETTID();
     }
 
   ret = sched_getparam(who, &param);

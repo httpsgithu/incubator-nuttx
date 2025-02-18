@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/arm/arm_allocpage.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -32,12 +34,12 @@
 
 #include <nuttx/sched.h>
 
-#ifdef CONFIG_PAGING
+#ifdef CONFIG_LEGACY_PAGING
 
 #include <nuttx/page.h>
 
-#include "pg_macros.h"
 #include "arm_internal.h"
+#include "pg_macros.h"
 
 /****************************************************************************
  * Pre-processor Definitions
@@ -150,7 +152,7 @@ static bool g_pgwrap;
  *
  ****************************************************************************/
 
-int up_allocpage(FAR struct tcb_s *tcb, FAR void **vpage)
+int up_allocpage(struct tcb_s *tcb, void **vpage)
 {
   uintptr_t vaddr;
   uintptr_t paddr;
@@ -171,7 +173,7 @@ int up_allocpage(FAR struct tcb_s *tcb, FAR void **vpage)
    */
 
   pgndx = g_pgndx++;
-  if (g_pgndx >= CONFIG_PAGING)
+  if (g_pgndx >= CONFIG_LEGACY_PAGING)
     {
       g_pgndx  = 0;
       g_pgwrap = true;
@@ -225,4 +227,4 @@ int up_allocpage(FAR struct tcb_s *tcb, FAR void **vpage)
   return OK;
 }
 
-#endif /* CONFIG_PAGING */
+#endif /* CONFIG_LEGACY_PAGING */

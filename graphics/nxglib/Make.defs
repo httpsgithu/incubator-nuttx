@@ -1,6 +1,8 @@
 ############################################################################
 # graphics/nxglib/Make.defs
 #
+# SPDX-License-Identifier: Apache-2.0
+#
 # Licensed to the Apache Software Foundation (ASF) under one or more
 # contributor license agreements.  See the NOTICE file distributed with
 # this work for additional information regarding copyright ownership.  The
@@ -96,6 +98,6 @@ CSRCS += nxglib_cursor_backup_24bpp.c nxglib_cursor_backup_32bpp.c
 endif
 
 DEPPATH += --dep-path nxglib
-CFLAGS += ${shell $(INCDIR) "$(CC)" $(TOPDIR)/graphics/nxglib}
+CFLAGS += ${INCDIR_PREFIX}$(TOPDIR)/graphics/nxglib
 #VPATH += :nxglib
 VPATH = nxglib

@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/s32k1xx/s32k1xx_pminitialize.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -23,9 +25,9 @@
  ****************************************************************************/
 
 #include <nuttx/config.h>
-
 #include <nuttx/power/pm.h>
 
+#include "s32k1xx_clockconfig.h"
 #include "arm_internal.h"
 
 #ifdef CONFIG_PM
@@ -54,9 +56,13 @@
 
 void arm_pminitialize(void)
 {
-  /* Then initialize the NuttX power management subsystem proper */
+  /* Initialize the NuttX power management subsystem proper */
 
   pm_initialize();
+
+  /* Register clockconfig first to receive power management callbacks */
+
+  s32k1xx_clock_pm_register();
 }
 
 #endif /* CONFIG_PM */

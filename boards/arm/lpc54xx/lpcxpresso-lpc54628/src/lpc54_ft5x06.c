@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/lpc54xx/lpcxpresso-lpc54628/src/lpc54_ft5x06.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -49,15 +51,15 @@
  ****************************************************************************/
 
 #ifndef CONFIG_FT5X06_POLLMODE
-static int  lpc54_ft5x06_attach(FAR const struct ft5x06_config_s *config,
-              xcpt_t isr, FAR void *arg);
-static void lpc54_ft5x06_enable(FAR const struct ft5x06_config_s *config,
+static int  lpc54_ft5x06_attach(const struct ft5x06_config_s *config,
+              xcpt_t isr, void *arg);
+static void lpc54_ft5x06_enable(const struct ft5x06_config_s *config,
               bool enable);
-static void lpc54_ft5x06_clear(FAR const struct ft5x06_config_s *config);
+static void lpc54_ft5x06_clear(const struct ft5x06_config_s *config);
 #endif
 
-static void lpc54_ft5x06_wakeup(FAR const struct ft5x06_config_s *config);
-static void lpc54_ft5x06_nreset(FAR const struct ft5x06_config_s *config,
+static void lpc54_ft5x06_wakeup(const struct ft5x06_config_s *config);
+static void lpc54_ft5x06_nreset(const struct ft5x06_config_s *config,
               bool state);
 
 /****************************************************************************
@@ -94,8 +96,8 @@ static uint8_t g_ft5x06_irq;
  ****************************************************************************/
 
 #ifndef CONFIG_FT5X06_POLLMODE
-static int lpc54_ft5x06_attach(FAR const struct ft5x06_config_s *config,
-                               xcpt_t isr, FAR void *arg)
+static int lpc54_ft5x06_attach(const struct ft5x06_config_s *config,
+                               xcpt_t isr, void *arg)
 {
   return irq_attach(g_ft5x06_irq, isr, arg);
 }
@@ -110,7 +112,7 @@ static int lpc54_ft5x06_attach(FAR const struct ft5x06_config_s *config,
  ****************************************************************************/
 
 #ifndef CONFIG_FT5X06_POLLMODE
-static void lpc54_ft5x06_enable(FAR const struct ft5x06_config_s *config,
+static void lpc54_ft5x06_enable(const struct ft5x06_config_s *config,
                                 bool enable)
 {
   if (enable)
@@ -133,7 +135,7 @@ static void lpc54_ft5x06_enable(FAR const struct ft5x06_config_s *config,
  ****************************************************************************/
 
 #ifndef CONFIG_FT5X06_POLLMODE
-static void lpc54_ft5x06_clear(FAR const struct ft5x06_config_s *config)
+static void lpc54_ft5x06_clear(const struct ft5x06_config_s *config)
 {
   lpc54_gpio_ackedge(g_ft5x06_irq);
 }
@@ -148,7 +150,7 @@ static void lpc54_ft5x06_clear(FAR const struct ft5x06_config_s *config)
  *
  ****************************************************************************/
 
-static void lpc54_ft5x06_wakeup(FAR const struct ft5x06_config_s *config)
+static void lpc54_ft5x06_wakeup(const struct ft5x06_config_s *config)
 {
   /* We do not have access to the WAKE pin in the implementation */
 }
@@ -161,7 +163,7 @@ static void lpc54_ft5x06_wakeup(FAR const struct ft5x06_config_s *config)
  *
  ****************************************************************************/
 
-static void lpc54_ft5x06_nreset(FAR const struct ft5x06_config_s *config,
+static void lpc54_ft5x06_nreset(const struct ft5x06_config_s *config,
                                 bool nstate)
 {
   lpc54_gpio_write(GPIO_FT5X06_CTRSTN, nstate);
@@ -181,7 +183,7 @@ static void lpc54_ft5x06_nreset(FAR const struct ft5x06_config_s *config,
 
 int lpc54_ft5x06_register(void)
 {
-  FAR struct i2c_master_s *i2c;
+  struct i2c_master_s *i2c;
   int ret;
 
 #ifndef CONFIG_FT5X06_POLLMODE

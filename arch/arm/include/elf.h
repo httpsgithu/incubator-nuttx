@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/include/elf.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -18,7 +20,7 @@
  *
  ****************************************************************************/
 
-/* Reference: "ELF for the ARM® Architecture," ARM IHI 0044D, current through
+/* Reference: "ELF for the ARM Architecture," ARM IHI 0044D, current through
  *   ABI release 2.08, October 28, 2009, ARM Limited.
  */
 
@@ -37,9 +39,7 @@
  *                     ELFDATA2MSB (big endian)
  */
 
-#if 0 /* Defined in include/elf32.h */
-#define EM_ARM                   40
-#endif
+#define EM_ARCH                  EM_ARM
 
 /* Table 4-2, ARM-specific e_flags */
 
@@ -52,6 +52,21 @@
 #define EF_ARM_EABI_VER5         0x05000000
 
 #define EF_ARM_BE8               0x00800000
+
+#define EF_ARM_ABI_FLOAT_SOFT    0x00000200
+#define EF_ARM_ABI_FLOAT_HARD    0x00000400
+
+#ifdef __VFP_FP__
+#  ifdef __ARM_PCS_VFP
+#    define EF_ARM_ABI_FLOAT     EF_ARM_ABI_FLOAT_HARD
+#  else
+#    define EF_ARM_ABI_FLOAT     EF_ARM_ABI_FLOAT_SOFT
+#  endif
+#else
+#  define EF_ARM_ABI_FLOAT       0
+#endif
+
+#define EF_FLAG                  (EF_ARM_EABI_VER5 | EF_ARM_ABI_FLOAT)
 
 /* Table 4-4, Processor specific section types */
 
@@ -191,6 +206,10 @@
 #define R_ARM_THM_TLS_DESCSEQ16  129           /* Thumb16 */
 #define R_ARM_THM_TLS_DESCSEQ32  130           /* Thumb32 */
 
+/* Processor specific values for the Phdr p_type field.  */
+
+#define PT_ARM_EXIDX             (PT_LOPROC + 1) /* ARM unwind segment.  */
+
 /* 5.2.1 Platform architecture compatibility data */
 
 #define PT_ARM_ARCHEXT_FMTMSK       0xff000000
@@ -227,5 +246,44 @@
 #define DT_ARM_SYMTABSZ          0x70000001
 #define DT_ARM_PREEMPTMAP        0x70000002
 #define DT_ARM_RESERVED2         0x70000003
+
+/****************************************************************************
+ * Public Types
+ ****************************************************************************/
+
+typedef struct __EIT_entry
+{
+  unsigned long fnoffset;
+  unsigned long content;
+} __EIT_entry;
+
+/* ELF register definitions */
+
+/* Holds the general purpose registers $a1 * through to $pc
+ * at indices 0 to 15.  At index 16 the program status register.
+ * Index 17 should be set to zero.
+ */
+
+typedef unsigned long elf_gregset_t[18];
+
+/****************************************************************************
+ * Public Data
+ ****************************************************************************/
+
+#ifdef __cplusplus
+#define EXTERN extern "C"
+extern "C"
+{
+#else
+#define EXTERN extern
+#endif
+
+extern __EIT_entry __exidx_start[];
+extern __EIT_entry __exidx_end[];
+
+#undef EXTERN
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* __ARCH_ARM_INCLUDE_ELF_H */

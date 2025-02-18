@@ -1,8 +1,9 @@
 /****************************************************************************
  * arch/arm/src/stm32f0l0g0/stm32_pwm.h
  *
- *   Copyright (C) 2019 Fundação CERTI. All rights reserved.
- *   Author: Daniel Pereira Volpato <dpo@certi.org.br>
+ * SPDX-License-Identifier: BSD-3-Clause
+ * SPDX-FileCopyrightText: 2019 Fundação CERTI. All rights reserved.
+ * SPDX-FileContributor: Daniel Pereira Volpato <dpo@certi.org.br>
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -48,8 +49,12 @@
  ****************************************************************************/
 
 #include <nuttx/config.h>
+#include <arch/board/board.h>
+
+#include <sys/param.h>
 
 #include "chip.h"
+#include "hardware/stm32_tim.h"
 
 /****************************************************************************
  * Pre-processor Definitions
@@ -99,9 +104,6 @@
     defined(CONFIG_STM32F0L0G0_TIM3_PWM)  || defined(CONFIG_STM32F0L0G0_TIM14_PWM)  || \
     defined(CONFIG_STM32F0L0G0_TIM15_PWM) || defined(CONFIG_STM32F0L0G0_TIM16_PWM)  || \
     defined(CONFIG_STM32F0L0G0_TIM17_PWM)
-
-#include <arch/board/board.h>
-#include "hardware/stm32_tim.h"
 
 #ifdef CONFIG_PWM_MULTICHAN
 
@@ -327,15 +329,13 @@
 #endif
 #define PWM_TIM17_NCHANNELS PWM_TIM17_CHANNEL1
 
-#define PWM_MAX(a, b) ((a) > (b) ? (a) : (b))
-
-#define PWM_NCHANNELS PWM_MAX(PWM_TIM1_NCHANNELS, \
-                      PWM_MAX(PWM_TIM2_NCHANNELS, \
-                      PWM_MAX(PWM_TIM3_NCHANNELS, \
-                      PWM_MAX(PWM_TIM14_NCHANNELS, \
-                      PWM_MAX(PWM_TIM15_NCHANNELS, \
-                      PWM_MAX(PWM_TIM16_NCHANNELS, \
-                              PWM_TIM17_NCHANNELS))))))
+#define PWM_NCHANNELS MAX(PWM_TIM1_NCHANNELS, \
+                      MAX(PWM_TIM2_NCHANNELS, \
+                      MAX(PWM_TIM3_NCHANNELS, \
+                      MAX(PWM_TIM14_NCHANNELS, \
+                      MAX(PWM_TIM15_NCHANNELS, \
+                      MAX(PWM_TIM16_NCHANNELS, \
+                          PWM_TIM17_NCHANNELS))))))
 
 #else  /* !CONFIG_PWM_MULTICHAN */
 
@@ -549,7 +549,7 @@ extern "C"
  *
  ****************************************************************************/
 
-FAR struct pwm_lowerhalf_s *stm32_pwminitialize(int timer);
+struct pwm_lowerhalf_s *stm32_pwminitialize(int timer);
 
 #undef EXTERN
 #if defined(__cplusplus)

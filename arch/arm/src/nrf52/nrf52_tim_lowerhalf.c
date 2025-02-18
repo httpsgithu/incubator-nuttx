@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/nrf52/nrf52_tim_lowerhalf.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -34,8 +36,7 @@
 #include <nuttx/arch.h>
 #include <nuttx/timers/timer.h>
 
-#include "arm_arch.h"
-
+#include "arm_internal.h"
 #include "nrf52_tim.h"
 
 /****************************************************************************
@@ -47,9 +48,13 @@
 #define NRF52_TIMER_CC  (NRF52_TIM_CC0)
 #define NRF52_TIMER_INT (NRF52_TIM_INT_COMPARE0)
 #define NRF52_TIMER_RES (NRF52_TIM_WIDTH_32B)
-#define NRF52_TIMER_MAX (0xffffffff)
+#define NRF52_TIMER_MAX (4294967295ul)
 #define NRF52_TIMER_PRE (NRF52_TIM_PRE_1000000)
 #define NRF52_TIMER_PER (1000000)
+
+/* Maximum supported timeout */
+
+#define NRF52_TIMER_MAXTIMEOUT (NRF52_TIMER_MAX * (1000000 / NRF52_TIMER_PER))
 
 /****************************************************************************
  * Private Types
@@ -57,11 +62,11 @@
 
 struct nrf52_timer_lowerhalf_s
 {
-  FAR const struct timer_ops_s *ops;        /* Lower half operations */
-  FAR struct nrf52_tim_dev_s   *tim;        /* nrf52 timer driver */
-  tccb_t                        callback;   /* Current user interrupt callback */
-  FAR void                     *arg;        /* Argument passed to upper half callback */
-  bool                          started;    /* True: Timer has been started */
+  const struct timer_ops_s *ops;      /* Lower half operations */
+  struct nrf52_tim_dev_s   *tim;      /* nrf52 timer driver */
+  tccb_t                    callback; /* Current user interrupt callback */
+  void                     *arg;      /* Argument passed to upper half callback */
+  bool                      started;  /* True: Timer has been started */
 };
 
 /****************************************************************************
@@ -72,14 +77,14 @@ static int nrf52_timer_handler(int irq, void *context, void *arg);
 
 /* "Lower half" driver methods **********************************************/
 
-static int nrf52_timer_start(FAR struct timer_lowerhalf_s *lower);
-static int nrf52_timer_stop(FAR struct timer_lowerhalf_s *lower);
-static int nrf52_timer_getstatus(FAR struct timer_lowerhalf_s *lower,
-                                  FAR struct timer_status_s *status);
-static int nrf52_timer_settimeout(FAR struct timer_lowerhalf_s *lower,
-                            uint32_t timeout);
-static void nrf52_timer_setcallback(FAR struct timer_lowerhalf_s *lower,
-                              tccb_t callback, FAR void *arg);
+static int nrf52_timer_start(struct timer_lowerhalf_s *lower);
+static int nrf52_timer_stop(struct timer_lowerhalf_s *lower);
+static int nrf52_timer_getstatus(struct timer_lowerhalf_s *lower,
+                                 struct timer_status_s *status);
+static int nrf52_timer_settimeout(struct timer_lowerhalf_s *lower,
+                                  uint32_t timeout);
+static void nrf52_timer_setcallback(struct timer_lowerhalf_s *lower,
+                                    tccb_t callback, void *arg);
 
 /****************************************************************************
  * Private Data
@@ -160,8 +165,8 @@ static struct nrf52_timer_lowerhalf_s g_nrf52_timer4_lowerhalf =
 
 static int nrf52_timer_handler(int irq, void *context, void *arg)
 {
-  FAR struct nrf52_timer_lowerhalf_s *priv =
-    (FAR struct nrf52_timer_lowerhalf_s *)arg;
+  struct nrf52_timer_lowerhalf_s *priv =
+    (struct nrf52_timer_lowerhalf_s *)arg;
   uint32_t next_interval_us = 0;
 
   NRF52_TIM_ACKINT(priv->tim, NRF52_TIMER_INT);
@@ -196,10 +201,10 @@ static int nrf52_timer_handler(int irq, void *context, void *arg)
  *
  ****************************************************************************/
 
-static int nrf52_timer_start(FAR struct timer_lowerhalf_s *lower)
+static int nrf52_timer_start(struct timer_lowerhalf_s *lower)
 {
-  FAR struct nrf52_timer_lowerhalf_s *priv =
-    (FAR struct nrf52_timer_lowerhalf_s *)lower;
+  struct nrf52_timer_lowerhalf_s *priv =
+    (struct nrf52_timer_lowerhalf_s *)lower;
   int ret = OK;
 
   DEBUGASSERT(priv);
@@ -257,10 +262,10 @@ errout:
  *
  ****************************************************************************/
 
-static int nrf52_timer_stop(FAR struct timer_lowerhalf_s *lower)
+static int nrf52_timer_stop(struct timer_lowerhalf_s *lower)
 {
-  FAR struct nrf52_timer_lowerhalf_s *priv =
-    (FAR struct nrf52_timer_lowerhalf_s *)lower;
+  struct nrf52_timer_lowerhalf_s *priv =
+    (struct nrf52_timer_lowerhalf_s *)lower;
   int ret = OK;
 
   DEBUGASSERT(priv);
@@ -299,11 +304,11 @@ errout:
  *
  ****************************************************************************/
 
-static int nrf52_timer_getstatus(FAR struct timer_lowerhalf_s *lower,
-                                 FAR struct timer_status_s *status)
+static int nrf52_timer_getstatus(struct timer_lowerhalf_s *lower,
+                                 struct timer_status_s *status)
 {
-  FAR struct nrf52_timer_lowerhalf_s *priv =
-    (FAR struct nrf52_timer_lowerhalf_s *)lower;
+  struct nrf52_timer_lowerhalf_s *priv =
+    (struct nrf52_timer_lowerhalf_s *)lower;
 
   DEBUGASSERT(priv);
   DEBUGASSERT(status);
@@ -346,12 +351,12 @@ static int nrf52_timer_getstatus(FAR struct timer_lowerhalf_s *lower,
  *
  ****************************************************************************/
 
-static int nrf52_timer_settimeout(FAR struct timer_lowerhalf_s *lower,
+static int nrf52_timer_settimeout(struct timer_lowerhalf_s *lower,
                                   uint32_t timeout)
 {
-  FAR struct nrf52_timer_lowerhalf_s *priv =
-    (FAR struct nrf52_timer_lowerhalf_s *)lower;
-  uint64_t cc  = 0;
+  struct nrf52_timer_lowerhalf_s *priv =
+    (struct nrf52_timer_lowerhalf_s *)lower;
+  uint32_t cc  = 0;
   int      ret = OK;
 
   DEBUGASSERT(priv);
@@ -362,13 +367,13 @@ static int nrf52_timer_settimeout(FAR struct timer_lowerhalf_s *lower,
       goto errout;
     }
 
-  if (timeout > NRF52_TIMER_MAX)
+  if (timeout > NRF52_TIMER_MAXTIMEOUT)
     {
       ret = -EINVAL;
       goto errout;
     }
 
-  cc = (timeout / 1000000) * NRF52_TIMER_PER;
+  cc = (timeout * NRF52_TIMER_PER / 1000000);
   NRF52_TIM_SETCC(priv->tim, NRF52_TIMER_CC, cc);
 
 errout:
@@ -395,11 +400,11 @@ errout:
  *
  ****************************************************************************/
 
-static void nrf52_timer_setcallback(FAR struct timer_lowerhalf_s *lower,
-                                    tccb_t callback, FAR void *arg)
+static void nrf52_timer_setcallback(struct timer_lowerhalf_s *lower,
+                                    tccb_t callback, void *arg)
 {
-  FAR struct nrf52_timer_lowerhalf_s *priv =
-    (FAR struct nrf52_timer_lowerhalf_s *)lower;
+  struct nrf52_timer_lowerhalf_s *priv =
+    (struct nrf52_timer_lowerhalf_s *)lower;
   irqstate_t flags;
 
   DEBUGASSERT(priv);
@@ -447,10 +452,10 @@ static void nrf52_timer_setcallback(FAR struct timer_lowerhalf_s *lower,
  *
  ****************************************************************************/
 
-int nrf52_timer_initialize(FAR const char *devpath, uint8_t timer)
+int nrf52_timer_initialize(const char *devpath, uint8_t timer)
 {
   struct nrf52_timer_lowerhalf_s *lower = NULL;
-  FAR void                       *drvr  = NULL;
+  void                           *drvr  = NULL;
   int                             ret   = OK;
 
   DEBUGASSERT(devpath);
@@ -521,7 +526,7 @@ int nrf52_timer_initialize(FAR const char *devpath, uint8_t timer)
    * REVISIT: The returned handle is discard here.
    */
 
-  drvr = timer_register(devpath, (FAR struct timer_lowerhalf_s *)lower);
+  drvr = timer_register(devpath, (struct timer_lowerhalf_s *)lower);
   if (drvr == NULL)
     {
       /* The actual cause of the failure may have been a failure to allocate

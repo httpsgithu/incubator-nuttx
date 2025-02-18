@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/stm32l4/stm32l4x3xx_rcc.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -45,10 +47,6 @@
 
 #define HSIRDY_TIMEOUT HSERDY_TIMEOUT
 #define MSIRDY_TIMEOUT HSERDY_TIMEOUT
-
-/* HSE divisor to yield ~1MHz RTC clock */
-
-#define HSE_DIVISOR (STM32L4_HSE_FREQUENCY + 500000) / 1000000
 
 /* Determine if board wants to use HSI48 as 48 MHz oscillator. */
 
@@ -121,7 +119,7 @@ static inline void rcc_enableahb1(void)
 {
   uint32_t regval;
 
-  /* Set the appropriate bits in the AHB1ENR register to enabled the
+  /* Set the appropriate bits in the AHB1ENR register to enable the
    * selected AHB1 peripherals.
    */
 
@@ -166,7 +164,7 @@ static inline void rcc_enableahb2(void)
 {
   uint32_t regval;
 
-  /* Set the appropriate bits in the AHB2ENR register to enable the
+  /* Set the appropriate bits in the AHB2ENR register to enabled the
    * selected AHB2 peripherals.
    */
 
@@ -523,16 +521,19 @@ static inline void rcc_enableccip(void)
 #ifdef CONFIG_STM32L4_I2C1
   /* Select HSI16 as I2C1 clock source. */
 
+  regval &= ~RCC_CCIPR_I2C1SEL_MASK;
   regval |= RCC_CCIPR_I2C1SEL_HSI;
 #endif
 #ifdef CONFIG_STM32L4_I2C2
   /* Select HSI16 as I2C2 clock source. */
 
+  regval &= ~RCC_CCIPR_I2C2SEL_MASK;
   regval |= RCC_CCIPR_I2C2SEL_HSI;
 #endif
 #ifdef CONFIG_STM32L4_I2C3
   /* Select HSI16 as I2C3 clock source. */
 
+  regval &= ~RCC_CCIPR_I2C3SEL_MASK;
   regval |= RCC_CCIPR_I2C3SEL_HSI;
 #endif
 #endif /* STM32L4_I2C_USE_HSI16 */
@@ -543,12 +544,14 @@ static inline void rcc_enableccip(void)
    * warning messages.
    */
 
+  regval &= ~RCC_CCIPR_CLK48SEL_MASK;
   regval |= STM32L4_CLK48_SEL;
 #endif
 
 #if defined(CONFIG_STM32L4_ADC1)
   /* Select SYSCLK as ADC clock source */
 
+  regval &= ~RCC_CCIPR_ADCSEL_MASK;
   regval |= RCC_CCIPR_ADCSEL_SYSCLK;
 #endif
 
@@ -574,7 +577,8 @@ static inline void rcc_enableccip(void)
 
   /* Select HSI16 as I2C4 clock source. */
 
-  regval |= RCC_CCIPR_I2C4SEL_HSI;
+  regval &= ~RCC_CCIPR2_I2C4SEL_MASK;
+  regval |= RCC_CCIPR2_I2C4SEL_HSI;
 
   putreg32(regval, STM32L4_RCC_CCIPR2);
 #endif
@@ -641,6 +645,7 @@ static void stm32l4_stdclockconfig(void)
   /* setting MSIRANGE */
 
   regval  = getreg32(STM32L4_RCC_CR);
+  regval &= ~RCC_CR_MSIRANGE_MASK;
   regval |= (STM32L4_BOARD_MSIRANGE | RCC_CR_MSION);    /* Enable MSI and frequency */
   putreg32(regval, STM32L4_RCC_CR);
 
@@ -695,9 +700,9 @@ static void stm32l4_stdclockconfig(void)
 #if 0
       /* Ensure Power control is enabled before modifying it. */
 
-      regval  = getreg32(STM32L4_RCC_APB1ENR);
-      regval |= RCC_APB1ENR_PWREN;
-      putreg32(regval, STM32L4_RCC_APB1ENR);
+      regval  = getreg32(STM32L4_RCC_APB1ENR1);
+      regval |= RCC_APB1ENR1_PWREN;
+      putreg32(regval, STM32L4_RCC_APB1ENR1);
 
       /* Select regulator voltage output Scale 1 mode to support system
        * frequencies up to 168 MHz.
@@ -729,15 +734,6 @@ static void stm32l4_stdclockconfig(void)
       regval &= ~RCC_CFGR_PPRE1_MASK;
       regval |= STM32L4_RCC_CFGR_PPRE1;
       putreg32(regval, STM32L4_RCC_CFGR);
-
-#ifdef CONFIG_STM32L4_RTC_HSECLOCK
-      /* Set the RTC clock divisor */
-
-      regval  = getreg32(STM32L4_RCC_CFGR);
-      regval &= ~RCC_CFGR_RTCPRE_MASK;
-      regval |= RCC_CFGR_RTCPRE(HSE_DIVISOR);
-      putreg32(regval, STM32L4_RCC_CFGR);
-#endif
 
       /* Set the PLL source and main divider */
 

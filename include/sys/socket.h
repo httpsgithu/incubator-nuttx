@@ -1,6 +1,8 @@
 /****************************************************************************
  * include/sys/socket.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -27,6 +29,7 @@
 
 #include <sys/types.h>
 #include <sys/uio.h>
+#include <stdint.h>
 
 /****************************************************************************
  * Pre-processor Definitions
@@ -49,6 +52,7 @@
 #define PF_CAN        29         /* Controller Area Network (SocketCAN) */
 #define PF_BLUETOOTH  31         /* Bluetooth sockets */
 #define PF_IEEE802154 36         /* Low level IEEE 802.15.4 radio frame interface */
+#define PF_VSOCK      40         /* vSockets */
 #define PF_PKTRADIO   64         /* Low level packet radio interface */
 #define PF_RPMSG      65         /* Remote core communication */
 
@@ -67,6 +71,7 @@
 #define AF_CAN         PF_CAN
 #define AF_BLUETOOTH   PF_BLUETOOTH
 #define AF_IEEE802154  PF_IEEE802154
+#define AF_VSOCK       PF_VSOCK
 #define AF_PKTRADIO    PF_PKTRADIO
 #define AF_RPMSG       PF_RPMSG
 
@@ -92,6 +97,13 @@
                                  * required to read an entire packet with each read
                                  * system call.
                                  */
+#define SOCK_CTRL      6        /* SOCK_CTRL is the preferred socket type to use
+                                 * when we just want a socket for performing driver
+                                 * ioctls. This definition is not POSIX compliant.
+                                 */
+#define SOCK_SMS       7        /* Support SMS(Short Message Service) socket.
+                                 * This definition is not POSIX compliant.
+                                 */
 #define SOCK_PACKET   10        /* Obsolete and should not be used in new programs */
 
 #define SOCK_CLOEXEC  02000000  /* Atomically set close-on-exec flag for the new
@@ -108,22 +120,25 @@
  * recognized by Linux, not all are supported by NuttX.
  */
 
-#define MSG_OOB        0x0001 /* Process out-of-band data.  */
-#define MSG_PEEK       0x0002 /* Peek at incoming messages.  */
-#define MSG_DONTROUTE  0x0004 /* Don't use local routing.  */
-#define MSG_CTRUNC     0x0008 /* Control data lost before delivery.  */
-#define MSG_PROXY      0x0010 /* Supply or ask second address.  */
-#define MSG_TRUNC      0x0020
-#define MSG_DONTWAIT   0x0040 /* Enable nonblocking IO.  */
-#define MSG_EOR        0x0080 /* End of record.  */
-#define MSG_WAITALL    0x0100 /* Wait for a full request.  */
-#define MSG_FIN        0x0200
-#define MSG_SYN        0x0400
-#define MSG_CONFIRM    0x0800 /* Confirm path validity.  */
-#define MSG_RST        0x1000
-#define MSG_ERRQUEUE   0x2000 /* Fetch message from error queue.  */
-#define MSG_NOSIGNAL   0x4000 /* Do not generate SIGPIPE.  */
-#define MSG_MORE       0x8000 /* Sender will send more.  */
+#define MSG_OOB          0x000001 /* Process out-of-band data.  */
+#define MSG_PEEK         0x000002 /* Peek at incoming messages.  */
+#define MSG_DONTROUTE    0x000004 /* Don't use local routing.  */
+#define MSG_CTRUNC       0x000008 /* Control data lost before delivery.  */
+#define MSG_PROXY        0x000010 /* Supply or ask second address.  */
+#define MSG_TRUNC        0x000020
+#define MSG_DONTWAIT     0x000040 /* Enable nonblocking IO.  */
+#define MSG_EOR          0x000080 /* End of record.  */
+#define MSG_WAITALL      0x000100 /* Wait for a full request.  */
+#define MSG_FIN          0x000200
+#define MSG_SYN          0x000400
+#define MSG_CONFIRM      0x000800 /* Confirm path validity.  */
+#define MSG_RST          0x001000
+#define MSG_ERRQUEUE     0x002000 /* Fetch message from error queue.  */
+#define MSG_NOSIGNAL     0x004000 /* Do not generate SIGPIPE.  */
+#define MSG_MORE         0x008000 /* Sender will send more.  */
+#define MSG_CMSG_CLOEXEC 0x100000 /* Set close_on_exit for file
+                                   * descriptor received through SCM_RIGHTS.
+                                   */
 
 /* Protocol levels supported by get/setsockopt(): */
 
@@ -200,6 +215,11 @@
 #define SO_TIMESTAMP    16 /* Generates a timestamp for each incoming packet
                             * arg: integer value
                             */
+#define SO_BINDTODEVICE 17 /* Bind this socket to a specific network device.
+                            */
+#define SO_PEERCRED     18 /* Return the credentials of the peer process
+                            * connected to this socket.
+                            */
 
 /* The options are unsupported but included for compatibility
  * and portability
@@ -221,6 +241,8 @@
 #define SOL_L2CAP       6  /* See options in include/netpacket/bluetooth.h */
 #define SOL_SCO         17 /* See options in include/netpacket/bluetooth.h */
 #define SOL_RFCOMM      18 /* See options in include/netpacket/bluetooth.h */
+
+#define SOL_PACKET      19
 
 /* Protocol-level socket options may begin with this value */
 
@@ -247,7 +269,7 @@
 #define CMSG_NXTHDR(mhdr, cmsg) cmsg_nxthdr((mhdr), (cmsg))
 
 #define CMSG_ALIGN(len) \
-  (((len)+sizeof(long)-1) & ~(sizeof(long)-1))
+  (((len) + sizeof(long) - 1) & ~(sizeof(long) - 1))
 #define CMSG_DATA(cmsg) \
   ((FAR void *)((FAR char *)(cmsg) + CMSG_ALIGN(sizeof(struct cmsghdr))))
 #define CMSG_SPACE(len) \
@@ -256,14 +278,13 @@
   (CMSG_ALIGN(sizeof(struct cmsghdr)) + (len))
 
 #define __CMSG_FIRSTHDR(ctl, len) \
-  ((len) >= sizeof(struct cmsghdr) ? (FAR struct cmsghdr *)(ctl) : \
-   (FAR struct cmsghdr *)NULL)
+  ((len) >= sizeof(struct cmsghdr) ? (FAR struct cmsghdr *)(ctl) : NULL)
 #define CMSG_FIRSTHDR(msg) \
   __CMSG_FIRSTHDR((msg)->msg_control, (msg)->msg_controllen)
 #define CMSG_OK(mhdr, cmsg) ((cmsg)->cmsg_len >= sizeof(struct cmsghdr) && \
                             (cmsg)->cmsg_len <= (unsigned long) \
                             ((mhdr)->msg_controllen - \
-                             ((char *)(cmsg) - (char *)(mhdr)->msg_control)))
+                             ((FAR char *)(cmsg) - (FAR char *)(mhdr)->msg_control)))
 #define for_each_cmsghdr(cmsg, msg) \
        for (cmsg = CMSG_FIRSTHDR(msg); \
             cmsg; \
@@ -274,6 +295,22 @@
 #define SCM_RIGHTS      0x01    /* rw: access rights (array of int) */
 #define SCM_CREDENTIALS 0x02    /* rw: struct ucred */
 #define SCM_SECURITY    0x03    /* rw: security label */
+#define SCM_TIMESTAMP   SO_TIMESTAMP
+
+/* Desired design of maximum size and alignment (see RFC2553) */
+
+#define SS_MAXSIZE   128               /* Implementation-defined maximum size. */
+#define SS_ALIGNSIZE (sizeof(int64_t)) /* Implementation-defined desired alignment. */
+
+/* Definitions used for sockaddr_storage structure paddings design */
+#define SS_PAD1SIZE (SS_ALIGNSIZE - sizeof(sa_family_t))
+#define SS_PAD2SIZE (SS_MAXSIZE - (sizeof(sa_family_t) + \
+                     SS_PAD1SIZE + SS_ALIGNSIZE))
+
+/* Network socket control */
+
+#define DENY_INET_SOCK_ENABLE  0x01   /* Deny to create INET socket */
+#define DENY_INET_SOCK_DISABLE 0x02   /* Not deny to create INET socket */
 
 /****************************************************************************
  * Type Definitions
@@ -284,23 +321,26 @@
  * aligned at an appropriate boundary so that pointers to it can be cast
  * as pointers to protocol-specific address structures and used to access
  * the fields of those structures without alignment problems.
- *
- * REVISIT: sizeof(struct sockaddr_storge) should be 128 bytes.
  */
 
-#ifdef CONFIG_NET_IPv6
 struct sockaddr_storage
 {
   sa_family_t ss_family;       /* Address family */
-  char        ss_data[26];     /* 26-bytes of address data */
+
+  /* Following fields are implementation-defined */
+
+  begin_packed_struct struct
+  {
+    char ss_pad1[SS_PAD1SIZE]; /* 6-byte pad; this is to make implementation-defined
+                                * pad up to alignment field that follows explicit in
+                                * the data structure */
+    int64_t ss_align;          /* Field to force desired structure storage alignment */
+    char ss_pad2[SS_PAD2SIZE]; /* 112-byte pad to achieve desired size, SS_MAXSIZE
+                                * value minus size of ss_family ss_pad1, ss_align
+                                * fields is 112. */
+  }
+  end_packed_struct ss_data[1];
 };
-#else
-struct sockaddr_storage
-{
-  sa_family_t ss_family;       /* Address family */
-  char        ss_data[14];     /* 14-bytes of address data */
-};
-#endif
 
 /* The sockaddr structure is used to define a socket address which is used
  * in the bind(), connect(), getpeername(), getsockname(), recvfrom(), and
@@ -317,8 +357,8 @@ struct sockaddr
 
 struct linger
 {
-  int  l_onoff;   /* Indicates whether linger option is enabled. */
-  int  l_linger;  /* Linger time, in seconds. */
+  int l_onoff;                  /* Indicates whether linger option is enabled. */
+  int l_linger;                 /* Linger time, in seconds. */
 };
 
 struct msghdr
@@ -339,21 +379,29 @@ struct cmsghdr
   int cmsg_type;                /* Protocol-specific type */
 };
 
+struct ucred
+{
+  pid_t pid;
+  uid_t uid;
+  gid_t gid;
+};
+
 /****************************************************************************
  * Inline Functions
  ****************************************************************************/
 
 static inline FAR struct cmsghdr *__cmsg_nxthdr(FAR void *__ctl,
-                                                unsigned int __size,
+                                                unsigned long __size,
                                                 FAR struct cmsghdr *__cmsg)
 {
-  FAR struct cmsghdr *__ptr;
+  size_t len = CMSG_ALIGN(__cmsg->cmsg_len);
+  FAR struct cmsghdr *__ptr =
+               (FAR struct cmsghdr *)(((FAR char *)__cmsg) + len);
 
-  __ptr = (FAR struct cmsghdr *)
-    (((FAR char *)__cmsg) + CMSG_ALIGN(__cmsg->cmsg_len));
-  if ((unsigned long)((FAR char *)(__ptr + 1) - (FAR char *)__ctl) > __size)
+  if (len < sizeof(*__cmsg) ||
+      (unsigned long)((FAR char *)(__ptr + 1) - (FAR char *)__ctl) > __size)
     {
-      return (FAR struct cmsghdr *)NULL;
+      return NULL;
     }
 
   return __ptr;
@@ -385,6 +433,8 @@ int connect(int sockfd, FAR const struct sockaddr *addr, socklen_t addrlen);
 
 int listen(int sockfd, int backlog);
 int accept(int sockfd, FAR struct sockaddr *addr, FAR socklen_t *addrlen);
+int accept4(int sockfd, FAR struct sockaddr *addr, FAR socklen_t *addrlen,
+            int flags);
 
 ssize_t send(int sockfd, FAR const void *buf, size_t len, int flags);
 ssize_t sendto(int sockfd, FAR const void *buf, size_t len, int flags,
@@ -408,6 +458,40 @@ int getpeername(int sockfd, FAR struct sockaddr *addr,
 
 ssize_t recvmsg(int sockfd, FAR struct msghdr *msg, int flags);
 ssize_t sendmsg(int sockfd, FAR struct msghdr *msg, int flags);
+
+#if CONFIG_FORTIFY_SOURCE > 0
+fortify_function(send) ssize_t send(int sockfd, FAR const void *buf,
+                                    size_t len, int flags)
+{
+  fortify_assert(len <= fortify_size(buf, 0));
+  return __real_send(sockfd, buf, len, flags);
+}
+
+fortify_function(sendto) ssize_t sendto(int sockfd, FAR const void *buf,
+                                        size_t len, int flags,
+                                        FAR const struct sockaddr *to,
+                                        socklen_t tolen)
+{
+  fortify_assert(len <= fortify_size(buf, 0));
+  return __real_sendto(sockfd, buf, len, flags, to, tolen);
+}
+
+fortify_function(recv) ssize_t recv(int sockfd, FAR void *buf,
+                                    size_t len, int flags)
+{
+  fortify_assert(len <= fortify_size(buf, 0));
+  return __real_recv(sockfd, buf, len, flags);
+}
+
+fortify_function(recvfrom) ssize_t recvfrom(int sockfd, FAR void *buf,
+                                            size_t len, int flags,
+                                            FAR struct sockaddr *from,
+                                            FAR socklen_t *fromlen)
+{
+  fortify_assert(len <= fortify_size(buf, 0));
+  return __real_recvfrom(sockfd, buf, len, flags, from, fromlen);
+}
+#endif
 
 #undef EXTERN
 #if defined(__cplusplus)

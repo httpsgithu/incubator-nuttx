@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/rp2040/common/src/rp2040_i2sdev.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -35,7 +37,7 @@
 
 #include <arch/board/board.h>
 
-#include "arm_arch.h"
+#include "arm_internal.h"
 #include "rp2040_i2s.h"
 
 /****************************************************************************
@@ -52,9 +54,9 @@
 
 int board_i2sdev_initialize(int port)
 {
-  FAR struct audio_lowerhalf_s *audio_i2s;
-  FAR struct audio_lowerhalf_s *pcm;
-  FAR struct i2s_dev_s *i2s;
+  struct audio_lowerhalf_s *audio_i2s;
+  struct audio_lowerhalf_s *pcm;
+  struct i2s_dev_s *i2s;
   char devname[12];
   int ret;
 
@@ -82,7 +84,7 @@ int board_i2sdev_initialize(int port)
       return  -ENODEV;
     }
 
-  snprintf(devname, 12, "pcm%d", port);
+  snprintf(devname, sizeof(devname), "pcm%d", port);
 
   ret = audio_register(devname, pcm);
 

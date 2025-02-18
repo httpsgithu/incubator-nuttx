@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/lc823450/lc823450_dvfs2.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -51,7 +53,7 @@ void lc823450_dvfs_enter_idle(void);
 void lc823450_dvfs_exit_idle(int irq);
 int  lc823450_dvfs_set_freq(int freq);
 void lc823450_dvfs_tick_callback(void);
-int lc823450_dvfs_oneshot(int irq, uint32_t *regs, FAR void *arg);
+int lc823450_dvfs_oneshot(int irq, uint32_t *regs, void *arg);
 
 int  dvfs_procfs_register(void);
 

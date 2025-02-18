@@ -1,6 +1,8 @@
 /****************************************************************************
  * mm/iob/iob_free_queue_qentry.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -24,19 +26,14 @@
 
 #include <nuttx/config.h>
 #include <assert.h>
+
+#include <nuttx/irq.h>
+#include <nuttx/arch.h>
 #include <nuttx/mm/iob.h>
 
 #include "iob.h"
 
 #if CONFIG_IOB_NCHAINS > 0
-
-/****************************************************************************
- * Pre-processor Definitions
- ****************************************************************************/
-
-#ifndef NULL
-#  define NULL ((FAR void *)0)
-#endif
 
 /****************************************************************************
  * Public Functions
@@ -51,8 +48,7 @@
  ****************************************************************************/
 
 void iob_free_queue_qentry(FAR struct iob_s *iob,
-                           FAR struct iob_queue_s *iobq,
-                           enum iob_user_e producerid)
+                           FAR struct iob_queue_s *iobq)
 {
   FAR struct iob_qentry_s *prev = NULL;
   FAR struct iob_qentry_s *qentry;
@@ -84,7 +80,7 @@ void iob_free_queue_qentry(FAR struct iob_s *iob,
 
           /* Free the I/O chain */
 
-          iob_free_chain(iob, producerid);
+          iob_free_chain(iob);
 
           break;
         }

@@ -1,6 +1,8 @@
 ############################################################################
 # fs/hostfs/Make.defs
 #
+# SPDX-License-Identifier: Apache-2.0
+#
 # Licensed to the Apache Software Foundation (ASF) under one or more
 # contributor license agreements.  See the NOTICE file distributed with
 # this work for additional information regarding copyright ownership.  The
@@ -25,12 +27,4 @@ VPATH += :hostfs
 
 ifeq ($(CONFIG_FS_HOSTFS),y)
 CSRCS += hostfs.c
-endif
-
-ifeq ($(CONFIG_FS_HOSTFS_RPMSG),y)
-CSRCS += hostfs_rpmsg.c
-endif
-
-ifeq ($(CONFIG_FS_HOSTFS_RPMSG_SERVER),y)
-CSRCS += hostfs_rpmsg_server.c
 endif

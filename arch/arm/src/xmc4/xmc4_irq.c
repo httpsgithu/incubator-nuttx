@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/xmc4/xmc4_irq.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -35,7 +37,6 @@
 
 #include "nvic.h"
 #include "ram_vectors.h"
-#include "arm_arch.h"
 #include "arm_internal.h"
 
 /****************************************************************************
@@ -56,28 +57,6 @@
 
 #define NVIC_ENA_OFFSET    (0)
 #define NVIC_CLRENA_OFFSET (NVIC_IRQ0_31_CLEAR - NVIC_IRQ0_31_ENABLE)
-
-/****************************************************************************
- * Public Data
- ****************************************************************************/
-
-/* g_current_regs[] holds a references to the current interrupt level
- * register storage structure.  If is non-NULL only during interrupt
- * processing.  Access to g_current_regs[] must be through the macro
- * CURRENT_REGS for portability.
- */
-
-volatile uint32_t *g_current_regs[1];
-
-/* This is the address of the  exception vector table (determined by the
- * linker script).
- */
-
-extern uint32_t _vectors[];
-
-/****************************************************************************
- * Private Data
- ****************************************************************************/
 
 /****************************************************************************
  * Private Functions
@@ -166,8 +145,7 @@ static void xmc4_dump_nvic(const char *msg, int irq)
 #endif
 
 /****************************************************************************
- * Name: xmc4_nmi, xmc4_busfault, xmc4_usagefault, xmc4_pendsv,
- *       xmc4_dbgmonitor, xmc4_pendsv, xmc4_reserved
+ * Name: xmc4_nmi, xmc4_pendsv, xmc4_pendsv, xmc4_reserved
  *
  * Description:
  *   Handlers for various exceptions.  None are handled and all are fatal
@@ -177,7 +155,7 @@ static void xmc4_dump_nvic(const char *msg, int irq)
  ****************************************************************************/
 
 #ifdef CONFIG_DEBUG_FEATURES
-static int xmc4_nmi(int irq, FAR void *context, FAR void *arg)
+static int xmc4_nmi(int irq, void *context, void *arg)
 {
   up_irq_save();
   _err("PANIC!!! NMI received\n");
@@ -185,23 +163,7 @@ static int xmc4_nmi(int irq, FAR void *context, FAR void *arg)
   return 0;
 }
 
-static int xmc4_busfault(int irq, FAR void *context, FAR void *arg)
-{
-  up_irq_save();
-  _err("PANIC!!! Bus fault received\n");
-  PANIC();
-  return 0;
-}
-
-static int xmc4_usagefault(int irq, FAR void *context, FAR void *arg)
-{
-  up_irq_save();
-  _err("PANIC!!! Usage fault received\n");
-  PANIC();
-  return 0;
-}
-
-static int xmc4_pendsv(int irq, FAR void *context, FAR void *arg)
+static int xmc4_pendsv(int irq, void *context, void *arg)
 {
   up_irq_save();
   _err("PANIC!!! PendSV received\n");
@@ -209,15 +171,7 @@ static int xmc4_pendsv(int irq, FAR void *context, FAR void *arg)
   return 0;
 }
 
-static int xmc4_dbgmonitor(int irq, FAR void *context, FAR void *arg)
-{
-  up_irq_save();
-  _err("PANIC!!! Debug Monitor received\n");
-  PANIC();
-  return 0;
-}
-
-static int xmc4_reserved(int irq, FAR void *context, FAR void *arg)
+static int xmc4_reserved(int irq, void *context, void *arg)
 {
   up_irq_save();
   _err("PANIC!!! Reserved interrupt\n");
@@ -235,7 +189,6 @@ static int xmc4_reserved(int irq, FAR void *context, FAR void *arg)
  *
  ****************************************************************************/
 
-#ifdef CONFIG_ARMV7M_USEBASEPRI
 static inline void xmc4_prioritize_syscall(int priority)
 {
   uint32_t regval;
@@ -247,7 +200,6 @@ static inline void xmc4_prioritize_syscall(int priority)
   regval |= (priority << NVIC_SYSH_PRIORITY_PR11_SHIFT);
   putreg32(regval, NVIC_SYSH8_11_PRIORITY);
 }
-#endif
 
 /****************************************************************************
  * Name: xmc4_irqinfo
@@ -395,10 +347,6 @@ void up_irqinitialize(void)
       putreg32(DEFPRIORITY32, regaddr);
     }
 
-  /* currents_regs is non-NULL only while processing an interrupt */
-
-  CURRENT_REGS = NULL;
-
   /* Attach the SVCall and Hard Fault exception handlers.  The SVCall
    * exception is used for performing context switches; The Hard Fault
    * must also be caught because a SVCall may show up as a Hard Fault
@@ -413,9 +361,8 @@ void up_irqinitialize(void)
 #ifdef CONFIG_ARCH_IRQPRIO
   /* up_prioritize_irq(XMC4_IRQ_PENDSV, NVIC_SYSH_PRIORITY_MIN); */
 #endif
-#ifdef CONFIG_ARMV7M_USEBASEPRI
+
   xmc4_prioritize_syscall(NVIC_SYSH_SVCALL_PRIORITY);
-#endif
 
   /* If the MPU is enabled, then attach and enable the Memory Management
    * Fault handler.
@@ -433,10 +380,11 @@ void up_irqinitialize(void)
 #ifndef CONFIG_ARM_MPU
   irq_attach(XMC4_IRQ_MEMFAULT, arm_memfault, NULL);
 #endif
-  irq_attach(XMC4_IRQ_BUSFAULT, xmc4_busfault, NULL);
-  irq_attach(XMC4_IRQ_USAGEFAULT, xmc4_usagefault, NULL);
+  irq_attach(XMC4_IRQ_BUSFAULT, arm_busfault, NULL);
+  irq_attach(XMC4_IRQ_USAGEFAULT, arm_usagefault, NULL);
   irq_attach(XMC4_IRQ_PENDSV, xmc4_pendsv, NULL);
-  irq_attach(XMC4_IRQ_DBGMONITOR, xmc4_dbgmonitor, NULL);
+  arm_enable_dbgmonitor();
+  irq_attach(XMC4_IRQ_DBGMONITOR, arm_dbgmonitor, NULL);
   irq_attach(XMC4_IRQ_RESERVED, xmc4_reserved, NULL);
 #endif
 

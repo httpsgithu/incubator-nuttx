@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/lpc17xx_40xx/lpc17_40_i2s.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -18,8 +20,8 @@
  *
  ****************************************************************************/
 
-#ifndef __ARCH_ARM_SRC_LPC17XX_40XX_CHIP_LPC17_40_I2S_H
-#define __ARCH_ARM_SRC_LPC17XX_40XX_CHIP_LPC17_40_I2S_H
+#ifndef __ARCH_ARM_SRC_LPC17XX_40XX_LPC17_40_I2S_H
+#define __ARCH_ARM_SRC_LPC17XX_40XX_LPC17_40_I2S_H
 
 /****************************************************************************
  * Included Files
@@ -44,4 +46,4 @@
  * Public Functions Prototypes
  ****************************************************************************/
 
-#endif /* __ARCH_ARM_SRC_LPC17XX_40XX_CHIP_LPC17_40_I2S_H */
+#endif /* __ARCH_ARM_SRC_LPC17XX_40XX_LPC17_40_I2S_H */

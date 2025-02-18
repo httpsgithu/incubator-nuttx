@@ -1,6 +1,8 @@
 /****************************************************************************
  * libs/libc/pthread/pthread_mutexattr_setrobust.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -62,7 +64,7 @@ int pthread_mutexattr_setrobust(pthread_mutexattr_t *attr, int robust)
 #elif defined(CONFIG_PTHREAD_MUTEX_BOTH)
 
   if (attr != NULL && (robust == PTHREAD_MUTEX_STALLED ||
-      robust == _PTHREAD_MFLAGS_ROBUST))
+      robust == PTHREAD_MUTEX_ROBUST))
     {
       attr->robust = robust;
       return OK;

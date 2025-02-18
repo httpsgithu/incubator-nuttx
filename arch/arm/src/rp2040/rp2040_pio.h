@@ -1,10 +1,8 @@
 /****************************************************************************
  * arch/arm/src/rp2040/rp2040_pio.h
  *
- * Based upon the software originally developed by
- *   Raspberry Pi (Trading) Ltd.
- *
- * Copyright 2020 (c) 2020 Raspberry Pi (Trading) Ltd.
+ * SPDX-License-Identifier: BSD-3-Clause
+ * SPDX-FileCopyrightText: 2020 Raspberry Pi (Trading) Ltd.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -1959,6 +1957,30 @@ void rp2040_pio_sm_unclaim(uint32_t pio, uint32_t sm);
  ****************************************************************************/
 
 int rp2040_pio_claim_unused_sm(uint32_t pio, bool required);
+
+/****************************************************************************
+ * Name: rp2040_pio_set_input_sync_bypass
+ *
+ * Description:
+ *   Set the input synchronizer bypess bit for a GPIO pin
+ *
+ * Input Parameters:
+ *   pio - PIO index (0..1)
+ *   pin - GPIO pin number (0-29)
+ *   bypass - bypass set true to bypass the synchronizer.
+ *
+ ****************************************************************************/
+
+static inline void rp2040_pio_set_input_sync_bypass(uint32_t pio,
+                                                    uint32_t pin,
+                                                    bool bypass)
+{
+  DEBUGASSERT(pin < RP2040_GPIO_NUM);
+
+  modbits_reg32(bypass ? (1 << pin) : 0,
+                (1 << pin),
+                RP2040_PIO_INPUT_SYNC_BYPASS(pio));
+}
 
 #undef EXTERN
 #if defined(__cplusplus)

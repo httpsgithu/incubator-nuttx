@@ -1,6 +1,8 @@
 /****************************************************************************
  * net/icmp/icmp.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -29,11 +31,12 @@
 
 #include <sys/types.h>
 #include <stdint.h>
-#include <queue.h>
 #include <assert.h>
 
 #include <nuttx/mm/iob.h>
+#include <nuttx/net/icmp.h>
 #include <nuttx/net/ip.h>
+#include <nuttx/net/net.h>
 #include <nuttx/net/netdev.h>
 
 #if defined(CONFIG_NET_ICMP) && !defined(CONFIG_NET_ICMP_NO_STACK)
@@ -47,9 +50,9 @@
 /* Allocate/free an ICMP data callback */
 
 #define icmp_callback_alloc(dev, conn) \
-  devif_callback_alloc((dev), &(conn)->list, &(conn)->list_tail)
+  devif_callback_alloc((dev), &(conn)->sconn.list, &(conn)->sconn.list_tail)
 #define icmp_callback_free(dev, conn, cb) \
-  devif_conn_callback_free((dev), (cb), &(conn)->list, &(conn)->list_tail)
+  devif_conn_callback_free((dev), (cb), &(conn)->sconn.list, &(conn)->sconn.list_tail)
 
 /****************************************************************************
  * Public types
@@ -69,6 +72,7 @@ struct devif_callback_s;         /* Forward reference */
 struct icmp_poll_s
 {
   FAR struct socket *psock;        /* IPPROTO_ICMP socket structure */
+  FAR struct net_driver_s *dev;    /* Needed to free the callback structure */
   FAR struct pollfd *fds;          /* Needed to handle poll events */
   FAR struct devif_callback_s *cb; /* Needed to teardown the poll */
 };
@@ -77,20 +81,12 @@ struct icmp_conn_s
 {
   /* Common prologue of all connection structures. */
 
-  dq_entry_t node;               /* Supports a doubly linked list */
-
-  /* This is a list of ICMP callbacks.  Each callback represents a thread
-   * that is stalled, waiting for a device-specific event.
-   */
-
-  FAR struct devif_callback_s *list;
-  FAR struct devif_callback_s *list_tail;
+  struct socket_conn_s sconn;
 
   /* ICMP-specific content follows */
 
-  uint16_t   id;                 /* ICMP ECHO request ID */
-  uint8_t    nreqs;              /* Number of requests with no response received */
-  uint8_t    crefs;              /* Reference counts on this instance */
+  uint16_t id;                 /* ICMP ECHO request ID */
+  uint8_t  crefs;              /* Reference counts on this instance */
 
   /* The device that the ICMP request was sent on */
 
@@ -102,6 +98,7 @@ struct icmp_conn_s
    */
 
   struct iob_queue_s readahead;  /* Read-ahead buffering */
+  uint32_t filter;               /* ICMP type filter */
 
   /* The following is a list of poll structures of threads waiting for
    * socket events.
@@ -109,6 +106,18 @@ struct icmp_conn_s
 
   struct icmp_poll_s pollinfo[CONFIG_NET_ICMP_NPOLLWAITERS];
 };
+
+typedef int (*icmp_callback_t)(FAR struct icmp_conn_s *conn, FAR void *arg);
+#endif
+
+#ifdef CONFIG_NET_IPv4
+struct icmp_pmtu_entry
+{
+  in_addr_t daddr;
+  uint16_t pmtu;
+  clock_t time;
+};
+
 #endif
 
 /****************************************************************************
@@ -152,19 +161,6 @@ EXTERN const struct sock_intf_s g_icmp_sockif;
  ****************************************************************************/
 
 void icmp_input(FAR struct net_driver_s *dev);
-
-/****************************************************************************
- * Name: icmp_sock_initialize
- *
- * Description:
- *   Initialize the IPPROTO_ICMP socket connection structures.  Called once
- *   and only from the network initialization layer.
- *
- ****************************************************************************/
-
-#ifdef CONFIG_NET_ICMP_SOCKET
-void icmp_sock_initialize(void);
-#endif
 
 /****************************************************************************
  * Name: icmp_alloc
@@ -239,6 +235,23 @@ FAR struct icmp_conn_s *icmp_nextconn(FAR struct icmp_conn_s *conn);
 #ifdef CONFIG_NET_ICMP_SOCKET
 FAR struct icmp_conn_s *icmp_findconn(FAR struct net_driver_s *dev,
                                       uint16_t id);
+#endif
+
+/****************************************************************************
+ * Name: icmp_foreach
+ *
+ * Description:
+ *   Enumerate each ICMP connection structure. This function will terminate
+ *   when either (1) all connection have been enumerated or (2) when a
+ *   callback returns any non-zero value.
+ *
+ * Assumptions:
+ *   This function is called from network logic at with the network locked.
+ *
+ ****************************************************************************/
+
+#ifdef CONFIG_NET_ICMP_SOCKET
+int icmp_foreach(icmp_callback_t callback, FAR void *arg);
 #endif
 
 /****************************************************************************
@@ -361,6 +374,79 @@ int icmp_pollsetup(FAR struct socket *psock, FAR struct pollfd *fds);
 #ifdef CONFIG_NET_ICMP_SOCKET
 int icmp_pollteardown(FAR struct socket *psock, FAR struct pollfd *fds);
 #endif
+
+/****************************************************************************
+ * Name: icmp_reply
+ *
+ * Description:
+ *   Send an ICMP message in response to a situation
+ *   RFC 1122: 3.2.2 MUST send at least the IP header and 8 bytes of header.
+ *       MAY send more (we do).
+ *       MUST NOT change this header information.
+ *       MUST NOT reply to a multicast/broadcast IP address.
+ *       MUST NOT reply to a multicast/broadcast MAC address.
+ *       MUST reply to only the first fragment.
+ *
+ * Input Parameters:
+ *   dev   - The device driver structure containing the received packet
+ *   type  - ICMP Message Type, eg. ICMP_DEST_UNREACHABLE
+ *   code  - ICMP Message Code, eg. ICMP_PORT_UNREACH
+ *
+ * Returned Value:
+ *   None
+ *
+ ****************************************************************************/
+
+void icmp_reply(FAR struct net_driver_s *dev, int type, int code);
+
+/****************************************************************************
+ * Name: icmp_ioctl
+ *
+ * Description:
+ *   This function performs icmp specific ioctl() operations.
+ *
+ * Parameters:
+ *   conn     The ICMP connection of interest
+ *   cmd      The ioctl command
+ *   arg      The argument of the ioctl cmd
+ *
+ ****************************************************************************/
+
+#ifdef CONFIG_NET_ICMP_SOCKET
+int icmp_ioctl(FAR struct socket *psock, int cmd, unsigned long arg);
+#endif
+
+/****************************************************************************
+ * Name: icmpv4_find_pmtu_entry
+ *
+ * Description:
+ *   Search for a ipv4 destination cache entry
+ *
+ * Parameters:
+ *   destipaddr   the IPv4 address of the destination
+ *
+ * Return:
+ *   not null is success; null is failure
+ ****************************************************************************/
+
+FAR struct icmp_pmtu_entry *icmpv4_find_pmtu_entry(in_addr_t destipaddr);
+
+/****************************************************************************
+ * Name: icmpv4_add_pmtu_entry
+ *
+ * Description:
+ *   Create a new ipv4 destination cache entry. If no unused entry is found,
+ *   will recycle oldest entry
+ *
+ * Parameters:
+ *   destipaddr   the IPv4 address of the destination
+ *   mtu          MTU
+ *
+ * Return:
+ *   void
+ ****************************************************************************/
+
+void icmpv4_add_pmtu_entry(in_addr_t destipaddr, int mtu);
 
 #undef EXTERN
 #ifdef __cplusplus

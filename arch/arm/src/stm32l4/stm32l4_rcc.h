@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/stm32l4/stm32l4_rcc.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -27,7 +29,7 @@
 
 #include <nuttx/config.h>
 
-#include "arm_arch.h"
+#include "arm_internal.h"
 #include "chip.h"
 
 #if defined(CONFIG_STM32L4_STM32L4X3)
@@ -53,23 +55,9 @@
 #define EXTERN extern "C"
 extern "C"
 {
-#elseO
+#else
 #define EXTERN extern
 #endif
-
-/****************************************************************************
- * Public Data
- ****************************************************************************/
-
-/* This symbol references the Cortex-M4 vector table (as positioned by the
- * linker script, ld.script or ld.script.dfu.  The standard location for the
- * vector table is at the beginning of FLASH at address 0x0800:0000.
- * If we are using the STMicro DFU bootloader, then the vector table will be
- * offset to a different location in FLASH and we will need to set the NVIC
- * vector location to this alternative location.
- */
-
-extern uint32_t _vectors[];  /* See stm32l4_vectors.S */
 
 /****************************************************************************
  * Inline Functions

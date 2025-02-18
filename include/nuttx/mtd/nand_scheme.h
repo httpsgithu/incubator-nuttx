@@ -1,7 +1,8 @@
 /****************************************************************************
  * include/nuttx/mtd/nand_scheme.h
  *
- *   Copyright (c) 2012, Atmel Corporation
+ * SPDX-License-Identifier: BSD-3-Clause
+ * SPDX-FileCopyrightText: 2012, Atmel Corporation
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -32,8 +33,8 @@
  *
  ****************************************************************************/
 
-#ifndef __INCLUDE_NUTTX_MTD_SCHEME_H
-#define __INCLUDE_NUTTX_MTD_SCHEME_H
+#ifndef __INCLUDE_NUTTX_MTD_NAND_SCHEME_H
+#define __INCLUDE_NUTTX_MTD_NAND_SCHEME_H
 
 /****************************************************************************
  * Included Files
@@ -112,7 +113,7 @@ void nandscheme_readbadblockmarker(FAR const struct nand_scheme_s *scheme,
                                    FAR uint8_t *marker);
 
 /****************************************************************************
- * Name: nandscheme_readbadblockmarker
+ * Name: nandscheme_writebadblockmarker
  *
  * Description:
  *   Modifies the bad block marker inside a spare area, using the given
@@ -263,7 +264,7 @@ void nandscheme_readextra(FAR const struct nand_scheme_s *scheme,
                           unsigned int size, unsigned int offset);
 
 /****************************************************************************
- * Name: nandscheme_readextra
+ * Name: nandscheme_writeextra
  *
  * Description:
  *   Write extra bytes of information inside a spare area, using the provided
@@ -286,7 +287,7 @@ void nandscheme_writeextra(FAR const struct nand_scheme_s *scheme,
                            unsigned int size, unsigned int offset);
 
 /****************************************************************************
- * Name: nandscheme_readextra
+ * Name: nandscheme_build4096
  *
  * Description:
  *   Build a scheme instance for 4096 page size nand flash
@@ -294,16 +295,14 @@ void nandscheme_writeextra(FAR const struct nand_scheme_s *scheme,
  * Input Parameters:
  *   scheme  Pointer to a nand_scheme_s instance.
  *   sparesize Size of spare area.
- *   offset  Index where to write the first extra byte.
- *   size    Number of extra bytes to write.
- *   offset  Index where to write the first extra byte.
+ *   eccoffset Index where to write the first ecc byte.
  *
  * Returned Value:
  *   OK on success; a negated errno value on failure.
  *
  ****************************************************************************/
 
-int nandscheme_build4086(FAR struct nand_scheme_s *scheme,
+int nandscheme_build4096(FAR struct nand_scheme_s *scheme,
                          unsigned int sparesize, unsigned int eccoffset);
 
 #undef EXTERN
@@ -312,4 +311,4 @@ int nandscheme_build4086(FAR struct nand_scheme_s *scheme,
 #endif
 
 #endif /* __ASSEMBLY__ */
-#endif /* __INCLUDE_NUTTX_MTD_SCHEME_H */
+#endif /* __INCLUDE_NUTTX_MTD_NAND_SCHEME_H */

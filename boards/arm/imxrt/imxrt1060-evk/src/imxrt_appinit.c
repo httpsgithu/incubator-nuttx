@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/imxrt/imxrt1060-evk/src/imxrt_appinit.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -27,12 +29,9 @@
 #include <sys/types.h>
 
 #include <nuttx/board.h>
+#include <nuttx/leds/userled.h>
 
 #include "imxrt1060-evk.h"
-
-#if !defined(CONFIG_ARCH_LEDS) && defined(CONFIG_USERLED_LOWER)
-#  define HAVE_LEDS 0
-#endif
 
 #ifdef CONFIG_BOARDCTL
 
@@ -67,7 +66,7 @@
 
 int board_app_initialize(uintptr_t arg)
 {
-#ifdef HAVE_LEDS
+#if !defined(CONFIG_ARCH_LEDS) && defined(CONFIG_USERLED_LOWER)
   /* Register the LED driver */
 
   int ret;

@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/nrf52/nrf52_tim.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -30,8 +32,7 @@
 #include <nuttx/arch.h>
 #include <nuttx/irq.h>
 
-#include "arm_arch.h"
-
+#include "arm_internal.h"
 #include "hardware/nrf52_tim.h"
 
 #include "nrf52_tim.h"
@@ -42,11 +43,11 @@
 
 struct nrf52_tim_priv_s
 {
-  FAR struct nrf52_tim_ops_s *ops;
-  uint32_t                    base;
-  uint32_t                    irq;
-  uint8_t                     chan;
-  bool                        inuse;
+  struct nrf52_tim_ops_s *ops;
+  uint32_t                base;
+  uint32_t                irq;
+  uint8_t                 chan;
+  bool                    inuse;
 };
 
 /****************************************************************************
@@ -55,38 +56,38 @@ struct nrf52_tim_priv_s
 
 /* TIM registers access *****************************************************/
 
-static uint32_t nrf52_tim_getreg(FAR struct nrf52_tim_dev_s *dev,
+static uint32_t nrf52_tim_getreg(struct nrf52_tim_dev_s *dev,
                                  uint32_t offset);
-static void nrf52_tim_putreg(FAR struct nrf52_tim_dev_s *dev,
+static void nrf52_tim_putreg(struct nrf52_tim_dev_s *dev,
                              uint32_t offset,
                              uint32_t value);
 
 /* TIM helpers **************************************************************/
 
-static uint32_t nrf52_tim_irq2reg(FAR struct nrf52_tim_dev_s *dev,
+static uint32_t nrf52_tim_irq2reg(struct nrf52_tim_dev_s *dev,
                                   uint8_t s);
 
 /* TIM operations ***********************************************************/
 
-static int nrf52_tim_start(FAR struct nrf52_tim_dev_s *dev);
-static int nrf52_tim_stop(FAR struct nrf52_tim_dev_s *dev);
-static int nrf52_tim_clear(FAR struct nrf52_tim_dev_s *dev);
-static int nrf52_tim_configure(FAR struct nrf52_tim_dev_s *dev, uint8_t mode,
+static int nrf52_tim_start(struct nrf52_tim_dev_s *dev);
+static int nrf52_tim_stop(struct nrf52_tim_dev_s *dev);
+static int nrf52_tim_clear(struct nrf52_tim_dev_s *dev);
+static int nrf52_tim_configure(struct nrf52_tim_dev_s *dev, uint8_t mode,
                                uint8_t width);
-static int nrf52_tim_shorts(FAR struct nrf52_tim_dev_s *dev, uint8_t s,
+static int nrf52_tim_shorts(struct nrf52_tim_dev_s *dev, uint8_t s,
                             uint8_t i, bool en);
-static int nrf52_tim_count(FAR struct nrf52_tim_dev_s *dev);
-static int nrf52_tim_setcc(FAR struct nrf52_tim_dev_s *dev, uint8_t i,
+static int nrf52_tim_count(struct nrf52_tim_dev_s *dev);
+static int nrf52_tim_setcc(struct nrf52_tim_dev_s *dev, uint8_t i,
                            uint32_t cc);
-static int nrf52_tim_getcc(FAR struct nrf52_tim_dev_s *dev, uint8_t i,
-                           FAR uint32_t *cc);
-static int nrf52_tim_setpre(FAR struct nrf52_tim_dev_s *dev, uint8_t pre);
-static int nrf52_tim_setisr(FAR struct nrf52_tim_dev_s *dev, xcpt_t handler,
-                            FAR void * arg);
-static int nrf52_tim_enableint(FAR struct nrf52_tim_dev_s *dev, uint8_t s);
-static int nrf52_tim_disableint(FAR struct nrf52_tim_dev_s *dev, uint8_t s);
-static int nrf52_tim_checkint(FAR struct nrf52_tim_dev_s *dev, uint8_t s);
-static int nrf52_tim_ackint(FAR struct nrf52_tim_dev_s *dev, uint8_t s);
+static int nrf52_tim_getcc(struct nrf52_tim_dev_s *dev, uint8_t i,
+                           uint32_t *cc);
+static int nrf52_tim_setpre(struct nrf52_tim_dev_s *dev, uint8_t pre);
+static int nrf52_tim_setisr(struct nrf52_tim_dev_s *dev, xcpt_t handler,
+                            void * arg);
+static int nrf52_tim_enableint(struct nrf52_tim_dev_s *dev, uint8_t s);
+static int nrf52_tim_disableint(struct nrf52_tim_dev_s *dev, uint8_t s);
+static int nrf52_tim_checkint(struct nrf52_tim_dev_s *dev, uint8_t s);
+static int nrf52_tim_ackint(struct nrf52_tim_dev_s *dev, uint8_t s);
 
 /****************************************************************************
  * Private Data
@@ -189,7 +190,7 @@ struct nrf52_tim_priv_s g_nrf52_tim4_priv =
  *
  ****************************************************************************/
 
-static uint32_t nrf52_tim_getreg(FAR struct nrf52_tim_dev_s *dev,
+static uint32_t nrf52_tim_getreg(struct nrf52_tim_dev_s *dev,
                                  uint32_t offset)
 {
   DEBUGASSERT(dev);
@@ -205,7 +206,7 @@ static uint32_t nrf52_tim_getreg(FAR struct nrf52_tim_dev_s *dev,
  *
  ****************************************************************************/
 
-static void nrf52_tim_putreg(FAR struct nrf52_tim_dev_s *dev,
+static void nrf52_tim_putreg(struct nrf52_tim_dev_s *dev,
                              uint32_t offset,
                              uint32_t value)
 {
@@ -223,7 +224,7 @@ static void nrf52_tim_putreg(FAR struct nrf52_tim_dev_s *dev,
  *
  ****************************************************************************/
 
-static uint32_t nrf52_tim_irq2reg(FAR struct nrf52_tim_dev_s *dev, uint8_t s)
+static uint32_t nrf52_tim_irq2reg(struct nrf52_tim_dev_s *dev, uint8_t s)
 {
   uint32_t regval = 0;
 
@@ -281,7 +282,7 @@ errout:
  * Name: nrf52_tim_start
  ****************************************************************************/
 
-static int nrf52_tim_start(FAR struct nrf52_tim_dev_s *dev)
+static int nrf52_tim_start(struct nrf52_tim_dev_s *dev)
 {
   DEBUGASSERT(dev);
 
@@ -294,7 +295,7 @@ static int nrf52_tim_start(FAR struct nrf52_tim_dev_s *dev)
  * Name: nrf52_tim_stop
  ****************************************************************************/
 
-static int nrf52_tim_stop(FAR struct nrf52_tim_dev_s *dev)
+static int nrf52_tim_stop(struct nrf52_tim_dev_s *dev)
 {
   DEBUGASSERT(dev);
 
@@ -307,7 +308,7 @@ static int nrf52_tim_stop(FAR struct nrf52_tim_dev_s *dev)
  * Name: nrf52_tim_clear
  ****************************************************************************/
 
-static int nrf52_tim_clear(FAR struct nrf52_tim_dev_s *dev)
+static int nrf52_tim_clear(struct nrf52_tim_dev_s *dev)
 {
   DEBUGASSERT(dev);
 
@@ -320,7 +321,7 @@ static int nrf52_tim_clear(FAR struct nrf52_tim_dev_s *dev)
  * Name: nrf52_tim_configure
  ****************************************************************************/
 
-static int nrf52_tim_configure(FAR struct nrf52_tim_dev_s *dev, uint8_t mode,
+static int nrf52_tim_configure(struct nrf52_tim_dev_s *dev, uint8_t mode,
                                uint8_t width)
 {
   uint32_t regval = 0;
@@ -412,7 +413,7 @@ errout:
  * Name: nrf52_tim_shorts
  ****************************************************************************/
 
-static int nrf52_tim_shorts(FAR struct nrf52_tim_dev_s *dev, uint8_t s,
+static int nrf52_tim_shorts(struct nrf52_tim_dev_s *dev, uint8_t s,
                             uint8_t i, bool en)
 {
   uint32_t regval = 0;
@@ -462,7 +463,7 @@ errout:
  * Name: nrf52_tim_count
  ****************************************************************************/
 
-static int nrf52_tim_count(FAR struct nrf52_tim_dev_s *dev)
+static int nrf52_tim_count(struct nrf52_tim_dev_s *dev)
 {
   DEBUGASSERT(dev);
 
@@ -475,15 +476,15 @@ static int nrf52_tim_count(FAR struct nrf52_tim_dev_s *dev)
  * Name: nrf52_tim_setcc
  ****************************************************************************/
 
-static int nrf52_tim_setcc(FAR struct nrf52_tim_dev_s *dev, uint8_t i,
+static int nrf52_tim_setcc(struct nrf52_tim_dev_s *dev, uint8_t i,
                            uint32_t cc)
 {
-  FAR struct nrf52_tim_priv_s *tim = NULL;
+  struct nrf52_tim_priv_s *tim = NULL;
   int ret = OK;
 
   DEBUGASSERT(dev);
 
-  tim = (FAR struct nrf52_tim_priv_s *)dev;
+  tim = (struct nrf52_tim_priv_s *)dev;
 
   /* Is the channel supported? */
 
@@ -504,16 +505,16 @@ errout:
  * Name: nrf52_tim_getcc
  ****************************************************************************/
 
-static int nrf52_tim_getcc(FAR struct nrf52_tim_dev_s *dev, uint8_t i,
-                           FAR uint32_t *cc)
+static int nrf52_tim_getcc(struct nrf52_tim_dev_s *dev, uint8_t i,
+                           uint32_t *cc)
 {
-  FAR struct nrf52_tim_priv_s *tim = NULL;
+  struct nrf52_tim_priv_s *tim = NULL;
   int ret = OK;
 
   DEBUGASSERT(dev);
   DEBUGASSERT(cc);
 
-  tim = (FAR struct nrf52_tim_priv_s *)dev;
+  tim = (struct nrf52_tim_priv_s *)dev;
 
   /* Is the channel supported? */
 
@@ -534,7 +535,7 @@ errout:
  * Name: nrf52_tim_setpre
  ****************************************************************************/
 
-static int nrf52_tim_setpre(FAR struct nrf52_tim_dev_s *dev, uint8_t pre)
+static int nrf52_tim_setpre(struct nrf52_tim_dev_s *dev, uint8_t pre)
 {
   int ret = OK;
 
@@ -557,15 +558,15 @@ errout:
  * Name: nrf52_tim_setisr
  ****************************************************************************/
 
-static int nrf52_tim_setisr(FAR struct nrf52_tim_dev_s *dev, xcpt_t handler,
-                            FAR void *arg)
+static int nrf52_tim_setisr(struct nrf52_tim_dev_s *dev, xcpt_t handler,
+                            void *arg)
 {
-  FAR struct nrf52_tim_priv_s *tim = NULL;
+  struct nrf52_tim_priv_s *tim = NULL;
   int ret = OK;
 
   DEBUGASSERT(dev);
 
-  tim = (FAR struct nrf52_tim_priv_s *)dev;
+  tim = (struct nrf52_tim_priv_s *)dev;
 
   /* Disable interrupt when callback is removed */
 
@@ -590,7 +591,7 @@ errout:
  * Name: nrf52_tim_enableint
  ****************************************************************************/
 
-static int nrf52_tim_enableint(FAR struct nrf52_tim_dev_s *dev, uint8_t s)
+static int nrf52_tim_enableint(struct nrf52_tim_dev_s *dev, uint8_t s)
 {
   uint32_t regval = 0;
   int      ret    = OK;
@@ -616,7 +617,7 @@ errout:
  * Name: nrf52_tim_disableint
  ****************************************************************************/
 
-static int nrf52_tim_disableint(FAR struct nrf52_tim_dev_s *dev, uint8_t s)
+static int nrf52_tim_disableint(struct nrf52_tim_dev_s *dev, uint8_t s)
 {
   uint32_t regval = 0;
   int      ret    = OK;
@@ -642,7 +643,7 @@ errout:
  * Name: nrf52_tim_checkint
  ****************************************************************************/
 
-static int nrf52_tim_checkint(FAR struct nrf52_tim_dev_s *dev, uint8_t s)
+static int nrf52_tim_checkint(struct nrf52_tim_dev_s *dev, uint8_t s)
 {
   int ret = 0;
 
@@ -658,7 +659,7 @@ static int nrf52_tim_checkint(FAR struct nrf52_tim_dev_s *dev, uint8_t s)
 
       case NRF52_TIM_INT_COMPARE1:
         {
-          ret = nrf52_tim_getreg(dev, NRF52_TIM_EVENTS_COMPARE_OFFSET(0));
+          ret = nrf52_tim_getreg(dev, NRF52_TIM_EVENTS_COMPARE_OFFSET(1));
           break;
         }
 
@@ -702,7 +703,7 @@ errout:
  * Name: nrf52_tim_ackint
  ****************************************************************************/
 
-static int nrf52_tim_ackint(FAR struct nrf52_tim_dev_s *dev, uint8_t s)
+static int nrf52_tim_ackint(struct nrf52_tim_dev_s *dev, uint8_t s)
 {
   int ret = 0;
 
@@ -770,9 +771,9 @@ errout:
  *
  ****************************************************************************/
 
-FAR struct nrf52_tim_dev_s *nrf52_tim_init(int timer)
+struct nrf52_tim_dev_s *nrf52_tim_init(int timer)
 {
-  FAR struct nrf52_tim_priv_s *tim = NULL;
+  struct nrf52_tim_priv_s *tim = NULL;
 
   /* Get timer instance */
 
@@ -833,7 +834,7 @@ FAR struct nrf52_tim_dev_s *nrf52_tim_init(int timer)
     }
 
 errout:
-  return (FAR struct nrf52_tim_dev_s *)tim;
+  return (struct nrf52_tim_dev_s *)tim;
 }
 
 /****************************************************************************
@@ -844,13 +845,13 @@ errout:
  *
  ****************************************************************************/
 
-int nrf52_tim_deinit(FAR struct nrf52_tim_dev_s *dev)
+int nrf52_tim_deinit(struct nrf52_tim_dev_s *dev)
 {
-  FAR struct nrf52_tim_priv_s *tim = NULL;
+  struct nrf52_tim_priv_s *tim = NULL;
 
   DEBUGASSERT(dev);
 
-  tim = (FAR struct nrf52_tim_priv_s *)dev;
+  tim = (struct nrf52_tim_priv_s *)dev;
 
   tim->inuse = false;
 

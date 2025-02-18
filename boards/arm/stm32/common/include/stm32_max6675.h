@@ -1,6 +1,8 @@
 /****************************************************************************
  * boards/arm/stm32/common/include/stm32_max6675.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -18,8 +20,8 @@
  *
  ****************************************************************************/
 
-#ifndef __STM32_MAX6675_C
-#define __STM32_MAX6675_C
+#ifndef __BOARDS_ARM_STM32_COMMON_INCLUDE_STM32_MAX6675_H
+#define __BOARDS_ARM_STM32_COMMON_INCLUDE_STM32_MAX6675_H
 
 /****************************************************************************
  * Included Files
@@ -81,4 +83,4 @@ int board_max6675_initialize(int devno, int busno);
 }
 #endif
 
-#endif // __STM32_MAX6675_C
+#endif /* __BOARDS_ARM_STM32_COMMON_INCLUDE_STM32_MAX6675_H */

@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/lpc17xx_40xx/lpc17_40_usbhost.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -37,6 +39,7 @@
 
 #include <nuttx/arch.h>
 #include <nuttx/signal.h>
+#include <nuttx/mutex.h>
 #include <nuttx/semaphore.h>
 #include <nuttx/usb/usb.h>
 #include <nuttx/usb/ohci.h>
@@ -47,9 +50,7 @@
 
 #include <arch/board/board.h> /* May redefine GPIO settings */
 
-#include "arm_arch.h"
 #include "arm_internal.h"
-
 #include "chip.h"
 #include "hardware/lpc17_40_usb.h"
 #include "hardware/lpc17_40_syscon.h"
@@ -165,7 +166,7 @@ struct lpc17_40_usbhost_s
   uint8_t          outinterval; /* Minimum periodic IN EP polling interval: 2, 4, 6, 16, or 32 */
 #endif
 
-  sem_t            exclsem;     /* Support mutually exclusive access */
+  mutex_t          lock;        /* Support mutually exclusive access */
   sem_t            pscsem;      /* Semaphore to wait Writeback Done Head event */
 
 #ifdef CONFIG_USBHOST_HUB
@@ -173,6 +174,8 @@ struct lpc17_40_usbhost_s
 
   volatile struct usbhost_hubport_s *hport;
 #endif
+
+  struct usbhost_devaddr_s devgen;  /* Address generation data */
 };
 
 /* This structure describes one asynchronous transfer */
@@ -268,15 +271,11 @@ static void lpc17_40_checkreg(uint32_t addr, uint32_t val, bool iswrite);
 static uint32_t lpc17_40_getreg(uint32_t addr);
 static void lpc17_40_putreg(uint32_t val, uint32_t addr);
 #else
-# define lpc17_40_getreg(addr)     getreg32(addr)
-# define lpc17_40_putreg(val,addr) putreg32(val,addr)
+#  define lpc17_40_getreg(addr)     getreg32(addr)
+#  define lpc17_40_putreg(val,addr) putreg32(val,addr)
 #endif
 
 /* Semaphores ***************************************************************/
-
-static int lpc17_40_takesem(sem_t *sem);
-static int lpc17_40_takesem_noncancelable(sem_t *sem);
-#define lpc17_40_givesem(s) nxsem_post(s);
 
 /* Byte stream access helper functions **************************************/
 
@@ -341,7 +340,7 @@ static int lpc17_40_ctrltd(struct lpc17_40_usbhost_s *priv,
 
 /* Interrupt handling *******************************************************/
 
-static int lpc17_40_usbinterrupt(int irq, void *context, FAR void *arg);
+static int lpc17_40_usbinterrupt(int irq, void *context, void *arg);
 
 /* USB host controller operations *******************************************/
 
@@ -388,16 +387,16 @@ static ssize_t lpc17_40_transfer(struct usbhost_driver_s *drvr,
 #ifdef CONFIG_USBHOST_ASYNCH
 static void lpc17_40_asynch_completion(struct lpc17_40_usbhost_s *priv,
                                        struct lpc17_40_ed_s *ed);
-static int lpc17_40_asynch(FAR struct usbhost_driver_s *drvr,
-                           usbhost_ep_t ep, FAR uint8_t *buffer,
+static int lpc17_40_asynch(struct usbhost_driver_s *drvr,
+                           usbhost_ep_t ep, uint8_t *buffer,
                            size_t buflen, usbhost_asynch_t callback,
-                           FAR void *arg);
+                           void *arg);
 #endif
-static int lpc17_40_cancel(FAR struct usbhost_driver_s *drvr,
+static int lpc17_40_cancel(struct usbhost_driver_s *drvr,
                            usbhost_ep_t ep);
 #ifdef CONFIG_USBHOST_HUB
-static int lpc17_40_connect(FAR struct usbhost_driver_s *drvr,
-                            FAR struct usbhost_hubport_s *hport,
+static int lpc17_40_connect(struct usbhost_driver_s *drvr,
+                            struct usbhost_hubport_s *hport,
                             bool connected);
 #endif
 static void lpc17_40_disconnect(struct usbhost_driver_s *drvr,
@@ -416,14 +415,18 @@ static inline void lpc17_40_ep0init(struct lpc17_40_usbhost_s *priv);
  * single global instance.
  */
 
-static struct lpc17_40_usbhost_s g_usbhost;
+static struct lpc17_40_usbhost_s g_usbhost =
+{
+  .lock = NXMUTEX_INITIALIZER,
+  .pscsem = SEM_INITIALIZER(0),
+};
 
 /* This is the connection/enumeration interface */
 
 static struct usbhost_connection_s g_usbconn =
 {
-  .wait             = lpc17_40_wait,
-  .enumerate        = lpc17_40_enumerate,
+  .wait      = lpc17_40_wait,
+  .enumerate = lpc17_40_enumerate,
 };
 
 /* This is a free list of EDs and TD buffers */
@@ -566,54 +569,6 @@ static void lpc17_40_putreg(uint32_t val, uint32_t addr)
   putreg32(val, addr);
 }
 #endif
-
-/****************************************************************************
- * Name: lpc17_40_takesem
- *
- * Description:
- *   This is just a wrapper to handle the annoying behavior of semaphore
- *   waits that return due to the receipt of a signal.
- *
- ****************************************************************************/
-
-static int lpc17_40_takesem(sem_t *sem)
-{
-  return nxsem_wait_uninterruptible(sem);
-}
-
-/****************************************************************************
- * Name: lpc17_40_takesem_noncancelable
- *
- * Description:
- *   This is just a wrapper to handle the annoying behavior of semaphore
- *   waits that return due to the receipt of a signal.  This version also
- *   ignores attempts to cancel the thread.
- *
- ****************************************************************************/
-
-static int lpc17_40_takesem_noncancelable(sem_t *sem)
-{
-  int result;
-  int ret = OK;
-
-  do
-    {
-      result = nxsem_wait_uninterruptible(sem);
-
-      /* The only expected error is ECANCELED which would occur if the
-       * calling thread were canceled.
-       */
-
-      DEBUGASSERT(result == OK || result == -ECANCELED);
-      if (ret == OK && result < 0)
-        {
-          ret = result;
-        }
-    }
-  while (result < 0);
-
-  return ret;
-}
 
 /****************************************************************************
  * Name: lpc17_40_getle16
@@ -1324,9 +1279,9 @@ static inline int lpc17_40_reminted(struct lpc17_40_usbhost_s *priv,
   struct lpc17_40_ed_s *head;
   struct lpc17_40_ed_s *curr;
   struct lpc17_40_ed_s *prev;
-  unsigned int       interval;
-  unsigned int       offset;
-  uint32_t           regval;
+  unsigned int          interval;
+  unsigned int          offset;
+  uint32_t              regval;
 
   /* Disable periodic list processing.  Does this take effect immediately?
    * Or at the next SOF... need to check.
@@ -1647,7 +1602,7 @@ static int lpc17_40_ctrltd(struct lpc17_40_usbhost_s *priv,
 
       /* Wait for the Writeback Done Head interrupt */
 
-      ret = lpc17_40_takesem(&ed->wdhsem);
+      ret = nxsem_wait_uninterruptible(&ed->wdhsem);
       if (ret < 0)
         {
           /* Task has been canceled */
@@ -1682,7 +1637,7 @@ errout_with_xfrinfo:
  *
  ****************************************************************************/
 
-static int lpc17_40_usbinterrupt(int irq, void *context, FAR void *arg)
+static int lpc17_40_usbinterrupt(int irq, void *context, void *arg)
 {
   struct lpc17_40_usbhost_s *priv = &g_usbhost;
   struct lpc17_40_ed_s *ed;
@@ -1746,7 +1701,7 @@ static int lpc17_40_usbinterrupt(int irq, void *context, FAR void *arg)
 
                           if (priv->pscwait)
                             {
-                              lpc17_40_givesem(&priv->pscsem);
+                              nxsem_post(&priv->pscsem);
                               priv->pscwait = false;
                             }
                         }
@@ -1805,7 +1760,7 @@ static int lpc17_40_usbinterrupt(int irq, void *context, FAR void *arg)
 
                       if (priv->pscwait)
                         {
-                          lpc17_40_givesem(&priv->pscsem);
+                          nxsem_post(&priv->pscsem);
                           priv->pscwait = false;
                         }
                     }
@@ -1944,7 +1899,7 @@ static int lpc17_40_usbinterrupt(int irq, void *context, FAR void *arg)
                     {
                       /* Wake up the thread waiting for the WDH event */
 
-                      lpc17_40_givesem(&ed->wdhsem);
+                      nxsem_post(&ed->wdhsem);
                       xfrinfo->wdhwait = false;
                     }
 
@@ -2065,7 +2020,7 @@ static int lpc17_40_wait(struct usbhost_connection_s *conn,
       /* Wait for the next connection event */
 
       priv->pscwait = true;
-      ret = lpc17_40_takesem(&priv->pscsem);
+      ret = nxsem_wait_uninterruptible(&priv->pscsem);
       if (ret < 0)
         {
           return ret;
@@ -2143,8 +2098,8 @@ static int lpc17_40_rh_enumerate(struct usbhost_connection_s *conn,
   return OK;
 }
 
-static int lpc17_40_enumerate(FAR struct usbhost_connection_s *conn,
-                           FAR struct usbhost_hubport_s *hport)
+static int lpc17_40_enumerate(struct usbhost_connection_s *conn,
+                              struct usbhost_hubport_s *hport)
 {
   int ret;
 
@@ -2221,7 +2176,7 @@ static int lpc17_40_ep0configure(struct usbhost_driver_s *drvr,
 
   /* We must have exclusive access to EP0 and the control list */
 
-  ret = lpc17_40_takesem(&priv->exclsem);
+  ret = nxmutex_lock(&priv->lock);
   if (ret < 0)
     {
       return ret;
@@ -2239,8 +2194,7 @@ static int lpc17_40_ep0configure(struct usbhost_driver_s *drvr,
     }
 
   ed->hw.ctrl = hwctrl;
-
-  lpc17_40_givesem(&priv->exclsem);
+  nxmutex_unlock(&priv->lock);
 
   uinfo("EP0 CTRL:%08" PRIx32 "\n", ed->hw.ctrl);
   return OK;
@@ -2287,7 +2241,7 @@ static int lpc17_40_epalloc(struct usbhost_driver_s *drvr,
    * periodic list and the interrupt table.
    */
 
-  ret = lpc17_40_takesem(&priv->exclsem);
+  ret = nxmutex_lock(&priv->lock);
   if (ret < 0)
     {
       return ret;
@@ -2351,14 +2305,7 @@ static int lpc17_40_epalloc(struct usbhost_driver_s *drvr,
 #endif
 
       uinfo("EP%d CTRL:%08" PRIx32 "\n", epdesc->addr, ed->hw.ctrl);
-
-      /* Initialize the semaphore that is used to wait for the endpoint
-       * WDH event. The wdhsem semaphore is used for signaling and, hence,
-       * should not have priority inheritance enabled.
-       */
-
       nxsem_init(&ed->wdhsem, 0, 0);
-      nxsem_set_protocol(&ed->wdhsem, SEM_PRIO_NONE);
 
       /* Link the common tail TD to the ED's TD list */
 
@@ -2409,7 +2356,7 @@ static int lpc17_40_epalloc(struct usbhost_driver_s *drvr,
         }
     }
 
-  lpc17_40_givesem(&priv->exclsem);
+  nxmutex_unlock(&priv->lock);
   return ret;
 }
 
@@ -2437,7 +2384,7 @@ static int lpc17_40_epfree(struct usbhost_driver_s *drvr, usbhost_ep_t ep)
 {
   struct lpc17_40_usbhost_s *priv = (struct lpc17_40_usbhost_s *)drvr;
   struct lpc17_40_ed_s      *ed   = (struct lpc17_40_ed_s *)ep;
-  int                     ret;
+  int                        ret;
 
   /* There should not be any pending, real TDs linked to this ED */
 
@@ -2448,7 +2395,7 @@ static int lpc17_40_epfree(struct usbhost_driver_s *drvr, usbhost_ep_t ep)
    * periodic list and the interrupt table.
    */
 
-  ret = lpc17_40_takesem(&priv->exclsem);
+  ret = nxmutex_lock(&priv->lock);
   if (ret < 0)
     {
       return ret;
@@ -2486,7 +2433,7 @@ static int lpc17_40_epfree(struct usbhost_driver_s *drvr, usbhost_ep_t ep)
   /* Put the ED back into the free list */
 
   lpc17_40_edfree(ed);
-  lpc17_40_givesem(&priv->exclsem);
+  nxmutex_unlock(&priv->lock);
   return ret;
 }
 
@@ -2533,7 +2480,7 @@ static int lpc17_40_alloc(struct usbhost_driver_s *drvr,
 
   /* We must have exclusive access to the transfer buffer pool */
 
-  ret = lpc17_40_takesem(&priv->exclsem);
+  ret = nxmutex_lock(&priv->lock);
   if (ret < 0)
     {
       return ret;
@@ -2548,7 +2495,7 @@ static int lpc17_40_alloc(struct usbhost_driver_s *drvr,
       ret = OK;
     }
 
-  lpc17_40_givesem(&priv->exclsem);
+  nxmutex_unlock(&priv->lock);
   return ret;
 }
 
@@ -2585,9 +2532,9 @@ static int lpc17_40_free(struct usbhost_driver_s *drvr, uint8_t *buffer)
 
   /* We must have exclusive access to the transfer buffer pool */
 
-  ret = lpc17_40_takesem_noncancelable(&priv->exclsem);
+  ret = nxmutex_lock(&priv->lock);
   lpc17_40_tbfree(buffer);
-  lpc17_40_givesem(&priv->exclsem);
+  nxmutex_unlock(&priv->lock);
   return ret;
 }
 
@@ -2722,7 +2669,7 @@ static int lpc17_40_ctrlin(struct usbhost_driver_s *drvr, usbhost_ep_t ep0,
   struct lpc17_40_usbhost_s *priv = (struct lpc17_40_usbhost_s *)drvr;
   struct lpc17_40_ed_s *ed = (struct lpc17_40_ed_s *)ep0;
   uint16_t len;
-  int  ret;
+  int ret;
 
   DEBUGASSERT(priv != NULL && ed != NULL && req != NULL);
 
@@ -2732,7 +2679,7 @@ static int lpc17_40_ctrlin(struct usbhost_driver_s *drvr, usbhost_ep_t ep0,
 
   /* We must have exclusive access to EP0 and the control list */
 
-  ret = lpc17_40_takesem(&priv->exclsem);
+  ret = nxmutex_lock(&priv->lock);
   if (ret < 0)
     {
       return ret;
@@ -2754,7 +2701,7 @@ static int lpc17_40_ctrlin(struct usbhost_driver_s *drvr, usbhost_ep_t ep0,
         }
     }
 
-  lpc17_40_givesem(&priv->exclsem);
+  nxmutex_unlock(&priv->lock);
   return ret;
 }
 
@@ -2775,7 +2722,7 @@ static int lpc17_40_ctrlout(struct usbhost_driver_s *drvr, usbhost_ep_t ep0,
 
   /* We must have exclusive access to EP0 and the control list */
 
-  ret = lpc17_40_takesem(&priv->exclsem);
+  ret = nxmutex_lock(&priv->lock);
   if (ret < 0)
     {
       return ret;
@@ -2798,7 +2745,7 @@ static int lpc17_40_ctrlout(struct usbhost_driver_s *drvr, usbhost_ep_t ep0,
         }
     }
 
-  lpc17_40_givesem(&priv->exclsem);
+  nxmutex_unlock(&priv->lock);
   return ret;
 }
 
@@ -3074,7 +3021,7 @@ static ssize_t lpc17_40_transfer(struct usbhost_driver_s *drvr,
    * table.
    */
 
-  ret = lpc17_40_takesem(&priv->exclsem);
+  ret = nxmutex_lock(&priv->lock);
   if (ret < 0)
     {
       return ret;
@@ -3091,7 +3038,7 @@ static ssize_t lpc17_40_transfer(struct usbhost_driver_s *drvr,
     {
       uerr("ERROR: lpc17_40_alloc_xfrinfo failed\n");
       nbytes = -ENOMEM;
-      goto errout_with_sem;
+      goto errout_with_lock;
     }
 
   /* Initialize the transfer structure */
@@ -3146,7 +3093,7 @@ static ssize_t lpc17_40_transfer(struct usbhost_driver_s *drvr,
 
   /* Wait for the Writeback Done Head interrupt */
 
-  ret = lpc17_40_takesem(&ed->wdhsem);
+  ret = nxsem_wait_uninterruptible(&ed->wdhsem);
   if (ret < 0)
     {
       return ret;
@@ -3205,8 +3152,8 @@ errout_with_xfrinfo:
   lpc17_40_free_xfrinfo(xfrinfo);
   ed->xfrinfo = NULL;
 
-errout_with_sem:
-  lpc17_40_givesem(&priv->exclsem);
+errout_with_lock:
+  nxmutex_unlock(&priv->lock);
   return nbytes;
 }
 
@@ -3353,7 +3300,7 @@ static int lpc17_40_asynch(struct usbhost_driver_s *drvr, usbhost_ep_t ep,
    * buffer pool, the bulk and interrupt lists, and the HCCA interrupt table.
    */
 
-  ret = lpc17_40_takesem(&priv->exclsem);
+  ret = nxmutex_lock(&priv->lock);
   if (ret < 0)
     {
       return ret;
@@ -3370,7 +3317,7 @@ static int lpc17_40_asynch(struct usbhost_driver_s *drvr, usbhost_ep_t ep,
     {
       uerr("ERROR: lpc17_40_alloc_xfrinfo failed\n");
       ret = -ENOMEM;
-      goto errout_with_sem;
+      goto errout_with_lock;
     }
 
   /* Initialize the transfer structure */
@@ -3390,7 +3337,7 @@ static int lpc17_40_asynch(struct usbhost_driver_s *drvr, usbhost_ep_t ep,
   if (ret < 0)
     {
       uerr("ERROR: lpc17_40_dma_alloc failed: %d\n", ret);
-      goto errout_with_sem;
+      goto errout_with_lock;
     }
 
   /* If a buffer was allocated, then use it instead of the callers buffer */
@@ -3414,7 +3361,7 @@ static int lpc17_40_asynch(struct usbhost_driver_s *drvr, usbhost_ep_t ep,
    * completes.
    */
 
-  lpc17_40_givesem(&priv->exclsem);
+  nxmutex_unlock(&priv->lock);
   return OK;
 
 errout_with_asynch:
@@ -3429,8 +3376,8 @@ errout_with_asynch:
   lpc17_40_free_xfrinfo(xfrinfo);
   ed->xfrinfo = NULL;
 
-errout_with_sem:
-  lpc17_40_givesem(&priv->exclsem);
+errout_with_lock:
+  nxmutex_unlock(&priv->lock);
   return ret;
 }
 #endif /* CONFIG_USBHOST_ASYNCH */
@@ -3454,7 +3401,7 @@ errout_with_sem:
  *
  ****************************************************************************/
 
-static int lpc17_40_cancel(FAR struct usbhost_driver_s *drvr,
+static int lpc17_40_cancel(struct usbhost_driver_s *drvr,
                            usbhost_ep_t ep)
 {
 #ifdef CONFIG_USBHOST_ASYNCH
@@ -3553,7 +3500,7 @@ static int lpc17_40_cancel(FAR struct usbhost_driver_s *drvr,
 
               /* Wake up the waiting thread */
 
-              lpc17_40_givesem(&ed->wdhsem);
+              nxsem_post(&ed->wdhsem);
               xfrinfo->wdhwait = false;
 
               /* And free the transfer structure */
@@ -3609,8 +3556,8 @@ static int lpc17_40_cancel(FAR struct usbhost_driver_s *drvr,
  ****************************************************************************/
 
 #ifdef CONFIG_USBHOST_HUB
-static int lpc17_40_connect(FAR struct usbhost_driver_s *drvr,
-                            FAR struct usbhost_hubport_s *hport,
+static int lpc17_40_connect(struct usbhost_driver_s *drvr,
+                            struct usbhost_hubport_s *hport,
                             bool connected)
 {
   struct lpc17_40_usbhost_s *priv = (struct lpc17_40_usbhost_s *)drvr;
@@ -3630,7 +3577,7 @@ static int lpc17_40_connect(FAR struct usbhost_driver_s *drvr,
   if (priv->pscwait)
     {
       priv->pscwait = false;
-      lpc17_40_givesem(&priv->pscsem);
+      nxsem_post(&priv->pscsem);
     }
 
   leave_critical_section(flags);
@@ -3691,7 +3638,7 @@ static inline void lpc17_40_ep0init(struct lpc17_40_usbhost_s *priv)
   /* Initialize the common tail TD. */
 
   memset(TDTAIL, 0, sizeof(struct lpc17_40_gtd_s));
-  TDTAIL->ed              = EDCTRL;
+  TDTAIL->ed = EDCTRL;
 
   /* Link the common tail TD to the ED's TD list */
 
@@ -3795,18 +3742,8 @@ struct usbhost_connection_s *lpc17_40_usbhost_initialize(int controller)
 
   /* Initialize function address generation logic */
 
-  usbhost_devaddr_initialize(&priv->rhport);
-
-  /* Initialize semaphores */
-
-  nxsem_init(&priv->pscsem,  0, 0);
-  nxsem_init(&priv->exclsem, 0, 1);
-
-  /* The pscsem semaphore is used for signaling and, hence, should not
-   * have priority inheritance enabled.
-   */
-
-  nxsem_set_protocol(&priv->pscsem, SEM_PRIO_NONE);
+  usbhost_devaddr_initialize(&priv->devgen);
+  priv->rhport.pdevgen = &priv->devgen;
 
 #ifndef CONFIG_USBHOST_INT_DISABLE
   priv->ininterval  = MAX_PERINTERVAL;
@@ -3899,12 +3836,7 @@ struct usbhost_connection_s *lpc17_40_usbhost_initialize(int controller)
   memset((void *)TDTAIL, 0, sizeof(struct ohci_gtd_s));
   memset((void *)EDCTRL, 0, sizeof(struct lpc17_40_ed_s));
 
-  /* The EDCTRL wdhsem semaphore is used for signaling and, hence, should
-   * not have priority inheritance enabled.
-   */
-
   nxsem_init(&EDCTRL->wdhsem, 0, 0);
-  nxsem_set_protocol(&EDCTRL->wdhsem, SEM_PRIO_NONE);
 
   /* Initialize user-configurable EDs */
 

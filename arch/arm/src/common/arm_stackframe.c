@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/common/arm_stackframe.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -33,30 +35,6 @@
 #include <arch/irq.h>
 
 #include "arm_internal.h"
-
-/****************************************************************************
- * Pre-processor Macros
- ****************************************************************************/
-
-/* For use with EABI and floating point, the stack must be aligned to 8-byte
- * addresses.
- */
-
-#define CONFIG_STACK_ALIGNMENT 8
-
-/* Stack alignment macros */
-
-#define STACK_ALIGN_MASK    (CONFIG_STACK_ALIGNMENT-1)
-#define STACK_ALIGN_DOWN(a) ((a) & ~STACK_ALIGN_MASK)
-#define STACK_ALIGN_UP(a)   (((a) + STACK_ALIGN_MASK) & ~STACK_ALIGN_MASK)
-
-/****************************************************************************
- * Private Types
- ****************************************************************************/
-
-/****************************************************************************
- * Private Function Prototypes
- ****************************************************************************/
 
 /****************************************************************************
  * Public Functions
@@ -93,9 +71,9 @@
  *
  ****************************************************************************/
 
-FAR void *up_stack_frame(FAR struct tcb_s *tcb, size_t frame_size)
+void *up_stack_frame(struct tcb_s *tcb, size_t frame_size)
 {
-  FAR void *ret;
+  void *ret;
 
   /* Align the frame_size */
 
@@ -113,7 +91,7 @@ FAR void *up_stack_frame(FAR struct tcb_s *tcb, size_t frame_size)
 
   /* Save the adjusted stack values in the struct tcb_s */
 
-  tcb->stack_base_ptr   = (FAR uint8_t *)tcb->stack_base_ptr + frame_size;
+  tcb->stack_base_ptr  = (uint8_t *)tcb->stack_base_ptr + frame_size;
   tcb->adj_stack_size -= frame_size;
 
   /* And return the pointer to the allocated region */

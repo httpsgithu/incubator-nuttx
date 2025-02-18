@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/stm32h7/stm32_start.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -18,8 +20,8 @@
  *
  ****************************************************************************/
 
-#ifndef __ARCH_ARM_SRC_STM32H7_START_H
-#define __ARCH_ARM_SRC_STM32H7_START_H
+#ifndef __ARCH_ARM_SRC_STM32H7_STM32_START_H
+#define __ARCH_ARM_SRC_STM32H7_STM32_START_H
 
 /****************************************************************************
  * Included Files
@@ -69,4 +71,4 @@ void stm32_boardinitialize(void);
 #endif
 
 #endif /* __ASSEMBLY__ */
-#endif /* __ARCH_ARM_SRC_STM32H7_START_H */
+#endif /* __ARCH_ARM_SRC_STM32H7_STM32_START_H */

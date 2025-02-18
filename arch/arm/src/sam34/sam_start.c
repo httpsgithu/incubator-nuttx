@@ -1,6 +1,8 @@
 /****************************************************************************
  * arch/arm/src/sam34/sam_start.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -30,7 +32,6 @@
 
 #include <nuttx/init.h>
 
-#include "arm_arch.h"
 #include "arm_internal.h"
 #include "nvic.h"
 
@@ -50,7 +51,7 @@
  * ARM EABI requires 64 bit stack alignment.
  */
 
-#define HEAP_BASE      ((uintptr_t)&_ebss + CONFIG_IDLETHREAD_STACKSIZE)
+#define HEAP_BASE      ((uintptr_t)_ebss + CONFIG_IDLETHREAD_STACKSIZE)
 
 /****************************************************************************
  * Public Data
@@ -71,10 +72,6 @@ const uintptr_t g_idle_topstack = HEAP_BASE;
 /****************************************************************************
  * Private Function prototypes
  ****************************************************************************/
-
-#ifdef CONFIG_ARCH_FPU
-static inline void sam_fpuconfig(void);
-#endif
 
 #ifdef CONFIG_ARMV7M_STACKCHECK
 /* We need to get r10 set before we can allow instrumentation calls */
@@ -101,101 +98,11 @@ void __start(void) noinstrument_function;
 #endif
 
 /****************************************************************************
- * Name: sam_fpuconfig
- *
- * Description:
- *   Configure the FPU.  Relative bit settings:
- *
- *     CPACR:  Enables access to CP10 and CP11
- *     CONTROL.FPCA: Determines whether the FP extension is active in the
- *       current context:
- *     FPCCR.ASPEN:  Enables automatic FP state preservation, then the
- *       processor sets this bit to 1 on successful completion of any FP
- *       instruction.
- *     FPCCR.LSPEN:  Enables lazy context save of FP state. When this is
- *       done, the processor reserves space on the stack for the FP state,
- *       but does not save that state information to the stack.
- *
- *  Software must not change the value of the ASPEN bit or LSPEN bit either:
- *   - the CPACR permits access to CP10 and CP11, that give access to the FP
- *     extension, or
- *   - the CONTROL.FPCA bit is set to 1
- *
- ****************************************************************************/
-
-#ifdef CONFIG_ARCH_FPU
-#ifndef CONFIG_ARMV7M_LAZYFPU
-
-static inline void sam_fpuconfig(void)
-{
-  uint32_t regval;
-
-  /* Set CONTROL.FPCA so that we always get the extended context frame
-   * with the volatile FP registers stacked above the basic context.
-   */
-
-  regval = getcontrol();
-  regval |= CONTROL_FPCA;
-  setcontrol(regval);
-
-  /* Ensure that FPCCR.LSPEN is disabled, so that we don't have to contend
-   * with the lazy FP context save behaviour.  Clear FPCCR.ASPEN since we
-   * are going to turn on CONTROL.FPCA for all contexts.
-   */
-
-  regval = getreg32(NVIC_FPCCR);
-  regval &= ~(NVIC_FPCCR_ASPEN | NVIC_FPCCR_LSPEN);
-  putreg32(regval, NVIC_FPCCR);
-
-  /* Enable full access to CP10 and CP11 */
-
-  regval = getreg32(NVIC_CPACR);
-  regval |= NVIC_CPACR_CP_FULL(10) | NVIC_CPACR_CP_FULL(11);
-  putreg32(regval, NVIC_CPACR);
-}
-
-#else
-
-static inline void sam_fpuconfig(void)
-{
-  uint32_t regval;
-
-  /* Clear CONTROL.FPCA so that we do not get the extended context frame
-   * with the volatile FP registers stacked in the saved context.
-   */
-
-  regval = getcontrol();
-  regval &= ~CONTROL_FPCA;
-  setcontrol(regval);
-
-  /* Ensure that FPCCR.LSPEN is disabled, so that we don't have to contend
-   * with the lazy FP context save behaviour.  Clear FPCCR.ASPEN since we
-   * are going to keep CONTROL.FPCA off for all contexts.
-   */
-
-  regval = getreg32(NVIC_FPCCR);
-  regval &= ~(NVIC_FPCCR_ASPEN | NVIC_FPCCR_LSPEN);
-  putreg32(regval, NVIC_FPCCR);
-
-  /* Enable full access to CP10 and CP11 */
-
-  regval = getreg32(NVIC_CPACR);
-  regval |= NVIC_CPACR_CP_FULL(10) | NVIC_CPACR_CP_FULL(11);
-  putreg32(regval, NVIC_CPACR);
-}
-
-#endif
-
-#else
-#  define sam_fpuconfig()
-#endif
-
-/****************************************************************************
  * Public Functions
  ****************************************************************************/
 
 /****************************************************************************
- * Name: _start
+ * Name: __start
  *
  * Description:
  *   This is the reset entry point.
@@ -225,7 +132,7 @@ void __start(void)
    * certain that there are no issues with the state of global variables.
    */
 
-  for (dest = &_sbss; dest < &_ebss; )
+  for (dest = (uint32_t *)_sbss; dest < (uint32_t *)_ebss; )
     {
       *dest++ = 0;
     }
@@ -236,29 +143,37 @@ void __start(void)
    * end of all of the other read-only data (.text, .rodata) at _eronly.
    */
 
-  for (src = &_eronly, dest = &_sdata; dest < &_edata; )
+  for (src = (const uint32_t *)_eronly,
+       dest = (uint32_t *)_sdata; dest < (uint32_t *)_edata;
+      )
     {
       *dest++ = *src++;
     }
 
   /* Copy any necessary code sections from FLASH to RAM.  The correct
-   * destination in SRAM is geive by _sramfuncs and _eramfuncs.  The
+   * destination in SRAM is given by _sramfuncs and _eramfuncs.  The
    * temporary location is in flash after the data initialization code
    * at _framfuncs.  This must be done before sam_clockconfig() can be
    * called (at least for the SAM4L family).
    */
 
 #ifdef CONFIG_ARCH_RAMFUNCS
-  for (src = &_framfuncs, dest = &_sramfuncs; dest < &_eramfuncs; )
+  for (src = (const uint32_t *)_framfuncs,
+       dest = (uint32_t *)_sramfuncs; dest < (uint32_t *)_eramfuncs;
+      )
     {
       *dest++ = *src++;
     }
 #endif
 
+#ifdef CONFIG_ARMV7M_STACKCHECK
+  arm_stack_check_init();
+#endif
+
   /* Configure the UART so that we can get debug output as soon as possible */
 
   sam_clockconfig();
-  sam_fpuconfig();
+  arm_fpuconfig();
   sam_lowsetup();
   showprogress('A');
 
